@@ -1,0 +1,98 @@
+[     759ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[     760ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/auth/refresh:0
+[     877ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/favicon.ico:0
+[    1321ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[    1322ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/auth/refresh:0
+[   13638ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[   46995ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[   64425ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[   66701ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[   66867ms] [WARNING] [Vue warn]: Unhandled error during execution of render function 
+  at <PosReportView onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <AppShell key=1 onSignOut=fn<signOut> > 
+  at <App> @ http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:1815
+[   66867ms] [WARNING] [Vue warn]: Unhandled error during execution of component update 
+  at <PosReportView onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > 
+  at <RouterView> 
+  at <AppShell key=1 onSignOut=fn<signOut> > 
+  at <App> @ http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:1815
+[   66868ms] TypeError: Cannot read properties of undefined (reading 'net')
+    at http://localhost:5173/src/views/pos/PosReportView.vue?t=1792062717453:329:68
+    at renderList (http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:3991:59)
+    at Proxy._sfc_render (http://localhost:5173/src/views/pos/PosReportView.vue?t=1792062717453:310:8)
+    at renderComponentRoot (http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:4893:35)
+    at ReactiveEffect.componentUpdateFn [as fn] (http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:5807:22)
+    at ReactiveEffect.run (http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:486:16)
+    at ReactiveEffect.runIfDirty (http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:513:27)
+    at callWithErrorHandling (http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:1953:31)
+    at flushJobs (http://localhost:5173/node_modules/.vite/deps/vue.runtime.esm-bundler-C1_OZs2c.js?v=8724addc:2102:5)
+[   68942ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[   89046ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/pos/outlets/9/floor:0
+[  248524ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[  251337ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/subscription:0
+[  295972ms] [ERROR] Failed to load resource: the server responded with a status of 422 (Unprocessable Entity) @ http://localhost:5173/api/v1/properties/1/pos/outlets/9/bills:0
+[ 1211394ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 2171401ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 3131406ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 4091395ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 5051407ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 6011423ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 6971393ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 7931395ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 8891401ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 9619559ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5173/@vite/client:1030
+[ 9671399ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 9731392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 9791404ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 9851392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 9911398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[ 9971402ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10031394ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10091401ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10151397ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10211394ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10271395ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10331390ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10391391ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10451391ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10511404ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10571405ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10631395ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10691403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10751417ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10811396ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10871403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10931406ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[10991400ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11051393ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11111410ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11171399ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11231403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11291398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11351393ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11411392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11471397ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11531403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11591393ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11651399ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11711400ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11771393ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11831406ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11891398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[11951397ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12011394ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12071402ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12131413ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12191392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12251399ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12311392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12371395ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12431407ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12491398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12551400ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12611398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12671397ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12731407ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12791392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12851398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0

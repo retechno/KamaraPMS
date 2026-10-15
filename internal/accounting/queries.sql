@@ -377,9 +377,15 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'CLOSED
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
 SELECT a.tenant_id, a.property_id, m.map_key, a.id, sqlc.narg(actor_id)
   FROM gl_accounts a
-  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155'), ('FOLIO_TRANSFER', '1215')) AS m (map_key, code) ON m.code = a.code
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155'), ('FOLIO_TRANSFER', '1215'), ('COMP', '6196')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
 ON CONFLICT (property_id, map_key) DO NOTHING;
+
+-- The revenue account of the rounding of the outlets: the system code POS_ROUNDING of a new property gets the account 4591 once the chart exists.
+-- name: SeedPosRoundingAccount :exec
+UPDATE charge_codes c SET gl_account_code = '4591'
+ WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.code = 'POS_ROUNDING' AND c.gl_account_code IS NULL
+   AND EXISTS (SELECT 1 FROM gl_accounts a WHERE a.property_id = c.property_id AND a.code = '4591');
 
 -- The direct method of the cash flow statement: the journals that touch a cash account (group CASH) in a range, closing journals left out, and for every other account
 -- on those journals what it explains of the cash (credit less debit: a revenue credited on a journal with cash debited brought that cash). Journals balance, so

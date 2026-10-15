@@ -1,9 +1,9 @@
 -- Companies (corporate accounts). Every query is scoped by tenant_id and property_id.
 
 -- name: CreateCompany :one
-INSERT INTO companies (tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_by, updated_by)
+INSERT INTO companies (tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, pos_billing_allowed, created_by, updated_by)
 VALUES (@tenant_id, @property_id, @code, @name, sqlc.narg(contact_name), sqlc.narg(email), sqlc.narg(phone), sqlc.narg(address), sqlc.narg(city), sqlc.narg(tax_id),
-        sqlc.narg(credit_limit), @payment_terms_days, sqlc.narg(notes), @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+        sqlc.narg(credit_limit), @payment_terms_days, sqlc.narg(notes), @is_active, @pos_billing_allowed, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING *;
 
 -- name: GetCompany :one
@@ -24,7 +24,7 @@ LIMIT @row_limit;
 UPDATE companies SET
     name = @name, contact_name = sqlc.narg(contact_name), email = sqlc.narg(email), phone = sqlc.narg(phone), address = sqlc.narg(address),
     city = sqlc.narg(city), tax_id = sqlc.narg(tax_id), credit_limit = sqlc.narg(credit_limit), payment_terms_days = @payment_terms_days,
-    notes = sqlc.narg(notes), is_active = @is_active, updated_by = sqlc.narg(actor_id)
+    notes = sqlc.narg(notes), is_active = @is_active, pos_billing_allowed = @pos_billing_allowed, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
 RETURNING *;
 

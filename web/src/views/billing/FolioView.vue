@@ -595,6 +595,9 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             {{ [i.room_number ? t('folioTransfer.room', { room: i.room_number }) : '', i.guest_name].filter(Boolean).join(' · ') }}
           </div>
           <small class="ml-1 text-muted-foreground">{{ i.charge_code === 'TRF' ? t('folioTransfer.trfType') : statusText(i.transaction_type) }}</small>
+          <div v-if="i.pos_bill && (can('pos.order') || can('pos.cashier'))" class="text-xs text-muted-foreground" :data-testid="`pos-bill-${i.id}`">
+            <RouterLink :to="`/pos/bills/${i.pos_bill.id}`" class="text-primary hover:underline">{{ t('posBill.openBill', { outlet: i.pos_bill.outlet_name, bill: i.pos_bill.bill_number }) }}</RouterLink>
+          </div>
           <div v-if="i.transfer?.role === 'IN' && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`from-${i.id}`">
             {{ t('folioTransfer.fromFolio') }}
             <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room && folio?.folio_type !== 'MASTER'"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>

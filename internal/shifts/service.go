@@ -213,6 +213,43 @@ func (s *Service) CashShift(ctx context.Context, propertyID int64) (*int64, erro
 	return &id, nil
 }
 
+// CashShiftOfDrawer is CashShift for the cash of an outlet: the open shift of the caller on the drawer of the outlet (docs/architecture/34-pos.md 7.1, F9). A cashier who has a shift on another
+// drawer has none for this one. The same lock, the same rule of a property that does not require a shift.
+func (s *Service) CashShiftOfDrawer(ctx context.Context, propertyID int64, drawer string) (*int64, error) {
+	p, err := auth.Require(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := s.settingsRow(ctx, p.TenantID, propertyID)
+	if err != nil {
+		return nil, err
+	}
+	none := func() (*int64, error) {
+		if cfg.RequireShiftForCash {
+			return nil, errNoOpenShift().WithContext("drawer", drawer)
+		}
+		return nil, nil
+	}
+	id, err := s.q(ctx).OpenShiftOfUserDrawer(ctx, shiftsdb.OpenShiftOfUserDrawerParams{TenantID: p.TenantID, PropertyID: propertyID, UserID: p.UserID, Drawer: drawer})
+	if isNoRows(err) {
+		return none()
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := db.LockRows(ctx, db.CashierShifts, db.ForShare, propertyID, []int64{id}); err != nil {
+		return nil, err
+	}
+	sh, err := s.q(ctx).GetShift(ctx, shiftsdb.GetShiftParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
+	if err != nil {
+		return nil, err
+	}
+	if sh.Status != StatusOpen {
+		return none()
+	}
+	return &id, nil
+}
+
 // OpenShifts lists the shifts that are open now (the night audit refuses to run while one is).
 func (s *Service) OpenShifts(ctx context.Context, tenantID, propertyID int64) ([]OpenShift, bool, error) {
 	cfg, err := s.settingsRow(ctx, tenantID, propertyID)

@@ -876,3 +876,35 @@ All the routes of this section belong to the POS module of the plan (`MODULE_NOT
 | `GET {P}/outlet-charges` | `folio.outlet_charge_open` or `folio.read` | `date` (the open day by default), `result`; accepted and refused, newest first |
 
 The refusals the gate gives to an outlet (stage 2 answers them on the charge to room): 409 `OUTLET_FOLIO_LOCKED` (`context.reason`: `NEVER_OPENED`, `MANUAL`, `LIMIT_REACHED`, `CHECKOUT`, `EXPIRED`), `OUTLET_NOT_ALLOWED`, `OUTLET_LIMIT_EXCEEDED` (`context`: `limit`, `used`, `remaining`, `requested`), `FOLIO_CLOSED`.
+
+### 24.1 POS: bills, the cashier floor plan, payment and corrections (`34-pos.md`, PR 2)
+
+Same module and the same `P`. `pos.order` also means `pos.cashier` (who may do more may order). Every mutation of a bill answers the whole bill (`PosBill`) so a screen never merges a partial answer.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET {P}/pos/outlets/{id}/floor` | `pos.order` or `pos.cashier` | areas with each table in its derived state (`FREE`, `OCCUPIED`, `AWAITING_PAYMENT`, `HELD`), the open bills (minutes and total), the holds of the day |
+| `GET {P}/pos/outlets/{id}/catalog` | same | the categories, what the outlet sells with prices and option groups, what is sold out; `ETag` and `If-None-Match` (304) |
+| `GET`, `POST {P}/pos/outlets/{id}/bills` | same | list: `status`, `table_id`, `date`, `q` (bill number, table, name or room), `limit`; open: `{client_uuid, order_type, table_id?, guest_count?, target_stay_id?, customer_name?, note?}`, the same uuid again returns the bill; 422 `REQUIRED` for a table or guests the outlet asks for |
+| `GET`, `PUT {P}/pos/bills/{id}` | same | `PUT` changes the table (a move: no ledger), the guests, the name and the note with the `version` |
+| `POST {P}/pos/bills/{id}/lines` | same | `{client_uuid, product_id, quantity, options?, note?}`; the price is the price list's; 409 `PRODUCT_SOLD_OUT`, `PRODUCT_NOT_SOLD`, `BILL_NOT_OPEN`, 422 `OPTION_GROUP_LIMIT` |
+| `PUT`, `DELETE {P}/pos/bills/{id}/lines/{lineId}` | same | a draft only: 409 `BILL_LINE_SENT` / `BILL_LINE_NOT_DRAFT` |
+| `POST {P}/pos/bills/{id}/send` | same | `{client_uuid}` is the round; posts every draft (one CHARGE each, source `POS`, in the sub-department of the outlet), one ticket for each station; 409 `NOTHING_TO_SEND` |
+| `POST {P}/pos/bills/{id}/lines/{lineId}/void` | `pos.void` + approval `POS_VOID` | a reversal the day it was sold, an exact adjustment of today later; a VOID ticket |
+| `POST {P}/pos/bills/{id}/discount` | `pos.discount` (+ approval `POS_DISCOUNT` above the limit of the outlet) | `{scope: LINE|BILL, line_id?, percent|amount, reason, approval?}`; allocated by base, largest remainder; 422 `APPROVAL_REQUIRED` when one is needed |
+| `POST {P}/pos/bills/{id}/comp` | `pos.comp` + `pos.cashier` + approval `POS_COMP` | `{line_ids?, reason, name, approval}`; in the treatment the bill kept: a COMP payment or a 100% discount |
+| `POST {P}/pos/bills/{id}/request` | `pos.order` | the table turns AWAITING_PAYMENT |
+| `POST {P}/pos/bills/{id}/pay` | `pos.cashier`; `pos.charge_room` for ROOM; `cityledger.transfer` for COMPANY | `Idempotency-Key` required; `{payments: [{method CASH|CARD|QRIS|BANK_TRANSFER|OTHER|ROOM|COMPANY, amount, reference?, label?, stay_id?, company_id?, tendered?}]}`; one transaction; 409 `OUTLET_FOLIO_LOCKED`, `OUTLET_NOT_ALLOWED`, `OUTLET_LIMIT_EXCEEDED` (the attempt is the only write), `NO_OPEN_SHIFT`, `PAYMENT_AMOUNT_MISMATCH`, `COMPANY_POS_BILLING_NOT_ALLOWED`, `OUTLET_NO_CASH` |
+| `POST {P}/pos/bills/{id}/split` | `pos.cashier` | `{client_uuid (the new bill), line_ids}`; 201 with the new bill; the sent lines move as a transfer by item (scope `OUTLET_BILL`) |
+| `POST {P}/pos/bills/{id}/merge` | `pos.cashier` | `{into_bill_id}`; 409 `BILL_HAS_PAYMENTS`, `MERGE_OTHER_OUTLET` |
+| `POST {P}/pos/bills/{id}/void` | `pos.order` | a bill that sold nothing and took nothing |
+| `POST {P}/pos/bills/{id}/reopen` | `pos.cashier` + `folio.reopen` + approval `POS_REOPEN` | `{reason, approval}` |
+| `POST {P}/pos/room-charges/{id}/return` | `pos.cashier` + `folio.reverse` + approval `FOLIO_TRANSFER` | the bill must be open |
+| `POST {P}/pos/room-charges/{id}/move` | `pos.cashier` + `pos.charge_room` + `folio.reverse` + approval `FOLIO_TRANSFER` | `{stay_id, reason, approval}`; the new charge goes through the gate at the target for everyone; a refusal moves nothing |
+| `GET {P}/pos/outlets/{id}/room-lookup` | `pos.charge_room` | `q`; the in-house rooms with where the charge lands, the lock, the limit and the usage: no balance, no lines |
+| `POST {P}/pos/outlets/{id}/holds`, `POST {P}/pos/holds/{id}/seat`, `…/cancel` | `pos.order` | "dipesan"; not linked to the reservations of the PMS |
+| `POST {P}/pos/outlets/{id}/drawer/open` | `pos.cashier` | `{reason}`: audit only |
+| `POST {P}/pos/price-quote` | `pos.order` | the same engine that posts the line |
+| `GET {P}/pos/outlets/{id}/report` | `pos.report` | `from`, `to`: days, products, methods, voids, discounts, comps, cashiers, waiters, charges to rooms, open bills |
+
+Folios: `GET {P}/folios` takes `folio_type=OUTLET` and `outlet_id`; without a `folio_type` the bills of the outlets are not listed. A folio of type `OUTLET` is changed only through the routes above (409 `OUTLET_FOLIO_USE_POS` on the generic charge, payment and transfer routes). The check-out answers `open_outlet_bills`; the night audit lists `outlet_bills` in blockers (outlets that ask for it) and warnings.

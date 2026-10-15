@@ -43,11 +43,20 @@ type Blockers struct {
 	OpenShifts           []shifts.OpenShift  `json:"open_shifts"`
 	// AccountingReadiness are the reasons the day close could not make its journal (accounting not set up, the system accounts, the room revenue account, the departments).
 	AccountingReadiness []accounting.ReadinessBlocker `json:"accounting_readiness"`
+	// OutletBills are the bills of the outlets that are still open with items sold, for an outlet that asks for every bill to be closed before the day closes (34-pos.md 13.1).
+	OutletBills []OutletIssue `json:"outlet_bills"`
+}
+
+// OutletIssue is a finding about the bills of the outlets.
+type OutletIssue struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Ref     string `json:"ref,omitempty"`
 }
 
 // Any reports whether something blocks the run.
 func (b Blockers) Any() bool {
-	return len(b.UnresolvedArrivals)+len(b.UnresolvedDepartures)+len(b.ChargeErrors)+len(b.InvalidCharges)+len(b.OpenShifts)+len(b.AccountingReadiness) > 0
+	return len(b.UnresolvedArrivals)+len(b.UnresolvedDepartures)+len(b.ChargeErrors)+len(b.InvalidCharges)+len(b.OpenShifts)+len(b.AccountingReadiness)+len(b.OutletBills) > 0
 }
 
 // MissingCharges are READY nights before the business date (the run posts them).
@@ -113,6 +122,8 @@ type Warnings struct {
 	// ClosedMasters are groups whose instructions point at a master folio that is closed: their nights go to the guest folios, which the audit allows and says.
 	ClosedMasters []ClosedMaster `json:"group_masters_closed"`
 	BlocksEnding  []EndingBlock  `json:"blocks_ending"`
+	// OutletBills are open bills of the outlets with items sold, or with lines that were never sent: the sale is revenue of the day and the money is not counted yet.
+	OutletBills []OutletIssue `json:"outlet_bills"`
 }
 
 // Preview is the full pre-check (nothing is written).

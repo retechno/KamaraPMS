@@ -26,6 +26,8 @@ const route = useRoute()
 // The follow-up of a cancellation: the open folios of cancelled reservations that still hold a deposit or a fee. The night audit links here (?cancelled_with_balance=true).
 const followUp = ref(route.query.cancelled_with_balance === 'true')
 const status = ref(followUp.value ? '' : 'OPEN')
+// The folios of the stays, the companies and the groups, or the bills of the outlets (a list of its own, so each keeps its meaning).
+const kind = ref<'STAY' | 'OUTLET'>(route.query.type === 'outlet' ? 'OUTLET' : 'STAY')
 
 // Open folios are what the page shows to begin with: another choice is a filter that is on.
 const activeFilters = computed(() => (status.value === 'OPEN' ? 0 : 1) + (followUp.value ? 1 : 0))
@@ -45,7 +47,7 @@ const columns = computed<Column<FolioSummary>[]>(() => [
 // One page of 50 at a time; the filter of the status is asked of the server, and a new search starts from the first page.
 const list = usePagedList<FolioSummary>(async (cursor) => {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', {
-    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, cancelled_with_balance: followUp.value || undefined, ...sortParams.value } },
+    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, folio_type: kind.value === 'OUTLET' ? 'OUTLET' : undefined, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, cancelled_with_balance: followUp.value || undefined, ...sortParams.value } },
   })
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
@@ -64,6 +66,11 @@ async function load(): Promise<void> {
 
 // Another order reads the list again from its first page (a cursor belongs to an order); the address already holds it.
 watch(sort, () => {
+  list.reset()
+  void load()
+})
+
+watch(kind, () => {
   list.reset()
   void load()
 })
@@ -88,6 +95,10 @@ watch(() => property.currentId, () => {
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('folios.noAccess') }}</p>
 
   <template v-else>
+    <div class="mb-3 flex flex-wrap gap-2" role="tablist" :aria-label="t('folios.kinds')" data-testid="folio-kinds">
+      <Button size="sm" role="tab" :aria-selected="kind === 'STAY'" :variant="kind === 'STAY' ? 'default' : 'outline'" data-testid="tab-STAY" @click="kind = 'STAY'">{{ t('folios.kindStay') }}</Button>
+      <Button size="sm" role="tab" :aria-selected="kind === 'OUTLET'" :variant="kind === 'OUTLET' ? 'default' : 'outline'" data-testid="tab-OUTLET" @click="kind = 'OUTLET'">{{ t('folios.kindOutlet') }}</Button>
+    </div>
     <FilterBar class="mb-4 flex flex-wrap items-end gap-3" role="search" :active="activeFilters" @submit="load">
 
       <FormField class="w-44" :label="t('folios.status')">
@@ -126,7 +137,8 @@ watch(() => property.currentId, () => {
     >
       <template #cell-folio_number="{ row }"><RouterLink :to="`/folios/${row.id}`">{{ row.folio_number }}</RouterLink></template>
       <template #cell-reservation_id="{ row }">
-        <RouterLink v-if="row.reservation_id !== null" :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number || `#${row.reservation_id}` }}</RouterLink>
+        <span v-if="row.folio_type === 'OUTLET'" data-testid="outlet-name">{{ row.outlet_name }}</span>
+        <RouterLink v-else-if="row.reservation_id !== null" :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number || `#${row.reservation_id}` }}</RouterLink>
         <RouterLink v-else-if="row.booking_group_id !== null" :to="`/groups/${row.booking_group_id}`" data-testid="master-group-link">{{ row.booking_group_code }} · {{ row.booking_group_name }}</RouterLink>
       </template>
       <template #cell-status="{ row }"><StatusBadge domain="record" :status="row.status" /></template>

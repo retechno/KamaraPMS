@@ -28,6 +28,11 @@ const (
 	KindTaxDocument      ApprovalKind = "TAX_DOCUMENT"
 	KindTaxSettings      ApprovalKind = "TAX_SETTINGS"
 	KindShiftVariance    ApprovalKind = "SHIFT_VARIANCE"
+	// The kinds of the point of sale (docs/architecture/34-pos.md 8.2): the void of a sold line, a discount, a complimentary bill and the reopening of a bill.
+	KindPOSVoid     ApprovalKind = "POS_VOID"
+	KindPOSDiscount ApprovalKind = "POS_DISCOUNT"
+	KindPOSComp     ApprovalKind = "POS_COMP"
+	KindPOSReopen   ApprovalKind = "POS_REOPEN"
 )
 
 // KindInfo describes a kind: whether it has an amount (a rule DISTINCT_ABOVE needs one) and the permission its approver
@@ -58,6 +63,10 @@ var approvalKinds = []KindInfo{
 	{KindTaxDocument, true, auth.PermCorrectionApprove},
 	{KindTaxSettings, false, auth.PermCorrectionApprove},
 	{KindShiftVariance, true, auth.PermCashierShiftApprove},
+	{KindPOSVoid, true, auth.PermPOSApprove},
+	{KindPOSDiscount, true, auth.PermPOSApprove},
+	{KindPOSComp, true, auth.PermPOSApprove},
+	{KindPOSReopen, true, auth.PermPOSApprove},
 }
 
 // ApprovalKinds lists the kinds, in screen order.

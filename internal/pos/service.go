@@ -9,6 +9,9 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
+	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/folios"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -31,6 +34,10 @@ type Service struct {
 	authz auth.Authorizer
 	days  *tenancy.Service
 	depts DepartmentChecker
+	// the ledger, the approvals and the charge calculation of the bills (SetBilling)
+	ledger  *folios.Service
+	iam     *iam.Service
+	billing *billingconfig.Service
 }
 
 // NewService wires the service.

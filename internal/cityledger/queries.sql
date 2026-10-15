@@ -78,7 +78,9 @@ SELECT p.id, p.payment_number, p.business_date, p.amount, p.reference_number,
        f.folio_number, COALESCE(r.confirmation_number, bg.code, '')::text AS confirmation_number,
        COALESCE(s.stay_number, '')::text AS stay_number,
        -- a transfer from the master folio of a group has no stay: it can be invoiced once every room of the group is over (the same "has left" the guest's check-out says for a folio of a stay)
-       (CASE WHEN f.folio_type = 'MASTER' THEN (CASE WHEN EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations lr ON lr.property_id = l.property_id AND lr.id = l.reservation_id
+       -- the bill of an outlet has no stay to wait for: it can be invoiced at once (34-pos.md 7.1)
+       (CASE WHEN f.folio_type = 'OUTLET' THEN 'CHECKED_OUT'
+             WHEN f.folio_type = 'MASTER' THEN (CASE WHEN EXISTS (SELECT 1 FROM reservation_rooms l JOIN reservations lr ON lr.property_id = l.property_id AND lr.id = l.reservation_id
                                                                      WHERE l.property_id = f.property_id AND lr.booking_group_id = f.booking_group_id AND l.status NOT IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
                                                                        AND NOT EXISTS (SELECT 1 FROM folio_group_routing_exclusions x WHERE x.reservation_room_id = l.id))
                                                  THEN 'OPEN' ELSE 'CHECKED_OUT' END)

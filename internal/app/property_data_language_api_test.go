@@ -34,13 +34,13 @@ func TestThePropertyAPITakesTheLanguageOfTheSeededData(t *testing.T) {
 	}
 	base := "/api/v1/properties/" + idOf(created)
 	accounts := namesOf(c, base+"/accounting/accounts?limit=500")
-	if len(accounts) != 201 || accounts["1215"] != "Transfer antar folio" || accounts["1155"] != "Akun penampung QRIS" || accounts["1110"] != "Kas di front office" || accounts["2410"] != "Utang PBJT (pajak hotel dan restoran)" {
+	if len(accounts) != 203 || accounts["4591"] != "Pembulatan" || accounts["6196"] != "Komplimen dan pemakaian internal" || accounts["1215"] != "Transfer antar folio" || accounts["1155"] != "Akun penampung QRIS" || accounts["1110"] != "Kas di front office" || accounts["2410"] != "Utang PBJT (pajak hotel dan restoran)" {
 		t.Fatalf("the chart in Indonesian: %d accounts, 1110 %q, 2410 %q", len(accounts), accounts["1110"], accounts["2410"])
 	}
 	if d := namesOf(c, base+"/departments"); d["ROOMS"] != "Kamar" || d["POM"] != "Teknik dan pemeliharaan (engineering)" || len(d) != 8 {
 		t.Fatalf("the departments in Indonesian: %v", d)
 	}
-	if cc := namesOf(c, base+"/charge-codes?limit=200"); cc["ROOM"] != "Biaya kamar" || cc["NO_SHOW_FEE"] != "Biaya no-show" {
+	if cc := namesOf(c, base+"/charge-codes?limit=200"); cc["ROOM"] != "Biaya kamar" || cc["NO_SHOW_FEE"] != "Biaya no-show" || cc["POS_ROUNDING"] != "Pembulatan POS" {
 		t.Fatalf("the charge codes in Indonesian: %v", cc)
 	}
 

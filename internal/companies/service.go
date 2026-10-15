@@ -40,7 +40,7 @@ func errNotFound() *apperr.Error {
 func toCompany(c companiesdb.Company, decimals int32) Company {
 	out := Company{
 		ID: c.ID, Code: c.Code, Name: c.Name, ContactName: deref(c.ContactName), Email: deref(c.Email), Phone: deref(c.Phone), Address: deref(c.Address),
-		City: deref(c.City), TaxID: deref(c.TaxID), PaymentTermsDays: int(c.PaymentTermsDays), Notes: deref(c.Notes), IsActive: c.IsActive,
+		City: deref(c.City), TaxID: deref(c.TaxID), PaymentTermsDays: int(c.PaymentTermsDays), Notes: deref(c.Notes), IsActive: c.IsActive, PosBillingAllowed: c.PosBillingAllowed,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 	if c.CreditLimit != nil {
@@ -167,7 +167,7 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in Input) (Compa
 		row, err := s.q(ctx).CreateCompany(ctx, companiesdb.CreateCompanyParams{
 			TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, ContactName: nullable(in.ContactName), Email: nullable(in.Email),
 			Phone: nullable(in.Phone), Address: nullable(in.Address), City: nullable(in.City), TaxID: nullable(in.TaxID), CreditLimit: limitOrNil(in.CreditLimit),
-			PaymentTermsDays: int16(in.PaymentTermsDays), Notes: nullable(in.Notes), IsActive: in.IsActive, ActorID: p.ActorID(), //nolint:gosec // G115: validated 0..365
+			PaymentTermsDays: int16(in.PaymentTermsDays), Notes: nullable(in.Notes), IsActive: in.IsActive, PosBillingAllowed: in.PosBillingAllowed, ActorID: p.ActorID(), //nolint:gosec // G115: validated 0..365
 		})
 		if err != nil {
 			return err
@@ -180,17 +180,18 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in Input) (Compa
 
 // Patch changes selected attributes; nil fields stay unchanged. CreditLimit "" removes the limit.
 type Patch struct {
-	Name             *string
-	ContactName      *string
-	Email            *string
-	Phone            *string
-	Address          *string
-	City             *string
-	TaxID            *string
-	CreditLimit      *string
-	PaymentTermsDays *int
-	Notes            *string
-	IsActive         *bool
+	Name              *string
+	ContactName       *string
+	Email             *string
+	Phone             *string
+	Address           *string
+	City              *string
+	TaxID             *string
+	CreditLimit       *string
+	PaymentTermsDays  *int
+	Notes             *string
+	IsActive          *bool
+	PosBillingAllowed *bool
 }
 
 func apply[T any](dst *T, v *T) {
@@ -232,7 +233,8 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 		}
 		before := toCompany(row, decimals)
 		in := Input{Code: before.Code, Name: before.Name, ContactName: before.ContactName, Email: before.Email, Phone: before.Phone, Address: before.Address,
-			City: before.City, TaxID: before.TaxID, PaymentTermsDays: before.PaymentTermsDays, Notes: before.Notes, IsActive: before.IsActive}
+			City: before.City, TaxID: before.TaxID, PaymentTermsDays: before.PaymentTermsDays, Notes: before.Notes, IsActive: before.IsActive,
+			PosBillingAllowed: before.PosBillingAllowed}
 		if before.CreditLimit != nil {
 			in.CreditLimit = *before.CreditLimit
 		}
@@ -247,6 +249,7 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 		apply(&in.PaymentTermsDays, patch.PaymentTermsDays)
 		apply(&in.Notes, patch.Notes)
 		apply(&in.IsActive, patch.IsActive)
+		apply(&in.PosBillingAllowed, patch.PosBillingAllowed)
 		in.Normalize()
 		if fields := in.Validate(false, decimals); len(fields) > 0 {
 			return apperr.Invalid("the company is invalid", fields...)
@@ -263,7 +266,7 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 		updated, err := q.UpdateCompany(ctx, companiesdb.UpdateCompanyParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, ContactName: nullable(in.ContactName), Email: nullable(in.Email), Phone: nullable(in.Phone),
 			Address: nullable(in.Address), City: nullable(in.City), TaxID: nullable(in.TaxID), CreditLimit: limitOrNil(in.CreditLimit),
-			PaymentTermsDays: int16(in.PaymentTermsDays), Notes: nullable(in.Notes), IsActive: in.IsActive, ActorID: p.ActorID(), //nolint:gosec // G115: validated 0..365
+			PaymentTermsDays: int16(in.PaymentTermsDays), Notes: nullable(in.Notes), IsActive: in.IsActive, PosBillingAllowed: in.PosBillingAllowed, ActorID: p.ActorID(), //nolint:gosec // G115: validated 0..365
 		})
 		if err != nil {
 			return err

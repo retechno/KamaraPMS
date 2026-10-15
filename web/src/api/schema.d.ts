@@ -7736,6 +7736,567 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/floor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The cashier floor plan of an outlet in its state (pos.order or pos.cashier)
+         * @description Each table has a derived `status`: FREE, OCCUPIED (an open bill sits at it), AWAITING_PAYMENT (a bill was requested) or HELD (a hold today). With it come the open bills (minutes and total each) and the holds of the day.
+         */
+        get: operations["getPosFloor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What an outlet sells, for the order screen (pos.order or pos.cashier)
+         * @description The categories, the products the outlet sells with their price and option groups, and what is sold out today. The answer has an `ETag`; `If-None-Match` with it answers 304.
+         */
+        get: operations["getPosCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/bills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The bills of an outlet, newest first (pos.order or pos.cashier) */
+        get: operations["listPosBills"];
+        put?: never;
+        /**
+         * Open a bill (pos.order or pos.cashier)
+         * @description The bill is the folio of the outlet with the number `{outlet code}-{n}`. `client_uuid` is made by the client: the same one again returns the bill that exists. 422 `REQUIRED` for a table or the number of guests the outlet asks for.
+         */
+        post: operations["openPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/holds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hold a table for a party (pos.order or pos.cashier)
+         * @description For the business day open now; it is not linked to a reservation of the PMS.
+         */
+        post: operations["createPosHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/holds/{id}/seat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The party came and sat */
+        post: operations["seatPosHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/holds/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The party did not come */
+        post: operations["cancelPosHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/drawer/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the drawer without a sale (pos.cashier)
+         * @description Moves no money; the audit keeps who and why. 409 `OUTLET_NO_CASH` when the outlet has no drawer.
+         */
+        post: operations["openPosDrawer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/room-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The in-house rooms an outlet may charge (pos.charge_room)
+         * @description By room number or the name of the guest. Each says where a charge would land (the guest folio, or the master of the group), the lock, the limit and what was used, and nothing else: no balance and no folio lines. It is advice; the gate decides again when the bill is charged.
+         */
+        get: operations["lookupPosRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The report of an outlet for a range of business dates (pos.report)
+         * @description Sales, service and tax by day, by product, payments by method, voids, discounts, complimentary, cashiers, waiters, charges to rooms and open bills: all read from the ledger of the folios of the bills.
+         */
+        get: operations["getPosOutletReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/price-quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Price a line without writing anything (pos.order or pos.cashier)
+         * @description The same engine that posts the line; the client never computes tax or service.
+         */
+        post: operations["quotePosLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A bill with its lines, payments, charges to rooms and totals (pos.order or pos.cashier)
+         * @description A draft line carries the quote of the charge engine; a sent line the amounts of its ledger row.
+         */
+        get: operations["getPosBill"];
+        /** Change the table (a move: no ledger), the guests, the name or the note of an open bill */
+        put: operations["updatePosBill"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a draft line (pos.order or pos.cashier)
+         * @description The price is the price list of the outlet at this moment with the options asked for, never the client's. Two waiters adding at once both succeed. 409 `PRODUCT_SOLD_OUT`, `PRODUCT_NOT_SOLD`, `BILL_NOT_OPEN`.
+         */
+        post: operations["addPosBillLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/lines/{lineId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a draft line */
+        put: operations["updatePosBillLine"];
+        post?: never;
+        /** Remove a draft line (a sent line is voided) */
+        delete: operations["deletePosBillLine"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/lines/{lineId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a sent line (pos.void and an approval of the kind POS_VOID)
+         * @description A reversal of the ledger row on the day it was sold; on a later day an adjustment of today that is its exact opposite. A VOID ticket is written.
+         */
+        post: operations["voidPosBillLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the draft lines (pos.order or pos.cashier)
+         * @description Each draft is posted to the ledger, a round and one ticket for each station are written. `client_uuid` is the round: the same one again sends nothing twice. 409 `NOTHING_TO_SEND`.
+         */
+        post: operations["sendPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/discount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discount a line or the bill (pos.discount)
+         * @description A percentage or an amount of the base, allocated to the lines by base so the parts add up exactly. Up to the share of the base the outlet lets its cashier give no approver is needed; above it the approval POS_DISCOUNT is.
+         */
+        post: operations["discountPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/comp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make lines (or the whole bill) complimentary (pos.comp, pos.cashier and an approval of the kind POS_COMP)
+         * @description In the treatment the bill kept: a payment of the method COMP, or a 100% discount. A name and a reason are required.
+         */
+        post: operations["compPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The guest asked for the bill: the table turns to awaiting payment */
+        post: operations["requestPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay a bill with one or more payments (pos.cashier; pos.charge_room and cityledger.transfer for a room and a company)
+         * @description All in one transaction under one `Idempotency-Key`. The payments add up to the balance, or to the balance rounded as the outlet rounds cash when every payment is cash, or are less (a part: the bill stays open). 409 `OUTLET_FOLIO_LOCKED`, `OUTLET_NOT_ALLOWED`, `OUTLET_LIMIT_EXCEEDED` (the attempt is written and nothing else), `NO_OPEN_SHIFT`, `PAYMENT_AMOUNT_MISMATCH`.
+         */
+        post: operations["payPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move lines of a bill to a new bill (pos.cashier)
+         * @description `client_uuid` is the new bill; the same one again returns it. The sent lines move as a transfer by item, nothing recomputed.
+         */
+        post: operations["splitPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge the bill into another open bill of the outlet (pos.cashier)
+         * @description 409 `BILL_HAS_PAYMENTS` when a payment was taken on it.
+         */
+        post: operations["mergePosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void a bill that sold nothing and took nothing */
+        post: operations["voidPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen a closed bill (pos.cashier, folio.reopen and an approval of the kind POS_REOPEN) */
+        post: operations["reopenPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/room-charges/{id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a charge to a room back to its bill (folio.reverse and an approval of the kind FOLIO_TRANSFER)
+         * @description The bill must be open: reopen it first. The usage of the limit goes back down.
+         */
+        post: operations["returnPosRoomCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/room-charges/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a charge to another room (folio.reverse, pos.charge_room and an approval of the kind FOLIO_TRANSFER)
+         * @description The return and the new charge in one transaction; the new charge goes through every check at the target (lock, validity, outlets, limit), for everyone. A refusal moves nothing and the first room keeps the charge.
+         */
+        post: operations["movePosRoomCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/folios/{id}/outlet-lock": {
         parameters: {
             query?: never;
@@ -8800,7 +9361,7 @@ export interface components {
          * @description A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
          * @enum {string}
          */
-        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE";
+        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN";
         /** @enum {string} */
         ApprovalRuleType: "FREE" | "DISTINCT" | "DISTINCT_ABOVE";
         ApprovalRuleInForce: {
@@ -9921,6 +10482,13 @@ export interface components {
             approved_by?: number | null;
             /** @description The mark of a line that a transfer between folios made or moved (null for any other line). */
             transfer: components["schemas"]["ItemTransfer"] | null;
+            /** @description The bill of an outlet a line was charged from (the line `{outlet} · {bill}` of a charge to a room), so the screen can open it; null on the others. */
+            pos_bill: {
+                /** Format: int64 */
+                id: number;
+                bill_number: string;
+                outlet_name: string;
+            } | null;
         };
         FolioRef: {
             /** Format: int64 */
@@ -10206,10 +10774,17 @@ export interface components {
             id: number;
             folio_number: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY" | "MASTER";
+            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+            /**
+             * Format: int64
+             * @description The outlet of an OUTLET folio; null on the others.
+             */
+            outlet_id?: number | null;
+            outlet_code?: string;
+            outlet_name?: string;
             /**
              * Format: int64
              * @description The company a COMPANY folio is billed to, or the company of the group on a MASTER folio; null on a guest folio.
@@ -10254,10 +10829,14 @@ export interface components {
             /** @description The confirmation number of the reservation of the folio (`RES000012`) */
             confirmation_number?: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY" | "MASTER";
+            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+            /** Format: int64 */
+            outlet_id?: number | null;
+            outlet_code?: string;
+            outlet_name?: string;
             /**
              * Format: int64
              * @description The company a COMPANY folio is billed to; null on a guest folio.
@@ -10312,10 +10891,10 @@ export interface components {
             /** @enum {string} */
             payment_type: "PAYMENT" | "REFUND";
             /**
-             * @description CITY_LEDGER is a transfer to a company account
+             * @description CITY_LEDGER is a transfer to a company account, not money received. COMP is a complimentary bill of an outlet (it settles the guest ledger against an expense account); only the point of sale takes it.
              * @enum {string}
              */
-            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS" | "CITY_LEDGER";
+            payment_method: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS" | "CITY_LEDGER" | "COMP";
             /**
              * Format: int64
              * @description The company of a CITY_LEDGER transfer.
@@ -10725,6 +11304,13 @@ export interface components {
             housekeeping: string;
             /** @description Set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing. */
             master_folio?: components["schemas"]["MasterInfo"] | null;
+            /** @description The bills of the outlets still open for this room (room service, a bar tab). A warning, never a block; the room is locked for outlets now, so they are paid another way. */
+            open_outlet_bills?: {
+                /** Format: int64 */
+                bill_id: number;
+                bill_number: string;
+                outlet_name: string;
+            }[];
             /** @description Where the room charges of the whole stay stand, one entry for each folio. A stay whose group routing changed while it was in house has them on two folios. */
             room_charges?: {
                 /** Format: int64 */
@@ -11082,6 +11668,8 @@ export interface components {
             accounting_readiness: components["schemas"]["AccountingReadinessBlocker"][];
             /** @description Cashier shifts still open, when the property wants the cash counted before the day closes. */
             open_shifts: components["schemas"]["OpenCashierShiftSummary"][];
+            /** @description Open bills of an outlet that asks for every bill to be closed before the day closes (with items sold). */
+            outlet_bills?: components["schemas"]["NightAuditOutletIssue"][];
             unresolved_arrivals: components["schemas"]["UnresolvedArrival"][];
             unresolved_departures: components["schemas"]["UnresolvedDeparture"][];
             charge_errors: components["schemas"]["RoomChargeItem"][];
@@ -11784,7 +12372,16 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        NightAuditOutletIssue: {
+            /** @enum {string} */
+            code: "POS_OPEN_BILLS" | "POS_DRAFT_LINES";
+            message: string;
+            /** @description The code of the outlet. */
+            ref?: string;
+        };
         NightAuditWarnings: {
+            /** @description Open bills of the outlets with items sold (the sale is revenue of the day, the money is not counted yet) or with lines that were never sent. */
+            outlet_bills?: components["schemas"]["NightAuditOutletIssue"][];
             stale_drafts: {
                 /** Format: int64 */
                 reservation_room_id: number;
@@ -12298,6 +12895,8 @@ export interface components {
             payment_terms_days: number;
             notes?: string;
             is_active: boolean;
+            /** @description The outlets may bill this company (a transfer of a bill to its city ledger account). */
+            pos_billing_allowed?: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -12324,6 +12923,11 @@ export interface components {
             notes?: string;
             /** @default true */
             is_active: boolean;
+            /**
+             * @description The outlets may bill this company (needs cityledger.transfer at the till and the setting of the outlet too).
+             * @default false
+             */
+            pos_billing_allowed: boolean;
         };
         PatchCompanyRequest: {
             name?: string;
@@ -12338,6 +12942,7 @@ export interface components {
             payment_terms_days?: number;
             notes?: string;
             is_active?: boolean;
+            pos_billing_allowed?: boolean;
         };
         Group: {
             /** Format: int64 */
@@ -13502,7 +14107,7 @@ export interface components {
         };
         GlAccountMapEntry: {
             /** @enum {string} */
-            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "QRIS" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE" | "INPUT_VAT" | "CASH_OVER_SHORT";
+            map_key: "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER_PAYMENT" | "QRIS" | "CITY_LEDGER" | "GUEST_LEDGER" | "ADVANCE_DEPOSITS" | "TAX_PAYABLE" | "SERVICE_PAYABLE" | "SUSPENSE" | "RETAINED_EARNINGS" | "ACCOUNTS_PAYABLE" | "INPUT_VAT" | "CASH_OVER_SHORT" | "FOLIO_TRANSFER" | "COMP";
             meaning: string;
             /** Format: int64 */
             account_id: number;
@@ -15269,6 +15874,477 @@ export interface components {
             created: number;
             updated: number;
             errors: components["schemas"]["PosImportRowError"][];
+        };
+        PosHold: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            table_id: number;
+            table_code: string;
+            business_date: components["schemas"]["Date"];
+            /** @description HH:MM. */
+            from_time: string;
+            party_size?: number | null;
+            name: string;
+            phone?: string;
+            note?: string;
+            /** @enum {string} */
+            status: "HELD" | "SEATED" | "CANCELLED";
+        };
+        PosHoldInput: {
+            /** Format: int64 */
+            table_id: number;
+            /** @description HH:MM. */
+            from_time: string;
+            party_size?: number | null;
+            name: string;
+            phone?: string;
+            note?: string;
+        };
+        PosReasonInput: {
+            reason: string;
+        };
+        PosBillSummary: {
+            /** Format: int64 */
+            id: number;
+            bill_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED" | "VOID" | "MERGED";
+            /** @enum {string} */
+            order_type: "DINE_IN" | "TAKEAWAY" | "ROOM_SERVICE" | "DIRECT";
+            /** Format: int64 */
+            table_id?: number | null;
+            table_code?: string;
+            guest_count?: number | null;
+            /** Format: int64 */
+            target_stay_id?: number | null;
+            target_room?: string;
+            customer_name?: string;
+            waiter_name?: string;
+            /** Format: date-time */
+            opened_at: string;
+            minutes: number;
+            /** Format: date-time */
+            bill_requested_at?: string | null;
+            /** Format: date-time */
+            closed_at?: string | null;
+            /** @description The balance of an open bill; what a closed one sold. */
+            total: string;
+            draft_lines: number;
+            sent_lines: number;
+            version: number;
+        };
+        PosBillList: {
+            data: components["schemas"]["PosBillSummary"][];
+        };
+        PosFloorTable: components["schemas"]["PosTable"] & {
+            /** @enum {string} */
+            status: "FREE" | "OCCUPIED" | "AWAITING_PAYMENT" | "HELD";
+            bills: components["schemas"]["PosBillSummary"][];
+            holds: components["schemas"]["PosHold"][];
+        };
+        PosFloorArea: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            grid_w: number;
+            grid_h: number;
+            layout_version: number;
+            tables: components["schemas"]["PosFloorTable"][];
+            marks: components["schemas"]["PosMark"][];
+        };
+        PosFloorState: {
+            business_date: components["schemas"]["Date"];
+            outlet: components["schemas"]["PosOutlet"];
+            areas: components["schemas"]["PosFloorArea"][];
+            open_bills: components["schemas"]["PosBillSummary"][];
+            holds: components["schemas"]["PosHold"][];
+            /** Format: date-time */
+            now: string;
+        };
+        PosCatalog: {
+            /** Format: int64 */
+            outlet_id: number;
+            business_date: components["schemas"]["Date"];
+            categories: components["schemas"]["PosCategory"][];
+            products: components["schemas"]["PosProduct"][];
+            sold_out: number[];
+        };
+        PosLineOption: {
+            /** Format: int64 */
+            option_id: number;
+            /** Format: int64 */
+            group_id: number;
+            name: string;
+            price_delta: string;
+            qty: number;
+        };
+        PosLineOptionInput: {
+            /** Format: int64 */
+            option_id: number;
+            /** @description 1 by default; at most the limit of the option. */
+            qty?: number;
+        };
+        PosBillLine: {
+            /** Format: int64 */
+            id: number;
+            client_uuid: string;
+            /** Format: int64 */
+            product_id: number;
+            product_name: string;
+            options: components["schemas"]["PosLineOption"][];
+            quantity: string;
+            unit_price: string;
+            discount_pct?: string | null;
+            discount_amount: string;
+            discount_reason?: string;
+            is_comp: boolean;
+            note?: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SENT" | "VOID";
+            /** @description 0 while it is a draft. */
+            round: number;
+            base_amount: string;
+            net_amount: string;
+            service_amount: string;
+            tax_amount: string;
+            total: string;
+            /** @enum {string} */
+            ticket_status?: "" | "NEW" | "COOKING" | "READY" | "SERVED" | "CANCELLED";
+            /** Format: int64 */
+            folio_item_id?: number | null;
+            created_by_name?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            sent_at?: string | null;
+            void_reason?: string;
+            voided_by_name?: string;
+            approved_by_name?: string;
+            /** Format: date-time */
+            voided_at?: string | null;
+        };
+        PosBillPayment: {
+            /** Format: int64 */
+            id: number;
+            payment_number: string;
+            method: string;
+            amount: string;
+            reference?: string;
+            label?: string;
+            /** Format: date-time */
+            paid_at: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: int64 */
+            company_id?: number | null;
+        };
+        PosBillRoomCharge: {
+            /** Format: int64 */
+            id: number;
+            amount: string;
+            /** Format: int64 */
+            to_folio_id: number;
+            /** Format: int64 */
+            stay_id?: number | null;
+            room?: string;
+            /** Format: date-time */
+            returned_at?: string | null;
+        };
+        PosBillTotals: {
+            base: string;
+            discount: string;
+            net: string;
+            service: string;
+            tax: string;
+            /** @description What the lines come to with service and tax, voids and discounts after the send in. */
+            sold: string;
+            /** @description The quote of the lines that are not sent yet. */
+            drafts: string;
+            rounding: string;
+            paid: string;
+            /** @description What was charged to a room. */
+            transferred: string;
+            balance: string;
+            /** @description The balance and the drafts: what is to pay now. */
+            payable: string;
+            /** @description Payable rounded as the outlet rounds cash. */
+            cash_payable: string;
+        };
+        PosBill: {
+            /** Format: int64 */
+            id: number;
+            client_uuid: string;
+            /** Format: int64 */
+            outlet_id: number;
+            outlet_code: string;
+            outlet_name: string;
+            /** Format: int64 */
+            folio_id?: number | null;
+            bill_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED" | "VOID" | "MERGED";
+            /** @enum {string} */
+            order_type: "DINE_IN" | "TAKEAWAY" | "ROOM_SERVICE" | "DIRECT";
+            /** Format: int64 */
+            table_id?: number | null;
+            table_code?: string;
+            guest_count?: number | null;
+            /** Format: int64 */
+            target_stay_id?: number | null;
+            target_room?: string;
+            customer_name?: string;
+            /** Format: int64 */
+            waiter_id?: number | null;
+            waiter_name?: string;
+            /** @enum {string} */
+            comp_treatment: "PAYMENT_COMP" | "DISCOUNT_100";
+            business_date_opened: components["schemas"]["Date"];
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            bill_requested_at?: string | null;
+            /** Format: date-time */
+            closed_at?: string | null;
+            closed_business_date?: components["schemas"]["Date"] | null;
+            /** Format: int64 */
+            merged_into_bill_id?: number | null;
+            note?: string;
+            version: number;
+            lines: components["schemas"]["PosBillLine"][];
+            payments: components["schemas"]["PosBillPayment"][];
+            room_charges: components["schemas"]["PosBillRoomCharge"][];
+            totals: components["schemas"]["PosBillTotals"];
+        };
+        PosOpenBillInput: {
+            /** @description A uuid the client made (v7 is time-ordered). */
+            client_uuid: string;
+            /** @enum {string} */
+            order_type: "DINE_IN" | "TAKEAWAY" | "ROOM_SERVICE" | "DIRECT";
+            /** Format: int64 */
+            table_id?: number | null;
+            guest_count?: number | null;
+            /**
+             * Format: int64
+             * @description Room service only: the room it is for. A hint for the screen, not a link of money.
+             */
+            target_stay_id?: number | null;
+            customer_name?: string;
+            note?: string;
+        };
+        PosUpdateBillInput: {
+            /** Format: int64 */
+            table_id?: number | null;
+            order_type?: string;
+            guest_count?: number | null;
+            customer_name?: string;
+            note?: string;
+            version?: number;
+        };
+        PosAddLineInput: {
+            client_uuid: string;
+            /** Format: int64 */
+            product_id: number;
+            quantity: string;
+            options?: components["schemas"]["PosLineOptionInput"][];
+            note?: string;
+        };
+        PosUpdateLineInput: {
+            quantity: string;
+            options?: components["schemas"]["PosLineOptionInput"][];
+            note?: string;
+        };
+        PosSendInput: {
+            /** @description The uuid of the round. */
+            client_uuid: string;
+        };
+        PosVoidLineInput: {
+            reason: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        PosDiscountInput: {
+            /** @enum {string} */
+            scope: "LINE" | "BILL";
+            /** Format: int64 */
+            line_id?: number | null;
+            percent?: string | null;
+            amount?: string | null;
+            reason: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        PosCompInput: {
+            /** @description The whole bill when empty. */
+            line_ids?: number[];
+            reason: string;
+            /** @description The guest or the manager who authorises it. */
+            name: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        PosPayLine: {
+            /** @enum {string} */
+            method: "CASH" | "CARD" | "QRIS" | "BANK_TRANSFER" | "OTHER" | "ROOM" | "COMPANY";
+            amount: string;
+            reference?: string;
+            /** @description Who paid, as "Guest 1/3". */
+            label?: string;
+            /**
+             * Format: int64
+             * @description The room
+             */
+            stay_id?: number | null;
+            /**
+             * Format: int64
+             * @description The company
+             */
+            company_id?: number | null;
+            /** @description The cash the guest gave */
+            tendered?: string | null;
+        };
+        PosPayInput: {
+            payments: components["schemas"]["PosPayLine"][];
+        };
+        PosPayResult: {
+            bill: components["schemas"]["PosBill"];
+            change: string;
+            closed: boolean;
+            open_drawer: boolean;
+        };
+        PosSplitInput: {
+            /** @description The uuid of the new bill. */
+            client_uuid: string;
+            line_ids: number[];
+        };
+        PosMergeInput: {
+            /** Format: int64 */
+            into_bill_id: number;
+        };
+        PosReopenInput: {
+            reason: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        PosRoomChargeCorrectionInput: {
+            /**
+             * Format: int64
+             * @description The room the charge moves to (the move only).
+             */
+            stay_id?: number | null;
+            reason: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        PosRoomLookup: {
+            /** Format: int64 */
+            stay_id: number;
+            room: string;
+            guest: string;
+            /** @enum {string} */
+            target_type?: "" | "GUEST" | "COMPANY" | "MASTER";
+            target_number?: string;
+            routed?: boolean;
+            open: boolean;
+            /** @enum {string} */
+            reason?: "" | "NEVER_OPENED" | "MANUAL" | "LIMIT_REACHED" | "CHECKOUT" | "EXPIRED" | "FOLIO_CLOSED" | "OUTLET_NOT_ALLOWED" | "ROUTING_TARGET_CLOSED";
+            limit?: string | null;
+            used?: string | null;
+            remaining?: string | null;
+        };
+        PosRoomLookupList: {
+            data: components["schemas"]["PosRoomLookup"][];
+        };
+        PosQuoteInput: {
+            /** Format: int64 */
+            outlet_id: number;
+            /** Format: int64 */
+            product_id: number;
+            quantity: string;
+            options?: components["schemas"]["PosLineOptionInput"][];
+            discount_amount?: string | null;
+        };
+        PosQuote: {
+            unit_price: string;
+            base_amount: string;
+            discount_amount: string;
+            net_amount: string;
+            service_amount: string;
+            tax_amount: string;
+            total: string;
+        };
+        PosReportDay: {
+            business_date: components["schemas"]["Date"];
+            bills: number;
+            net: string;
+            service: string;
+            tax: string;
+            rounding: string;
+            total: string;
+        };
+        PosReportTotals: {
+            bills: number;
+            net: string;
+            service: string;
+            tax: string;
+            rounding: string;
+            total: string;
+        };
+        PosReportProduct: {
+            /** Format: int64 */
+            product_id: number;
+            name: string;
+            category: string;
+            quantity: string;
+            base: string;
+            discount: string;
+            net: string;
+            service: string;
+            tax: string;
+            total: string;
+        };
+        PosReportMethod: {
+            method: string;
+            payments: number;
+            amount: string;
+        };
+        PosReportEvent: {
+            business_date: components["schemas"]["Date"];
+            bill_number: string;
+            what: string;
+            amount: string;
+            reason?: string;
+            by?: string;
+            approved_by?: string;
+            kind?: string;
+        };
+        PosReportPerson: {
+            name: string;
+            bills?: number;
+            payments?: number;
+            cash: string;
+            other: string;
+            total: string;
+        };
+        PosOutletReport: {
+            /** Format: int64 */
+            outlet_id: number;
+            outlet_name: string;
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            days: components["schemas"]["PosReportDay"][];
+            totals: components["schemas"]["PosReportTotals"];
+            products: components["schemas"]["PosReportProduct"][];
+            methods: components["schemas"]["PosReportMethod"][];
+            voids: components["schemas"]["PosReportEvent"][];
+            discounts: components["schemas"]["PosReportEvent"][];
+            comps: components["schemas"]["PosReportEvent"][];
+            cashiers: components["schemas"]["PosReportPerson"][];
+            waiters: components["schemas"]["PosReportPerson"][];
+            room_charges: {
+                count: number;
+                amount: string;
+                returned: number;
+            };
+            open_bills: {
+                count: number;
+                balance: string;
+            };
         };
         FolioOutletLockInput: {
             /** @description Required and above zero; there is no unlimited. */
@@ -18505,7 +19581,10 @@ export interface operations {
                 reservation_id?: number;
                 /** @description The master folio of that group. */
                 booking_group_id?: number;
-                folio_type?: "GUEST" | "COMPANY" | "MASTER";
+                /** @description Without it the bills of the outlets (OUTLET) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills. */
+                folio_type?: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+                /** @description The bills of one outlet. */
+                outlet_id?: number;
                 stay_id?: number;
                 status?: "OPEN" | "CLOSED";
                 /** @description true: only the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee. */
@@ -27749,6 +28828,829 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getPosFloor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosFloorState"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getPosCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosCatalog"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listPosBills: {
+        parameters: {
+            query?: {
+                /** @description OPEN, CLOSED, VOID or MERGED. */
+                status?: string;
+                /** @description The bills of a table. */
+                table_id?: number;
+                /** @description A business date: opened or closed that day. */
+                date?: string;
+                /** @description Part of a bill number, a table, a name or a room. */
+                q?: string;
+                /** @description At most 200. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBillList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    openPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosOpenBillInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosHold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosHoldInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosHold"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    seatPosHold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    cancelPosHold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    openPosDrawer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosReasonInput"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    lookupPosRooms: {
+        parameters: {
+            query?: {
+                /** @description A room number or part of the name of a guest, 1 to 40 characters. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosRoomLookupList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPosOutletReport: {
+        parameters: {
+            query?: {
+                /** @description First business date. */
+                from?: string;
+                /** @description Last business date, at most a year after the first. */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosOutletReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    quotePosLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosQuoteInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosQuote"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updatePosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosUpdateBillInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    addPosBillLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosAddLineInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updatePosBillLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosUpdateLineInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deletePosBillLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    voidPosBillLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lineId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosVoidLineInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    sendPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosSendInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    discountPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosDiscountInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    compPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosCompInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    requestPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    payPosBill: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosPayInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosPayResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    splitPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosSplitInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    mergePosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosMergeInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    voidPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    reopenPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosReopenInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    returnPosRoomCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosRoomChargeCorrectionInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    movePosRoomCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosRoomChargeCorrectionInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     getFolioOutletLock: {

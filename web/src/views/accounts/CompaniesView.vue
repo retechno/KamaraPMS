@@ -32,7 +32,7 @@ const canManage = computed(() => auth.can('company.manage', property.currentId))
 const canRead = computed(() => auth.can('reservation.read', property.currentId) || auth.can('cityledger.read', property.currentId))
 const blank = () => ({
   code: '', name: '', contact_name: '', email: '', phone: '', address: '', city: '', tax_id: '', credit_limit: '', unlimited: true,
-  payment_terms_days: 30, notes: '', is_active: true,
+  payment_terms_days: 30, notes: '', is_active: true, pos_billing_allowed: false,
 })
 const form = reactive(blank())
 const fieldError = (field: string) => error.value?.fieldMessage(field)
@@ -61,7 +61,7 @@ function startEdit(c: Company): void {
   Object.assign(form, blank(), {
     code: c.code, name: c.name, contact_name: c.contact_name ?? '', email: c.email ?? '', phone: c.phone ?? '', address: c.address ?? '', city: c.city ?? '',
     tax_id: c.tax_id ?? '', credit_limit: c.credit_limit ?? '', unlimited: c.credit_limit === null, payment_terms_days: c.payment_terms_days,
-    notes: c.notes ?? '', is_active: c.is_active,
+    notes: c.notes ?? '', is_active: c.is_active, pos_billing_allowed: c.pos_billing_allowed,
   })
   error.value = null
   editing.value = c
@@ -74,7 +74,7 @@ async function save(): Promise<void> {
   error.value = null
   const common = {
     name: form.name, contact_name: form.contact_name, email: form.email, phone: form.phone, address: form.address, city: form.city, tax_id: form.tax_id,
-    credit_limit: form.unlimited ? '' : form.credit_limit, payment_terms_days: Number(form.payment_terms_days), notes: form.notes, is_active: form.is_active,
+    credit_limit: form.unlimited ? '' : form.credit_limit, payment_terms_days: Number(form.payment_terms_days), notes: form.notes, is_active: form.is_active, pos_billing_allowed: form.pos_billing_allowed,
   }
   try {
     if (editing.value === 'new') {
@@ -164,6 +164,10 @@ watch(() => property.currentId, load, { immediate: true })
           <label class="flex items-center gap-2 self-end pb-2 text-sm">
             <input v-model="form.is_active" name="is_active" type="checkbox" class="size-4 accent-primary" />
             <span>{{ t('companies.activeCheck') }}</span>
+          </label>
+          <label class="flex items-center gap-2 self-end pb-2 text-sm">
+            <input v-model="form.pos_billing_allowed" name="pos_billing_allowed" type="checkbox" class="size-4 accent-primary" data-testid="pos-billing" />
+            <span>{{ t('companies.posBilling') }}</span>
           </label>
         </div>
         <div class="mt-4 flex justify-end gap-2">

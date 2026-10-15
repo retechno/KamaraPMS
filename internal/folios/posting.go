@@ -80,6 +80,8 @@ type itemSpec struct {
 	components    []foliosdb.InsertFolioItemComponentParams
 	// revenueAccount names the account of the item when it is not the account of its charge code: the code TRF has none, its account is the system key FOLIO_TRANSFER.
 	revenueAccount *string
+	// departmentID is the department of the item when it is not the one of its charge code: the sub-department of the outlet that sells it (docs/architecture/34-pos.md 3.2).
+	departmentID *int64
 }
 
 // insert writes the item and its components and bumps the folio's version. The deferred trigger checks at
@@ -87,7 +89,7 @@ type itemSpec struct {
 func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem, error) {
 	q := ps.s.q(ctx)
 	a := spec.amounts
-	if spec.reversesItemID == nil && spec.copiesItemID == nil && spec.chargeCodeID != nil {
+	if spec.reversesItemID == nil && spec.copiesItemID == nil && spec.chargeCodeID != nil && spec.departmentID == nil {
 		if err := ps.requireDepartment(ctx, *spec.chargeCodeID); err != nil {
 			return foliosdb.FolioItem{}, err
 		}
@@ -99,7 +101,7 @@ func (ps posting) insert(ctx context.Context, spec itemSpec) (foliosdb.FolioItem
 		Description: spec.description, Quantity: a.quantity, UnitPrice: a.unitPrice, PriceMode: a.priceMode, BaseAmount: a.base,
 		DiscountAmount: a.discount, NetAmount: a.net, RoundingAdjustment: a.rounding, ServiceChargeTotal: a.service, TaxTotal: a.tax,
 		Debit: a.debit, Credit: a.credit, Source: sourceOf(spec.source), Reason: spec.reason, IdempotencyKey: spec.key, ActorID: ps.p.ActorID(),
-		ApprovedBy: spec.approvedBy, RevenueAccountOverride: spec.revenueAccount,
+		ApprovedBy: spec.approvedBy, RevenueAccountOverride: spec.revenueAccount, DepartmentOverride: spec.departmentID,
 	})
 	if err != nil {
 		return foliosdb.FolioItem{}, err
@@ -323,6 +325,12 @@ func (ps posting) reverseAs(ctx context.Context, orig foliosdb.FolioItem, reason
 	if approval.IsZero() {
 		return foliosdb.FolioItem{}, errApprovalRequired()
 	}
+	by := approval.UserID()
+	return ps.reverseBy(ctx, orig, reason, &by, refType, refID)
+}
+
+// reverseBy writes the reversal; approvedBy is nil only for the move of a line between two bills of an outlet (a split or a merge), which is the cashier's own act (34-pos.md 5.3).
+func (ps posting) reverseBy(ctx context.Context, orig foliosdb.FolioItem, reason string, approvedBy *int64, refType, refID *string) (foliosdb.FolioItem, error) {
 	q := ps.s.q(ctx)
 	comps, err := q.ListItemComponents(ctx, foliosdb.ListItemComponentsParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, ItemIds: []int64{orig.ID}})
 	if err != nil {
@@ -335,10 +343,14 @@ func (ps posting) reverseAs(ctx context.Context, orig foliosdb.FolioItem, reason
 			TaxOnService: c.TaxOnService, BaseAmount: c.BaseAmount.Neg(), Amount: c.Amount.Neg(), Sequence: c.Sequence,
 		}
 	}
-	by, origID := approval.UserID(), orig.ID
+	origID := orig.ID
+	source := ""
+	if approvedBy == nil {
+		source = SourcePOS // the one reversal that has no approver is the cashier's own move of a line between two bills
+	}
 	spec := itemSpec{
-		transactionType: TypeReversal, chargeCodeID: orig.ChargeCodeID, reversesItemID: &origID, referenceType: refType, referenceID: refID,
-		serviceDate: orig.ServiceDate, description: "Reversal: " + orig.Description, reason: &reason, approvedBy: &by, components: specComps,
+		transactionType: TypeReversal, chargeCodeID: orig.ChargeCodeID, reversesItemID: &origID, referenceType: refType, referenceID: refID, source: source,
+		serviceDate: orig.ServiceDate, description: "Reversal: " + orig.Description, reason: &reason, approvedBy: approvedBy, components: specComps,
 		amounts: itemAmounts{
 			quantity: orig.Quantity, unitPrice: orig.UnitPrice, priceMode: orig.PriceMode, base: orig.BaseAmount.Neg(), discount: orig.DiscountAmount.Neg(),
 			net: orig.NetAmount.Neg(), rounding: orig.RoundingAdjustment.Neg(), service: orig.ServiceChargeTotal.Neg(), tax: orig.TaxTotal.Neg(),
@@ -351,6 +363,36 @@ func (ps posting) reverseAs(ctx context.Context, orig foliosdb.FolioItem, reason
 	}
 	err = q.FlipPostingRegister(ctx, foliosdb.FlipPostingRegisterParams{PropertyID: ps.propertyID, ItemID: orig.ID, ReversalItemID: &item.ID})
 	return item, err
+}
+
+// negate writes the correction of an item of an earlier business day: an ADJUSTMENT of today that is exactly the opposite of the original (every signed column and every component negated, the
+// revenue account and the department copied), so that the revenue of the day it was sold stays as it was and the correction reduces today's, as a void of a closed day does
+// (docs/architecture/34-pos.md 7.6). It needs a verified approval.
+func (ps posting) negate(ctx context.Context, orig foliosdb.FolioItem, reason string, approval iam.Approval, departmentID *int64) (foliosdb.FolioItem, error) {
+	if approval.IsZero() {
+		return foliosdb.FolioItem{}, errApprovalRequired()
+	}
+	comps, err := ps.s.q(ctx).ListItemComponents(ctx, foliosdb.ListItemComponentsParams{TenantID: ps.p.TenantID, PropertyID: ps.propertyID, ItemIds: []int64{orig.ID}})
+	if err != nil {
+		return foliosdb.FolioItem{}, err
+	}
+	specComps := make([]foliosdb.InsertFolioItemComponentParams, len(comps))
+	for i, c := range comps {
+		specComps[i] = foliosdb.InsertFolioItemComponentParams{
+			ComponentType: c.ComponentType, TaxID: c.TaxID, ServiceChargeID: c.ServiceChargeID, Code: c.Code, Name: c.Name, Rate: c.Rate,
+			TaxOnService: c.TaxOnService, BaseAmount: c.BaseAmount.Neg(), Amount: c.Amount.Neg(), Sequence: c.Sequence,
+		}
+	}
+	by, origID := approval.UserID(), orig.ID
+	return ps.insert(ctx, itemSpec{
+		transactionType: TypeAdjustment, chargeCodeID: orig.ChargeCodeID, copiesItemID: &origID, referenceType: orig.ReferenceType, referenceID: orig.ReferenceID,
+		serviceDate: ps.bd, description: "Void: " + orig.Description, reason: &reason, approvedBy: &by, components: specComps, source: orig.Source, departmentID: departmentID,
+		amounts: itemAmounts{
+			quantity: orig.Quantity, unitPrice: orig.UnitPrice, priceMode: orig.PriceMode, base: orig.BaseAmount.Neg(), discount: orig.DiscountAmount.Neg(),
+			net: orig.NetAmount.Neg(), rounding: orig.RoundingAdjustment.Neg(), service: orig.ServiceChargeTotal.Neg(), tax: orig.TaxTotal.Neg(),
+			debit: orig.Credit, credit: orig.Debit,
+		},
+	})
 }
 
 // stayOf is the stay a ledger line is stamped with: the one the posting names (a room night routed to a folio of no stay), else the stay of the folio.

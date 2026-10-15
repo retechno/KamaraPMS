@@ -307,3 +307,368 @@ ORDER BY o.code;
 -- The charge codes of the property by code, for the CSV import of products.
 -- name: ListChargeCodeRefs :many
 SELECT id, code, charge_type, is_active FROM charge_codes WHERE tenant_id = @tenant_id AND property_id = @property_id;
+
+-- ================================================================ PR 2: bills, lines, rounds, tickets, holds (docs/architecture/34-pos.md 3.3, 5)
+
+-- The next number of the bills of an outlet: the sequence of the outlet, the last lock of the transaction (level 50).
+-- name: NextBillNumber :one
+UPDATE pos_outlets SET next_bill_no = next_bill_no + 1
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING (next_bill_no - 1)::bigint AS number, code;
+
+-- name: InsertBill :one
+INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, folio_id, bill_number, order_type, table_id, guest_count, target_stay_id, customer_name, waiter_id,
+                       comp_treatment, business_date_opened, opened_at, note, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @outlet_id, @client_uuid, sqlc.narg(folio_id), sqlc.narg(bill_number), @order_type, sqlc.narg(table_id), sqlc.narg(guest_count),
+        sqlc.narg(target_stay_id), sqlc.narg(customer_name), sqlc.narg(actor_id), @comp_treatment, @business_date_opened, @opened_at, sqlc.narg(note), sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: GetBill :one
+SELECT b.id, b.outlet_id, b.client_uuid, b.folio_id, b.bill_number, b.status, b.order_type, b.table_id, b.guest_count, b.target_stay_id, b.customer_name, b.waiter_id,
+       b.comp_treatment, b.business_date_opened, b.opened_at, b.bill_requested_at, b.closed_at, b.closed_business_date, b.merged_into_bill_id, b.note, b.version,
+       COALESCE(t.code, '')::text AS table_code, COALESCE(u.full_name, '')::text AS waiter_name,
+       COALESCE((SELECT r.room_number FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                  WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id ORDER BY sr.id DESC LIMIT 1), '')::text AS target_room
+FROM pos_bills b
+LEFT JOIN pos_tables t ON t.property_id = b.property_id AND t.id = b.table_id
+LEFT JOIN users u ON u.id = b.waiter_id
+WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.id = @id;
+
+-- name: GetBillByUUID :one
+SELECT id FROM pos_bills WHERE tenant_id = @tenant_id AND property_id = @property_id AND client_uuid = @client_uuid;
+
+-- name: GetBillOfFolio :one
+SELECT id FROM pos_bills WHERE tenant_id = @tenant_id AND property_id = @property_id AND folio_id = @folio_id;
+
+-- name: UpdateBillMeta :execrows
+UPDATE pos_bills SET table_id = sqlc.narg(table_id), order_type = @order_type, guest_count = sqlc.narg(guest_count), customer_name = sqlc.narg(customer_name), note = sqlc.narg(note),
+       version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'OPEN';
+
+-- name: SetBillRequested :exec
+UPDATE pos_bills SET bill_requested_at = @at::timestamptz, version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'OPEN';
+
+-- name: CloseBill :execrows
+UPDATE pos_bills SET status = @status, closed_at = @at::timestamptz, closed_business_date = @business_date, merged_into_bill_id = sqlc.narg(merged_into_bill_id),
+       version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'OPEN';
+
+-- name: ReopenBill :execrows
+UPDATE pos_bills SET status = 'OPEN', closed_at = NULL, closed_business_date = NULL, bill_requested_at = NULL, version = version + 1, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'CLOSED';
+
+-- The bills of an outlet with what a list shows. The balance of an open bill is the balance of its folio; a draft line is not in it (the screen adds the quote of the drafts).
+-- name: ListBills :many
+SELECT b.id, b.client_uuid, b.folio_id, b.bill_number, b.status, b.order_type, b.table_id, b.guest_count, b.target_stay_id, b.customer_name, b.waiter_id,
+       b.opened_at, b.bill_requested_at, b.closed_at, b.business_date_opened, b.closed_business_date, b.version,
+       COALESCE(t.code, '')::text AS table_code, COALESCE(u.full_name, '')::text AS waiter_name,
+       COALESCE((SELECT sum(i.debit) - sum(i.credit) FROM folio_items i WHERE i.property_id = b.property_id AND i.folio_id = b.folio_id), 0)::numeric AS balance,
+       COALESCE((SELECT sum(i.debit) FROM folio_items i WHERE i.property_id = b.property_id AND i.folio_id = b.folio_id AND i.transaction_type = 'CHARGE'), 0)::numeric AS sold_debit,
+       (SELECT count(*) FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'DRAFT')::int AS draft_lines,
+       (SELECT count(*) FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT')::int AS sent_lines,
+       COALESCE((SELECT r.room_number FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                  WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id ORDER BY sr.id DESC LIMIT 1), '')::text AS target_room
+FROM pos_bills b
+LEFT JOIN pos_tables t ON t.property_id = b.property_id AND t.id = b.table_id
+LEFT JOIN users u ON u.id = b.waiter_id
+WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.outlet_id = @outlet_id
+  AND (sqlc.narg(status)::text IS NULL OR b.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(table_id)::bigint IS NULL OR b.table_id = sqlc.narg(table_id)::bigint)
+  AND (sqlc.narg(day)::date IS NULL OR b.business_date_opened = sqlc.narg(day)::date OR b.closed_business_date = sqlc.narg(day)::date)
+  AND (sqlc.narg(q)::text IS NULL OR b.bill_number ILIKE '%' || sqlc.narg(q)::text || '%' OR COALESCE(t.code, '') ILIKE '%' || sqlc.narg(q)::text || '%'
+       OR COALESCE(b.customer_name, '') ILIKE '%' || sqlc.narg(q)::text || '%'
+       OR EXISTS (SELECT 1 FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                   WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id AND r.room_number ILIKE '%' || sqlc.narg(q)::text || '%'))
+ORDER BY b.id DESC
+LIMIT @row_limit;
+
+-- ---------------------------------------------------------------- lines
+-- name: InsertBillLine :one
+INSERT INTO pos_bill_lines (tenant_id, property_id, bill_id, client_uuid, product_id, product_name, charge_code_id, rule_profile_id, options, quantity, unit_price,
+                            discount_pct, discount_amount, note, station_id, created_by)
+VALUES (@tenant_id, @property_id, @bill_id, @client_uuid, @product_id, @product_name, @charge_code_id, sqlc.narg(rule_profile_id), @options::jsonb, @quantity, @unit_price,
+        sqlc.narg(discount_pct), @discount_amount, sqlc.narg(note), sqlc.narg(station_id), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: ListBillLines :many
+SELECT l.id, l.bill_id, l.client_uuid, l.product_id, l.product_name, l.charge_code_id, l.rule_profile_id, l.options, l.quantity, l.unit_price, l.discount_pct, l.discount_amount,
+       l.discount_reason, l.is_comp, l.note, l.station_id, l.status, l.round_id, l.folio_item_id, l.voided_item_id, l.created_by, l.created_at, l.sent_by, l.sent_at,
+       l.voided_by, l.voided_at, l.void_approved_by, l.void_reason, COALESCE(r.round_no, 0)::int AS round_no,
+       COALESCE(i.base_amount, 0)::numeric AS item_base, COALESCE(i.discount_amount, 0)::numeric AS item_discount, COALESCE(i.net_amount, 0)::numeric AS item_net,
+       COALESCE(i.service_charge_total, 0)::numeric AS item_service, COALESCE(i.tax_total, 0)::numeric AS item_tax, COALESCE(i.debit - i.credit, 0)::numeric AS item_total,
+       COALESCE((SELECT t.status FROM pos_ticket_lines tl JOIN pos_tickets t ON t.property_id = tl.property_id AND t.id = tl.ticket_id
+                  WHERE tl.property_id = l.property_id AND tl.bill_line_id = l.id AND NOT tl.is_void ORDER BY t.id DESC LIMIT 1), '')::text AS ticket_status,
+       COALESCE((SELECT sum(a.net_amount) FROM folio_items a WHERE a.property_id = l.property_id AND a.reference_type = 'POS_BILL_LINE' AND a.reference_id = l.client_uuid::text
+                  AND a.transaction_type = 'ADJUSTMENT'), 0)::numeric AS adjusted_net,
+       COALESCE(vu.full_name, '')::text AS voided_by_name, COALESCE(au.full_name, '')::text AS approved_by_name, COALESCE(cu.full_name, '')::text AS created_by_name
+FROM pos_bill_lines l
+LEFT JOIN pos_rounds r ON r.property_id = l.property_id AND r.id = l.round_id
+LEFT JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users vu ON vu.id = l.voided_by
+LEFT JOIN users au ON au.id = l.void_approved_by
+LEFT JOIN users cu ON cu.id = l.created_by
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.bill_id = @bill_id
+ORDER BY l.created_at, l.client_uuid;
+
+-- name: GetBillLine :one
+SELECT id, bill_id, client_uuid, product_id, product_name, charge_code_id, rule_profile_id, options, quantity, unit_price, discount_pct, discount_amount, discount_reason, is_comp,
+       note, station_id, status, round_id, folio_item_id, voided_item_id
+FROM pos_bill_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetBillLineByUUID :one
+SELECT id FROM pos_bill_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND bill_id = @bill_id AND client_uuid = @client_uuid;
+
+-- name: UpdateDraftLine :execrows
+UPDATE pos_bill_lines SET quantity = @quantity, options = @options::jsonb, unit_price = @unit_price, note = sqlc.narg(note)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND bill_id = @bill_id AND status = 'DRAFT';
+
+-- name: SetLineDiscount :execrows
+UPDATE pos_bill_lines SET discount_pct = sqlc.narg(discount_pct), discount_amount = @discount_amount, discount_reason = sqlc.narg(discount_reason), discount_by = sqlc.narg(actor_id), is_comp = @is_comp
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND bill_id = @bill_id AND status = 'DRAFT';
+
+-- name: DeleteDraftLine :execrows
+DELETE FROM pos_bill_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND bill_id = @bill_id AND status = 'DRAFT';
+
+-- name: MarkLineSent :exec
+UPDATE pos_bill_lines SET status = 'SENT', round_id = @round_id, folio_item_id = @folio_item_id, sent_by = sqlc.narg(actor_id), sent_at = @at::timestamptz
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'DRAFT';
+
+-- name: MarkLineVoid :exec
+UPDATE pos_bill_lines SET status = 'VOID', voided_item_id = @voided_item_id, voided_by = sqlc.narg(actor_id), voided_at = @at::timestamptz, void_approved_by = sqlc.narg(approved_by),
+       void_reason = @reason
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'SENT';
+
+-- The line moves to another bill (merge, split); a sent line follows its copy on the folio of the other bill.
+-- name: MoveLineToBill :exec
+UPDATE pos_bill_lines SET bill_id = @bill_id, folio_item_id = COALESCE(sqlc.narg(folio_item_id)::bigint, folio_item_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- ---------------------------------------------------------------- rounds and tickets
+-- name: NextRoundNo :one
+SELECT (COALESCE(max(round_no), 0) + 1)::int AS round_no FROM pos_rounds WHERE property_id = @property_id AND bill_id = @bill_id;
+
+-- name: InsertRound :one
+INSERT INTO pos_rounds (tenant_id, property_id, bill_id, round_no, client_uuid, sent_by)
+VALUES (@tenant_id, @property_id, @bill_id, @round_no, @client_uuid, sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: GetRoundByUUID :one
+SELECT id, bill_id, round_no FROM pos_rounds WHERE tenant_id = @tenant_id AND property_id = @property_id AND client_uuid = @client_uuid;
+
+-- name: InsertTicket :one
+INSERT INTO pos_tickets (tenant_id, property_id, round_id, bill_id, station_id, kind)
+VALUES (@tenant_id, @property_id, @round_id, @bill_id, sqlc.narg(station_id), @kind)
+RETURNING id;
+
+-- name: InsertTicketLine :exec
+INSERT INTO pos_ticket_lines (tenant_id, property_id, ticket_id, bill_line_id, quantity, name, options_text, note, is_void)
+VALUES (@tenant_id, @property_id, @ticket_id, @bill_line_id, @quantity, @name, sqlc.narg(options_text), sqlc.narg(note), @is_void);
+
+-- A line voided before its ticket was served: the ticket line is struck through.
+-- name: StrikeTicketLines :exec
+UPDATE pos_ticket_lines SET is_void = true WHERE tenant_id = @tenant_id AND property_id = @property_id AND bill_line_id = @bill_line_id AND NOT is_void;
+
+-- ---------------------------------------------------------------- holds
+-- name: ListHolds :many
+SELECT h.id, h.table_id, t.code AS table_code, h.business_date, h.from_time, h.party_size, h.name, h.phone, h.note, h.status
+FROM pos_table_holds h JOIN pos_tables t ON t.property_id = h.property_id AND t.id = h.table_id JOIN pos_areas a ON a.property_id = t.property_id AND a.id = t.area_id
+WHERE h.tenant_id = @tenant_id AND h.property_id = @property_id AND a.outlet_id = @outlet_id AND h.business_date = @business_date AND h.status = 'HELD'
+ORDER BY h.from_time, h.id;
+
+-- name: InsertHold :one
+INSERT INTO pos_table_holds (tenant_id, property_id, table_id, business_date, from_time, party_size, name, phone, note, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @table_id, @business_date, @from_time::time, sqlc.narg(party_size), @name, sqlc.narg(phone), sqlc.narg(note), sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: SetHoldStatus :execrows
+UPDATE pos_table_holds SET status = @status, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'HELD';
+
+-- name: GetTableOutlet :one
+SELECT t.id, t.code, t.is_active, a.outlet_id FROM pos_tables t JOIN pos_areas a ON a.property_id = t.property_id AND a.id = t.area_id
+WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id AND t.id = @id;
+
+-- ---------------------------------------------------------------- the product as sold at an outlet (the price list of the outlet)
+-- name: GetSellableProduct :one
+SELECT p.id, p.name, p.short_name, p.charge_code_id, p.rule_profile_id, p.is_active, i.station_id AS list_station_id, p.station_id AS product_station_id,
+       i.price, COALESCE(i.is_sold, false)::boolean AS is_sold,
+       EXISTS (SELECT 1 FROM pos_outlet_sold_out so WHERE so.property_id = p.property_id AND so.outlet_id = @outlet_id AND so.product_id = p.id AND so.business_date = @business_date)::boolean AS sold_out
+FROM pos_products p
+JOIN pos_outlets o ON o.property_id = p.property_id AND o.id = @outlet_id
+LEFT JOIN pos_price_list_items i ON i.property_id = p.property_id AND i.price_list_id = o.price_list_id AND i.product_id = p.id
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.id = @product_id;
+
+-- The rooms an outlet may look up: in-house stays whose room matches the number or the guest's name.
+-- name: LookupRooms :many
+SELECT s.id AS stay_id, r.room_number, btrim(COALESCE(g.first_name, '') || ' ' || g.last_name)::text AS guest_name
+FROM stays s
+JOIN stay_rooms sr ON sr.property_id = s.property_id AND sr.stay_id = s.id AND sr.check_out_at IS NULL
+JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.status = 'OPEN'
+  AND (r.room_number ILIKE @q::text || '%' OR btrim(COALESCE(g.first_name, '') || ' ' || g.last_name) ILIKE '%' || @q::text || '%')
+ORDER BY r.room_number
+LIMIT 20;
+
+-- What a bill has sold, rounded, been paid and charged to a room, read from its folio (the ledger is the one source of the amounts).
+-- name: BillLedgerSums :one
+SELECT
+  COALESCE(sum(i.debit - i.credit) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS sold,
+  COALESCE(sum(i.debit - i.credit) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND c.charge_type = 'ROUNDING'), 0)::numeric AS rounding,
+  COALESCE(sum(i.credit - i.debit) FILTER (WHERE i.transaction_type IN ('PAYMENT', 'REFUND')), 0)::numeric AS paid,
+  COALESCE(sum(i.credit - i.debit) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND c.charge_type = 'TRANSFER'), 0)::numeric AS transferred,
+  COALESCE(sum(i.base_amount) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS base,
+  COALESCE(sum(i.net_amount) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS net,
+  COALESCE(sum(i.service_charge_total) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS service,
+  COALESCE(sum(i.tax_total) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS tax
+FROM folio_items i LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
+WHERE i.property_id = @property_id AND i.folio_id = @folio_id;
+
+-- name: ListBillRoomCharges :many
+SELECT c.id, c.amount, c.to_folio_id, c.stay_id, c.returned_at, COALESCE(r.room_number, '')::text AS room_number
+FROM pos_room_charges c
+LEFT JOIN stay_rooms sr ON sr.property_id = c.property_id AND sr.stay_id = c.stay_id AND sr.id = (SELECT max(x.id) FROM stay_rooms x WHERE x.property_id = c.property_id AND x.stay_id = c.stay_id)
+LEFT JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.bill_id = sqlc.narg(bill_id)
+ORDER BY c.id;
+
+-- name: MarkLineComp :exec
+UPDATE pos_bill_lines SET is_comp = true, discount_reason = sqlc.narg(reason), discount_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'SENT';
+
+-- name: GetRoomChargeForBill :one
+SELECT id, bill_id, from_folio_id, to_folio_id, stay_id, amount, returned_at FROM pos_room_charges WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- ================================================================ reports of an outlet (34-pos.md 13.2): everything is read from the ledger of the bills' folios, never a second set of totals
+
+-- Sales, service and tax of each business day: the lines the bills sold less what was voided and discounted after, without the lines of the transfers between folios (a split or a merge
+-- changes nothing of what was sold) and without the rounding, which has its own column.
+-- name: ReportDays :many
+SELECT i.business_date,
+       COALESCE(sum(i.net_amount) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS net,
+       COALESCE(sum(i.service_charge_total) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS service,
+       COALESCE(sum(i.tax_total) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS tax,
+       COALESCE(sum(i.debit - i.credit) FILTER (WHERE c.charge_type = 'ROUNDING'), 0)::numeric AS rounding,
+       COALESCE(sum(i.debit - i.credit) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS total,
+       count(DISTINCT i.folio_id) FILTER (WHERE i.transaction_type = 'CHARGE' AND i.source = 'POS')::int AS bills
+FROM folio_items i
+JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = @outlet_id
+LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.business_date BETWEEN @from_date AND @to_date
+  AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') <> 'TRANSFER'
+  AND NOT (i.source = 'TRANSFER' OR (i.reference_type = 'FOLIO_TRANSFER'))
+GROUP BY i.business_date
+ORDER BY i.business_date;
+
+-- name: ReportProducts :many
+SELECT l.product_id, l.product_name, COALESCE(cat.name, '')::text AS category, sum(l.quantity)::numeric AS quantity,
+       sum(i.base_amount)::numeric AS base, sum(i.discount_amount)::numeric AS discount, sum(i.net_amount)::numeric AS net, sum(i.service_charge_total)::numeric AS service,
+       sum(i.tax_total)::numeric AS tax, sum(i.debit - i.credit)::numeric AS total
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = @outlet_id
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = COALESCE(l.voided_item_id, l.folio_item_id)
+LEFT JOIN pos_products p ON p.property_id = l.property_id AND p.id = l.product_id
+LEFT JOIN pos_categories cat ON cat.property_id = p.property_id AND cat.id = p.category_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'SENT' AND i.service_date BETWEEN @from_date AND @to_date
+GROUP BY l.product_id, l.product_name, cat.name
+ORDER BY sum(i.debit - i.credit) DESC, l.product_name;
+
+-- name: ReportMethods :many
+SELECT p.payment_method AS method, count(*)::int AS payments, COALESCE(sum(p.amount), 0)::numeric AS amount
+FROM payments p JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = @outlet_id
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.business_date BETWEEN @from_date AND @to_date AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+GROUP BY p.payment_method
+ORDER BY p.payment_method;
+
+-- name: ReportRoomCharges :one
+SELECT count(*) FILTER (WHERE c.returned_at IS NULL)::int AS charges, COALESCE(sum(c.amount) FILTER (WHERE c.returned_at IS NULL), 0)::numeric AS amount,
+       count(*) FILTER (WHERE c.returned_at IS NOT NULL)::int AS returned
+FROM pos_room_charges c
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.outlet_id = @outlet_id AND c.business_date BETWEEN @from_date AND @to_date;
+
+-- name: ReportVoids :many
+SELECT l.id, COALESCE(b.bill_number, '')::text AS bill_number, l.product_name, l.quantity, (i.debit - i.credit)::numeric AS amount, l.void_reason,
+       COALESCE(vu.full_name, '')::text AS voided_by, COALESCE(au.full_name, '')::text AS approved_by, v.business_date
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = @outlet_id
+JOIN folio_items v ON v.property_id = l.property_id AND v.id = l.voided_item_id
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = v.reverses_item_id
+LEFT JOIN users vu ON vu.id = l.voided_by
+LEFT JOIN users au ON au.id = l.void_approved_by
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'VOID' AND v.business_date BETWEEN @from_date AND @to_date
+ORDER BY v.business_date, l.id;
+
+-- Discounts after the send are adjustments; discounts before it are on the line itself.
+-- name: ReportDiscounts :many
+SELECT COALESCE(b.bill_number, '')::text AS bill_number, i.description, (i.base_amount - i.discount_amount)::numeric AS amount, COALESCE(i.reason, '')::text AS reason,
+       COALESCE(cu.full_name, '')::text AS given_by, COALESCE(au.full_name, '')::text AS approved_by, i.business_date, 'ADJUSTMENT'::text AS kind
+FROM folio_items i
+JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = @outlet_id
+LEFT JOIN pos_bills b ON b.property_id = f.property_id AND b.folio_id = f.id
+LEFT JOIN users cu ON cu.id = i.created_by
+LEFT JOIN users au ON au.id = i.approved_by
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.transaction_type = 'ADJUSTMENT' AND i.source = 'POS' AND i.description LIKE 'Discount: %'
+  AND i.business_date BETWEEN @from_date AND @to_date
+UNION ALL
+SELECT COALESCE(b.bill_number, '')::text, l.product_name, i.discount_amount::numeric, COALESCE(l.discount_reason, '')::text, COALESCE(cu.full_name, '')::text, ''::text, i.business_date, 'LINE'::text
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = @outlet_id
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users cu ON cu.id = l.discount_by
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status IN ('SENT', 'VOID') AND i.discount_amount > 0 AND NOT l.is_comp AND i.business_date BETWEEN @from_date AND @to_date
+ORDER BY 7, 1;
+
+-- Complimentary: the payments of the method COMP and the lines made complimentary by a 100% discount.
+-- name: ReportComps :many
+SELECT COALESCE(b.bill_number, '')::text AS bill_number, p.amount::numeric AS amount, COALESCE(p.remarks, '')::text AS remarks, COALESCE(au.full_name, '')::text AS approved_by,
+       p.business_date, 'PAYMENT_COMP'::text AS treatment
+FROM payments p
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = @outlet_id
+LEFT JOIN pos_bills b ON b.property_id = f.property_id AND b.folio_id = f.id
+LEFT JOIN users au ON au.id = p.approved_by
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.payment_method = 'COMP' AND p.status = 'POSTED' AND p.business_date BETWEEN @from_date AND @to_date
+UNION ALL
+SELECT COALESCE(b.bill_number, '')::text, (i.debit - i.credit)::numeric, COALESCE(l.discount_reason, '')::text, COALESCE(cu.full_name, '')::text, i.business_date, 'DISCOUNT_100'::text
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = @outlet_id AND b.comp_treatment = 'DISCOUNT_100'
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users cu ON cu.id = l.discount_by
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.is_comp AND l.status = 'SENT' AND i.business_date BETWEEN @from_date AND @to_date
+ORDER BY 5, 1;
+
+-- name: ReportCashiers :many
+SELECT COALESCE(u.full_name, '')::text AS cashier, count(*)::int AS payments, COALESCE(sum(p.amount) FILTER (WHERE p.payment_method = 'CASH'), 0)::numeric AS cash,
+       COALESCE(sum(p.amount) FILTER (WHERE p.payment_method <> 'CASH'), 0)::numeric AS other
+FROM payments p JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = @outlet_id
+LEFT JOIN users u ON u.id = p.created_by
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.business_date BETWEEN @from_date AND @to_date AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+GROUP BY u.full_name
+ORDER BY u.full_name;
+
+-- name: ReportWaiters :many
+SELECT COALESCE(u.full_name, '')::text AS waiter, count(DISTINCT b.id)::int AS bills, COALESCE(sum(i.debit - i.credit), 0)::numeric AS total
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = @outlet_id
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users u ON u.id = COALESCE(l.created_by, b.waiter_id)
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.status = 'SENT' AND i.service_date BETWEEN @from_date AND @to_date
+GROUP BY u.full_name
+ORDER BY u.full_name;
+
+-- name: ReportOpenBills :one
+SELECT count(*)::int AS bills,
+       COALESCE(sum((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = b.property_id AND i.folio_id = b.folio_id)), 0)::numeric AS balance
+FROM pos_bills b WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.outlet_id = @outlet_id AND b.status = 'OPEN'
+  AND EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT');
+
+-- The open bills of the outlets for the night audit: a bill with a sold line is revenue of the day whose payment nobody counted; a bill with draft lines only has nothing in the books.
+-- name: NightAuditOpenBills :many
+SELECT o.id AS outlet_id, o.code AS outlet_code, o.name AS outlet_name, o.block_night_audit_with_open_bills AS blocks,
+       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT'))::int AS with_sold_lines,
+       count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT')
+                          AND EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'DRAFT'))::int AS drafts_only
+FROM pos_bills b JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
+WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.status = 'OPEN'
+GROUP BY o.id, o.code, o.name, o.block_night_audit_with_open_bills
+ORDER BY o.code;

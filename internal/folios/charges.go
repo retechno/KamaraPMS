@@ -110,6 +110,9 @@ func (s *Service) PostCharge(ctx context.Context, propertyID, folioID int64, key
 				if err := requireOpen(folio); err != nil {
 					return err
 				}
+				if err := refuseOutletFolios(folio); err != nil {
+					return err
+				}
 				if in.StayID != nil {
 					if folio.FolioType != FolioTypeMaster || folio.BookingGroupID == nil {
 						return apperr.Invalid("the charge is invalid", fieldErr("stay_id", "ONLY_ON_MASTER", "only on the master folio of a group"))
@@ -230,6 +233,9 @@ func (s *Service) PostAdjustment(ctx context.Context, propertyID, folioID int64,
 				if err := requireOpen(folio); err != nil {
 					return err
 				}
+				if err := refuseOutletFolios(folio); err != nil {
+					return err
+				}
 				if in.RelatedItemID != nil {
 					rel, err := s.q(ctx).GetFolioItem(ctx, foliosdb.GetFolioItemParams{TenantID: p.TenantID, PropertyID: propertyID, ID: *in.RelatedItemID})
 					if err != nil || rel.FolioID != folioID {
@@ -286,6 +292,9 @@ func (s *Service) Reverse(ctx context.Context, propertyID, itemID int64, in Corr
 			return err
 		}
 		if err := requireOpen(folio); err != nil {
+			return err
+		}
+		if err := refuseOutletFolios(folio); err != nil {
 			return err
 		}
 		item, err := q.GetFolioItem(ctx, foliosdb.GetFolioItemParams{TenantID: p.TenantID, PropertyID: propertyID, ID: itemID})

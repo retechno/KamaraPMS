@@ -18,37 +18,40 @@ var codePattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,19}$`)
 
 // Company is a corporate account of a property.
 type Company struct {
-	ID               int64     `json:"id"`
-	Code             string    `json:"code"`
-	Name             string    `json:"name"`
-	ContactName      string    `json:"contact_name,omitempty"`
-	Email            string    `json:"email,omitempty"`
-	Phone            string    `json:"phone,omitempty"`
-	Address          string    `json:"address,omitempty"`
-	City             string    `json:"city,omitempty"`
-	TaxID            string    `json:"tax_id,omitempty"`
-	CreditLimit      *string   `json:"credit_limit"` // null: no limit; "0": no credit
-	PaymentTermsDays int       `json:"payment_terms_days"`
-	Notes            string    `json:"notes,omitempty"`
-	IsActive         bool      `json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               int64   `json:"id"`
+	Code             string  `json:"code"`
+	Name             string  `json:"name"`
+	ContactName      string  `json:"contact_name,omitempty"`
+	Email            string  `json:"email,omitempty"`
+	Phone            string  `json:"phone,omitempty"`
+	Address          string  `json:"address,omitempty"`
+	City             string  `json:"city,omitempty"`
+	TaxID            string  `json:"tax_id,omitempty"`
+	CreditLimit      *string `json:"credit_limit"` // null: no limit; "0": no credit
+	PaymentTermsDays int     `json:"payment_terms_days"`
+	Notes            string  `json:"notes,omitempty"`
+	IsActive         bool    `json:"is_active"`
+	// PosBillingAllowed: the outlets may bill this company (a transfer of a bill to its city ledger account).
+	PosBillingAllowed bool      `json:"pos_billing_allowed"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // Input is the editable part of a company (the code is fixed at creation).
 type Input struct {
-	Code             string
-	Name             string
-	ContactName      string
-	Email            string
-	Phone            string
-	Address          string
-	City             string
-	TaxID            string
-	CreditLimit      string // "" = no limit
-	PaymentTermsDays int
-	Notes            string
-	IsActive         bool
+	Code              string
+	Name              string
+	ContactName       string
+	Email             string
+	Phone             string
+	Address           string
+	City              string
+	TaxID             string
+	CreditLimit       string // "" = no limit
+	PaymentTermsDays  int
+	Notes             string
+	IsActive          bool
+	PosBillingAllowed bool
 }
 
 // Normalize trims text and upper-cases the code.

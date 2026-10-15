@@ -9,6 +9,12 @@ INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_i
 VALUES (@tenant_id, @property_id, @folio_number, @reservation_id, sqlc.narg(stay_id), sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING *;
 
+-- The folio of a bill of an outlet (docs/architecture/34-pos.md): no reservation, stay, group or company; its number is the bill number of the outlet.
+-- name: InsertOutletFolio :one
+INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @folio_number, 'OUTLET', @outlet_id, sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING *;
+
 -- Every posting bumps the version, so a stale "close" screen is rejected.
 -- name: BumpFolio :exec
 UPDATE folios SET version = version + 1, updated_by = sqlc.narg(actor_id)
@@ -35,7 +41,9 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_id =
 SELECT f.*, bal.balance::numeric AS balance,
        COALESCE((SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id), '')::text AS confirmation_number,
        COALESCE((SELECT g.code FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_code,
-       COALESCE((SELECT g.name FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_name
+       COALESCE((SELECT g.name FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_name,
+       COALESCE((SELECT o.code FROM pos_outlets o WHERE o.property_id = f.property_id AND o.id = f.outlet_id), '')::text AS outlet_code,
+       COALESCE((SELECT o.name FROM pos_outlets o WHERE o.property_id = f.property_id AND o.id = f.outlet_id), '')::text AS outlet_name
 FROM folios f
 CROSS JOIN LATERAL (
     SELECT CASE WHEN f.status = 'OPEN'
@@ -57,6 +65,9 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
   AND (sqlc.narg(stay_id)::bigint IS NULL OR f.stay_id = sqlc.narg(stay_id)::bigint)
   AND (sqlc.narg(booking_group_id)::bigint IS NULL OR f.booking_group_id = sqlc.narg(booking_group_id)::bigint)
   AND (sqlc.narg(folio_type)::text IS NULL OR f.folio_type = sqlc.narg(folio_type)::text)
+  -- the bills of the outlets are listed only when asked for (folio_type = OUTLET): every other list of the front desk keeps its meaning (34-pos.md 11)
+  AND (sqlc.narg(folio_type)::text IS NOT NULL OR f.folio_type <> 'OUTLET')
+  AND (sqlc.narg(outlet_id)::bigint IS NULL OR f.outlet_id = sqlc.narg(outlet_id)::bigint)
   AND (sqlc.narg(status)::text IS NULL OR f.status = sqlc.narg(status)::text)
   -- the follow-up of a cancellation: the open folio of a reservation that has no live room and no stay, that still holds something (a deposit that was kept, a fee that was not paid)
   AND (NOT @cancelled_with_balance::boolean OR (f.status = 'OPEN' AND f.stay_id IS NULL AND f.reservation_id IS NOT NULL AND bal.balance <> 0
@@ -110,13 +121,14 @@ INSERT INTO folio_items (
          ELSE (SELECT c.gl_account_code FROM charge_codes c WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
     END),
     -- The department in force now: the default of the charge code, else the default of its revenue account, and none when the account takes none;
-    -- a reversal copies the department of the item it reverses.
+    -- a reversal copies the department of the item it reverses; a sale of an outlet names the sub-department of the outlet (department_override), which wins over the code's.
+    COALESCE(sqlc.narg(department_override)::bigint,
     CASE WHEN COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint) IS NOT NULL
          THEN (SELECT o.department_id FROM folio_items o WHERE o.property_id = @property_id AND o.id = COALESCE(sqlc.narg(reverses_item_id)::bigint, sqlc.narg(copies_item_id)::bigint))
          ELSE (SELECT CASE WHEN a.department_requirement = 'NONE' THEN NULL ELSE COALESCE(c.department_id, a.default_department_id) END
                  FROM charge_codes c LEFT JOIN gl_accounts a ON a.property_id = c.property_id AND a.code = c.gl_account_code
                 WHERE c.property_id = @property_id AND c.id = sqlc.narg(charge_code_id)::bigint)
-    END
+    END)
 )
 RETURNING *;
 
@@ -451,7 +463,7 @@ SELECT id, booking_group_id FROM reservations WHERE tenant_id = @tenant_id AND p
 
 -- name: InsertTransferBatch :one
 INSERT INTO folio_transfer_batches (tenant_id, property_id, kind, is_return, from_folio_id, to_folio_id, scope, reason, business_date, approved_by, idempotency_key, created_by)
-VALUES (@tenant_id, @property_id, @kind, @is_return, @from_folio_id, @to_folio_id, @scope, @reason, @business_date, @approved_by, sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+VALUES (@tenant_id, @property_id, @kind, @is_return, @from_folio_id, @to_folio_id, @scope, @reason, @business_date, sqlc.narg(approved_by), sqlc.narg(idempotency_key), sqlc.narg(actor_id))
 RETURNING *;
 
 -- name: InsertTransfer :one
@@ -835,3 +847,60 @@ SELECT id FROM pos_outlets WHERE tenant_id = @tenant_id AND property_id = @prope
 
 -- name: OutletInfo :one
 SELECT id, code, name, is_active, allow_room_charge FROM pos_outlets WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetOutletBrief :one
+SELECT id, code, name, department_id, drawer, rounding_unit, comp_treatment FROM pos_outlets WHERE property_id = @property_id AND id = @id;
+
+-- The account of the system key COMP (complimentary): a COMP payment is refused while it is not mapped to an active account that takes postings.
+-- name: GetCompAccount :one
+SELECT a.code, a.is_active, a.is_postable, a.account_type
+FROM gl_account_map m JOIN gl_accounts a ON a.property_id = m.property_id AND a.id = m.account_id
+WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.map_key = 'COMP';
+
+-- A company an outlet may bill (companies.pos_billing_allowed, 34-pos.md D8).
+-- name: GetCompanyPosBilling :one
+SELECT id, name, is_active, pos_billing_allowed FROM companies WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: GetRoomCharge :one
+SELECT * FROM pos_room_charges WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- A charge to a room is returned once, with the transfer that sent it back.
+-- name: MarkRoomChargeReturned :execrows
+UPDATE pos_room_charges SET returned_at = @returned_at::timestamptz, returned_by_transfer_id = @transfer_id
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND returned_at IS NULL;
+
+-- The open bills (with a stay of their own as the room they are for) that a check-out should warn about.
+-- name: ListOpenBillsOfStay :many
+SELECT b.id, b.bill_number, o.name AS outlet_name
+FROM pos_bills b JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
+WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.target_stay_id = @stay_id AND b.status = 'OPEN'
+ORDER BY b.id;
+
+-- name: ReopenFolio :one
+UPDATE folios f SET status = 'OPEN', closed_at = NULL, closed_by = NULL, closed_on = NULL, version = f.version + 1, updated_by = sqlc.narg(actor_id)
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id = @id AND f.status = 'CLOSED'
+RETURNING *;
+
+-- The system code POS_ROUNDING of a property (charge type ROUNDING).
+-- name: GetRoundingChargeCode :one
+SELECT id, code FROM charge_codes WHERE tenant_id = @tenant_id AND property_id = @property_id AND charge_type = 'ROUNDING' AND is_active ORDER BY id LIMIT 1;
+
+-- name: ListPaymentsOfFolio :many
+SELECT * FROM payments WHERE tenant_id = @tenant_id AND property_id = @property_id AND folio_id = @folio_id ORDER BY id;
+
+-- The folio a request to pay a bill of an outlet was applied to (its payments are K#0, K#1, ... and its charge to a room K#room): a repeat of the request finds it and answers the bill as it is.
+-- name: OutletPayKeyFolio :one
+SELECT folio_id FROM (
+    SELECT p.folio_id FROM payments p WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.idempotency_key LIKE @prefix::text || '#%'
+    UNION ALL
+    SELECT c.from_folio_id FROM pos_room_charges c WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.idempotency_key LIKE @prefix::text || '#%' AND c.from_folio_id IS NOT NULL
+) k LIMIT 1;
+
+-- The bill of an outlet a line of a folio comes from: the line TRF "{outlet} · {bill}" that a charge to a room made points at its bill (the batch of the transfer is the one of the charge).
+-- name: ListPosBillsOfItems :many
+SELECT i.id AS item_id, b.id AS bill_id, COALESCE(b.bill_number, '')::text AS bill_number, o.name AS outlet_name
+FROM folio_items i
+JOIN pos_room_charges c ON c.property_id = i.property_id AND c.transfer_batch_id::text = i.reference_id AND i.reference_type = 'FOLIO_BALANCE_TRANSFER' AND c.to_folio_id = i.folio_id
+JOIN pos_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
+JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
+WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.id = ANY(@ids::bigint[]);

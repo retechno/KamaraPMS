@@ -171,6 +171,9 @@ func (s *Service) PostReservationFee(ctx context.Context, propertyID, reservatio
 		if err := requireOpen(folio); err != nil {
 			return err
 		}
+		if err := refuseOutletFolios(folio); err != nil {
+			return err
+		}
 		amt := amount
 		item, err := s.posting(p, propertyID, day.BusinessDate, folio).postCharge(ctx, chargeCmd{
 			chargeCodeID: code.ID, quantity: decimal.NewFromInt(1), unitPrice: &amt, serviceDate: day.BusinessDate, description: subject, key: key,

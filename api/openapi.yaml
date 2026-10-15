@@ -2313,7 +2313,8 @@ paths:
         - $ref: "#/components/parameters/Cursor"
         - { name: reservation_id, in: query, schema: { type: integer, format: int64 } }
         - { name: booking_group_id, in: query, schema: { type: integer, format: int64 }, description: The master folio of that group. }
-        - { name: folio_type, in: query, schema: { type: string, enum: [GUEST, COMPANY, MASTER] } }
+        - { name: folio_type, in: query, schema: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET] }, description: "Without it the bills of the outlets (OUTLET) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills." }
+        - { name: outlet_id, in: query, schema: { type: integer, format: int64 }, description: The bills of one outlet. }
         - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
         - { name: cancelled_with_balance, in: query, schema: { type: boolean }, description: "true: only the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee." }
@@ -8961,6 +8962,589 @@ paths:
               schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosSetupIssue" } } } }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/floor:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosFloor
+      summary: "The cashier floor plan of an outlet in its state (pos.order or pos.cashier)"
+      description: "Each table has a derived `status`: FREE, OCCUPIED (an open bill sits at it), AWAITING_PAYMENT (a bill was requested) or HELD (a hold today). With it come the open bills (minutes and total each) and the holds of the day."
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosFloorState" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/catalog:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosCatalog
+      summary: "What an outlet sells, for the order screen (pos.order or pos.cashier)"
+      description: "The categories, the products the outlet sells with their price and option groups, and what is sold out today. The answer has an `ETag`; `If-None-Match` with it answers 304."
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosCatalog" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/bills:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listPosBills
+      summary: "The bills of an outlet, newest first (pos.order or pos.cashier)"
+      tags: [pos]
+      parameters:
+        - { name: status, in: query, description: "OPEN, CLOSED, VOID or MERGED.", schema: { type: string } }
+        - { name: table_id, in: query, description: "The bills of a table.", schema: { type: integer } }
+        - { name: date, in: query, description: "A business date: opened or closed that day.", schema: { type: string } }
+        - { name: q, in: query, description: "Part of a bill number, a table, a name or a room.", schema: { type: string } }
+        - { name: limit, in: query, description: "At most 200.", schema: { type: integer } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBillList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: openPosBill
+      summary: "Open a bill (pos.order or pos.cashier)"
+      description: "The bill is the folio of the outlet with the number `{outlet code}-{n}`. `client_uuid` is made by the client: the same one again returns the bill that exists. 422 `REQUIRED` for a table or the number of guests the outlet asks for."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosOpenBillInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/holds:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: createPosHold
+      summary: "Hold a table for a party (pos.order or pos.cashier)"
+      description: "For the business day open now; it is not linked to a reservation of the PMS."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosHoldInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosHold" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/holds/{id}/seat:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: seatPosHold
+      summary: "The party came and sat"
+      tags: [pos]
+      responses:
+        "204":
+          description: Done.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/holds/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelPosHold
+      summary: "The party did not come"
+      tags: [pos]
+      responses:
+        "204":
+          description: Done.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/drawer/open:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: openPosDrawer
+      summary: "Open the drawer without a sale (pos.cashier)"
+      description: "Moves no money; the audit keeps who and why. 409 `OUTLET_NO_CASH` when the outlet has no drawer."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosReasonInput" }
+      responses:
+        "204":
+          description: Done.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/room-lookup:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: lookupPosRooms
+      summary: "The in-house rooms an outlet may charge (pos.charge_room)"
+      description: "By room number or the name of the guest. Each says where a charge would land (the guest folio, or the master of the group), the lock, the limit and what was used, and nothing else: no balance and no folio lines. It is advice; the gate decides again when the bill is charged."
+      tags: [pos]
+      parameters:
+        - { name: q, in: query, description: "A room number or part of the name of a guest, 1 to 40 characters.", schema: { type: string } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRoomLookupList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/report:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosOutletReport
+      summary: "The report of an outlet for a range of business dates (pos.report)"
+      description: "Sales, service and tax by day, by product, payments by method, voids, discounts, complimentary, cashiers, waiters, charges to rooms and open bills: all read from the ledger of the folios of the bills."
+      tags: [pos]
+      parameters:
+        - { name: from, in: query, description: "First business date.", schema: { type: string } }
+        - { name: to, in: query, description: "Last business date, at most a year after the first.", schema: { type: string } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosOutletReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/price-quote:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: quotePosLine
+      summary: "Price a line without writing anything (pos.order or pos.cashier)"
+      description: "The same engine that posts the line; the client never computes tax or service."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosQuoteInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosQuote" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosBill
+      summary: "A bill with its lines, payments, charges to rooms and totals (pos.order or pos.cashier)"
+      description: "A draft line carries the quote of the charge engine; a sent line the amounts of its ledger row."
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updatePosBill
+      summary: "Change the table (a move: no ledger), the guests, the name or the note of an open bill"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosUpdateBillInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/lines:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: addPosBillLine
+      summary: "Add a draft line (pos.order or pos.cashier)"
+      description: "The price is the price list of the outlet at this moment with the options asked for, never the client's. Two waiters adding at once both succeed. 409 `PRODUCT_SOLD_OUT`, `PRODUCT_NOT_SOLD`, `BILL_NOT_OPEN`."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosAddLineInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/lines/{lineId}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lineId, in: path, required: true, schema: { type: integer, format: int64 } }
+    put:
+      operationId: updatePosBillLine
+      summary: "Change a draft line"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosUpdateLineInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deletePosBillLine
+      summary: "Remove a draft line (a sent line is voided)"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/lines/{lineId}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lineId, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: voidPosBillLine
+      summary: "Void a sent line (pos.void and an approval of the kind POS_VOID)"
+      description: "A reversal of the ledger row on the day it was sold; on a later day an adjustment of today that is its exact opposite. A VOID ticket is written."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosVoidLineInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/send:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: sendPosBill
+      summary: "Send the draft lines (pos.order or pos.cashier)"
+      description: "Each draft is posted to the ledger, a round and one ticket for each station are written. `client_uuid` is the round: the same one again sends nothing twice. 409 `NOTHING_TO_SEND`."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosSendInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/discount:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: discountPosBill
+      summary: "Discount a line or the bill (pos.discount)"
+      description: "A percentage or an amount of the base, allocated to the lines by base so the parts add up exactly. Up to the share of the base the outlet lets its cashier give no approver is needed; above it the approval POS_DISCOUNT is."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosDiscountInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/comp:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: compPosBill
+      summary: "Make lines (or the whole bill) complimentary (pos.comp, pos.cashier and an approval of the kind POS_COMP)"
+      description: "In the treatment the bill kept: a payment of the method COMP, or a 100% discount. A name and a reason are required."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosCompInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/request:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: requestPosBill
+      summary: "The guest asked for the bill: the table turns to awaiting payment"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/pay:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: payPosBill
+      summary: "Pay a bill with one or more payments (pos.cashier; pos.charge_room and cityledger.transfer for a room and a company)"
+      description: "All in one transaction under one `Idempotency-Key`. The payments add up to the balance, or to the balance rounded as the outlet rounds cash when every payment is cash, or are less (a part: the bill stays open). 409 `OUTLET_FOLIO_LOCKED`, `OUTLET_NOT_ALLOWED`, `OUTLET_LIMIT_EXCEEDED` (the attempt is written and nothing else), `NO_OPEN_SHIFT`, `PAYMENT_AMOUNT_MISMATCH`."
+      tags: [pos]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 80 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosPayInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosPayResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/split:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: splitPosBill
+      summary: "Move lines of a bill to a new bill (pos.cashier)"
+      description: "`client_uuid` is the new bill; the same one again returns it. The sent lines move as a transfer by item, nothing recomputed."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosSplitInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/merge:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: mergePosBill
+      summary: "Merge the bill into another open bill of the outlet (pos.cashier)"
+      description: "409 `BILL_HAS_PAYMENTS` when a payment was taken on it."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosMergeInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidPosBill
+      summary: "Void a bill that sold nothing and took nothing"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/reopen:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reopenPosBill
+      summary: "Reopen a closed bill (pos.cashier, folio.reopen and an approval of the kind POS_REOPEN)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosReopenInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/room-charges/{id}/return:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: returnPosRoomCharge
+      summary: "Send a charge to a room back to its bill (folio.reverse and an approval of the kind FOLIO_TRANSFER)"
+      description: "The bill must be open: reopen it first. The usage of the limit goes back down."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRoomChargeCorrectionInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/room-charges/{id}/move:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: movePosRoomCharge
+      summary: "Move a charge to another room (folio.reverse, pos.charge_room and an approval of the kind FOLIO_TRANSFER)"
+      description: "The return and the new charge in one transaction; the new charge goes through every check at the target (lock, validity, outlets, limit), for everyone. A refusal moves nothing and the first room keeps the charge."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRoomChargeCorrectionInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosBill" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/folios/{id}/outlet-lock:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -10148,7 +10732,7 @@ components:
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
     ApprovalKind:
       type: string
-      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE]
+      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN]
       description: A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
     ApprovalRuleType:
       type: string
@@ -11176,7 +11760,7 @@ components:
         changed: { type: boolean, description: False when the line was in that group already (nothing was written). }
     FolioItem:
       type: object
-      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components, revenue_account_code, group_code, transfer]
+      required: [id, folio_id, transaction_type, business_date, service_date, transaction_at, description, quantity, unit_price, price_mode, base_amount, discount_amount, net_amount, rounding_adjustment, service_charge_total, tax_total, debit, credit, components, revenue_account_code, group_code, transfer, pos_bill]
       properties:
         id: { type: integer, format: int64 }
         folio_id: { type: integer, format: int64 }
@@ -11213,6 +11797,16 @@ components:
         created_by: { type: [integer, "null"], format: int64 }
         approved_by: { type: [integer, "null"], format: int64 }
         transfer: { oneOf: [{ $ref: "#/components/schemas/ItemTransfer" }, { type: "null" }], description: "The mark of a line that a transfer between folios made or moved (null for any other line)." }
+        pos_bill:
+          description: "The bill of an outlet a line was charged from (the line `{outlet} · {bill}` of a charge to a room), so the screen can open it; null on the others."
+          oneOf:
+            - type: object
+              required: [id, bill_number, outlet_name]
+              properties:
+                id: { type: integer, format: int64 }
+                bill_number: { type: string }
+                outlet_name: { type: string }
+            - type: "null"
     FolioRef:
       type: object
       required: [id, number]
@@ -11474,7 +12068,10 @@ components:
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
-        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay." }
+        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company." }
+        outlet_id: { type: [integer, "null"], format: int64, description: "The outlet of an OUTLET folio; null on the others." }
+        outlet_code: { type: string }
+        outlet_name: { type: string }
         bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to, or the company of the group on a MASTER folio; null on a guest folio." }
         bill_to_company_name: { type: string, description: "The name of that company (absent on a guest folio)." }
         status: { type: string, enum: [OPEN, CLOSED] }
@@ -11501,7 +12098,10 @@ components:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
         confirmation_number: { type: string, description: The confirmation number of the reservation of the folio (`RES000012`), so a list can name it. }
-        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group." }
+        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet." }
+        outlet_id: { type: [integer, "null"], format: int64 }
+        outlet_code: { type: string }
+        outlet_name: { type: string }
         bill_to_company_id: { type: [integer, "null"], format: int64, description: "The company a COMPANY folio is billed to; null on a guest folio." }
         status: { type: string, enum: [OPEN, CLOSED] }
         reservation_id: { type: [integer, "null"], format: int64, description: "Null on a MASTER folio." }
@@ -11541,7 +12141,7 @@ components:
         folio_id: { type: integer, format: int64 }
         folio_number: { type: string, description: The number of that folio (`FOL000026`), so a list can name it. Absent where the payment is returned without it. }
         payment_type: { type: string, enum: [PAYMENT, REFUND] }
-        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, QRIS, CITY_LEDGER], description: CITY_LEDGER is a transfer to a company account, not money received. }
+        payment_method: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER, QRIS, CITY_LEDGER, COMP], description: "CITY_LEDGER is a transfer to a company account, not money received. COMP is a complimentary bill of an outlet (it settles the guest ledger against an expense account); only the point of sale takes it." }
         company_id: { type: [integer, "null"], format: int64, description: The company of a CITY_LEDGER transfer. }
         amount: { type: string }
         paid_at: { type: string, format: date-time }
@@ -11952,6 +12552,16 @@ components:
           items: { $ref: "#/components/schemas/ClosedFolio" }
         housekeeping: { type: string, description: The housekeeping status the room has now (DIRTY). }
         master_folio: { oneOf: [{ $ref: "#/components/schemas/MasterInfo" }, { type: "null" }], description: "Set when this was the last room of a group that has an open master folio: the group still has a bill. It blocks nothing." }
+        open_outlet_bills:
+          type: array
+          description: The bills of the outlets still open for this room (room service, a bar tab). A warning, never a block; the room is locked for outlets now, so they are paid another way.
+          items:
+            type: object
+            required: [bill_id, bill_number, outlet_name]
+            properties:
+              bill_id: { type: integer, format: int64 }
+              bill_number: { type: string }
+              outlet_name: { type: string }
         room_charges:
           type: array
           description: Where the room charges of the whole stay stand, one entry for each folio. A stay whose group routing changed while it was in house has them on two folios.
@@ -12349,6 +12959,10 @@ components:
           type: array
           description: Cashier shifts still open, when the property wants the cash counted before the day closes.
           items: { $ref: "#/components/schemas/OpenCashierShiftSummary" }
+        outlet_bills:
+          type: array
+          description: Open bills of an outlet that asks for every bill to be closed before the day closes (with items sold).
+          items: { $ref: "#/components/schemas/NightAuditOutletIssue" }
         unresolved_arrivals:
           type: array
           items: { $ref: "#/components/schemas/UnresolvedArrival" }
@@ -13001,10 +13615,21 @@ components:
         payments: { type: integer }
         reference: { type: string }
         created_at: { type: string, format: date-time }
+    NightAuditOutletIssue:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, enum: [POS_OPEN_BILLS, POS_DRAFT_LINES] }
+        message: { type: string }
+        ref: { type: string, description: The code of the outlet. }
     NightAuditWarnings:
       type: object
       required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending]
       properties:
+        outlet_bills:
+          type: array
+          description: Open bills of the outlets with items sold (the sale is revenue of the day, the money is not counted yet) or with lines that were never sent.
+          items: { $ref: "#/components/schemas/NightAuditOutletIssue" }
         stale_drafts:
           type: array
           items:
@@ -13629,6 +14254,7 @@ components:
         payment_terms_days: { type: integer }
         notes: { type: string }
         is_active: { type: boolean }
+        pos_billing_allowed: { type: boolean, description: "The outlets may bill this company (a transfer of a bill to its city ledger account)." }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     CompanyPage:
@@ -13656,6 +14282,7 @@ components:
         payment_terms_days: { type: integer, minimum: 0, maximum: 365, default: 30 }
         notes: { type: string }
         is_active: { type: boolean, default: true }
+        pos_billing_allowed: { type: boolean, default: false, description: The outlets may bill this company (needs cityledger.transfer at the till and the setting of the outlet too). }
     PatchCompanyRequest:
       type: object
       additionalProperties: false
@@ -13671,6 +14298,7 @@ components:
         payment_terms_days: { type: integer, minimum: 0, maximum: 365 }
         notes: { type: string }
         is_active: { type: boolean }
+        pos_billing_allowed: { type: boolean }
     Group:
       type: object
       required: [id, code, name, company_id, contact_guest_id, arrival_date, departure_date, is_active, reservation_count, cancelled_reservation_count, room_count, created_at]
@@ -14850,7 +15478,7 @@ components:
       type: object
       required: [map_key, meaning, account_id, account_code, account_name, account_type]
       properties:
-        map_key: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS, CITY_LEDGER, GUEST_LEDGER, ADVANCE_DEPOSITS, TAX_PAYABLE, SERVICE_PAYABLE, SUSPENSE, RETAINED_EARNINGS, ACCOUNTS_PAYABLE, INPUT_VAT, CASH_OVER_SHORT] }
+        map_key: { type: string, enum: [CASH, CARD, BANK_TRANSFER, OTHER_PAYMENT, QRIS, CITY_LEDGER, GUEST_LEDGER, ADVANCE_DEPOSITS, TAX_PAYABLE, SERVICE_PAYABLE, SUSPENSE, RETAINED_EARNINGS, ACCOUNTS_PAYABLE, INPUT_VAT, CASH_OVER_SHORT, FOLIO_TRANSFER, COMP] }
         meaning: { type: string }
         account_id: { type: integer, format: int64 }
         account_code: { type: string }
@@ -16465,6 +17093,470 @@ components:
         created: { type: integer }
         updated: { type: integer }
         errors: { type: array, items: { $ref: "#/components/schemas/PosImportRowError" } }
+    PosHold:
+      type: object
+      required: [id, table_id, table_code, business_date, from_time, name, status]
+      properties:
+        id: { type: integer, format: int64 }
+        table_id: { type: integer, format: int64 }
+        table_code: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        from_time: { type: string, description: HH:MM. }
+        party_size: { type: [integer, "null"] }
+        name: { type: string }
+        phone: { type: string }
+        note: { type: string }
+        status: { type: string, enum: [HELD, SEATED, CANCELLED] }
+    PosHoldInput:
+      type: object
+      required: [table_id, from_time, name]
+      properties:
+        table_id: { type: integer, format: int64 }
+        from_time: { type: string, description: HH:MM. }
+        party_size: { type: [integer, "null"] }
+        name: { type: string }
+        phone: { type: string }
+        note: { type: string }
+    PosReasonInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, maxLength: 200 }
+    PosBillSummary:
+      type: object
+      required: [id, bill_number, status, order_type, opened_at, minutes, total, draft_lines, sent_lines, version]
+      properties:
+        id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED, VOID, MERGED] }
+        order_type: { type: string, enum: [DINE_IN, TAKEAWAY, ROOM_SERVICE, DIRECT] }
+        table_id: { type: [integer, "null"], format: int64 }
+        table_code: { type: string }
+        guest_count: { type: [integer, "null"] }
+        target_stay_id: { type: [integer, "null"], format: int64 }
+        target_room: { type: string }
+        customer_name: { type: string }
+        waiter_name: { type: string }
+        opened_at: { type: string, format: date-time }
+        minutes: { type: integer }
+        bill_requested_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        total: { type: string, description: "The balance of an open bill; what a closed one sold." }
+        draft_lines: { type: integer }
+        sent_lines: { type: integer }
+        version: { type: integer }
+    PosBillList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PosBillSummary" } }
+    PosFloorTable:
+      allOf:
+        - $ref: "#/components/schemas/PosTable"
+        - type: object
+          required: [status, bills, holds]
+          properties:
+            status: { type: string, enum: [FREE, OCCUPIED, AWAITING_PAYMENT, HELD] }
+            bills: { type: array, items: { $ref: "#/components/schemas/PosBillSummary" } }
+            holds: { type: array, items: { $ref: "#/components/schemas/PosHold" } }
+    PosFloorArea:
+      type: object
+      required: [id, name, grid_w, grid_h, layout_version, tables, marks]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        grid_w: { type: integer }
+        grid_h: { type: integer }
+        layout_version: { type: integer }
+        tables: { type: array, items: { $ref: "#/components/schemas/PosFloorTable" } }
+        marks: { type: array, items: { $ref: "#/components/schemas/PosMark" } }
+    PosFloorState:
+      type: object
+      required: [business_date, outlet, areas, open_bills, holds, now]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        outlet: { $ref: "#/components/schemas/PosOutlet" }
+        areas: { type: array, items: { $ref: "#/components/schemas/PosFloorArea" } }
+        open_bills: { type: array, items: { $ref: "#/components/schemas/PosBillSummary" } }
+        holds: { type: array, items: { $ref: "#/components/schemas/PosHold" } }
+        now: { type: string, format: date-time }
+    PosCatalog:
+      type: object
+      required: [outlet_id, business_date, categories, products, sold_out]
+      properties:
+        outlet_id: { type: integer, format: int64 }
+        business_date: { $ref: "#/components/schemas/Date" }
+        categories: { type: array, items: { $ref: "#/components/schemas/PosCategory" } }
+        products: { type: array, items: { $ref: "#/components/schemas/PosProduct" } }
+        sold_out: { type: array, items: { type: integer, format: int64 } }
+    PosLineOption:
+      type: object
+      required: [option_id, group_id, name, price_delta, qty]
+      properties:
+        option_id: { type: integer, format: int64 }
+        group_id: { type: integer, format: int64 }
+        name: { type: string }
+        price_delta: { type: string }
+        qty: { type: integer }
+    PosLineOptionInput:
+      type: object
+      required: [option_id]
+      properties:
+        option_id: { type: integer, format: int64 }
+        qty: { type: integer, description: 1 by default; at most the limit of the option. }
+    PosBillLine:
+      type: object
+      required: [id, client_uuid, product_id, product_name, options, quantity, unit_price, discount_amount, is_comp, status, round, base_amount, net_amount, service_amount, tax_amount, total, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        client_uuid: { type: string }
+        product_id: { type: integer, format: int64 }
+        product_name: { type: string }
+        options: { type: array, items: { $ref: "#/components/schemas/PosLineOption" } }
+        quantity: { type: string }
+        unit_price: { type: string }
+        discount_pct: { type: [string, "null"] }
+        discount_amount: { type: string }
+        discount_reason: { type: string }
+        is_comp: { type: boolean }
+        note: { type: string }
+        status: { type: string, enum: [DRAFT, SENT, VOID] }
+        round: { type: integer, description: 0 while it is a draft. }
+        base_amount: { type: string }
+        net_amount: { type: string }
+        service_amount: { type: string }
+        tax_amount: { type: string }
+        total: { type: string }
+        ticket_status: { type: string, enum: ["", NEW, COOKING, READY, SERVED, CANCELLED] }
+        folio_item_id: { type: [integer, "null"], format: int64 }
+        created_by_name: { type: string }
+        created_at: { type: string, format: date-time }
+        sent_at: { type: [string, "null"], format: date-time }
+        void_reason: { type: string }
+        voided_by_name: { type: string }
+        approved_by_name: { type: string }
+        voided_at: { type: [string, "null"], format: date-time }
+    PosBillPayment:
+      type: object
+      required: [id, payment_number, method, amount, paid_at, status]
+      properties:
+        id: { type: integer, format: int64 }
+        payment_number: { type: string }
+        method: { type: string }
+        amount: { type: string }
+        reference: { type: string }
+        label: { type: string }
+        paid_at: { type: string, format: date-time }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        company_id: { type: [integer, "null"], format: int64 }
+    PosBillRoomCharge:
+      type: object
+      required: [id, amount, to_folio_id]
+      properties:
+        id: { type: integer, format: int64 }
+        amount: { type: string }
+        to_folio_id: { type: integer, format: int64 }
+        stay_id: { type: [integer, "null"], format: int64 }
+        room: { type: string }
+        returned_at: { type: [string, "null"], format: date-time }
+    PosBillTotals:
+      type: object
+      required: [base, discount, net, service, tax, sold, drafts, rounding, paid, transferred, balance, payable, cash_payable]
+      properties:
+        base: { type: string }
+        discount: { type: string }
+        net: { type: string }
+        service: { type: string }
+        tax: { type: string }
+        sold: { type: string, description: "What the lines come to with service and tax, voids and discounts after the send in." }
+        drafts: { type: string, description: The quote of the lines that are not sent yet. }
+        rounding: { type: string }
+        paid: { type: string }
+        transferred: { type: string, description: What was charged to a room. }
+        balance: { type: string }
+        payable: { type: string, description: "The balance and the drafts: what is to pay now." }
+        cash_payable: { type: string, description: Payable rounded as the outlet rounds cash. }
+    PosBill:
+      type: object
+      required: [id, client_uuid, outlet_id, outlet_code, outlet_name, bill_number, status, order_type, comp_treatment, business_date_opened, opened_at, version, lines, payments, room_charges, totals]
+      properties:
+        id: { type: integer, format: int64 }
+        client_uuid: { type: string }
+        outlet_id: { type: integer, format: int64 }
+        outlet_code: { type: string }
+        outlet_name: { type: string }
+        folio_id: { type: [integer, "null"], format: int64 }
+        bill_number: { type: string }
+        status: { type: string, enum: [OPEN, CLOSED, VOID, MERGED] }
+        order_type: { type: string, enum: [DINE_IN, TAKEAWAY, ROOM_SERVICE, DIRECT] }
+        table_id: { type: [integer, "null"], format: int64 }
+        table_code: { type: string }
+        guest_count: { type: [integer, "null"] }
+        target_stay_id: { type: [integer, "null"], format: int64 }
+        target_room: { type: string }
+        customer_name: { type: string }
+        waiter_id: { type: [integer, "null"], format: int64 }
+        waiter_name: { type: string }
+        comp_treatment: { type: string, enum: [PAYMENT_COMP, DISCOUNT_100] }
+        business_date_opened: { $ref: "#/components/schemas/Date" }
+        opened_at: { type: string, format: date-time }
+        bill_requested_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        closed_business_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        merged_into_bill_id: { type: [integer, "null"], format: int64 }
+        note: { type: string }
+        version: { type: integer }
+        lines: { type: array, items: { $ref: "#/components/schemas/PosBillLine" } }
+        payments: { type: array, items: { $ref: "#/components/schemas/PosBillPayment" } }
+        room_charges: { type: array, items: { $ref: "#/components/schemas/PosBillRoomCharge" } }
+        totals: { $ref: "#/components/schemas/PosBillTotals" }
+    PosOpenBillInput:
+      type: object
+      required: [client_uuid, order_type]
+      properties:
+        client_uuid: { type: string, description: A uuid the client made (v7 is time-ordered). }
+        order_type: { type: string, enum: [DINE_IN, TAKEAWAY, ROOM_SERVICE, DIRECT] }
+        table_id: { type: [integer, "null"], format: int64 }
+        guest_count: { type: [integer, "null"] }
+        target_stay_id: { type: [integer, "null"], format: int64, description: "Room service only: the room it is for. A hint for the screen, not a link of money." }
+        customer_name: { type: string }
+        note: { type: string }
+    PosUpdateBillInput:
+      type: object
+      properties:
+        table_id: { type: [integer, "null"], format: int64 }
+        order_type: { type: string }
+        guest_count: { type: [integer, "null"] }
+        customer_name: { type: string }
+        note: { type: string }
+        version: { type: integer }
+    PosAddLineInput:
+      type: object
+      required: [client_uuid, product_id, quantity]
+      properties:
+        client_uuid: { type: string }
+        product_id: { type: integer, format: int64 }
+        quantity: { type: string }
+        options: { type: array, items: { $ref: "#/components/schemas/PosLineOptionInput" } }
+        note: { type: string, maxLength: 200 }
+    PosUpdateLineInput:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: { type: string }
+        options: { type: array, items: { $ref: "#/components/schemas/PosLineOptionInput" } }
+        note: { type: string, maxLength: 200 }
+    PosSendInput:
+      type: object
+      required: [client_uuid]
+      properties:
+        client_uuid: { type: string, description: The uuid of the round. }
+    PosVoidLineInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, maxLength: 200 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    PosDiscountInput:
+      type: object
+      required: [scope, reason]
+      properties:
+        scope: { type: string, enum: [LINE, BILL] }
+        line_id: { type: [integer, "null"], format: int64 }
+        percent: { type: [string, "null"] }
+        amount: { type: [string, "null"] }
+        reason: { type: string, maxLength: 200 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    PosCompInput:
+      type: object
+      required: [reason, name]
+      properties:
+        line_ids: { type: array, items: { type: integer, format: int64 }, description: The whole bill when empty. }
+        reason: { type: string, maxLength: 200 }
+        name: { type: string, maxLength: 100, description: The guest or the manager who authorises it. }
+        approval: { $ref: "#/components/schemas/Approval" }
+    PosPayLine:
+      type: object
+      required: [method, amount]
+      properties:
+        method: { type: string, enum: [CASH, CARD, QRIS, BANK_TRANSFER, OTHER, ROOM, COMPANY] }
+        amount: { type: string }
+        reference: { type: string }
+        label: { type: string, description: 'Who paid, as "Guest 1/3".' }
+        stay_id: { type: [integer, "null"], format: int64, description: The room, for ROOM. }
+        company_id: { type: [integer, "null"], format: int64, description: The company, for COMPANY. }
+        tendered: { type: [string, "null"], description: The cash the guest gave, for the change. }
+    PosPayInput:
+      type: object
+      required: [payments]
+      properties:
+        payments: { type: array, items: { $ref: "#/components/schemas/PosPayLine" }, maxItems: 8 }
+    PosPayResult:
+      type: object
+      required: [bill, change, closed, open_drawer]
+      properties:
+        bill: { $ref: "#/components/schemas/PosBill" }
+        change: { type: string }
+        closed: { type: boolean }
+        open_drawer: { type: boolean }
+    PosSplitInput:
+      type: object
+      required: [client_uuid, line_ids]
+      properties:
+        client_uuid: { type: string, description: The uuid of the new bill. }
+        line_ids: { type: array, items: { type: integer, format: int64 } }
+    PosMergeInput:
+      type: object
+      required: [into_bill_id]
+      properties:
+        into_bill_id: { type: integer, format: int64 }
+    PosReopenInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, maxLength: 200 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    PosRoomChargeCorrectionInput:
+      type: object
+      required: [reason]
+      properties:
+        stay_id: { type: [integer, "null"], format: int64, description: The room the charge moves to (the move only). }
+        reason: { type: string, maxLength: 200 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    PosRoomLookup:
+      type: object
+      required: [stay_id, room, guest, open]
+      properties:
+        stay_id: { type: integer, format: int64 }
+        room: { type: string }
+        guest: { type: string }
+        target_type: { type: string, enum: ["", GUEST, COMPANY, MASTER] }
+        target_number: { type: string }
+        routed: { type: boolean }
+        open: { type: boolean }
+        reason: { type: string, enum: ["", NEVER_OPENED, MANUAL, LIMIT_REACHED, CHECKOUT, EXPIRED, FOLIO_CLOSED, OUTLET_NOT_ALLOWED, ROUTING_TARGET_CLOSED] }
+        limit: { type: [string, "null"] }
+        used: { type: [string, "null"] }
+        remaining: { type: [string, "null"] }
+    PosRoomLookupList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PosRoomLookup" } }
+    PosQuoteInput:
+      type: object
+      required: [outlet_id, product_id, quantity]
+      properties:
+        outlet_id: { type: integer, format: int64 }
+        product_id: { type: integer, format: int64 }
+        quantity: { type: string }
+        options: { type: array, items: { $ref: "#/components/schemas/PosLineOptionInput" } }
+        discount_amount: { type: [string, "null"] }
+    PosQuote:
+      type: object
+      required: [unit_price, base_amount, discount_amount, net_amount, service_amount, tax_amount, total]
+      properties:
+        unit_price: { type: string }
+        base_amount: { type: string }
+        discount_amount: { type: string }
+        net_amount: { type: string }
+        service_amount: { type: string }
+        tax_amount: { type: string }
+        total: { type: string }
+    PosReportDay:
+      type: object
+      required: [business_date, bills, net, service, tax, rounding, total]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        bills: { type: integer }
+        net: { type: string }
+        service: { type: string }
+        tax: { type: string }
+        rounding: { type: string }
+        total: { type: string }
+    PosReportTotals:
+      type: object
+      required: [bills, net, service, tax, rounding, total]
+      properties:
+        bills: { type: integer }
+        net: { type: string }
+        service: { type: string }
+        tax: { type: string }
+        rounding: { type: string }
+        total: { type: string }
+    PosReportProduct:
+      type: object
+      required: [product_id, name, category, quantity, base, discount, net, service, tax, total]
+      properties:
+        product_id: { type: integer, format: int64 }
+        name: { type: string }
+        category: { type: string }
+        quantity: { type: string }
+        base: { type: string }
+        discount: { type: string }
+        net: { type: string }
+        service: { type: string }
+        tax: { type: string }
+        total: { type: string }
+    PosReportMethod:
+      type: object
+      required: [method, payments, amount]
+      properties:
+        method: { type: string }
+        payments: { type: integer }
+        amount: { type: string }
+    PosReportEvent:
+      type: object
+      required: [business_date, bill_number, what, amount]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        bill_number: { type: string }
+        what: { type: string }
+        amount: { type: string }
+        reason: { type: string }
+        by: { type: string }
+        approved_by: { type: string }
+        kind: { type: string }
+    PosReportPerson:
+      type: object
+      required: [name, cash, other, total]
+      properties:
+        name: { type: string }
+        bills: { type: integer }
+        payments: { type: integer }
+        cash: { type: string }
+        other: { type: string }
+        total: { type: string }
+    PosOutletReport:
+      type: object
+      required: [outlet_id, outlet_name, from, to, days, totals, products, methods, voids, discounts, comps, cashiers, waiters, room_charges, open_bills]
+      properties:
+        outlet_id: { type: integer, format: int64 }
+        outlet_name: { type: string }
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        days: { type: array, items: { $ref: "#/components/schemas/PosReportDay" } }
+        totals: { $ref: "#/components/schemas/PosReportTotals" }
+        products: { type: array, items: { $ref: "#/components/schemas/PosReportProduct" } }
+        methods: { type: array, items: { $ref: "#/components/schemas/PosReportMethod" } }
+        voids: { type: array, items: { $ref: "#/components/schemas/PosReportEvent" } }
+        discounts: { type: array, items: { $ref: "#/components/schemas/PosReportEvent" } }
+        comps: { type: array, items: { $ref: "#/components/schemas/PosReportEvent" } }
+        cashiers: { type: array, items: { $ref: "#/components/schemas/PosReportPerson" } }
+        waiters: { type: array, items: { $ref: "#/components/schemas/PosReportPerson" } }
+        room_charges:
+          type: object
+          required: [count, amount, returned]
+          properties:
+            count: { type: integer }
+            amount: { type: string }
+            returned: { type: integer }
+        open_bills:
+          type: object
+          required: [count, balance]
+          properties:
+            count: { type: integer }
+            balance: { type: string }
     FolioOutletLockInput:
       type: object
       required: [limit_amount, valid_mode, outlet_ids]
