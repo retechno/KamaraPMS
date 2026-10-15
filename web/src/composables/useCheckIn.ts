@@ -211,7 +211,7 @@ export function useCheckIn(arrival: Arrival) {
   const willTake = computed(() => isPositive(dep.amount, decimals.value))
   /** A guest who pays is asked for a deposit (or a deliberate "without deposit"); a company, a cover that is enough, or a desk without the right to take money is not. */
   const depositRequired = computed(() => !company.value && !covered.value && canTakeDeposit.value)
-  const canFinish = computed(() => roomOk.value && (posted.value !== null || willTake.value || !depositRequired.value))
+  const canFinish = computed(() => roomOk.value && outletReady.value && (posted.value !== null || willTake.value || !depositRequired.value))
 
   async function loadEstimate(): Promise<void> {
     const propertyId = pid.value
@@ -278,6 +278,30 @@ export function useCheckIn(arrival: Arrival) {
   /** The deposit went through and the check-in did not: the desk is told so, and the retry repeats the check-in only. */
   const failedAfterDeposit = ref(false)
 
+  // Open the folio for outlet charges (docs/architecture/34-pos.md 6.5): chosen on the deposit step, after the deposit, done after the check-in as a request of its own. When it fails the check-in
+  // stands: the done step says so and offers to try again.
+  const outlet = reactive({ enabled: false, limit: '', mode: 'UNTIL_CLOSE' as 'UNTIL_CLOSE' | 'TODAY', outletIds: [] as number[] })
+  const outletState = ref<'idle' | 'done' | 'failed'>('idle')
+  const outletError = ref<ApiError | null>(null)
+  const outletReady = computed(() => !outlet.enabled || (Number(outlet.limit) > 0 && outlet.outletIds.length > 0))
+
+  async function openOutlets(): Promise<void> {
+    const propertyId = pid.value
+    const folioId = result.value?.folio?.id
+    if (propertyId === null || !folioId || !outlet.enabled) return
+    outletError.value = null
+    try {
+      await api.PUT('/api/v1/properties/{propertyId}/folios/{id}/outlet-lock', {
+        params: { path: { propertyId, id: folioId } },
+        body: { limit_amount: outlet.limit.trim(), valid_mode: outlet.mode, outlet_ids: outlet.outletIds },
+      })
+      outletState.value = 'done'
+    } catch (e) {
+      outletState.value = 'failed'
+      outletError.value = e instanceof ApiError ? e : null
+    }
+  }
+
   /** The last step: the deposit (when one is taken), then the check-in, each its own request. `withoutDeposit` is the deliberate click. */
   async function finish(withoutDeposit: boolean): Promise<void> {
     const propertyId = pid.value
@@ -315,6 +339,7 @@ export function useCheckIn(arrival: Arrival) {
             // not remembered: harmless
           }
           advance('done')
+          if (outlet.enabled) await openOutlets()
         }
       } catch (e) {
         error.value = e instanceof ApiError ? e : null
@@ -335,6 +360,7 @@ export function useCheckIn(arrival: Arrival) {
     step, reached, busy, error, result, go, back, next, finish, init, canGoBack, finished,
     guestId, guest, form, dirty, hints, foreign, stays, lastStay, guestLoading, query, results, searched, newGuest, canWriteGuest, search, pick, createGuest, saveGuest, loadGuest,
     types, typeId, rooms, roomId, party, activeTypes, selected, roomLabel, notReady, canOverride, isUpgrade, roomOk, requiresInspection, loadRooms,
+    outlet, outletState, outletError, outletReady, openOutlets,
     estimate, estimateLoaded, company, incidental, posted, dep, canTakeDeposit, heldBefore, proposal, covered, willTake, depositRequired, canFinish, failedAfterDeposit, decimals,
   }
 }

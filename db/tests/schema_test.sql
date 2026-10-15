@@ -1927,7 +1927,7 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('tax_invoices', 'CHILD', 'of folio_items or city_ledger_invoices'), ('tax_invoice_lines', 'CHILD', 'of tax_invoices'),
     ('tax_invoice_exports', 'CHILD', 'of tax_invoices'), ('tax_invoice_export_items', 'CHILD', 'of tax_invoices'),
     ('budget_lines', 'CHILD', 'of budgets'), ('budget_statistics', 'CHILD', 'of budgets'),
-    ('folio_transfers', 'CHILD', 'of folio_items');
+    ('folio_transfers', 'CHILD', 'of folio_items'), ('pos_room_charges', 'CHILD', 'of folio_items');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -1936,7 +1936,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('tax_filing_profiles', 'CONFIG', 'filing settings'), ('charge_code_taxes', 'CONFIG', 'tax mapping'), ('service_charges', 'CONFIG', 'service charge'),
     ('taxes', 'CONFIG', 'tax rates'), ('charge_codes', 'CONFIG', 'charge codes'),
     ('reservation_room_rates', 'PLAN', 'the nightly price of a booking: money to be charged, kept as a snapshot, not a transaction'),
-    ('reservation_rooms', 'PLAN', 'bookings'), ('reservations', 'PLAN', 'bookings'), ('stays', 'PLAN', 'stays'), ('stay_rooms', 'PLAN', 'stays');
+    ('reservation_rooms', 'PLAN', 'bookings'), ('reservations', 'PLAN', 'bookings'), ('stays', 'PLAN', 'stays'), ('stay_rooms', 'PLAN', 'stays'),
+    ('pos_options', 'CONFIG', 'add-on and variant price differences'), ('pos_price_list_items', 'CONFIG', 'prices of an outlet'), ('folio_outlet_locks', 'CONFIG', 'the limit of outlet charges of a folio'),
+    ('pos_room_charge_attempts', 'PLAN', 'a request of an outlet to charge a room, kept as a trail; the money is in the ledger');
 DO $$
 DECLARE v_missing text;
 BEGIN
@@ -2012,22 +2014,100 @@ SELECT expect_error('payments: a payment cannot be dated a closed business day',
 SELECT expect_error('stay_charge_postings: a posted room night cannot be dated a closed business day', '23514', $q$SELECT pms_test.insert_on_closed_day('stay_charge_postings', 'business_date')$q$);
 SELECT expect_error('city_ledger_receipts: a receipt cannot be dated a closed business day', '23514', $q$SELECT pms_test.insert_on_closed_day('city_ledger_receipts', 'business_date')$q$);
 -- the other five tables (adjustments, invoices, shift movements, shifts opened and closed) have no row in this fixture; the Go tests of cityledger and shifts copy a real row of each
--- onto a closed day. What is checked here for all nine is that the trigger is there, on the right column, in the right moment.
+-- onto a closed day. What is checked here for all ten is that the trigger is there, on the right column, in the right moment.
 DO $$
 DECLARE v_missing text;
 BEGIN
     SELECT string_agg(e.t || '.' || e.c, ', ') INTO v_missing
       FROM (VALUES ('folio_items', 'business_date'), ('payments', 'business_date'), ('stay_charge_postings', 'business_date'), ('city_ledger_receipts', 'business_date'),
                    ('city_ledger_adjustments', 'business_date'), ('city_ledger_invoices', 'invoice_date'), ('cashier_shift_movements', 'business_date'),
-                   ('cashier_shifts', 'business_date_opened'), ('cashier_shifts', 'business_date_closed')) AS e (t, c)
+                   ('cashier_shifts', 'business_date_opened'), ('cashier_shifts', 'business_date_closed'), ('pos_room_charges', 'business_date')) AS e (t, c)
      WHERE NOT EXISTS (SELECT 1 FROM pg_trigger g JOIN pg_class c ON c.oid = g.tgrelid
                         WHERE c.relname = e.t AND NOT g.tgisinternal AND g.tgfoid = 'public.business_day_must_be_open'::regproc
                           AND (g.tgtype & 2) = 2 -- BEFORE
                           AND (string_to_array(encode(g.tgargs, 'escape'), '\000'))[1] = e.c);
     IF v_missing IS NOT NULL THEN RAISE EXCEPTION 'FAIL business day guard: no BEFORE trigger on %', v_missing; END IF;
-    INSERT INTO pms_test.results VALUES ('the nine ledger and cash date columns each have the business-day guard', 'accepted');
-    RAISE NOTICE 'PASS  the nine ledger and cash date columns each have the business-day guard';
+    INSERT INTO pms_test.results VALUES ('the ten ledger and cash date columns each have the business-day guard', 'accepted');
+    RAISE NOTICE 'PASS  the ten ledger and cash date columns each have the business-day guard';
 END $$;
+
+------------------------------------------------------------------------------------------
+-- POS masters and the lock of a folio for outlet charges (migration 00080, docs/architecture/34-pos.md)
+------------------------------------------------------------------------------------------
+-- Makes the rows an outlet points to, and the outlet T1 (inside the subtransaction of the test: it is rolled back).
+CREATE FUNCTION pms_test.pos_base() RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_dept bigint; v_profile bigint; v_list bigint;
+BEGIN
+    SELECT id INTO v_dept FROM departments WHERE property_id = pr('BALI') AND code = 'FB';
+    INSERT INTO pos_rule_profiles (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'P1', 'Profile') RETURNING id INTO v_profile;
+    INSERT INTO pos_price_lists (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'L1', 'List') RETURNING id INTO v_list;
+    INSERT INTO pos_outlets (tenant_id, property_id, code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id)
+    VALUES (tn('ABC'), pr('BALI'), 'T', 'Outlet', 'RESTAURANT', 'PRINT', v_dept, v_profile, v_list);
+    INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price_mode) VALUES (tn('ABC'), pr('BALI'), 'POSX', 'POS test code', 'FOOD_BEVERAGE', 'EXCLUSIVE');
+END $$;
+CREATE FUNCTION pms_test.pos_outlet() RETURNS bigint LANGUAGE sql STABLE AS $$ SELECT id FROM pos_outlets WHERE property_id = pr('BALI') AND code = 'T' $$;
+
+SELECT expect_ok('an outlet with its department, profile and price list is accepted', $q$SELECT pms_test.pos_base()$q$);
+SELECT expect_error('the code of an outlet is letters, 1 to 6', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$UPDATE pos_outlets SET code = 'T1' WHERE code = 'T'$q$);
+SELECT expect_error('the code of an outlet is not the prefix of another document', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$UPDATE pos_outlets SET code = 'FOL' WHERE code = 'T'$q$);
+SELECT expect_error('the order mode of an outlet is PRINT, KDS or DIRECT', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$UPDATE pos_outlets SET order_mode = 'FAX' WHERE code = 'T'$q$);
+SELECT expect_error('the complimentary treatment of an outlet is one of two', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$UPDATE pos_outlets SET comp_treatment = 'GIVE_AWAY' WHERE code = 'T'$q$);
+SELECT expect_error('an outlet code is unique in the property', '23505', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_outlets (tenant_id, property_id, code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id)
+       SELECT tenant_id, property_id, code, 'Again', outlet_type, order_mode, department_id, rule_profile_id, price_list_id FROM pos_outlets WHERE code = 'T'$q$);
+SELECT expect_error('the department of an outlet is one of the property', '23503', $q$SELECT pms_test.pos_base()$q$,
+    $q$UPDATE pos_outlets SET department_id = (SELECT id FROM departments WHERE property_id <> pr('BALI') LIMIT 1) WHERE code = 'T'$q$);
+SELECT expect_error('a variant group picks exactly one', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_categories (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'C', 'Cat')$q$,
+    $q$INSERT INTO pos_products (tenant_id, property_id, code, name, category_id, charge_code_id) VALUES (tn('ABC'), pr('BALI'), 'P', 'Product', (SELECT id FROM pos_categories WHERE code = 'C'), cc('POSX'))$q$,
+    $q$INSERT INTO pos_option_groups (tenant_id, property_id, product_id, name, kind, min_select, max_select) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_products WHERE code = 'P'), 'Portion', 'VARIANT', 1, 2)$q$);
+SELECT expect_error('the minimum of a group is not above its maximum', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_categories (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'C', 'Cat')$q$,
+    $q$INSERT INTO pos_products (tenant_id, property_id, code, name, category_id, charge_code_id) VALUES (tn('ABC'), pr('BALI'), 'P', 'Product', (SELECT id FROM pos_categories WHERE code = 'C'), cc('POSX'))$q$,
+    $q$INSERT INTO pos_option_groups (tenant_id, property_id, product_id, name, kind, min_select, max_select) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_products WHERE code = 'P'), 'Extras', 'MODIFIER', 3, 2)$q$);
+SELECT expect_error('a rule of a profile is a tax or a service charge, not both and not none', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_rule_profile_rules (tenant_id, property_id, profile_id, tax_id, service_charge_id, sequence)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_rule_profiles WHERE code = 'P1'), NULL, NULL, 1)$q$);
+SELECT expect_error('a price is not negative', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_categories (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'C', 'Cat')$q$,
+    $q$INSERT INTO pos_products (tenant_id, property_id, code, name, category_id, charge_code_id) VALUES (tn('ABC'), pr('BALI'), 'P', 'Product', (SELECT id FROM pos_categories WHERE code = 'C'), cc('POSX'))$q$,
+    $q$INSERT INTO pos_price_list_items (tenant_id, property_id, price_list_id, product_id, price) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_price_lists WHERE code = 'L1'), (SELECT id FROM pos_products WHERE code = 'P'), -1)$q$);
+SELECT expect_error('a table is inside its sizes', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_areas (tenant_id, property_id, outlet_id, name) VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'Indoors')$q$,
+    $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, x, y, w, h) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_areas WHERE name = 'Indoors'), '1', 0, 0, 0, 4)$q$);
+SELECT expect_error('a table code is unique in the outlet, across its areas', '23505', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_areas (tenant_id, property_id, outlet_id, name) VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'Indoors'), (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'Terrace')$q$,
+    $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, x, y) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_areas WHERE name = 'Indoors'), '5', 0, 0)$q$,
+    $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, x, y) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_areas WHERE name = 'Terrace'), '5', 0, 0)$q$);
+SELECT expect_ok('the same table code in two outlets is accepted', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_outlets (tenant_id, property_id, code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id)
+       SELECT tenant_id, property_id, 'U', 'Other', outlet_type, order_mode, department_id, rule_profile_id, price_list_id FROM pos_outlets WHERE code = 'T'$q$,
+    $q$INSERT INTO pos_areas (tenant_id, property_id, outlet_id, name) VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'Indoors'), (tn('ABC'), pr('BALI'), (SELECT id FROM pos_outlets WHERE code = 'U'), 'Indoors')$q$,
+    $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, x, y) SELECT tn('ABC'), pr('BALI'), id, '5', 0, 0 FROM pos_areas$q$);
+
+-- the lock of a folio
+SELECT expect_error('an open lock has a limit above zero', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folio_outlet_locks (folio_id, tenant_id, property_id, status, limit_amount, valid_mode) VALUES (fo('F1'), tn('ABC'), pr('BALI'), 'OPEN', 0, 'UNTIL_CLOSE')$q$);
+SELECT expect_error('a lock of one business day has its day, and only that one', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folio_outlet_locks (folio_id, tenant_id, property_id, status, limit_amount, valid_mode, valid_on) VALUES (fo('F1'), tn('ABC'), pr('BALI'), 'OPEN', 1000, 'TODAY', NULL)$q$);
+SELECT expect_error('a locked lock says why, an open one does not', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folio_outlet_locks (folio_id, tenant_id, property_id, status, limit_amount, valid_mode) VALUES (fo('F1'), tn('ABC'), pr('BALI'), 'LOCKED', 1000, 'UNTIL_CLOSE')$q$);
+SELECT expect_ok('an open lock with its outlets is accepted', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folio_outlet_locks (folio_id, tenant_id, property_id, status, limit_amount, valid_mode) VALUES (fo('F1'), tn('ABC'), pr('BALI'), 'OPEN', 1000, 'UNTIL_CLOSE')$q$,
+    $q$INSERT INTO folio_outlet_lock_outlets (tenant_id, property_id, folio_id, outlet_id) VALUES (tn('ABC'), pr('BALI'), fo('F1'), pms_test.pos_outlet())$q$);
+SELECT expect_error('the lock events are append only', '23001', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folio_outlet_lock_events (tenant_id, property_id, folio_id, kind, business_date) VALUES (tn('ABC'), pr('BALI'), fo('F1'), 'OPENED', (SELECT max(business_date) FROM business_days WHERE property_id = pr('BALI')))$q$,
+    $q$UPDATE folio_outlet_lock_events SET reason = 'MANUAL'$q$);
+SELECT expect_error('a refused attempt carries its code, an accepted one does not', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_room_charge_attempts (tenant_id, property_id, source, folio_id, outlet_id, amount, result, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'CHARGE', fo('F1'), pms_test.pos_outlet(), 1000, 'REJECTED', (SELECT max(business_date) FROM business_days WHERE property_id = pr('BALI')))$q$);
+SELECT expect_error('an outlet charge is above zero', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_room_charges (tenant_id, property_id, outlet_id, to_folio_id, amount, lock_period_no, business_date)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), fo('F1'), 0, 1, (SELECT max(business_date) FROM business_days WHERE property_id = pr('BALI')))$q$);
 
 ------------------------------------------------------------------------------------------
 -- Ordered lists: the database must have the ICU collation (the order of the guest names depends on it) and the indexes of the orders a screen opens with

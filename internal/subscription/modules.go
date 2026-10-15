@@ -29,6 +29,11 @@ var moduleRules = []struct {
 	{"budgets", Accounting},
 	{"departments", Accounting},
 
+	// POS: the outlets, and the lock of a folio for outlet charges that the front desk uses (the longest prefix wins over "folios").
+	{"pos", POS},
+	{"outlet-charges", POS},
+	{"folios/{id}/outlet-lock", POS},
+
 	// Front office, billing, setup, end of day and reports: CORE.
 	{"housekeeping", Core},
 	{"rooms", Core},

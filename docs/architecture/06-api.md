@@ -845,3 +845,34 @@ Reservation nights (`nightly_rates[]`) carry `grid_rate` and `yield_rules`; `bas
 
 - **`GET {P}/arrivals`** (`reservation.read`): `date` (the business date by default), `status` (CONFIRMED by default; CHECKED_IN, CANCELLED, NO_SHOW), `q` (guest, confirmation number, room; a text, not a pattern), `room_type_id`. One day, not paged. Each row adds the company (first billing instruction), the booked rate of the arrival night (snapshot, never the master), the deposit (credit balance of the deposit folio, from the ledger) and `readiness`: READY, BLOCKED with blockers (`NOT_BUSINESS_DATE`, `GUEST_MISSING`, `ROOM_NOT_ASSIGNED`, `ROOM_NOT_READY` by the inspection rule of the property, `ROOM_OCCUPIED`, `ROOM_BLOCKED`, `ROOM_NOT_AVAILABLE`), or NONE for a room that is not waiting. It is not a status; the check-in applies every rule again. There is no payment or restriction blocker because the check-in has no such rule.
 - **`GET {P}/stays/in-house`** also answers the departures tab: `departure_until`, `departure_date`, `room_type_id`, `q`. A row adds `checkout.status` (READY = no known blocker, BALANCE_DUE, COMPANY_BILL, CHARGES_PENDING, FOLIO_ISSUE) and `uncharged_nights`; a stay without a folio has `balance.status` NO_FOLIO and no amount (never a zero). The check-out itself applies every rule, so a zero balance is no promise.
+
+## 24. POS: outlets and the lock of a folio for outlet charges (`34-pos.md`, PR 1)
+
+All the routes of this section belong to the POS module of the plan (`MODULE_NOT_IN_PLAN` otherwise). `P` is `/api/v1/properties/{propertyId}`.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET {P}/pos/outlets` | `pos.manage`, `pos.order`, `pos.cashier`, `pos.kds` or `folio.outlet_charge_open` | `active` |
+| `POST {P}/pos/outlets` | `pos.manage` | the whole form; the code is 1 to 6 letters that no other document uses (422 `code` `RESERVED`), 409 `CODE_TAKEN` |
+| `GET`, `PUT {P}/pos/outlets/{id}` | read as above; write `pos.manage` | `PUT` needs the `version` (409 `VERSION_CONFLICT`); a change of `comp_treatment` is audited with the old and the new value |
+| `GET {P}/pos/outlets/{id}/floor-plan` | `pos.manage`, `pos.order`, `pos.cashier`, `pos.kds` | areas with tables and marks |
+| `POST {P}/pos/outlets/{id}/areas` | `pos.manage` | `{name, sort_order?, grid_w?, grid_h?}` |
+| `PUT {P}/pos/areas/{id}/layout` | `pos.manage` | the whole area with `layout_version` (409 `VERSION_CONFLICT`); a table not in the list is switched off; 409 `CODE_TAKEN` (a table code is unique in the outlet), 422 `OUT_OF_PLAN` |
+| `GET {P}/pos/outlets/{id}/sold-out`, `PUT`/`DELETE …/sold-out/{productId}` | read as the catalogue; write also `pos.order` | the mark belongs to the business day and clears itself |
+| `GET`, `POST {P}/pos/printers`, `PUT …/{id}` | read as the catalogue; write `pos.manage` | |
+| `GET`, `POST {P}/pos/stations`, `PUT …/{id}` | same | the code never changes |
+| `GET`, `POST {P}/pos/rule-profiles`, `PUT …/{id}` | same | the rules are `{tax_id}` or `{service_charge_id}` in the order of calculation |
+| `GET`, `POST {P}/pos/price-lists`, `PUT …/{id}` | same | 409 `PRICE_LIST_IN_USE` when an active outlet uses it |
+| `GET`, `PUT {P}/pos/price-lists/{id}/items` | same | `{items: [{product_id, price, is_sold, station_id?}]}` |
+| `GET`, `POST {P}/pos/categories`, `PUT …/{id}` | same | one level |
+| `GET {P}/pos/products` | as the catalogue | `outlet_id` adds the price and whether it is sold there |
+| `POST {P}/pos/products` | `pos.manage` | with `option_groups` and `prices`; the charge code is not a room or transfer code |
+| `GET`, `PUT {P}/pos/products/{id}` | read as the catalogue; write `pos.manage` | `PUT` replaces the product, its groups and its prices, with the `version` |
+| `POST {P}/pos/products/import` | `pos.manage` | `text/csv` or `{csv}`; `dry_run=true` checks it; all or nothing |
+| `GET {P}/pos/setup-check` | `pos.manage` | `OUTLET_NO_PRODUCTS`, `OUTLET_NO_TABLES`, `OUTLET_NO_RECEIPT_PRINTER`, `OUTLET_NO_DRAWER`, `PRODUCT_NO_STATION`, `PRODUCT_STATION_NO_OUTPUT` |
+| `GET {P}/folios/{id}/outlet-lock` | `folio.outlet_charge_open` or `folio.read` | state, `can_open`/`why_not`, limit, used, remaining, validity, outlets, events |
+| `PUT {P}/folios/{id}/outlet-lock` | `folio.outlet_charge_open` | `{limit_amount, valid_mode (UNTIL_CLOSE, TODAY), outlet_ids, version?}`; opens (a new period) or changes (needs `version`); 409 `OUTLET_LOCK_NOT_ALLOWED`, `LIMIT_BELOW_USED`, `VERSION_CONFLICT` |
+| `POST {P}/folios/{id}/outlet-lock/lock` | `folio.outlet_charge_open` | locks by hand |
+| `GET {P}/outlet-charges` | `folio.outlet_charge_open` or `folio.read` | `date` (the open day by default), `result`; accepted and refused, newest first |
+
+The refusals the gate gives to an outlet (stage 2 answers them on the charge to room): 409 `OUTLET_FOLIO_LOCKED` (`context.reason`: `NEVER_OPENED`, `MANUAL`, `LIMIT_REACHED`, `CHECKOUT`, `EXPIRED`), `OUTLET_NOT_ALLOWED`, `OUTLET_LIMIT_EXCEEDED` (`context`: `limit`, `used`, `remaining`, `requested`), `FOLIO_CLOSED`.

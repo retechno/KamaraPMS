@@ -14,6 +14,7 @@ import { useLayoutMode } from '@/composables/useLayoutMode'
 import { useNavPins } from '@/composables/useNavPins'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
+import { useSubscriptionStore } from '@/stores/subscription'
 import { formatBusinessDate } from '@/utils/dates'
 
 /**
@@ -26,6 +27,8 @@ const property = usePropertyStore()
 const route = useRoute()
 const { mode, collapsed, canCollapse, toggleCollapsed } = useLayoutMode()
 const pins = useNavPins()
+const subscription = useSubscriptionStore()
+void subscription.load() // the modules of the plan: the menu leaves out the pages of a module that is off
 
 const drawer = ref(false)
 const palette = ref(false)

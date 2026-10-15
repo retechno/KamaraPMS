@@ -725,3 +725,113 @@ SELECT p.id, p.payment_number, p.amount, p.status, p.idempotency_key,
        COALESCE((SELECT sum(r.amount) FROM payments r WHERE r.property_id = p.property_id AND r.refund_of_payment_id = p.id AND r.status = 'POSTED'), 0)::numeric AS refunded
 FROM payments p
 WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.payment_type = 'PAYMENT' AND p.idempotency_key = ANY(@keys::text[]);
+
+-- ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- The lock of a folio for outlet charges (docs/architecture/34-pos.md section 6).
+
+-- name: GetOutletLock :one
+SELECT folio_id, status, limit_amount, valid_mode, valid_on, period_no, locked_reason, opened_by, opened_at, updated_by, updated_at, version
+FROM folio_outlet_locks WHERE tenant_id = @tenant_id AND property_id = @property_id AND folio_id = @folio_id;
+
+-- name: InsertOutletLock :exec
+INSERT INTO folio_outlet_locks (folio_id, tenant_id, property_id, status, limit_amount, valid_mode, valid_on, period_no, locked_reason, opened_by, updated_by)
+VALUES (@folio_id, @tenant_id, @property_id, @status, @limit_amount, @valid_mode, sqlc.narg(valid_on), @period_no, sqlc.narg(locked_reason), sqlc.narg(actor_id), sqlc.narg(actor_id));
+
+-- name: UpdateOutletLock :exec
+UPDATE folio_outlet_locks SET status = @status, limit_amount = @limit_amount, valid_mode = @valid_mode, valid_on = sqlc.narg(valid_on), period_no = @period_no,
+       locked_reason = sqlc.narg(locked_reason), opened_by = COALESCE(sqlc.narg(opened_by)::bigint, opened_by), opened_at = COALESCE(sqlc.narg(opened_at)::timestamptz, opened_at),
+       updated_by = sqlc.narg(actor_id), version = version + 1
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND folio_id = @folio_id;
+
+-- name: DeleteLockOutlets :exec
+DELETE FROM folio_outlet_lock_outlets WHERE tenant_id = @tenant_id AND property_id = @property_id AND folio_id = @folio_id;
+
+-- name: InsertLockOutlet :exec
+INSERT INTO folio_outlet_lock_outlets (tenant_id, property_id, folio_id, outlet_id) VALUES (@tenant_id, @property_id, @folio_id, @outlet_id);
+
+-- name: ListLockOutlets :many
+SELECT o.id, o.code, o.name, o.is_active
+FROM folio_outlet_lock_outlets l JOIN pos_outlets o ON o.property_id = l.property_id AND o.id = l.outlet_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.folio_id = @folio_id
+ORDER BY o.sort_order, o.name, o.id;
+
+-- name: InsertOutletLockEvent :exec
+INSERT INTO folio_outlet_lock_events (tenant_id, property_id, folio_id, kind, reason, old_value, new_value, business_date, actor_id)
+VALUES (@tenant_id, @property_id, @folio_id, @kind, sqlc.narg(reason), sqlc.narg(old_value)::jsonb, sqlc.narg(new_value)::jsonb, @business_date, sqlc.narg(actor_id));
+
+-- name: ListOutletLockEvents :many
+SELECT e.id, e.kind, e.reason, e.old_value, e.new_value, e.business_date, e.actor_id, COALESCE(u.full_name, '')::text AS actor_name, e.created_at
+FROM folio_outlet_lock_events e LEFT JOIN users u ON u.id = e.actor_id
+WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.folio_id = @folio_id
+ORDER BY e.id DESC LIMIT 50;
+
+-- What counts against the limit: the accepted charges of the lock period that were not returned or moved away through POS. Never the balance of the folio.
+-- name: OutletChargesUsed :one
+SELECT COALESCE(sum(amount), 0)::numeric AS used
+FROM pos_room_charges
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND to_folio_id = @folio_id AND lock_period_no = @period_no AND returned_at IS NULL;
+
+-- name: InsertRoomChargeAccepted :one
+INSERT INTO pos_room_charges (tenant_id, property_id, outlet_id, bill_id, bill_number, from_folio_id, to_folio_id, stay_id, amount, lock_period_no, transfer_batch_id,
+                              business_date, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @outlet_id, sqlc.narg(bill_id), sqlc.narg(bill_number), sqlc.narg(from_folio_id), @to_folio_id, sqlc.narg(stay_id), @amount, @period_no,
+        sqlc.narg(transfer_batch_id), @business_date, sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: InsertChargeAttempt :one
+INSERT INTO pos_room_charge_attempts (tenant_id, property_id, source, folio_id, requested_stay_id, outlet_id, bill_id, bill_number, amount, result, code, context,
+                                      pos_room_charge_id, business_date, created_by)
+VALUES (@tenant_id, @property_id, @source, @folio_id, sqlc.narg(requested_stay_id), @outlet_id, sqlc.narg(bill_id), sqlc.narg(bill_number), @amount, @result,
+        sqlc.narg(code), @context::jsonb, sqlc.narg(pos_room_charge_id), @business_date, sqlc.narg(actor_id))
+RETURNING id;
+
+-- The incoming outlet charges of a business date, every room, with the attempts that were refused.
+-- name: ListChargeAttempts :many
+SELECT a.id, a.source, a.folio_id, f.folio_number, f.folio_type, a.requested_stay_id, a.outlet_id, o.code AS outlet_code, o.name AS outlet_name, a.bill_number, a.amount, a.result, a.code,
+       a.context, a.business_date, a.created_at, COALESCE(u.full_name, '')::text AS created_by_name,
+       COALESCE(cr.room_number, '')::text AS room_number, COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
+       COALESCE(bg.name, '')::text AS group_name,
+       COALESCE((SELECT l.status FROM folio_outlet_locks l WHERE l.folio_id = a.folio_id), '')::text AS lock_status
+FROM pos_room_charge_attempts a
+JOIN folios f ON f.property_id = a.property_id AND f.id = a.folio_id
+JOIN pos_outlets o ON o.property_id = a.property_id AND o.id = a.outlet_id
+LEFT JOIN users u ON u.id = a.created_by
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = COALESCE(a.requested_stay_id, f.stay_id)
+LEFT JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+                    WHERE sr.property_id = st.property_id AND sr.stay_id = st.id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = f.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.business_date = @business_date
+  AND (sqlc.narg(result)::text IS NULL OR a.result = sqlc.narg(result)::text)
+ORDER BY a.id DESC
+LIMIT @row_limit;
+
+-- The open locks of the folios of a stay (the check-out locks them).
+-- name: ListOpenOutletLocksOfStay :many
+SELECT l.folio_id, l.period_no FROM folio_outlet_locks l JOIN folios f ON f.property_id = l.property_id AND f.id = l.folio_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND f.stay_id = @stay_id AND l.status = 'OPEN';
+
+-- name: ListExpiredTodayLocks :many
+SELECT folio_id FROM folio_outlet_locks
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'OPEN' AND valid_mode = 'TODAY' AND valid_on <= @business_date
+ORDER BY folio_id;
+
+-- name: GetFolioForOutletLock :one
+SELECT f.id, f.folio_number, f.folio_type, f.status, f.stay_id, f.booking_group_id, f.version, COALESCE(st.status, '')::text AS stay_status,
+       COALESCE(cr.room_number, '')::text AS room_number, g.first_name, g.last_name, COALESCE(bg.name, '')::text AS group_name, rrm.departure_date AS checkout_date
+FROM folios f
+LEFT JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
+LEFT JOIN reservation_rooms rrm ON rrm.property_id = st.property_id AND rrm.id = st.reservation_room_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+                    WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = f.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id AND f.id = @id;
+
+-- name: ListActiveOutletIDs :many
+SELECT id FROM pos_outlets WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active ORDER BY id;
+
+-- name: OutletInfo :one
+SELECT id, code, name, is_active, allow_room_charge FROM pos_outlets WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

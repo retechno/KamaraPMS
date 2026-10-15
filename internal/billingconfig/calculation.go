@@ -19,6 +19,9 @@ type ChargeRequest struct {
 	UnitPrice    decimal.Decimal       // signed: a negative price calculates a credit (adjustments)
 	PriceMode    *chargecalc.PriceMode // nil = the charge code's price mode
 	Discount     decimal.Decimal       // magnitude, at most the currency's decimals
+	// RuleProfileID, when set, replaces the tax and service rules mapped to the charge code with the rules of a POS profile (docs/architecture/34-pos.md 4.3); the charge code still
+	// decides the account and the department. A transfer or room code ignores it. The price mode of the profile applies unless PriceMode is given.
+	RuleProfileID *int64
 }
 
 // Calculate is the ChargeCalculationService: it resolves the charge code's active, ordered rules and the
@@ -41,6 +44,14 @@ func (s *Service) Calculate(ctx context.Context, req ChargeRequest) (chargecalc.
 	}
 	if !rules.IsActive {
 		return chargecalc.Breakdown{}, apperr.Conflict("CHARGE_CODE_INACTIVE", "the charge code is inactive").WithContext("charge_code", rules.Code)
+	}
+
+	if req.RuleProfileID != nil && rules.ChargeType != "TRANSFER" && rules.ChargeType != "ROOM" {
+		prof, err := s.ResolveProfileRules(ctx, p.TenantID, req.PropertyID, *req.RuleProfileID)
+		if err != nil {
+			return chargecalc.Breakdown{}, err
+		}
+		rules.Taxes, rules.ServiceCharges, rules.PriceMode = prof.Taxes, prof.ServiceCharges, prof.PriceMode
 	}
 
 	mode := chargecalc.PriceMode(rules.PriceMode)

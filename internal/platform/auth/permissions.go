@@ -109,6 +109,19 @@ const (
 	PermCashierSettings     Permission = "cashier.settings"
 
 	PermAuditRead Permission = "audit.read"
+
+	PermFolioOutletChargeOpen Permission = "folio.outlet_charge_open"
+
+	PermPOSManage     Permission = "pos.manage"
+	PermPOSOrder      Permission = "pos.order"
+	PermPOSCashier    Permission = "pos.cashier"
+	PermPOSChargeRoom Permission = "pos.charge_room"
+	PermPOSDiscount   Permission = "pos.discount"
+	PermPOSComp       Permission = "pos.comp"
+	PermPOSVoid       Permission = "pos.void"
+	PermPOSApprove    Permission = "pos.approve"
+	PermPOSKDS        Permission = "pos.kds"
+	PermPOSReport     Permission = "pos.report"
 )
 
 // Catalogue is the complete, ordered list of permissions (the only valid codes).
@@ -206,6 +219,19 @@ var Catalogue = []PermissionInfo{
 	{PermCashierShiftManage, "Billing", "See every cashier shift of the property and close the shift of another cashier", "S2"},
 	{PermCashierShiftApprove, "Billing", "Approve the cash over or short of a shift that is beyond the limit", "S2"},
 	{PermCashierSettings, "Billing", "Change the cashier settings: shifts for cash, the variance limit, the night audit rule", "S2"},
+
+	{PermFolioOutletChargeOpen, "Billing", "Open a folio for outlet charges with a limit, a validity and the outlets allowed, change it and lock it, and see the outlet charges that come in", "S4"},
+
+	{PermPOSManage, "POS", "Set up the outlets: products, prices, options, tax and service profiles, floor plans, stations and printers", "S4"},
+	{PermPOSOrder, "POS", "Take orders: open bills, add and change items, send to the kitchen or bar, move tables", "S4"},
+	{PermPOSCashier, "POS", "Take payment, close, split and merge bills of an outlet, print receipts, open the cash drawer", "S4"},
+	{PermPOSChargeRoom, "POS", "Charge a bill of an outlet to the room of an in-house guest", "S4"},
+	{PermPOSDiscount, "POS", "Give a discount on an item or a bill of an outlet", "S4"},
+	{PermPOSComp, "POS", "Make a bill or an item of an outlet complimentary (an approval is needed)", "S4"},
+	{PermPOSVoid, "POS", "Void an item that was sent to the kitchen or bar (an approval is needed)", "S4"},
+	{PermPOSApprove, "POS", "Approve a void, a discount, a complimentary or the reopening of a bill of an outlet, with own credentials", "S4"},
+	{PermPOSKDS, "POS", "Use the kitchen display and change the status of tickets", "S4"},
+	{PermPOSReport, "POS", "View the reports of the outlets", "S4"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

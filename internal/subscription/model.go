@@ -27,9 +27,9 @@ const (
 	Core         Module = "CORE"
 	Housekeeping Module = "HOUSEKEEPING"
 	Accounting   Module = "ACCOUNTING"
-	Inventory    Module = "INVENTORY" // reserved: no routes yet
-	Banquet      Module = "BANQUET"   // reserved: no routes yet
-	POS          Module = "POS"       // reserved: no routes yet
+	Inventory    Module = "INVENTORY" // the outlets (docs/architecture/34-pos.md)
+	Banquet      Module = "BANQUET"   // the outlets (docs/architecture/34-pos.md)
+	POS          Module = "POS"       // the outlets (docs/architecture/34-pos.md)
 )
 
 // Optional are the modules a plan may include (the same set as subscription_plans_modules_ck).

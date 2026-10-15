@@ -104,7 +104,7 @@ func apply[T any](dst *T, v *T) {
 
 // ListTaxes lists taxes by id after afterID.
 func (s *Service) ListTaxes(ctx context.Context, propertyID, afterID int64, active *bool, limit int) ([]Tax, error) {
-	p, err := s.reader(ctx, propertyID, auth.PermCityLedgerCreditNote, auth.PermTaxManage)
+	p, err := s.reader(ctx, propertyID, auth.PermCityLedgerCreditNote, auth.PermTaxManage, auth.PermPOSManage)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 
 // ListServiceCharges lists service charges by id after afterID.
 func (s *Service) ListServiceCharges(ctx context.Context, propertyID, afterID int64, active *bool, limit int) ([]ServiceCharge, error) {
-	p, err := s.reader(ctx, propertyID, auth.PermCityLedgerCreditNote, auth.PermTaxManage)
+	p, err := s.reader(ctx, propertyID, auth.PermCityLedgerCreditNote, auth.PermTaxManage, auth.PermPOSManage)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +394,7 @@ func (s *Service) attachRules(ctx context.Context, tenantID, propertyID int64, o
 
 // ListChargeCodes lists charge codes (with their rules) by id after afterID.
 func (s *Service) ListChargeCodes(ctx context.Context, propertyID, afterID int64, f ChargeCodeFilter, limit int) ([]ChargeCode, error) {
-	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage)
+	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage, auth.PermPOSManage)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func (s *Service) loadChargeCode(ctx context.Context, tenantID, propertyID, id i
 
 // GetChargeCode returns one charge code with its rules.
 func (s *Service) GetChargeCode(ctx context.Context, propertyID, id int64) (ChargeCode, error) {
-	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage)
+	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage, auth.PermPOSManage)
 	if err != nil {
 		return ChargeCode{}, err
 	}
@@ -750,6 +750,51 @@ func (s *Service) ResolveRules(ctx context.Context, tenantID, propertyID, charge
 	services, err := q.ListActiveServiceRules(ctx, billingconfigdb.ListActiveServiceRulesParams{TenantID: tenantID, PropertyID: propertyID, ChargeCodeID: &chargeCodeID})
 	if err != nil {
 		return ChargeRules{}, err
+	}
+	for _, sv := range services {
+		if sv.ServiceIsActive {
+			out.ServiceCharges = append(out.ServiceCharges, ResolvedService{ID: sv.ServiceChargeID, Code: sv.Code, Name: sv.Name, Rate: sv.Rate, Sequence: int(sv.Sequence)})
+		}
+	}
+	return out, nil
+}
+
+// ProfileRules are the active, ordered rules of a POS profile and its price mode.
+type ProfileRules struct {
+	ProfileID      int64
+	Code           string
+	PriceMode      string
+	Taxes          []ResolvedTax
+	ServiceCharges []ResolvedService
+}
+
+// ResolveProfileRules reads the rules of a tax and service profile of an outlet or a product (docs/architecture/34-pos.md 4.3). A rule counts only while the tax or the service charge is
+// active. An unknown or inactive profile is refused. It takes no locks.
+func (s *Service) ResolveProfileRules(ctx context.Context, tenantID, propertyID, profileID int64) (ProfileRules, error) {
+	q := s.q(ctx)
+	prof, err := q.GetRuleProfile(ctx, billingconfigdb.GetRuleProfileParams{TenantID: tenantID, PropertyID: propertyID, ID: profileID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ProfileRules{}, apperr.NotFound("RULE_PROFILE_NOT_FOUND", "the tax and service profile does not exist in this property")
+	}
+	if err != nil {
+		return ProfileRules{}, err
+	}
+	if !prof.IsActive {
+		return ProfileRules{}, apperr.Conflict("RULE_PROFILE_INACTIVE", "the tax and service profile is inactive").WithContext("profile", prof.Code)
+	}
+	out := ProfileRules{ProfileID: prof.ID, Code: prof.Code, PriceMode: prof.PriceMode, Taxes: []ResolvedTax{}, ServiceCharges: []ResolvedService{}}
+	taxes, err := q.ListProfileTaxRules(ctx, billingconfigdb.ListProfileTaxRulesParams{TenantID: tenantID, PropertyID: propertyID, ProfileID: profileID})
+	if err != nil {
+		return ProfileRules{}, err
+	}
+	for _, t := range taxes {
+		if t.TaxIsActive {
+			out.Taxes = append(out.Taxes, ResolvedTax{ID: t.TaxID, Code: t.Code, Name: t.Name, Rate: t.Rate, OnService: t.TaxOnService, Sequence: int(t.Sequence)})
+		}
+	}
+	services, err := q.ListProfileServiceRules(ctx, billingconfigdb.ListProfileServiceRulesParams{TenantID: tenantID, PropertyID: propertyID, ProfileID: profileID})
+	if err != nil {
+		return ProfileRules{}, err
 	}
 	for _, sv := range services {
 		if sv.ServiceIsActive {

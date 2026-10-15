@@ -50,3 +50,22 @@ func TestBedCodeAt(t *testing.T) {
 		}
 	}
 }
+
+// The laundry has a price list of its own that holds laundry services only, and no food is sold there (and no laundry service in a kitchen list).
+func TestPosDemoKeepsTheLaundryApartFromTheKitchen(t *testing.T) {
+	for _, p := range posProducts {
+		switch p.category {
+		case "LAUNDRY":
+			if p.laundry == "" || p.resto != "" || p.rs != "" || p.charge != "LAUNDRY" || p.station != "" {
+				t.Errorf("%s: a laundry service is sold in the laundry list only, with the laundry charge code and no station: %+v", p.code, p)
+			}
+		default:
+			if p.laundry != "" {
+				t.Errorf("%s: food and drinks are not sold at the laundry", p.code)
+			}
+			if p.resto == "" || p.station == "" {
+				t.Errorf("%s: food has a restaurant price and a station", p.code)
+			}
+		}
+	}
+}

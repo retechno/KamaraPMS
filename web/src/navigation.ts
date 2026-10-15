@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { BedDouble, BookOpen, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Truck } from 'lucide-vue-next'
+import { BedDouble, BookOpen, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Store, Truck } from 'lucide-vue-next'
 
 /**
  * Application navigation. Labels are translation keys (`nav.items.<id>`, `nav.sections.<id>`), so the menu follows the
@@ -15,6 +15,8 @@ export interface NavItem {
    * No permission: the endpoint lets in every member of the property.
    */
   permission?: string | string[]
+  /** The optional module of the plan the page belongs to (docs/architecture/26-subscriptions.md): a tenant without it does not see the item. */
+  module?: string
 }
 
 export interface NavSection {
@@ -68,6 +70,7 @@ export const navigation: NavSection[] = [
       { id: 'roomCharges', to: '/room-charges', permission: ['nightaudit.run', 'folio.post_charge'] },
       { id: 'cityLedger', to: '/city-ledger', permission: 'cityledger.read' },
       { id: 'cityLedgerOverdue', to: '/city-ledger/overdue', permission: 'cityledger.read' },
+      { id: 'outletCharges', to: '/outlet-charges', permission: ['folio.outlet_charge_open', 'folio.read'], module: 'POS' },
     ],
   },
   {
@@ -78,6 +81,17 @@ export const navigation: NavSection[] = [
       { id: 'nightAudit', to: '/night-audit', permission: 'nightaudit.run' },
       { id: 'reports', to: '/reports', permission: 'report.view' },
       { id: 'performance', to: '/performance', permission: 'report.view' },
+    ],
+  },
+  {
+    id: 'pos',
+    icon: Store,
+    items: [
+      { id: 'posOutlets', to: '/pos/outlets', permission: 'pos.manage', module: 'POS' },
+      { id: 'posProducts', to: '/pos/products', permission: 'pos.manage', module: 'POS' },
+      { id: 'posMenuSetup', to: '/pos/menu', permission: 'pos.manage', module: 'POS' },
+      { id: 'posFloorPlan', to: '/pos/floor-plan', permission: 'pos.manage', module: 'POS' },
+      { id: 'posStations', to: '/pos/stations', permission: 'pos.manage', module: 'POS' },
     ],
   },
   {
@@ -169,8 +183,9 @@ export const permitted = (i: Pick<NavItem, 'permission'>, can: (permission: stri
 /**
  * The sections a person sees: items for administrators only are left out, an item that names a permission is left out unless `can` says the person has it, and a section left empty disappears.
  */
-export function visibleNavigation(isAdmin: boolean, can?: (permission: string) => boolean, menu: NavSection[] = navigation): NavSection[] {
-  const allowed = (i: NavItem): boolean => (!i.adminOnly || isAdmin) && (!i.permission || (can ? permitted(i, can) : false))
+export function visibleNavigation(isAdmin: boolean, can?: (permission: string) => boolean, menu: NavSection[] = navigation, hasModule?: (module: string) => boolean): NavSection[] {
+  const allowed = (i: NavItem): boolean =>
+    (!i.adminOnly || isAdmin) && (!i.permission || (can ? permitted(i, can) : false)) && (!i.module || !hasModule || hasModule(i.module))
   return menu.map((s) => ({ ...s, items: s.items.filter(allowed) })).filter((s) => s.items.length > 0)
 }
 

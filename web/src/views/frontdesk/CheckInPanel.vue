@@ -14,6 +14,9 @@ import FormField from '@/components/app/FormField.vue'
 import { focusProgrammatically } from '@/lib/focus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useSubscriptionStore } from '@/stores/subscription'
+import OutletLockForm from '@/components/folio/OutletLockForm.vue'
+import type { PosOutlet } from '@/api/types'
 import { usePropertyStore } from '@/stores/property'
 import { CHECKIN_STEPS, DEPOSIT_METHODS, nextReadyArrival, nightsOf } from '@/utils/checkin'
 import { documentPath, openPdf } from '@/utils/documents'
@@ -29,6 +32,20 @@ const emit = defineEmits<{ done: [result: CheckInResult]; cancel: []; next: [arr
 const auth = useAuthStore()
 const property = usePropertyStore()
 const ci = useCheckIn(props.arrival)
+const subscription = useSubscriptionStore()
+const outletsOffered = computed(() => subscription.has('POS') && auth.can('folio.outlet_charge_open', property.currentId))
+const outletList = ref<PosOutlet[]>([])
+async function loadOutletList(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null || outletList.value.length > 0) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/pos/outlets', { params: { path: { propertyId }, query: { active: true } } })
+    outletList.value = data?.data ?? []
+  } catch {
+    outletList.value = []
+  }
+}
+watch(() => ci.outlet.enabled, (on) => { if (on) void loadOutletList() })
 const root = ref<HTMLFormElement | null>(null)
 const pid = computed(() => property.currentId)
 const fieldError = (field: string) => ci.error.value?.fieldMessage(field)
@@ -261,6 +278,17 @@ const lastVisit = computed(() => {
           <template #default="{ id }"><Input :id="id" v-model="ci.dep.reference" name="deposit_reference" maxlength="100" /></template>
         </FormField>
       </template>
+
+      <!-- open the folio for outlets, once the deposit is in (docs/architecture/34-pos.md 6.5): a request of its own after the check-in -->
+      <div v-if="outletsOffered" class="rounded-xl border border-border p-3.5" data-testid="deposit-outlets">
+        <label class="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-semibold">
+          <input v-model="ci.outlet.enabled" type="checkbox" class="size-4 accent-primary" name="open_for_outlets" data-testid="open-for-outlets" />
+          {{ t('outletLock.checkInOption') }}
+        </label>
+        <p class="m-0 text-xs text-muted-foreground">{{ t('outletLock.checkInHint') }}</p>
+        <OutletLockForm v-if="ci.outlet.enabled" v-model="ci.outlet" class="mt-3" :outlets="outletList" :decimals="ci.decimals.value" id-prefix="checkin" />
+        <p v-if="ci.outlet.enabled && !ci.outletReady.value" class="m-0 mt-2 text-sm text-muted-foreground" data-testid="outlets-missing">{{ t('outletLock.missingBoth') }}</p>
+      </div>
     </section>
 
     <!-- 4. done -->
@@ -272,6 +300,12 @@ const lastVisit = computed(() => {
         <template v-if="ci.posted.value"> {{ t('frontDesk.checkIn.doneDeposit', { amount: formatMoney(ci.posted.value.amount), method: t(`payMethod.${ci.posted.value.method}`) }) }}</template>
         <template v-else> {{ t('frontDesk.checkIn.doneNoDeposit') }}</template>
       </p>
+      <p v-if="ci.outletState.value === 'done'" class="alert m-0" role="status" data-testid="done-outlets">{{ t('outletLock.checkInOpened') }}</p>
+      <div v-else-if="ci.outletState.value === 'failed'" class="alert warning m-0" role="alert" data-testid="done-outlets-failed">
+        <ErrorNotice v-if="ci.outletError.value" :error="ci.outletError.value" inline />
+        <span class="block">{{ t('outletLock.checkInFailed') }}</span>
+        <Button type="button" variant="outline" size="sm" class="mt-2" data-testid="done-outlets-retry" @click="ci.openOutlets()">{{ t('outletLock.tryAgain') }}</Button>
+      </div>
       <ErrorNotice :error="docError" inline data-testid="done-error" />
       <p v-if="emailNotice" class="alert m-0" role="status" data-testid="done-email-notice">{{ emailNotice }}</p>
       <div class="flex flex-wrap gap-2">

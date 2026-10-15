@@ -162,3 +162,26 @@ describe('navigation', () => {
     expect(findNavItem('nope')).toBeUndefined()
   })
 })
+
+describe('the modules of the plan', () => {
+  const all = () => true
+  const ids = (sections: ReturnType<typeof visibleNavigation>) => sections.flatMap((s) => s.items.map((i) => i.id))
+
+  it('leaves out the pages of a module that the plan does not have, and shows them when it does', () => {
+    const without = ids(visibleNavigation(true, all, undefined, (m) => m !== 'POS'))
+    const withPos = ids(visibleNavigation(true, all, undefined, () => true))
+    for (const id of ['posOutlets', 'posProducts', 'posMenuSetup', 'posFloorPlan', 'posStations', 'outletCharges']) {
+      expect(without, id).not.toContain(id)
+      expect(withPos, id).toContain(id)
+    }
+    expect(without).toContain('folios') // the core is never switched off
+  })
+
+  it('shows every page when the plan is not known yet', () => {
+    expect(ids(visibleNavigation(true, all))).toContain('posOutlets')
+  })
+
+  it('asks for a permission of its own for each page of POS, and the same one in the router', () => {
+    for (const i of navigation.flatMap((s) => s.items).filter((x) => x.module === 'POS')) expect(i.permission, i.id).toBeTruthy()
+  })
+})

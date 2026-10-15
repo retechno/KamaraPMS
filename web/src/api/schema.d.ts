@@ -7254,6 +7254,554 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/pos/outlets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The outlets of the property (pos.manage, pos.order, pos.cashier, pos.kds or folio.outlet_charge_open) */
+        get: operations["listPosOutlets"];
+        put?: never;
+        /**
+         * Add an outlet (pos.manage)
+         * @description The code is 1 to 6 letters and is the start of its bill numbers; it never changes. 409 `CODE_TAKEN`.
+         */
+        post: operations["createPosOutlet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One outlet */
+        get: operations["getPosOutlet"];
+        /**
+         * Replace the settings of an outlet (pos.manage)
+         * @description The whole form with the `version` that was loaded (409 `VERSION_CONFLICT`). A change of `comp_treatment` is audited with the old and the new value and applies to the bills opened afterwards.
+         */
+        put: operations["updatePosOutlet"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/floor-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The floor plan of an outlet: its areas with tables and marks */
+        get: operations["getPosFloorPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an empty area to the floor of an outlet (pos.manage) */
+        post: operations["createPosArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/areas/{id}/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save a whole area: its size, its tables and its marks (pos.manage)
+         * @description The `layout_version` that was loaded must still be the current one (409 `VERSION_CONFLICT`). A table that is not in the list is switched off, not deleted. Table codes are unique in the outlet (409 `CODE_TAKEN`); a table outside the plan is 422 `OUT_OF_PLAN`.
+         */
+        put: operations["savePosLayout"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/sold-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The products marked sold out today at an outlet
+         * @description The ids of the products; the marks clear themselves when the business day changes.
+         */
+        get: operations["listPosSoldOut"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/sold-out/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                productId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark a product sold out for the business day */
+        put: operations["markPosSoldOut"];
+        post?: never;
+        /** Mark a product available again */
+        delete: operations["clearPosSoldOut"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/printers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The printers of the property */
+        get: operations["listPosPrinters"];
+        put?: never;
+        /** Add a printer (pos.manage) */
+        post: operations["createPosPrinter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/printers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a printer (pos.manage)
+         * @description The whole form is sent. The code, where there is one, never changes.
+         */
+        put: operations["updatePosPrinter"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/stations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The stations of the property */
+        get: operations["listPosStations"];
+        put?: never;
+        /** Add a station (pos.manage) */
+        post: operations["createPosStation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/stations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a station (pos.manage)
+         * @description The whole form is sent. The code, where there is one, never changes.
+         */
+        put: operations["updatePosStation"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/rule-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The tax and service profiles of the property */
+        get: operations["listPosRuleProfiles"];
+        put?: never;
+        /** Add a tax and service profile (pos.manage) */
+        post: operations["createPosRuleProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/rule-profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a tax and service profile (pos.manage)
+         * @description The whole form is sent. The code, where there is one, never changes.
+         */
+        put: operations["updatePosRuleProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/price-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The price lists of the property */
+        get: operations["listPosPriceLists"];
+        put?: never;
+        /** Add a price list (pos.manage) */
+        post: operations["createPosPriceList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/price-lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a price list (pos.manage)
+         * @description The whole form is sent. The code, where there is one, never changes.
+         */
+        put: operations["updatePosPriceList"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The categorys of the property */
+        get: operations["listPosCategories"];
+        put?: never;
+        /** Add a category (pos.manage) */
+        post: operations["createPosCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a category (pos.manage)
+         * @description The whole form is sent. The code, where there is one, never changes.
+         */
+        put: operations["updatePosCategory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/price-lists/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The prices of a price list */
+        get: operations["listPosPriceItems"];
+        /**
+         * Set the prices of some products in a price list (pos.manage)
+         * @description The products that are not named keep their price.
+         */
+        put: operations["setPosPriceItems"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The products of the property
+         * @description With `outlet_id` each product carries the price and whether it is sold at that outlet.
+         */
+        get: operations["listPosProducts"];
+        put?: never;
+        /** Add a product with its option groups and prices (pos.manage) */
+        post: operations["createPosProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/products/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import products from a CSV (pos.manage)
+         * @description A header row names the columns: `code`, `name`, `category`, `charge_code` (required), `short_name`, `station`, `profile`, `price_list`, `price`, `is_sold`. All or nothing: with `dry_run=true`, or when a row is wrong, nothing is written and the rows that are wrong are listed. A product that exists (by code) is updated; its variants and add-ons are not touched. The body is `text/csv` or `{ "csv": "..." }`.
+         */
+        post: operations["importPosProducts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** One product with its option groups and prices */
+        get: operations["getPosProduct"];
+        /**
+         * Replace a product, its option groups and its prices (pos.manage)
+         * @description The `version` that was loaded (409 `VERSION_CONFLICT`).
+         */
+        put: operations["updatePosProduct"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/setup-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** What is wrong with the configuration of the outlets (pos.manage) */
+        get: operations["getPosSetupCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/outlet-lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The lock of a folio for outlet charges (folio.outlet_charge_open or folio.read)
+         * @description A folio that was never opened is LOCKED with reason `NEVER_OPENED`. `used` is what the outlets have charged in the current period, never the balance of the folio.
+         */
+        get: operations["getFolioOutletLock"];
+        /**
+         * Open a folio for outlet charges, or change the open lock (folio.outlet_charge_open)
+         * @description The limit is required. Opening starts a new period. Changing needs the `version` of the lock; a limit below what was used is 409 `LIMIT_BELOW_USED`. A folio that cannot be opened (closed, not in house, a master of an inactive group) is 409 `OUTLET_LOCK_NOT_ALLOWED`.
+         */
+        put: operations["setFolioOutletLock"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/folios/{id}/outlet-lock/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lock a folio for outlet charges by hand (folio.outlet_charge_open) */
+        post: operations["lockFolioOutlet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/outlet-charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The outlet charges that came in on a business date, accepted and refused (folio.outlet_charge_open or folio.read) */
+        get: operations["listOutletCharges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -14330,6 +14878,509 @@ export interface components {
             taxes: components["schemas"]["TaxFilingLiabilityLine"][];
             accounts: components["schemas"]["TaxFilingLiabilityAccount"][];
             owed: string;
+        };
+        PosOutletInput: {
+            /** @description 1 to 6 letters; the start of the bill numbers. Never changes. */
+            code: string;
+            name: string;
+            /** @enum {string} */
+            outlet_type: "RESTAURANT" | "BAR" | "CAFE" | "ROOM_SERVICE" | "SPA" | "LAUNDRY" | "BUSINESS_CENTER" | "MINIBAR" | "OTHER";
+            /** @enum {string} */
+            order_mode: "PRINT" | "KDS" | "DIRECT";
+            /** Format: int64 */
+            department_id: number;
+            /** Format: int64 */
+            rule_profile_id: number;
+            /** Format: int64 */
+            price_list_id: number;
+            /** @description The cashier drawer label of the outlet; empty when it takes no cash. */
+            drawer?: string | null;
+            /** Format: int64 */
+            receipt_printer_id?: number | null;
+            uses_tables: boolean;
+            guest_count_required: boolean;
+            /** @enum {integer} */
+            rounding_unit: 0 | 100 | 500 | 1000;
+            allow_room_charge: boolean;
+            allow_company_charge: boolean;
+            allow_comp: boolean;
+            /** @enum {string} */
+            comp_treatment: "PAYMENT_COMP" | "DISCOUNT_100";
+            /** @description Decimal as a string. */
+            max_discount_pct_no_approval: string;
+            block_night_audit_with_open_bills: boolean;
+            is_active?: boolean | null;
+            sort_order?: number;
+            /** @description Required to replace an outlet. */
+            version?: number;
+        };
+        PosOutlet: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            outlet_type: string;
+            /** @enum {string} */
+            order_mode: "PRINT" | "KDS" | "DIRECT";
+            /** Format: int64 */
+            department_id: number;
+            department_name: string;
+            /** Format: int64 */
+            rule_profile_id: number;
+            rule_profile_name: string;
+            /** Format: int64 */
+            price_list_id: number;
+            price_list_name: string;
+            drawer: string | null;
+            /** Format: int64 */
+            receipt_printer_id: number | null;
+            receipt_printer_name?: string | null;
+            uses_tables: boolean;
+            guest_count_required: boolean;
+            rounding_unit: number;
+            allow_room_charge: boolean;
+            allow_company_charge: boolean;
+            allow_comp: boolean;
+            /** @enum {string} */
+            comp_treatment: "PAYMENT_COMP" | "DISCOUNT_100";
+            /** @description Decimal as a string. */
+            max_discount_pct_no_approval: string;
+            block_night_audit_with_open_bills: boolean;
+            is_active: boolean;
+            sort_order: number;
+            version: number;
+        };
+        PosPrinterInput: {
+            name: string;
+            /** @enum {string} */
+            kind: "RECEIPT" | "KITCHEN" | "LABEL";
+            /** @description Where the print agent finds it, for example 192.168.1.50:9100. */
+            connection_info?: string;
+            /** @enum {integer} */
+            paper_width_mm: 58 | 80;
+            codepage: string;
+            opens_drawer?: boolean;
+            is_active?: boolean | null;
+        };
+        PosPrinter: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            kind: string;
+            connection_info: string;
+            paper_width_mm: number;
+            codepage: string;
+            opens_drawer: boolean;
+            is_active: boolean;
+        };
+        PosStationInput: {
+            /** @description Never changes. */
+            code: string;
+            name: string;
+            /** Format: int64 */
+            printer_id?: number | null;
+            kds_enabled: boolean;
+            late_after_minutes: number;
+            is_active?: boolean | null;
+        };
+        PosStation: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            printer_id: number | null;
+            printer_name?: string | null;
+            kds_enabled: boolean;
+            late_after_minutes: number;
+            is_active: boolean;
+        };
+        PosRuleInput: {
+            /** Format: int64 */
+            tax_id?: number | null;
+            /** Format: int64 */
+            service_charge_id?: number | null;
+        };
+        PosRuleProfileInput: {
+            /** @description Never changes. */
+            code: string;
+            name: string;
+            /** @enum {string} */
+            price_mode: "EXCLUSIVE" | "INCLUSIVE";
+            is_active?: boolean | null;
+            /** @description In the order of calculation: one tax or one service charge each. */
+            rules: components["schemas"]["PosRuleInput"][];
+        };
+        PosRuleRef: {
+            /** @enum {string} */
+            rule_type: "TAX" | "SERVICE";
+            /** Format: int64 */
+            tax_id?: number | null;
+            /** Format: int64 */
+            service_charge_id?: number | null;
+            code: string;
+            name: string;
+            /** @description A percentage. */
+            rate: string;
+            tax_on_service?: boolean | null;
+            sequence: number;
+            is_active: boolean;
+        };
+        PosRuleProfile: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            price_mode: "EXCLUSIVE" | "INCLUSIVE";
+            is_active: boolean;
+            rules: components["schemas"]["PosRuleRef"][];
+        };
+        PosPriceListInput: {
+            /** @description Never changes. */
+            code: string;
+            name: string;
+            is_active?: boolean | null;
+        };
+        PosPriceList: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            is_active: boolean;
+            item_count: number;
+        };
+        PosPriceItemInput: {
+            /** Format: int64 */
+            product_id: number;
+            /** @description Decimal as a string. */
+            price: string;
+            is_sold: boolean;
+            /**
+             * Format: int64
+             * @description Overrides the station of the product at the outlets that use this list.
+             */
+            station_id?: number | null;
+        };
+        PosPriceItem: {
+            /** Format: int64 */
+            price_list_id: number;
+            /** Format: int64 */
+            product_id: number;
+            /** @description Decimal as a string. */
+            price: string;
+            is_sold: boolean;
+            /** Format: int64 */
+            station_id?: number | null;
+        };
+        PosCategoryInput: {
+            /** @description Never changes. */
+            code: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description One level only; never changes.
+             */
+            parent_id?: number | null;
+            sort_order?: number;
+            is_active?: boolean | null;
+        };
+        PosCategory: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            parent_id: number | null;
+            sort_order: number;
+            is_active: boolean;
+            product_count: number;
+        };
+        PosOption: {
+            /** Format: int64 */
+            id?: number;
+            name: string;
+            /** @description A variant may be cheaper (negative); an add-on is zero or more. */
+            price_delta: string;
+            is_default: boolean;
+            max_qty: number;
+            sort_order: number;
+            is_active: boolean;
+        };
+        PosOptionGroup: {
+            /** Format: int64 */
+            id?: number;
+            name: string;
+            /**
+             * @description A variant is pick one (min 1 = required); an add-on takes min to max choices.
+             * @enum {string}
+             */
+            kind: "VARIANT" | "MODIFIER";
+            min_select: number;
+            max_select: number;
+            sort_order?: number;
+            options: components["schemas"]["PosOption"][];
+        };
+        PosProductPriceIn: {
+            /** Format: int64 */
+            price_list_id: number;
+            /** @description Decimal as a string. */
+            price: string;
+            is_sold: boolean;
+            /** Format: int64 */
+            station_id?: number | null;
+        };
+        PosProductInput: {
+            /** @description Never changes. */
+            code: string;
+            name: string;
+            /** @description Up to 24 characters; printed on the kitchen ticket. */
+            short_name?: string | null;
+            /** Format: int64 */
+            category_id: number;
+            /**
+             * Format: int64
+             * @description Decides the revenue account and the department; not a room or transfer code.
+             */
+            charge_code_id: number;
+            /**
+             * Format: int64
+             * @description Tax and service of this product; empty follows the outlet.
+             */
+            rule_profile_id?: number | null;
+            /** Format: int64 */
+            station_id?: number | null;
+            is_active?: boolean | null;
+            /** @description Required to replace a product. */
+            version?: number;
+            option_groups?: components["schemas"]["PosOptionGroup"][];
+            prices?: components["schemas"]["PosProductPriceIn"][];
+        };
+        PosProduct: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            short_name?: string | null;
+            /** Format: int64 */
+            category_id: number;
+            category_name: string;
+            /** Format: int64 */
+            charge_code_id: number;
+            charge_code: string;
+            charge_code_name: string;
+            /** Format: int64 */
+            rule_profile_id?: number | null;
+            /** Format: int64 */
+            station_id?: number | null;
+            is_active: boolean;
+            version: number;
+            option_groups?: components["schemas"]["PosOptionGroup"][];
+            prices?: components["schemas"]["PosPriceItem"][];
+            /** @description The price at the outlet asked for. */
+            price?: string;
+            /** @description Whether it is sold at the outlet asked for. */
+            is_sold?: boolean;
+        };
+        PosTable: {
+            /**
+             * Format: int64
+             * @description Absent for a table that is new.
+             */
+            id?: number;
+            /** Format: int64 */
+            area_id?: number;
+            code: string;
+            capacity: number;
+            /** @enum {string} */
+            shape: "SQUARE" | "RECT" | "ROUND";
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            is_active: boolean;
+        };
+        PosMark: {
+            /** Format: int64 */
+            id?: number;
+            /** @enum {string} */
+            kind: "WINDOW" | "DOOR" | "CASHIER" | "OTHER";
+            label: string;
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+        };
+        PosArea: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            outlet_id: number;
+            name: string;
+            sort_order: number;
+            grid_w: number;
+            grid_h: number;
+            layout_version: number;
+            is_active: boolean;
+            tables: components["schemas"]["PosTable"][];
+            marks: components["schemas"]["PosMark"][];
+        };
+        PosAreaInput: {
+            name: string;
+            sort_order?: number;
+            /** @description Grid units */
+            grid_w?: number;
+            /** @description Grid units */
+            grid_h?: number;
+        };
+        PosLayoutInput: {
+            name: string;
+            sort_order?: number;
+            grid_w: number;
+            grid_h: number;
+            is_active?: boolean | null;
+            layout_version: number;
+            tables: components["schemas"]["PosTable"][];
+            marks: components["schemas"]["PosMark"][];
+        };
+        PosFloorPlan: {
+            /** Format: int64 */
+            outlet_id: number;
+            areas: components["schemas"]["PosArea"][];
+        };
+        PosSetupIssue: {
+            /** @enum {string} */
+            code: "OUTLET_NO_PRODUCTS" | "OUTLET_NO_TABLES" | "OUTLET_NO_RECEIPT_PRINTER" | "OUTLET_NO_DRAWER" | "PRODUCT_NO_STATION" | "PRODUCT_STATION_NO_OUTPUT";
+            /** @enum {string} */
+            severity: "ERROR" | "WARNING";
+            outlet?: string;
+            product?: string;
+            station?: string;
+        };
+        PosImportRowError: {
+            row: number;
+            field: string;
+            code: string;
+            detail?: string;
+        };
+        PosImportResult: {
+            dry_run: boolean;
+            rows: number;
+            created: number;
+            updated: number;
+            errors: components["schemas"]["PosImportRowError"][];
+        };
+        FolioOutletLockInput: {
+            /** @description Required and above zero; there is no unlimited. */
+            limit_amount: string;
+            /**
+             * @description Until check-out (or until the master closes)
+             * @enum {string}
+             */
+            valid_mode: "UNTIL_CLOSE" | "TODAY";
+            /** @description The outlets that may charge this folio; at least one. */
+            outlet_ids: number[];
+            /** @description The version of the lock that was loaded; required to change an open lock. */
+            version?: number;
+        };
+        FolioOutletLockPatch: {
+            version?: number;
+        };
+        PosOutletRef: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            is_active: boolean;
+        };
+        FolioOutletLockEvent: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "OPENED" | "CHANGED" | "LOCKED";
+            reason?: string | null;
+            old?: {
+                [key: string]: unknown;
+            } | null;
+            new?: {
+                [key: string]: unknown;
+            } | null;
+            business_date: components["schemas"]["Date"];
+            actor_name: string;
+            /** Format: date-time */
+            at: string;
+        };
+        FolioOutletLock: {
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            folio_type: string;
+            folio_status: string;
+            room_number?: string;
+            guest_name?: string;
+            group_name?: string;
+            /** @description The departure date of the stay, which is what valid until check-out means. */
+            checkout_date: components["schemas"]["Date"] | null;
+            /** @enum {string} */
+            status: "OPEN" | "LOCKED";
+            /** @description Why it is locked: NEVER_OPENED, MANUAL, LIMIT_REACHED, CHECKOUT, EXPIRED or FOLIO_CLOSED. */
+            reason: string | null;
+            can_open: boolean;
+            /** @description FOLIO_CLOSED, STAY_NOT_IN_HOUSE, GROUP_INACTIVE or FOLIO_TYPE. */
+            why_not: string | null;
+            limit_amount: string | null;
+            /** @description What outlets charged in the current period */
+            used: string | null;
+            remaining: string | null;
+            valid_mode: string | null;
+            valid_on: components["schemas"]["Date"] | null;
+            period_no: number;
+            outlets: components["schemas"]["PosOutletRef"][];
+            /** Format: date-time */
+            opened_at?: string | null;
+            /** Format: date-time */
+            updated_at?: string | null;
+            version: number;
+            folio_version: number;
+            business_date: components["schemas"]["Date"];
+            events?: components["schemas"]["FolioOutletLockEvent"][];
+        };
+        OutletChargeRow: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            source: "CHARGE" | "MOVE";
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            folio_type: string;
+            room_number?: string;
+            guest_name?: string;
+            group_name?: string;
+            /** Format: int64 */
+            outlet_id: number;
+            outlet_code: string;
+            outlet_name: string;
+            bill_number?: string;
+            amount: string;
+            /** @enum {string} */
+            result: "ACCEPTED" | "REJECTED";
+            /** @description OUTLET_FOLIO_LOCKED, OUTLET_NOT_ALLOWED, OUTLET_LIMIT_EXCEEDED or FOLIO_CLOSED when refused. */
+            code: string | null;
+            context: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            lock_status?: "" | "OPEN" | "LOCKED";
+            created_by_name?: string;
+            /** Format: date-time */
+            at: string;
+        };
+        OutletChargeList: {
+            business_date: components["schemas"]["Date"];
+            data: components["schemas"]["OutletChargeRow"][];
+            accepted: number;
+            rejected: number;
         };
     };
     responses: {
@@ -25736,6 +26787,1078 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosOutlets: {
+        parameters: {
+            query?: {
+                /** @description Only the ones in use (true) or switched off (false). */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosOutlet"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosOutlet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosOutletInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosOutlet"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPosOutlet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosOutlet"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updatePosOutlet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosOutletInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosOutlet"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPosFloorPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosFloorPlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createPosArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosAreaInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosArea"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    savePosLayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosLayoutInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosArea"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosSoldOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: number[];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    markPosSoldOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                productId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    clearPosSoldOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                productId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listPosPrinters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosPrinter"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosPrinter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosPrinterInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosPrinter"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updatePosPrinter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosPrinterInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosPrinter"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosStations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosStation"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosStation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosStationInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosStation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updatePosStation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosStationInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosStation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosRuleProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosRuleProfile"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosRuleProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosRuleProfileInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosRuleProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updatePosRuleProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosRuleProfileInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosRuleProfile"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosPriceLists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosPriceList"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosPriceList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosPriceListInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosPriceList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updatePosPriceList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosPriceListInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosPriceList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosCategory"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosCategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosCategory"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updatePosCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosCategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosCategory"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosPriceItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosPriceItem"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setPosPriceItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    items: components["schemas"]["PosPriceItemInput"][];
+                };
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosPriceItem"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosProducts: {
+        parameters: {
+            query?: {
+                /** @description Only the ones in use (true) or switched off (false). */
+                active?: boolean;
+                outlet_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosProduct"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createPosProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosProductInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosProduct"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    importPosProducts: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    csv: string;
+                };
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosImportResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPosProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosProduct"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updatePosProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosProductInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosProduct"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPosSetupCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosSetupIssue"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getFolioOutletLock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolioOutletLock"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setFolioOutletLock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolioOutletLockInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolioOutletLock"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    lockFolioOutlet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolioOutletLockPatch"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolioOutletLock"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listOutletCharges: {
+        parameters: {
+            query?: {
+                /** @description The business date; the open one by default. */
+                date?: components["schemas"]["Date"];
+                result?: "ACCEPTED" | "REJECTED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutletChargeList"];
                 };
             };
             403: components["responses"]["Problem"];

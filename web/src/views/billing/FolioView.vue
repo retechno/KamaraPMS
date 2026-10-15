@@ -9,6 +9,7 @@ import { ApiError } from '@/api/problem'
 import type { Approval, ChargeCode, Company, Folio, FolioItem, FolioSummary, PaymentMethod } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import TransferDialog from '@/components/folio/TransferDialog.vue'
+import OutletLockCard from '@/components/folio/OutletLockCard.vue'
 import TransferredList from '@/components/folio/TransferredList.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import type { RowAction } from '@/components/app/rowActions'
@@ -28,6 +29,7 @@ import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { routingText } from '@/utils/routing'
 import { usePropertyStore } from '@/stores/property'
+import { useSubscriptionStore } from '@/stores/subscription'
 import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { folioDescription } from '@/utils/folioDescription'
@@ -88,6 +90,11 @@ const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const isOpen = computed(() => folio.value?.status === 'OPEN')
+const subscription = useSubscriptionStore()
+/** The lock for outlet charges belongs to a folio that can be charged by an outlet: an open folio of an in-house stay, or the master of a group (docs/architecture/34-pos.md 6.2). */
+const showOutletLock = computed(
+  () => !!folio.value && isOpen.value && subscription.has('POS') && (folio.value.folio_type === 'MASTER' || folio.value.stay_id !== null) && (can('folio.outlet_charge_open') || can('folio.read')),
+)
 const chargeCodes = computed(() => codes.value.filter((c) => c.is_active && c.charge_type !== 'ROOM' && c.charge_type !== 'TRANSFER'))
 // An adjustment corrects what is already posted: only the charge codes that have something posted on this folio (the net
 // of their charges, adjustments and reversals above zero). The server enforces it; this keeps the list honest.
@@ -522,6 +529,8 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         </Button>
       </div>
     </Card>
+
+    <OutletLockCard v-if="showOutletLock" :folio-id="folio.id" :until-label="folio.folio_type === 'MASTER' ? t('outletLock.untilMasterCloses') : undefined" class="mb-4" data-testid="folio-outlet-lock" />
 
     <div class="mb-2 flex flex-wrap items-center gap-2" data-testid="group-filter" role="group" :aria-label="t('folio.groups')">
       <Button v-for="g in (['ALL', ...GROUPS] as const)" :key="g" size="sm" :variant="shownGroup === g ? 'default' : 'outline'" :data-testid="`group-${g}`" :aria-pressed="shownGroup === g" @click="shownGroup = g">

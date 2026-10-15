@@ -41,6 +41,15 @@ func (s *Service) need(ctx context.Context, propertyID int64, perm auth.Permissi
 	return p, s.authz.Require(ctx, propertyID, perm)
 }
 
+// needAny is need for a read that the permission of the page that manages the data or the permission of a screen that uses it may do (docs/architecture/33-setup-read-permissions.md).
+func (s *Service) needAny(ctx context.Context, propertyID int64, perms ...auth.Permission) (auth.Principal, error) {
+	p, err := auth.Require(ctx)
+	if err != nil {
+		return p, err
+	}
+	return p, auth.RequireAny(ctx, s.authz, propertyID, perms...)
+}
+
 func fieldErr(f, code, msg string) apperr.FieldError {
 	return apperr.FieldError{Field: f, Code: code, Message: msg}
 }
@@ -83,9 +92,9 @@ func (s *Service) list(ctx context.Context, tenantID, propertyID int64, id *int6
 	return out, nil
 }
 
-// List answers the departments, each department followed by its sub-departments (accounting.view).
+// List answers the departments, each department followed by its sub-departments (accounting.view, or pos.manage for the department of an outlet).
 func (s *Service) List(ctx context.Context, propertyID int64, f Filter) ([]Department, error) {
-	p, err := s.need(ctx, propertyID, auth.PermAccountingView)
+	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +103,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, f Filter) ([]Depar
 
 // Get answers one department (accounting.view).
 func (s *Service) Get(ctx context.Context, propertyID, id int64) (Department, error) {
-	p, err := s.need(ctx, propertyID, auth.PermAccountingView)
+	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage)
 	if err != nil {
 		return Department{}, err
 	}

@@ -37,6 +37,7 @@ import (
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/health"
 	"kamarapms/internal/platform/httpx"
+	"kamarapms/internal/pos"
 	"kamarapms/internal/rates"
 	"kamarapms/internal/reports"
 	"kamarapms/internal/reservations"
@@ -156,6 +157,7 @@ func New(d Deps) *App {
 	shifts.NewHandler(shiftsSvc).Register(api)
 	budget.NewHandler(budgetSvc).Register(api)
 	departments.NewHandler(departmentsSvc).Register(api)
+	pos.NewHandler(pos.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)
