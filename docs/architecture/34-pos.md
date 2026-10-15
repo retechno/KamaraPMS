@@ -1,6 +1,6 @@
 # 34. POS: outlets, bills on the folio, the lock of a folio for outlet charges, kitchen and print agent
 
-Status: **draft, design only (2026-10-15)**. Asked by the owner on 2026-10-15; the owner's decisions are in the request (numbered 1 to 13 there, referred to here as **R1 to R13**) and are **not re-opened**. Where one of them touches a rule of the platform or of an earlier document, section 1 says so, with the reason and what this design does about it. Nothing here is built. Words in `code font` are tables, columns, permissions or error codes; every new name is a proposal until approved.
+Status: **approved by the owner (2026-10-15)**, design only, nothing built. D1 to D21 of section 15 are decided (D2 and D21 differently from the recommendation: marked there and in 7.5, 7.6, 6.3 and 9.10, 9.11). Asked by the owner on 2026-10-15; the owner's decisions are in the request (numbered 1 to 13 there, referred to here as **R1 to R13**) and are **not re-opened**. Where one of them touches a rule of the platform or of an earlier document, section 1 says so, with the reason and what this design does about it. Nothing here is built. Words in `code font` are tables, columns, permissions or error codes; every new name is a proposal until approved.
 
 Read with: `03-financial-engines.md` (one engine, one posting path), `05-transactions-locking.md` (lock order), `18-architecture-decisions.md` 3 (folio model), `26-subscriptions.md` (module gate), `28-check-in-panel.md`, `30-group-folio.md` (master folio, `TRF`, the trail and the return, routing), `31-deposit-release.md`, `32-distinct-approver.md`, `33-setup-read-permissions.md`, `11-cashier-budget-cashflow-card.md` (shifts), `27-qris.md`.
 
@@ -86,6 +86,7 @@ pos_outlets
   guest_count_required boolean
   rounding_unit        smallint    CHECK IN (0, 100, 500, 1000)         -- 0 = none (7.4)
   allow_room_charge    boolean, allow_company_charge boolean, allow_comp boolean
+  comp_treatment       CHECK IN (PAYMENT_COMP, DISCOUNT_100) DEFAULT 'PAYMENT_COMP'   -- 7.5 (D2); changing it is audited (old, new) and applies to bills opened afterwards
   max_discount_pct_no_approval numeric(5,2) DEFAULT 0                   -- D12
   block_night_audit_with_open_bills boolean DEFAULT false               -- D4
   next_bill_no         bigint DEFAULT 1                                 -- the sequence of the outlet (level 50)
@@ -136,6 +137,7 @@ pos_bills
   target_stay_id     bigint NULL FK → stays   -- room service: the room it is for; a hint for the screen, not a link of money
   customer_name      varchar(100) NULL
   waiter_id          bigint FK → users
+  comp_treatment     CHECK IN (PAYMENT_COMP, DISCOUNT_100) NOT NULL   -- copied from the outlet when the bill is opened; an open bill keeps it (7.5)
   business_date_opened date, opened_at, bill_requested_at NULL, closed_at, closed_business_date NULL
   merged_into_bill_id NULL, note, version
 
@@ -279,7 +281,7 @@ folio_outlet_locks          -- one row per folio that was ever opened; NO row = 
 
 folio_outlet_lock_outlets   (folio_id, outlet_id)   -- the outlets that may charge; at least one while OPEN
 folio_outlet_lock_events    -- append-only: OPENED, CHANGED, LOCKED (with the reason), each with actor, old and new values, business date
-pos_room_charge_attempts    (id, folio_id (the folio the charge would land on), requested_stay_id NULL, outlet_id, bill_id,
+pos_room_charge_attempts    (id, source CHECK IN (CHARGE, MOVE, TRANSFER), folio_id (the folio the charge would land on), requested_stay_id NULL, outlet_id, bill_id,
                              amount, result ACCEPTED|REJECTED, code NULL, context jsonb, pos_room_charge_id NULL,
                              business_date, created_at, created_by)
 ```
@@ -304,6 +306,8 @@ Input: the bill, the room chosen by the cashier (a stay), the amount X (≤ the 
 6. The outlet is in `folio_outlet_lock_outlets`: else **`OUTLET_NOT_ALLOWED`**.
 7. `used + X ≤ limit`: else **`OUTLET_LIMIT_EXCEEDED`**, `context`: `limit`, `used`, `remaining`, `requested`. The folio **stays open**: a smaller part may still be charged (the screen offers "charge `remaining` to the room, the rest another way").
 8. Accepted: the `TRF` pair is posted (document 30 4.3: ADJUSTMENT −X on the outlet folio, CHARGE +X on the target, description "{outlet name} · R-0123"), `pos_room_charges` gets its row, the attempt row is ACCEPTED. **If `used + X = limit` the lock becomes LOCKED (LIMIT_REACHED) in the same transaction**: the next charge is refused for that reason.
+
+The same decision is taken by **every path that puts an outlet-charged amount on a folio**: the charge to room, the move of 7.6 and the attributed part of a balance transfer; the attempts table says which (`source CHARGE|MOVE|TRANSFER`).
 
 Because a refused attempt must be written although the use case refuses, the use case returns a **result** of kind `REFUSED` (commit) that the handler turns into the 409 with the code: the attempt rows are the only writes of that transaction.
 
@@ -352,9 +356,23 @@ Identical to a folio payment: Dr the method's account (1110 cash, 1150 card, 115
 - It is recorded as **one ADJUSTMENT (or CHARGE when rounding up) of the system code `POS_ROUNDING`** of ±r on the same folio, source `POS`: **no tax and no service** (the code has no rules, as `TRF` and `ROOM_EXEMPT` have none, so the same engine returns zero components; the configuration refuses to map one). Its revenue account is 4591 "Rounding", a revenue account of the department of the outlet. So there is **no second tax path**: the tax and service of the bill are exactly those of its lines, and the rounding is a separate line that carries none.
 - Whether the rounding changes the tax base in the eyes of the tax office is a question for the consultant (D3); the design records it so that it can be turned off per outlet (`rounding_unit = 0`).
 
-### 7.5 Complimentary (R4), recommended form
+### 7.5 Complimentary (R4, D2): a setting of the outlet
 
-A comp is a **payment of method `COMP`** for the whole (or part of the) balance, with an approval of kind `POS_COMP`, a reason and the guest's or the authorising manager's name in `remarks`. The revenue, service and tax of the lines **stay** on the outlet folio (the sale is recorded at its value); the house pays: Dr 6591 "Complimentary and house use", Cr 1210. This keeps the cost of comps visible by outlet and does not touch the tax computation. The alternative (a 100% discount) removes revenue and tax and hides the cost; it is D2.
+`pos_outlets.comp_treatment`, "Perlakuan komplimen" in the outlet's setup, is one of two; the bill **copies it when it is opened and keeps it** (`pos_bills.comp_treatment`), so a change of the setting applies to the bills opened afterwards and never to an open one. Every change is audited with the old and the new value (`pos.outlet_comp_treatment_changed`). In **both** treatments a complimentary needs `pos.comp` on the person, the approval of kind **`POS_COMP`** (8.2), a reason, and the name of the guest or of the authorising manager; the outlet must allow it (`allow_comp`).
+
+| | `PAYMENT_COMP` (default) | `DISCOUNT_100` |
+|---|---|---|
+| Mechanism | a **payment of method `COMP`** for the comped part of the balance | a **100% discount** on the item(s) or the bill |
+| Before the send | the lines are posted at full value at the send; the COMP payment follows | the line's `discount_amount` is its whole base: the engine returns net 0, service 0, tax 0, so the item is posted with a zero total |
+| After the send | the same | one negative ADJUSTMENT per posted line through `PostAdjustment` (7.3), reference `POS_COMP`; it reverses the net, the service and the tax of the line in full |
+| Revenue, service, tax | **recorded as if sold** | **none** |
+| Expense | the value goes to the **complimentary expense account** (system key `COMP`, a row of Account mapping, default 6591 "Complimentary and house use") | **none** |
+| Tax line of the books | the VAT/PB1 of the sale is declared as for any sale | nothing is declared, because the engine computed it on a discounted net of zero |
+| Report | counted as comp (value with tax, base, by whom, approver, reason) | counted as comp from the discount lines marked `POS_COMP` (value of what was given away at list price, with tax) |
+
+**There is no second tax path in either mode.** In `PAYMENT_COMP` the tax is the one of the lines and the COMP payment is a payment like any other (it settles the guest ledger against an expense account). In `DISCOUNT_100` the tax is **zero because the engine computed it on the discounted net**, exactly as for any discount (7.3); nothing is reduced by hand and no line is exempted from a rule. The **report of the outlet shows comps in both modes** (a "Complimentary" block with count, value at list price including tax, and by approver), so the two treatments are comparable even though only one of them reaches the expense account.
+
+**To be confirmed with the tax consultant (konsultan pajak) before either mode is used by a PKP property:** whether the VAT/PB1 on a complimentary item is due (what `PAYMENT_COMP` assumes) or not (what `DISCOUNT_100` assumes). The design makes both available because the answer may differ by outlet and by the nature of the comp; it does not decide it.
 
 ### 7.6 Voids and corrections (R6)
 
@@ -364,9 +382,11 @@ A comp is a **payment of method `COMP`** for the whole (or part of the) balance,
 | Same, **earlier business day** (the day is closed) | a negative ADJUSTMENT through the engine with the line's code and profile, today's date; revenue reduces **today** | `POS_VOID` |
 | The bill is CLOSED, same business day | **reopen** (`folio.reopen` + `POS_REOPEN`), then void or refund, then pay again; a payment of the same day is voided (`PaymentService.Void`), an earlier one is refunded | `POS_REOPEN`, then the existing kinds for the payment |
 | The bill is CLOSED, the day is closed | reopen, then adjustments in the current day (never back-posting, document 04 rule), then pay again | `POS_REOPEN`, `POS_VOID` |
-| Already **charged to a room** | **Return** the `TRF` pair (document 30 4.5; the folio must be OPEN, so reopen the bill first), correct, charge again; or, to put it on the right room, a balance transfer from the wrong room to the right one (scopes of 4.2: `folio.transfer_any` if unrelated) | `POS_REOPEN`, then `FOLIO_TRANSFER` of document 32 |
+| Already **charged to a room** | **Return** the `TRF` pair (document 30 4.5; the folio must be OPEN, so reopen the bill first), correct, charge again; or **move the charge to the right room** (`POST /pos/room-charges/{id}/move`): a return and a new charge in **one transaction**, where the new charge goes through **every check of 6.3 at the target** (lock, validity, allowed outlets, limit); if any fails nothing moves and the first room keeps the charge | `POS_REOPEN` and `FOLIO_TRANSFER` (the return), then the checks of 6.3 |
 
 A void of a line whose ticket was SERVED is allowed (with the approval) and the ticket shows it struck through; `TRANSFER_COPY_USE_RETURN` of document 30 12.1 still refuses reversing the copy of a transfer on the guest folio: the way back is the return.
+
+**A direct transfer of an outlet charge to another room has no exception (D21).** The balance of a folio is fungible (document 30 4.3), so the rule is by **attribution**: a balance transfer **out of** a folio takes first the **outstanding outlet-charged amount** of that folio (the sum of its `pos_room_charges` of the current period not returned, most recent first), and **that part is subject to steps 3 to 7 of 6.3 at the target folio** (the target, or the master when routed), on the outlet of each charge, **for every person, including the holder of `folio.transfer_any`**; the rest of the amount is an ordinary transfer. A refusal refuses the whole request. The usage moves with it: the source charges are marked returned and the target gets new `pos_room_charges` rows in the target's period. `folio.transfer_any` widens *where* a transfer may go (document 30 4.2); it never opens a locked folio for outlets.
 
 ## 8. Permissions and approvals
 
@@ -519,6 +539,33 @@ Bill of 9.1 without the void: L1 (100,000 net) and L3 (30,000 net), total 158,73
 
 158,730 − 142,857 = 15,873 = 10% of 158,730: the discount reduces service and tax in proportion because the engine computes them on the discounted net. Applied after the send, it is two ADJUSTMENTs of −12,210 and −3,663 (the same total). Cash settlement with `rounding_unit = 100`: 142,857 → **142,900**: one CHARGE `POS_ROUNDING` **+43** (no tax, no service; Cr 4591 43), cash 142,900. Journal: Dr 1110 142,900 / Cr 4210 117,000, 2430 11,700, 2410 14,157, 4591 43 (142,900 ✓). The VAT base stays 117,000 + 11,700; the 43 is not taxed (D3).
 
+### 9.10 Complimentary in both treatments (D2)
+
+Bill R-0160: 2 × nasi goreng 50,000, total **122,100** (net 100,000, service 10,000, tax 12,100), approved as complimentary by the supervisor (`POS_COMP`, amount 122,100, reason "Guest of the owner").
+
+| | `PAYMENT_COMP` | `DISCOUNT_100` |
+|---|---|---|
+| Folio R-0160 | CHARGE 122,100 (source POS); PAYMENT method COMP 122,100 (credit; `remarks` the name and the approver) | CHARGE with discount 100,000: net 0, service 0, tax 0, **debit 0** (or, after the send, CHARGE 122,100 and ADJUSTMENT −122,100 reference `POS_COMP`) |
+| Balance | 0, bill CLOSED | 0, bill CLOSED (a bill with a zero balance and no payment closes) |
+| Journal | Dr 1210 122,100 / Cr 4210 100,000, 2430 10,000, 2410 12,100; Dr **6591** 122,100 / Cr 1210 122,100. **Net: Dr 6591 122,100; Cr 4210 100,000, Cr 2430 10,000, Cr 2410 12,100** | **none** (net zero in every account; before the send nothing was ever posted with value) |
+| Reconciliation | 1210 unchanged; 6591 +122,100 | 1210 unchanged |
+| Outlet report, "Complimentary" | 1 bill, 122,100 incl. tax (base 100,000), approver | the same figures, read from the lines marked `POS_COMP` |
+
+An outlet whose treatment is changed from `PAYMENT_COMP` to `DISCOUNT_100` at 14:00: bills opened before 14:00 keep `PAYMENT_COMP`, bills opened after use `DISCOUNT_100`; the audit has one entry with the old and new value.
+
+### 9.11 A charge moved to another room checks the lock again (D21)
+
+The charge of 9.1 (58,730, R-0123, outlet RESTO) sits on room 305; it should have been room 307. 307 has **no open lock**.
+
+| Step | Result |
+|---|---|
+| Move to 307 (`POST /pos/room-charges/{id}/move`), by the supervisor who holds `folio.transfer_any` | **409 `OUTLET_FOLIO_LOCKED`** (`reason NEVER_OPENED`, `source MOVE`); the transaction is the refusal only; **nothing moves**: 305 keeps +58,730, 307 has nothing; attempt row REJECTED |
+| Reception opens 307 (limit 100,000, outlets RESTO) and the move is repeated | accepted: R-0123 gets CHARGE `TRF` +58,730 (return) then ADJUSTMENT `TRF` −58,730; 305 gets ADJUSTMENT −58,730; 307 gets CHARGE +58,730; `pos_room_charges`: the old row returned, a new one on 307 (used 58,730 of 100,000) |
+| The same move to 307 with the limit 50,000 | `OUTLET_LIMIT_EXCEEDED` (remaining 50,000); 305 unchanged |
+| A plain balance transfer of 58,730 from 305 to 307 (`folio.transfer_any`) | the 58,730 is outlet-charged on 305, so it is treated as above and refused the same way; a transfer of 20,000 of room charges of 305 (no outlet charge outstanding) is an ordinary transfer |
+
+Journal of an accepted move: the return pair and the new pair each net to zero on 1215; 1210 moves 58,730 from the folio of 305 to the folio of 307; revenue untouched.
+
 ## 10. Realtime, KDS and printing
 
 ### 10.1 Realtime (F2)
@@ -646,6 +693,8 @@ Migration numbers are the next free: **00080, 00081, 00082**; if another PR take
 
 **PR 2**
 - **Races**: two waiters add to one bill at once (both lines present, order by `(created_at, uuid)`); an add against a pay (the pay wins or the add answers `BILL_NOT_OPEN`); two sends of one bill (one round per line, no line posted twice, `folio_items.reference_id` unique); **two payments at once** on one bill (balance never negative, one `CLOSED`); **two outlets charge one room at once and pass the limit** (6.4, repeated); a charge to room against the check-out of that stay (no deadlock: the stay share lock, or `CHECKOUT` wins and the charge answers `OUTLET_FOLIO_LOCKED`); a charge against the lock being closed by reception; two merges of the same bills; a void against a pay.
+- **Comp (D2)**: both treatments end to end (9.10): journal, reconciliation, report; the treatment kept on the bill when the setting changes; the audit of the change; `POS_COMP` asked in both modes under `FREE`, `DISTINCT` and `DISTINCT_ABOVE`; `DISCOUNT_100` leaves no revenue, service, tax or expense and no zero-value line in the journal.
+- **Move and transfer (D21)**: the move and the attributed part of a transfer are refused for a locked, expired, not-allowed or over-limit target **also for the holder of `folio.transfer_any`**; accepted and refused in one transaction (nothing moves on a refusal); the usage follows the charge; a transfer with no outlet-charged amount is unchanged; two moves to one room at once cannot pass the limit.
 - **Ledger**: for each flow of section 9 the exact folio lines, the day journal, and the reconciliation (`ControlSources`) with and without deposits, before and after the close and the release of deposits (document 31, both modes); **net zero per account and department** of a split, a merge and a return; **revenue not doubled** when charged to a room (the revenue summary, the department report and the journal by outlet); `TRF` zero on 1215 at every close; the faktur of the guest folio unchanged by an outlet charge.
 - **View**: the new `is_deposit` branch compared row by row with the old view for every existing case (as 00075).
 - **Approvals**: each new kind under `FREE`, `DISTINCT`, `DISTINCT_ABOVE` at, below and above the limit; the structural test; the idempotency replay does not ask again.
@@ -663,12 +712,14 @@ Migration numbers are the next free: **00080, 00081, 00082**; if another PR take
 - Print: claim order and lease, `SKIP LOCKED` with two agents, the retry and the failed state, idempotent result, dedupe, reprint copy mark, drawer job, token revocation and rotation, device token on a user route and the reverse (401/403), payload purge, the module gate and `READ_ONLY`.
 - Web: the waiter layout at 390 px, KDS, the printer status.
 
-## 15. Decisions the owner still has to take (with a recommendation)
+## 15. Decisions of the owner (decided 2026-10-15, review of PR #35)
+
+**D1 and D3 to D20 are approved as recommended.** D2 and D21 were decided differently from the recommendation; the column "Recommendation" below is kept as the question was asked, and the **decision** of the owner is given for those two in bold at the start of the row.
 
 | # | Question | Recommendation |
 |---|---|---|
 | D1 | Tax and service per outlet: **rule profiles** (a field on the calculation request) or **a charge code per treatment** (no engine change, more codes and a revenue report per code)? | **Profiles.** It is the literal R2 ("follows the outlet, override per product"); the engine change is one optional field and `chargecalc` is untouched. |
-| D2 | Complimentary: **payment method `COMP`** (revenue and tax recorded, the house pays into an expense account) or a 100% discount? | **Payment method.** The cost of comps stays visible per outlet; the tax is as if sold. Ask the consultant whether VAT on a complimentary item is due (it is conservative to record it). |
+| D2 | Complimentary: payment method `COMP` or a 100% discount? | **DECIDED: a setting of each outlet, "Perlakuan komplimen": `PAYMENT_COMP` (default) or `DISCOUNT_100`**, stored on the bill when it is opened, audited, always with the `POS_COMP` approval, reported in both modes; the tax treatment is to be confirmed with the consultant. Section 7.5, flow 9.10. (Recommended was the payment method only.) |
 | D3 | Rounding as an untaxed `POS_ROUNDING` line: acceptable to the tax office? | **Yes, per outlet and switchable** (`rounding_unit`); confirm with the consultant before it is switched on for a PKP property. |
 | D4 | Open bills at the night audit | **Warning by default, per outlet a blocker** (13.1). |
 | D5 | Splitting and merging inside one outlet without a supervisor's approval (`OUTLET_BILL`) | **Yes**: no money changes payer; audited. Moving a line to another folio keeps the approval. |
@@ -679,7 +730,7 @@ Migration numbers are the next free: **00080, 00081, 00082**; if another PR take
 | D10 | Bill number = folio number (`R-0123`), gaps allowed for voided empty bills | **Yes**; a bill is a receipt, not a fiscal document. |
 | D11 | Grant the new permissions to existing roles by migration? | **No**: the module is new and the 00076 lesson was a grant that was too wide. The tenant administrator holds everything; `pms-seed pos` can create demo roles in a development database only. |
 | D12 | Discount without an approver's password up to a percent (`max_discount_pct_no_approval`) | **Default 0** (always approve), settable per outlet; a staff discount of 5% at a café is a decision of the hotel. |
-| D13 | `COMP` and the `POS` source add CHECK values and a system account each | **Approved with D2**; the Down refuses while used. |
+| D13 | `COMP` and the `POS` source add CHECK values and a system account each | **Approved**; the account of `COMP` is a row of Account mapping (D2); the Down refuses while used. |
 | D14 | Cash for the outlet: the shift **per drawer**, several drawers per cashier | **Yes** (F9); no change to the shift rules, a drawer per outlet. |
 | D15 | SSE over fetch instead of WebSocket | **SSE.** Nothing asked needs the client to push, and an outbox gives resume. |
 | D16 | The agent in this repository (`cmd/pos-agent`, Go, one binary) or its own? | **Here**, same protocol tests and release; it needs no database. |
@@ -687,7 +738,7 @@ Migration numbers are the next free: **00080, 00081, 00082**; if another PR take
 | D18 | A prepaid amount on an outlet bill before any charge (a spa deposit) | Allowed by the role-based `is_deposit`; the release of document 31 applies. Confirm it is wanted. |
 | D19 | Kitchen status per ticket (recommended) or per line | **Per ticket**; per line only if a kitchen asks. |
 | D20 | A table "hold" (dipesan) is a small list with a time, **not** a link to PMS reservations | **Yes** for now. |
-| D21 | A stay's outlet charges moved to another room after a wrong room (7.6, last row) | The return and a new charge is the path; a direct balance transfer needs `folio.transfer_any` when the rooms are unrelated, and does **not** re-check the lock of the new room. Confirm that exception. |
+| D21 | A stay's outlet charges moved to another room after a wrong room (7.6) | **DECIDED: no exception.** A direct transfer of an outlet charge to another room checks the lock, the limit and the allowed outlets on the target folio (or the master when routed) like a new charge, **also for the holder of `folio.transfer_any`**. Section 7.6, flow 9.11. (Recommended was to skip the check for that permission.) |
 
 ## 16. Not in this design
 
