@@ -440,6 +440,6 @@ async function book(approval?: Approval): Promise<void> {
         </CardContent>
       </form>
     </Card>
-    <ApprovalDialog v-if="approving" :title="isRestricted ? t('restrictions.approvalTitle') : isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isRestricted ? t('restrictions.approvalMessage') : isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="saving" :error="dialogError" @approve="(a) => book(a)" @cancel="approving = false" />
+    <ApprovalDialog :kind="isRestricted ? 'SALES_RESTRICTION' : isFree ? 'FREE_ROOM' : 'RATE_OVERRIDE'" v-if="approving" :title="isRestricted ? t('restrictions.approvalTitle') : isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isRestricted ? t('restrictions.approvalMessage') : isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="saving" :error="dialogError" @approve="(a) => book(a)" @cancel="approving = false" />
   </template>
 </template>

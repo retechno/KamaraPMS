@@ -409,5 +409,5 @@ watch(() => [route.query.source_type, route.query.id], () => {
       </CardContent>
     </Card>
   </template>
-  <ApprovalDialog v-if="voiding?.asking" :title="t('taxInvoices.approveVoid')" :busy="busy" :error="dialogError" @approve="voidInvoice" @cancel="voiding = null; dialogError = null" />
+  <ApprovalDialog kind="TAX_DOCUMENT" v-if="voiding?.asking" :title="t('taxInvoices.approveVoid')" :busy="busy" :error="dialogError" @approve="voidInvoice" @cancel="voiding = null; dialogError = null" />
 </template>

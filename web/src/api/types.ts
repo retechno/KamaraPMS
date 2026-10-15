@@ -259,3 +259,7 @@ export type MasterResult = Schemas['MasterResult']
 export type MasterInfo = Schemas['MasterInfo']
 export type PostedCharges = Schemas['PostedCharges']
 export type RoutingNotice = Schemas['RoutingNotice']
+
+export type ApprovalKind = Schemas['ApprovalKind']
+export type ApprovalRuleType = Schemas['ApprovalRuleType']
+export type ApprovalRule = Schemas['ApprovalRule']

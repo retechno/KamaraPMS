@@ -185,5 +185,5 @@ watch(() => [open.value, props.row?.id], () => { if (open.value) void load() }, 
       </form>
     </DialogContent>
   </Dialog>
-  <ApprovalDialog v-if="approving" :title="t('frontDesk.rateEdit.approvalTitle')" :message="t('frontDesk.rateEdit.approvalMessage')" :busy="busy" :error="approvalError" @approve="(a) => send(a)" @cancel="approving = false" />
+  <ApprovalDialog kind="STAY_RATE" v-if="approving" :title="t('frontDesk.rateEdit.approvalTitle')" :message="t('frontDesk.rateEdit.approvalMessage')" :busy="busy" :error="approvalError" @approve="(a) => send(a)" @cancel="approving = false" />
 </template>

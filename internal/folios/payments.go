@@ -11,6 +11,7 @@ import (
 
 	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/folios/foliosdb"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -389,7 +390,11 @@ func (s *Service) Void(ctx context.Context, propertyID, paymentID int64, in Corr
 	if len(fields) > 0 {
 		return PaymentResult{}, apperr.Invalid("the void is invalid", fields...)
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	approvedAmount := decimal.Zero // the amount of the payment voided (an unknown payment is 404 in the transaction)
+	if pay, err := s.q(ctx).GetPayment(ctx, foliosdb.GetPaymentParams{TenantID: p.TenantID, PropertyID: propertyID, ID: paymentID}); err == nil {
+		approvedAmount = pay.Amount
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindFolioReversal, Amount: approvedAmount})
 	if err != nil {
 		return PaymentResult{}, err
 	}
@@ -455,7 +460,7 @@ func (s *Service) Void(ctx context.Context, propertyID, paymentID int64, in Corr
 			return err
 		}
 		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.voided", "payment", paymentID, auditlabel.Payment(ctx, propertyID, paymentID),
-			map[string]any{"status": pay.Status}, map[string]any{"status": voided.Status, "reason": reason, "actor": p.ActorID(), "approved_by": by})); err != nil {
+			map[string]any{"status": pay.Status}, approval.AuditFields(map[string]any{"status": voided.Status, "reason": reason, "actor": p.ActorID()}))); err != nil {
 			return err
 		}
 		out, err = s.voidResult(ctx, p.TenantID, propertyID, voided, entry.ID)
@@ -522,7 +527,7 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 			return res, ok, err
 		},
 		func() (PaymentResult, error) {
-			approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+			approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindRefund, Amount: amount})
 			if err != nil {
 				return PaymentResult{}, err
 			}
@@ -593,10 +598,10 @@ func (s *Service) Refund(ctx context.Context, propertyID, paymentID int64, key s
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.refunded", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "payment.refunded", "payment", pay.ID, auditlabel.Payment(ctx, propertyID, pay.ID), nil, approval.AuditFields(map[string]any{
 					"payment_number": pay.PaymentNumber, "refund_of_payment_id": paymentID, "amount": pay.Amount.String(), "reason": reason,
-					"actor": p.ActorID(), "approved_by": by,
-				})); err != nil {
+					"actor": p.ActorID(),
+				}))); err != nil {
 					return err
 				}
 				out, err = s.paymentResult(ctx, p.TenantID, propertyID, pay)

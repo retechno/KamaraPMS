@@ -30,7 +30,7 @@ const open = ref<number | null>(null)
 // sorts goes between the two; the newest first is the server's own order, so it is the address with no order.
 const { sort, params: sortParams, setSort } = useServerSort(['created_at'])
 const NEWEST_FIRST = { key: 'created_at', dir: 'desc' } as const
-const filter = reactive({ entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
+const filter = reactive({ entity_type: '', user_id: '', action: '', document: '', from: '', to: '', self_approved: false })
 const users = ref<{ id: number; full_name: string }[]>([])
 
 // The choices of the entity and action filters, in the words of the language of the page.
@@ -49,7 +49,7 @@ async function loadUsers(): Promise<void> {
 }
 
 // The document number is the search (it is in the bar of a phone); the others are filters.
-const activeFilters = computed(() => (['entity_type', 'user_id', 'action', 'from', 'to'] as const).filter((k) => filter[k] !== '').length)
+const activeFilters = computed(() => (['entity_type', 'user_id', 'action', 'from', 'to'] as const).filter((k) => filter[k] !== '').length + (filter.self_approved ? 1 : 0))
 
 const columns = computed<Column<AuditLog>[]>(() => [
   { key: 'created_at', label: t('audit.when'), sortable: true, format: 'datetime' as const, card: 'secondary' as const },
@@ -72,8 +72,10 @@ const searchTooShort = computed(() => searchText.value.length > 0 && [...searchT
 function query(cursor?: string): Record<string, string | number | undefined> {
   const q: Record<string, string | number | undefined> = { limit: 50, cursor, ...sortParams.value }
   for (const [k, v] of Object.entries(filter)) {
-    if (k !== 'document' && v.trim()) q[k] = k === 'user_id' ? Number(v) : v.trim()
+    if (k !== 'document' && k !== 'self_approved' && String(v).trim()) q[k] = k === 'user_id' ? Number(v) : String(v).trim()
   }
+  // The approvals an administrator gave to their own correction against the rule of the property (docs/architecture/32-distinct-approver.md).
+  if (filter.self_approved) q.self_approved = 'true'
   if (searchText.value && !searchTooShort.value) q.q = searchText.value
   return q
 }
@@ -102,7 +104,7 @@ const toggleDetails = (id: number): void => {
 const actionsOf = (row: AuditLog): RowAction[] => [{ key: 'details', label: open.value === row.id ? t('audit.hide') : t('audit.details'), primary: true, testId: `toggle-${row.id}`, onSelect: () => toggleDetails(row.id) }]
 
 function reset(): void {
-  Object.assign(filter, { entity_type: '', user_id: '', action: '', document: '', from: '', to: '' })
+  Object.assign(filter, { entity_type: '', user_id: '', action: '', document: '', from: '', to: '', self_approved: false })
   void load()
 }
 
@@ -177,6 +179,10 @@ watch(pid, () => {
           </template>
         </FormField>
         
+        <label class="flex items-start gap-2 text-sm sm:col-span-2 lg:col-span-4" data-testid="self-approved-filter">
+          <input v-model="filter.self_approved" type="checkbox" name="self_approved" class="mt-1 size-4 accent-primary" />
+          <span>{{ t('audit.selfApproved') }}</span>
+        </label>
         <FormField float-hint :hint="$weekday(filter.from)" :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
         <FormField float-hint :hint="$weekday(filter.to)" :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
       <template #actions>

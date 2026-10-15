@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/availability"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
@@ -33,6 +35,7 @@ type restrictionAuth struct {
 	ro         *RestrictionOverride
 	done       bool
 	approvedBy int64
+	marked     bool // an administrator approved their own against the rule of the property
 	reason     string
 	violations []restrictedStay
 }
@@ -97,25 +100,11 @@ func (s *Service) requireSellable(ctx context.Context, tenantID, propertyID int6
 	case len([]rune(reason)) > maxRestrictionReasonLen:
 		return apperr.Invalid("the restriction override is invalid", fieldErr("restriction_override.reason", "TOO_LONG", "at most 500 characters"))
 	}
-	p, err := auth.Require(ctx)
-	if err != nil {
+	var run approvalRun
+	if err := s.approveRun(ctx, propertyID, iam.KindSalesRestriction, auth.PermReservationRestrictionApprove, ra.ro.Approval, &run, decimal.Zero); err != nil {
 		return err
 	}
-	if s.authz.Require(ctx, propertyID, auth.PermReservationRestrictionApprove) == nil {
-		if id := p.ActorID(); id != nil {
-			ra.approvedBy = *id
-		}
-	} else {
-		if s.approver == nil {
-			return apperr.New(apperr.KindInvalid, "APPROVAL_REQUIRED", "this restriction override needs an approval: the approver's email and password").
-				WithContext("permission", string(auth.PermReservationRestrictionApprove))
-		}
-		ap, err := s.approver.VerifyApprovalFor(ctx, propertyID, ra.ro.Approval, auth.PermReservationRestrictionApprove)
-		if err != nil {
-			return err
-		}
-		ra.approvedBy = ap.UserID()
-	}
+	ra.approvedBy, ra.marked = run.approvedBy, run.marked
 	ra.done, ra.reason = true, reason
 	ra.violations = append(ra.violations, found...)
 	return nil
@@ -136,7 +125,11 @@ func RestrictionAudit(ctx context.Context) map[string]any {
 	if ra == nil || !ra.done {
 		return nil
 	}
-	return map[string]any{"restriction_override": map[string]any{"approved_by": ra.approvedBy, "reason": ra.reason, "violations": ra.violations}}
+	out := map[string]any{"restriction_override": map[string]any{"approved_by": ra.approvedBy, "reason": ra.reason, "violations": ra.violations}}
+	if ra.marked {
+		out[iam.SelfApprovedKey] = true
+	}
+	return out
 }
 
 // withRestrictionAudit adds the override to the data of an audit entry.

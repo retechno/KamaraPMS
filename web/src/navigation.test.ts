@@ -115,7 +115,7 @@ describe('navigation', () => {
   })
 
   it('names the permission of the read endpoint on every page, except the ones that every member of the property may read', () => {
-    const open = ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'roomBlocks', 'properties', 'users', 'roles', 'roomTypes', 'bedTypes', 'roomsSetup', 'taxesService', 'chargeCodes', 'ratePlans', 'freeQuotas', 'rateGrid', 'bedSupplements', 'restrictions', 'yieldRules']
+    const open = ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'roomBlocks', 'properties', 'users', 'roles', 'roomTypes', 'bedTypes', 'roomsSetup', 'taxesService', 'chargeCodes', 'ratePlans', 'freeQuotas', 'approvalRules', 'rateGrid', 'bedSupplements', 'restrictions', 'yieldRules']
     const bare = items.filter((i) => !i.permission && !i.adminOnly).map((i) => i.id)
     expect(bare.sort()).toEqual(open.filter((id) => !['properties', 'users', 'roles', 'myTasks'].includes(id)).sort())
   })

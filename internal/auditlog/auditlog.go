@@ -32,10 +32,10 @@ func (r *Reader) searchRows(ctx context.Context, f Filter, tenantID int64, entit
 	q := auditdb.New(r.txm.DB(ctx))
 	if !f.Oldest {
 		return q.SearchAuditLogs(ctx, auditdb.SearchAuditLogsParams{TenantID: tenantID, PropertyID: f.PropertyID, EntityType: entityType, EntityID: f.EntityID, UserID: f.UserID, Action: action,
-			FromDate: f.From, ToDate: f.To, LabelLike: labelLike, BeforeID: position, RowLimit: limit})
+			FromDate: f.From, ToDate: f.To, LabelLike: labelLike, SelfApproved: f.SelfApproved, BeforeID: position, RowLimit: limit})
 	}
 	rows, err := q.SearchAuditLogsAsc(ctx, auditdb.SearchAuditLogsAscParams{TenantID: tenantID, PropertyID: f.PropertyID, EntityType: entityType, EntityID: f.EntityID, UserID: f.UserID, Action: action,
-		FromDate: f.From, ToDate: f.To, LabelLike: labelLike, AfterID: position, RowLimit: limit})
+		FromDate: f.From, ToDate: f.To, LabelLike: labelLike, SelfApproved: f.SelfApproved, AfterID: position, RowLimit: limit})
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +72,8 @@ type Filter struct {
 	From, To   *civil.Date
 	// Oldest lists the oldest entries first; the default is the newest first. The order is by id (ids grow with time).
 	Oldest bool
+	// SelfApproved lists only the corrections a tenant administrator approved themselves although the rule of the property asked for someone else (self_approved_by_admin).
+	SelfApproved bool
 	// Q finds the entries whose label holds it, in any case (a part of a number: "0012" finds RES000012). 3 to 64 characters; the escaping for LIKE is done here.
 	Q string
 }
@@ -220,7 +222,7 @@ func (h *Handler) tenant(w http.ResponseWriter, req *http.Request) error { retur
 func (h *Handler) list(w http.ResponseWriter, req *http.Request, property *int64) error {
 	q := req.URL.Query()
 	var errs []apperr.FieldError
-	f := Filter{PropertyID: property, EntityType: q.Get("entity_type"), Action: q.Get("action"), Q: strings.TrimSpace(q.Get("q"))}
+	f := Filter{PropertyID: property, EntityType: q.Get("entity_type"), Action: q.Get("action"), Q: strings.TrimSpace(q.Get("q")), SelfApproved: q.Get("self_approved") == "true"}
 	num := func(name string) *int64 {
 		v := q.Get(name)
 		if v == "" {

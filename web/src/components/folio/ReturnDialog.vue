@@ -97,5 +97,5 @@ async function approve(approval: Approval): Promise<void> {
       </form>
     </DialogContent>
   </Dialog>
-  <ApprovalDialog v-else :title="t('folioTransfer.returnApprovalTitle')" :busy="busy" :error="dialogError" @approve="approve" @cancel="stage = 'form'" />
+  <ApprovalDialog kind="FOLIO_TRANSFER" v-else :title="t('folioTransfer.returnApprovalTitle')" :busy="busy" :error="dialogError" @approve="approve" @cancel="stage = 'form'" />
 </template>

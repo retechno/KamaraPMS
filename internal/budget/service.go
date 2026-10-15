@@ -861,7 +861,7 @@ func (s *Service) Activate(ctx context.Context, propertyID, id int64, in Activat
 	if err != nil {
 		return Budget{}, err
 	}
-	approval, err := s.iam.VerifyApprovalFor(ctx, propertyID, in.Approval, auth.PermBudgetApprove)
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindBudget})
 	if err != nil {
 		return Budget{}, err
 	}
@@ -924,7 +924,7 @@ func (s *Service) Activate(ctx context.Context, propertyID, id int64, in Activat
 			return err
 		}
 		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "budget.activated", id, auditlabel.Budget(ctx, propertyID, id), map[string]any{"status": StatusDraft},
-			map[string]any{"status": StatusActive, "year": out.YearLabel, "version": out.Version, "approved_by": approval.UserID(), "archived_budget_id": archived}))
+			approval.AuditFields(map[string]any{"status": StatusActive, "year": out.YearLabel, "version": out.Version, "archived_budget_id": archived})))
 	})
 	return out, err
 }

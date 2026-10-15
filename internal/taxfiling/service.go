@@ -721,7 +721,11 @@ func (s *Service) VoidReturn(ctx context.Context, propertyID, id int64, in VoidI
 	if reason == "" || len([]rune(reason)) > 500 {
 		return Return{}, apperr.Invalid("the void is invalid", fieldErr("reason", "INVALID", "a reason of up to 500 characters is required"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	taxAmount := decimal.Zero // the tax of the return voided, for the rule of approval (not found: 404 in the transaction)
+	if ret, err := s.loadReturn(ctx, p.TenantID, propertyID, id, civil.Date{}); err == nil {
+		taxAmount = ret.Tax
+	}
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindTaxDocument, Amount: taxAmount})
 	if err != nil {
 		return Return{}, err
 	}
@@ -783,7 +787,7 @@ func (s *Service) VoidReturn(ctx context.Context, propertyID, id int64, in VoidI
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.return_voided", "tax_return", id, auditlabel.TaxReturn(ctx, propertyID, id),
-			map[string]any{"status": "FILED"}, map[string]any{"status": "VOIDED", "reason": reason, "approved_by": by, "return_number": ret.Number}))
+			map[string]any{"status": "FILED"}, approval.AuditFields(map[string]any{"status": "VOIDED", "reason": reason, "return_number": ret.Number})))
 	})
 	if err != nil {
 		return Return{}, err

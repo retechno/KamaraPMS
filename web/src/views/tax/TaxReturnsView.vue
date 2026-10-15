@@ -410,5 +410,5 @@ watch([() => pid.value, taxId], () => {
       </div>
     </CardContent>
   </Card>
-  <ApprovalDialog v-if="voiding?.asking" :title="t('taxReturns.approveVoid')" :busy="busy" :error="dialogError" @approve="confirmVoid" @cancel="voiding = null; dialogError = null" />
+  <ApprovalDialog kind="TAX_DOCUMENT" v-if="voiding?.asking" :title="t('taxReturns.approveVoid')" :busy="busy" :error="dialogError" @approve="confirmVoid" @cancel="voiding = null; dialogError = null" />
 </template>

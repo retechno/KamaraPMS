@@ -458,5 +458,5 @@ watch([() => pid.value, sid], () => {
       </Card>
     </div>
   </template>
-  <ApprovalDialog v-if="reopening?.asking" :title="t('reconcile.approveReopen')" :busy="busy" :error="dialogError" @approve="reopen" @cancel="reopening = null; dialogError = null" />
+  <ApprovalDialog kind="BANK" v-if="reopening?.asking" :title="t('reconcile.approveReopen')" :busy="busy" :error="dialogError" @approve="reopen" @cancel="reopening = null; dialogError = null" />
 </template>

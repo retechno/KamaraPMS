@@ -273,7 +273,7 @@ func (s *Service) ReopenFiscalYear(ctx context.Context, propertyID int64, start 
 	if reason == "" || len([]rune(reason)) > 500 {
 		return FiscalYear{}, apperr.Invalid("the reopening is invalid", fieldErr("reason", "INVALID", "a reason of up to 500 characters is required"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindFiscalYear})
 	if err != nil {
 		return FiscalYear{}, err
 	}
@@ -332,7 +332,7 @@ func (s *Service) ReopenFiscalYear(ctx context.Context, propertyID int64, start 
 			return err
 		}
 		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.fiscal_year_reopened", "gl_fiscal_year", propertyID, fy.Label, nil,
-			map[string]any{"year": fy.Label, "start": fy.Start.String(), "reason": reason, "approved_by": by})); err != nil {
+			approval.AuditFields(map[string]any{"year": fy.Label, "start": fy.Start.String(), "reason": reason}))); err != nil {
 			return err
 		}
 		out, err = s.oneYear(ctx, p.TenantID, propertyID, cfg, day.BusinessDate, start)

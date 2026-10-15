@@ -438,5 +438,5 @@ watch(() => move.kind, (k) => {
     </Card>
   </template>
 
-  <ApprovalDialog v-if="closing.asking" :title="t('shifts.approveTitle')" :message="t('shifts.approveMessage')" :busy="busy" :error="dialogError" @approve="close" @cancel="closing.asking = false; dialogError = null" />
+  <ApprovalDialog kind="SHIFT_VARIANCE" :amount="difference === null ? undefined : String(Math.abs(difference))" v-if="closing.asking" :title="t('shifts.approveTitle')" :message="t('shifts.approveMessage')" :busy="busy" :error="dialogError" @approve="close" @cancel="closing.asking = false; dialogError = null" />
 </template>

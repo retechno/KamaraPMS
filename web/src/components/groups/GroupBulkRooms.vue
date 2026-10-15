@@ -381,7 +381,7 @@ const failedAt = computed(() => {
     </CardContent>
   </Card>
 
-  <ApprovalDialog
+  <ApprovalDialog kind="RATE_OVERRIDE"
     v-if="approving" :title="t('rateOverride.approvalTitle')" :message="t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError"
     @approve="(a) => submit(a)" @cancel="approving = false"
   />

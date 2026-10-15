@@ -375,6 +375,39 @@ export interface paths {
         patch: operations["updateRoomType"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/approval-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The rule of approval of each kind of correction (a grant on the property)
+         * @description Who may approve a correction (docs/architecture/32-distinct-approver.md). Every kind is answered, with `FREE` for a kind without a rule:
+         *     anyone who holds the permission may approve, including the person who makes the change. `DISTINCT`: the approver must be someone other than
+         *     the person who makes the change. `DISTINCT_ABOVE`: the person who makes the change may approve their own correction up to and including
+         *     `threshold` (an amount at the currency decimals); above it the approver must be someone else. A tenant administrator is exempt: their approval
+         *     of their own correction is accepted and the audit entry carries `self_approved_by_admin: true`. `approvers` counts the active users, other than
+         *     administrators, who hold the permission of the kind at the property: fewer than two is a warning of the screen when the rule asks for someone else.
+         */
+        get: operations["listApprovalRules"];
+        /**
+         * Set the rule of the kinds named (property.manage)
+         * @description `FREE` removes the rule of the kind. `DISTINCT_ABOVE` needs a `threshold` of zero or more and only a kind that has an amount (422
+         *     `RULE_NOT_ALLOWED_FOR_KIND` otherwise). Each change is audited (`property.approval_rule_changed`, the old and the new rule). A rule may be changed
+         *     at any time and applies to the approvals from then on. Answers the rules after the change.
+         */
+        put: operations["setApprovalRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/free-night-quotas": {
         parameters: {
             query?: never;
@@ -8190,6 +8223,27 @@ export interface components {
          * @enum {string}
          */
         MealPlan: "RO" | "BB" | "HB" | "FB" | "AI";
+        /**
+         * @description A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
+         * @enum {string}
+         */
+        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE";
+        /** @enum {string} */
+        ApprovalRuleType: "FREE" | "DISTINCT" | "DISTINCT_ABOVE";
+        ApprovalRule: {
+            kind: components["schemas"]["ApprovalKind"];
+            rule: components["schemas"]["ApprovalRuleType"];
+            /** @description The limit of a rule DISTINCT_ABOVE (the person who acts may approve up to and including it). */
+            threshold: string | null;
+            /** @description Whether the kind has an amount; only then can the rule be DISTINCT_ABOVE. */
+            has_amount: boolean;
+            /** @description The permission its approver must hold at the property. */
+            permission: string;
+            /** @description Active users, other than tenant administrators, who hold that permission at the property. */
+            approvers: number;
+            /** Format: date-time */
+            updated_at: string | null;
+        };
         FreeNightQuota: {
             /** @enum {string} */
             occupancy_kind: "COMPLIMENTARY" | "HOUSE_USE";
@@ -14979,6 +15033,70 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    listApprovalRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRule"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setApprovalRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rules: {
+                        kind: components["schemas"]["ApprovalKind"];
+                        rule: components["schemas"]["ApprovalRuleType"];
+                        /** @description The limit of a rule `DISTINCT_ABOVE`, an amount at the currency decimals; otherwise absent or null. */
+                        threshold?: string | null;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The rules after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRule"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     listFreeNightQuotas: {
         parameters: {
             query?: never;
@@ -19918,6 +20036,8 @@ export interface operations {
                 q?: string;
                 /** @description Last business date. */
                 to?: components["schemas"]["Date"];
+                /** @description `true` lists only the corrections a tenant administrator approved themselves although the rule of the property asked for someone else (`self_approved_by_admin: true` in the entry; docs/architecture/32-distinct-approver.md). */
+                self_approved?: boolean;
                 /** @description The trail is ordered by time (in fact by id: ids grow with time). Without `sort`: newest first; `sort=created_at&order=asc`: oldest first. */
                 sort?: "created_at";
                 /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */

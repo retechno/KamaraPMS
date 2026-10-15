@@ -69,6 +69,7 @@ type Env struct {
 	Avail   *availability.Service
 	Res     *reservations.Service
 	IAM     *iam.Service
+	Rules   *iam.Rules
 	Folios  *folios.Service
 	Front   *frontdesk.Service
 	Charges *roomcharge.Service
@@ -141,7 +142,7 @@ func Setup(t *testing.T) *Env {
 	docs.SetBudget(bud)
 	docs.SetShifts(sh)
 	bud.SetDepartments(dept)
-	return &Env{Departments: dept, Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
+	return &Env{Rules: iam.NewRules(ia, authz), Departments: dept, Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reports.NewService(txm, authz, ten, na), IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,
 		Companies: co, CityLedger: cl, Groups: groups.NewService(txm, aw, authz, ten), Maintenance: maintenance.NewService(txm, c, aw, authz, ten, rm), LostFound: lostfound.NewService(txm, c, aw, authz, ten), Accounting: acct, Payables: payables.NewService(txm, c, aw, authz, ten, acct, ia, taxSvc), BankRec: br, Tax: taxSvc}
 }
@@ -414,4 +415,14 @@ func must(t *testing.T, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// SetRule sets the rule of approval of a kind at a property (docs/architecture/32-distinct-approver.md): "FREE", "DISTINCT", or "DISTINCT_ABOVE" with a limit.
+func (e *Env) SetRule(t *testing.T, tenantID, propertyID int64, kind, rule string, threshold ...string) {
+	t.Helper()
+	in := iam.ApprovalRuleInput{Kind: kind, Rule: rule}
+	if len(threshold) > 0 {
+		in.Threshold = &threshold[0]
+	}
+	must(t, e.Rules.Set(Admin(tenantID), propertyID, 3, []iam.ApprovalRuleInput{in}))
 }

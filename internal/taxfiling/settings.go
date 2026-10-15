@@ -175,8 +175,9 @@ func (s *Service) ChangeSettings(ctx context.Context, propertyID int64, in Setti
 		return SettingsView{}, err
 	}
 	var approvedBy *int64
+	var approval iam.Approval
 	if in.EffectiveFrom.Before(today.BusinessDate) {
-		approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+		approval, err = s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindTaxSettings})
 		if err != nil {
 			return SettingsView{}, err
 		}
@@ -215,7 +216,7 @@ func (s *Service) ChangeSettings(ctx context.Context, propertyID int64, in Setti
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "tax.settings_changed", "property_tax_settings", id, auditlabel.Property(ctx, propertyID),
 			map[string]any{"is_pkp": latest.IsPKP, "input_vat_treatment": latest.InputVATTreatment, "effective_from": latest.EffectiveFrom.String()},
-			map[string]any{"is_pkp": in.IsPKP, "input_vat_treatment": in.InputVATTreatment, "effective_from": in.EffectiveFrom.String(), "backdated": approvedBy != nil, "approved_by": approvedBy}))
+			approval.Marker(map[string]any{"is_pkp": in.IsPKP, "input_vat_treatment": in.InputVATTreatment, "effective_from": in.EffectiveFrom.String(), "backdated": approvedBy != nil, "approved_by": approvedBy})))
 	})
 	if err != nil {
 		return SettingsView{}, err

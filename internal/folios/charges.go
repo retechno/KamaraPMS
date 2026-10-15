@@ -6,10 +6,12 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/folios/foliosdb"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/db"
@@ -211,7 +213,7 @@ func (s *Service) PostAdjustment(ctx context.Context, propertyID, folioID int64,
 	return replayLoop(key,
 		func() (ItemResult, bool, error) { return s.itemReplay(ctx, p.TenantID, propertyID, folioID, key) },
 		func() (ItemResult, error) {
-			approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval) // before the transaction: no lock is held while the password is hashed
+			approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindFolioAdjustment, Amount: amount}) // before the transaction: no lock is held while the password is hashed
 			if err != nil {
 				return ItemResult{}, err
 			}
@@ -240,10 +242,10 @@ func (s *Service) PostAdjustment(ctx context.Context, propertyID, folioID int64,
 				if err != nil {
 					return err
 				}
-				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.adjustment_posted", "folio", folioID, auditlabel.Folio(ctx, propertyID, folioID), nil, map[string]any{
+				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.adjustment_posted", "folio", folioID, auditlabel.Folio(ctx, propertyID, folioID), nil, approval.AuditFields(map[string]any{
 					"folio_item_id": item.ID, "charge_code_id": in.ChargeCodeID, "debit": item.Debit.String(), "credit": item.Credit.String(),
-					"reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID(),
-				})); err != nil {
+					"reason": reason, "actor": p.ActorID(),
+				}))); err != nil {
 					return err
 				}
 				out, err = s.itemResult(ctx, p.TenantID, propertyID, folioID, item.ID)
@@ -264,7 +266,7 @@ func (s *Service) Reverse(ctx context.Context, propertyID, itemID int64, in Corr
 	if len(fields) > 0 {
 		return ItemResult{}, apperr.Invalid("the reversal is invalid", fields...)
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindFolioReversal, Amount: s.itemAmountOf(ctx, p.TenantID, propertyID, itemID)})
 	if err != nil {
 		return ItemResult{}, err
 	}
@@ -319,13 +321,24 @@ func (s *Service) Reverse(ctx context.Context, propertyID, itemID int64, in Corr
 		if err != nil {
 			return err
 		}
-		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.item_reversed", "folio_item", itemID, auditlabel.FolioOfItem(ctx, propertyID, itemID), nil, map[string]any{
-			"reversal_item_id": rev.ID, "folio_id": folio.ID, "reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID(),
-		})); err != nil {
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "folio.item_reversed", "folio_item", itemID, auditlabel.FolioOfItem(ctx, propertyID, itemID), nil, approval.AuditFields(map[string]any{
+			"reversal_item_id": rev.ID, "folio_id": folio.ID, "reason": reason, "actor": p.ActorID(),
+		}))); err != nil {
 			return err
 		}
 		out, err = s.itemResult(ctx, p.TenantID, propertyID, folio.ID, rev.ID)
 		return err
 	})
 	return out, err
+}
+
+// itemAmountOf is the amount of a folio item as the approval rule sees it (the amount of the charge reversed): read before the
+// transaction, without a lock, only to know whether the person who acts may approve their own correction. An item that is not
+// found is zero here; the transaction answers 404.
+func (s *Service) itemAmountOf(ctx context.Context, tenantID, propertyID, itemID int64) decimal.Decimal {
+	it, err := s.q(ctx).GetFolioItem(ctx, foliosdb.GetFolioItemParams{TenantID: tenantID, PropertyID: propertyID, ID: itemID})
+	if err != nil {
+		return decimal.Zero
+	}
+	return it.Debit.Add(it.Credit)
 }

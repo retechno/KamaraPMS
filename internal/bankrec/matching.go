@@ -8,6 +8,7 @@ import (
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/bankrec/bankrecdb"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -294,7 +295,7 @@ func (s *Service) Reopen(ctx context.Context, propertyID, statementID int64, in 
 	if reason == "" || len([]rune(reason)) > 500 {
 		return StatementDetail{}, apperr.Invalid("the reopening is invalid", fieldErr("reason", "INVALID", "a reason of up to 500 characters is required"))
 	}
-	approval, err := s.iam.VerifyApproval(ctx, propertyID, in.Approval)
+	approval, err := s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindBank})
 	if err != nil {
 		return StatementDetail{}, err
 	}
@@ -328,7 +329,7 @@ func (s *Service) Reopen(ctx context.Context, propertyID, statementID int64, in 
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "bank.statement_reopened", "bank_statement", statementID, auditlabel.BankStatement(ctx, propertyID, statementID), nil,
-			map[string]any{"reason": reason, "approved_by": approval.UserID()}))
+			approval.AuditFields(map[string]any{"reason": reason})))
 	})
 	if err != nil {
 		return StatementDetail{}, err

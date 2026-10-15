@@ -126,23 +126,26 @@ WHERE a.tenant_id = $1
   AND ($8::date IS NULL OR a.business_date <= $8::date)
   -- a part of the label, in any case; the caller has escaped backslash, percent and underscore (the pattern is "%<q>%" with ESCAPE of a backslash), and asks for 3 characters or more so the trigram index serves it
   AND ($9::text IS NULL OR a.entity_label ILIKE $9::text ESCAPE '\')
-  AND ($10::bigint IS NULL OR a.id < $10::bigint)
+  -- the approvals of a tenant administrator of their own correction, against the rule of the property (docs/architecture/32-distinct-approver.md 4)
+  AND (NOT $10::boolean OR a.new_data ->> 'self_approved_by_admin' = 'true')
+  AND ($11::bigint IS NULL OR a.id < $11::bigint)
 ORDER BY a.id DESC
-LIMIT $11
+LIMIT $12
 `
 
 type SearchAuditLogsParams struct {
-	TenantID   int64
-	PropertyID *int64
-	EntityType *string
-	EntityID   *int64
-	UserID     *int64
-	Action     *string
-	FromDate   *civil.Date
-	ToDate     *civil.Date
-	LabelLike  *string
-	BeforeID   *int64
-	RowLimit   int32
+	TenantID     int64
+	PropertyID   *int64
+	EntityType   *string
+	EntityID     *int64
+	UserID       *int64
+	Action       *string
+	FromDate     *civil.Date
+	ToDate       *civil.Date
+	LabelLike    *string
+	SelfApproved bool
+	BeforeID     *int64
+	RowLimit     int32
 }
 
 type SearchAuditLogsRow struct {
@@ -173,6 +176,7 @@ func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams
 		arg.FromDate,
 		arg.ToDate,
 		arg.LabelLike,
+		arg.SelfApproved,
 		arg.BeforeID,
 		arg.RowLimit,
 	)
@@ -222,23 +226,26 @@ WHERE a.tenant_id = $1
   AND ($8::date IS NULL OR a.business_date <= $8::date)
   -- a part of the label, in any case; the caller has escaped backslash, percent and underscore (the pattern is "%<q>%" with ESCAPE of a backslash), and asks for 3 characters or more so the trigram index serves it
   AND ($9::text IS NULL OR a.entity_label ILIKE $9::text ESCAPE '\')
-  AND ($10::bigint IS NULL OR a.id > $10::bigint)
+  -- the approvals of a tenant administrator of their own correction, against the rule of the property (docs/architecture/32-distinct-approver.md 4)
+  AND (NOT $10::boolean OR a.new_data ->> 'self_approved_by_admin' = 'true')
+  AND ($11::bigint IS NULL OR a.id > $11::bigint)
 ORDER BY a.id ASC
-LIMIT $11
+LIMIT $12
 `
 
 type SearchAuditLogsAscParams struct {
-	TenantID   int64
-	PropertyID *int64
-	EntityType *string
-	EntityID   *int64
-	UserID     *int64
-	Action     *string
-	FromDate   *civil.Date
-	ToDate     *civil.Date
-	LabelLike  *string
-	AfterID    *int64
-	RowLimit   int32
+	TenantID     int64
+	PropertyID   *int64
+	EntityType   *string
+	EntityID     *int64
+	UserID       *int64
+	Action       *string
+	FromDate     *civil.Date
+	ToDate       *civil.Date
+	LabelLike    *string
+	SelfApproved bool
+	AfterID      *int64
+	RowLimit     int32
 }
 
 type SearchAuditLogsAscRow struct {
@@ -269,6 +276,7 @@ func (q *Queries) SearchAuditLogsAsc(ctx context.Context, arg SearchAuditLogsAsc
 		arg.FromDate,
 		arg.ToDate,
 		arg.LabelLike,
+		arg.SelfApproved,
 		arg.AfterID,
 		arg.RowLimit,
 	)

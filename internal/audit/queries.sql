@@ -28,6 +28,8 @@ WHERE a.tenant_id = @tenant_id
   AND (sqlc.narg(to_date)::date IS NULL OR a.business_date <= sqlc.narg(to_date)::date)
   -- a part of the label, in any case; the caller has escaped backslash, percent and underscore (the pattern is "%<q>%" with ESCAPE of a backslash), and asks for 3 characters or more so the trigram index serves it
   AND (sqlc.narg(label_like)::text IS NULL OR a.entity_label ILIKE sqlc.narg(label_like)::text ESCAPE '\')
+  -- the approvals of a tenant administrator of their own correction, against the rule of the property (docs/architecture/32-distinct-approver.md 4)
+  AND (NOT @self_approved::boolean OR a.new_data ->> 'self_approved_by_admin' = 'true')
   AND (sqlc.narg(before_id)::bigint IS NULL OR a.id < sqlc.narg(before_id)::bigint)
 ORDER BY a.id DESC
 LIMIT @row_limit;
@@ -47,6 +49,8 @@ WHERE a.tenant_id = @tenant_id
   AND (sqlc.narg(to_date)::date IS NULL OR a.business_date <= sqlc.narg(to_date)::date)
   -- a part of the label, in any case; the caller has escaped backslash, percent and underscore (the pattern is "%<q>%" with ESCAPE of a backslash), and asks for 3 characters or more so the trigram index serves it
   AND (sqlc.narg(label_like)::text IS NULL OR a.entity_label ILIKE sqlc.narg(label_like)::text ESCAPE '\')
+  -- the approvals of a tenant administrator of their own correction, against the rule of the property (docs/architecture/32-distinct-approver.md 4)
+  AND (NOT @self_approved::boolean OR a.new_data ->> 'self_approved_by_admin' = 'true')
   AND (sqlc.narg(after_id)::bigint IS NULL OR a.id > sqlc.narg(after_id)::bigint)
 ORDER BY a.id ASC
 LIMIT @row_limit;

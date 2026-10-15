@@ -77,14 +77,16 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 		if err != nil {
 			return ChangeRatesResult{}, err
 		}
-		corrected, lowered := approvalNeeds(rateTargetsOrNil(in, amount, nights, postings), amount)
+		targets := rateTargetsOrNil(in, amount, nights, postings)
+		corrected, lowered := approvalNeeds(targets, amount)
+		delta := rateDelta(targets, amount)
 		if corrected {
-			if approval, err = s.folios.VerifyApproval(ctx, propertyID, in.Approval); err != nil {
+			if approval, err = s.folios.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindStayRate, Amount: delta}); err != nil {
 				return ChangeRatesResult{}, err
 			}
 		}
-		if lowered && !callerApproves {
-			if rateApproval, err = s.folios.VerifyApprovalFor(ctx, propertyID, in.Approval, auth.PermReservationOverrideApprove); err != nil {
+		if lowered {
+			if rateApproval, err = s.folios.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindStayRate, Amount: delta, Permission: auth.PermReservationOverrideApprove, Own: callerApproves}); err != nil {
 				return ChangeRatesResult{}, err
 			}
 		}
@@ -127,28 +129,26 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 			return apperr.Invalid("the rate change is invalid", fieldErr("amount", "UNCHANGED", "no night would change"))
 		}
 		needsCorrection, lowered := approvalNeeds(targets, amount)
+		delta := rateDelta(targets, amount)
 		var rateApprover *int64 // who approved a lower rate: the caller when they are a rate approver, else the person whose credentials came with the request
 		if needsCorrection {
 			if err := s.authz.Require(ctx, propertyID, auth.PermFolioAdjust); err != nil {
 				return err
 			}
 			if approval.IsZero() {
-				if _, err := s.folios.VerifyApproval(ctx, propertyID, nil); err != nil { // APPROVAL_REQUIRED
+				if approval, err = s.folios.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Kind: iam.KindStayRate, Amount: delta}); err != nil { // APPROVAL_REQUIRED
 					return err
 				}
 			}
 		}
 		if lowered {
-			switch {
-			case callerApproves:
-				rateApprover = p.ActorID()
-			case !rateApproval.IsZero():
-				id := rateApproval.UserID()
-				rateApprover = &id
-			default:
-				_, err := s.folios.VerifyApprovalFor(ctx, propertyID, nil, auth.PermReservationOverrideApprove) // APPROVAL_REQUIRED
-				return err
+			if rateApproval.IsZero() { // no credentials came: the caller approves their own when they hold the right and the rule allows it, otherwise APPROVAL_REQUIRED
+				if rateApproval, err = s.folios.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Kind: iam.KindStayRate, Amount: delta, Permission: auth.PermReservationOverrideApprove, Own: callerApproves}); err != nil {
+					return err
+				}
 			}
+			id := rateApproval.UserID()
+			rateApprover = &id
 		}
 		overrides := make([]reservations.NightOverride, len(targets))
 		for i, t := range targets {
@@ -200,11 +200,13 @@ func (s *Service) ChangeRates(ctx context.Context, propertyID, stayID int64, in 
 			}
 			if rateApprover != nil && nr.Amount.LessThan(t.night.Amount) {
 				meta["rate_approved_by"] = *rateApprover
+				rateApproval.Marker(meta)
 			}
 			if t.po != nil {
 				a := adjusted[t.po.FolioItemID]
 				c.FolioID, c.AdjustmentItemID = &a.FolioID, &a.AdjustmentItemID
-				meta["adjustment_item_id"], meta["folio_id"], meta["charged_item_id"], meta["approved_by"] = a.AdjustmentItemID, a.FolioID, t.po.FolioItemID, approval.UserID()
+				meta["adjustment_item_id"], meta["folio_id"], meta["charged_item_id"] = a.AdjustmentItemID, a.FolioID, t.po.FolioItemID
+				approval.AuditFields(meta)
 			}
 			if err := s.audit.Write(ctx, auditEntry(p, propertyID, bd, "stay.rate_changed", stayID, auditlabel.Stay(ctx, propertyID, stayID), map[string]any{"date": c.Date, "amount": c.OldAmount}, meta)); err != nil {
 				return err
@@ -261,4 +263,13 @@ func approvalNeeds(targets []rateTarget, amount decimal.Decimal) (corrected, low
 		lowered = lowered || amount.LessThan(t.night.Amount)
 	}
 	return
+}
+
+// rateDelta is the amount of a change of rates for the rule of approval: the sum over the nights of what the price moves, whatever the direction.
+func rateDelta(targets []rateTarget, amount decimal.Decimal) decimal.Decimal {
+	total := decimal.Zero
+	for _, t := range targets {
+		total = total.Add(amount.Sub(t.night.Amount).Abs())
+	}
+	return total
 }

@@ -678,7 +678,14 @@ func (s *Service) Close(ctx context.Context, propertyID, shiftID int64, in Close
 	// An approval that is given is checked now, so a wrong password is refused whether or not the difference needs it.
 	var approval iam.Approval
 	if in.Approval != nil {
-		if approval, err = s.iam.VerifyApprovalFor(ctx, propertyID, in.Approval, auth.PermCashierShiftApprove); err != nil {
+		// the amount the rule of the property sees is the difference of the count: read now without a lock (the transaction applies the rule again to the difference it finds)
+		variance := decimal.Zero
+		if row, err := s.q(ctx).GetShift(ctx, shiftsdb.GetShiftParams{TenantID: p.TenantID, PropertyID: propertyID, ID: shiftID}); err == nil {
+			if _, expected, err := s.cashOf(ctx, p.TenantID, propertyID, row, decimals); err == nil {
+				variance = counted.Sub(expected).Abs()
+			}
+		}
+		if approval, err = s.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: propertyID, Input: in.Approval, Kind: iam.KindShiftVariance, Amount: variance}); err != nil {
 			return Shift{}, err
 		}
 	}
@@ -725,6 +732,11 @@ func (s *Service) Close(ctx context.Context, propertyID, shiftID int64, in Close
 		}
 		var journalID *int64
 		var approvedBy *int64
+		if !approval.IsZero() { // the rule of the property applied to the difference found under the lock
+			if approval, err = s.iam.Extend(ctx, iam.ApprovalRequest{PropertyID: propertyID, Kind: iam.KindShiftVariance, Amount: overShort.Abs()}, approval); err != nil {
+				return err
+			}
+		}
 		if !overShort.IsZero() {
 			if Exceeds(overShort, cfg.MaxVariance) {
 				if reason == "" {
@@ -759,10 +771,14 @@ func (s *Service) Close(ctx context.Context, propertyID, shiftID int64, in Close
 				return err
 			}
 		}
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.shift_closed", shiftID, auditlabel.Shift(ctx, propertyID, shiftID), nil, map[string]any{
+		data := map[string]any{
 			"shift_number": row.ShiftNumber, "expected_cash": expected.String(), "counted_cash": counted.String(), "over_short": overShort.String(), "reason": reason,
 			"approved_by": approvedBy, "journal_id": journalID,
-		}))
+		}
+		if approvedBy != nil {
+			approval.Marker(data)
+		}
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cashier.shift_closed", shiftID, auditlabel.Shift(ctx, propertyID, shiftID), nil, data))
 	})
 	if err != nil {
 		return Shift{}, err

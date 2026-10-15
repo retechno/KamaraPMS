@@ -303,5 +303,5 @@ watch(businessDate, (bd) => {
       </CardContent>
     </form>
   </Card>
-  <ApprovalDialog v-if="approving" :title="isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submit(a, overriding)" @cancel="approving = false" />
+  <ApprovalDialog :kind="isFree ? 'FREE_ROOM' : 'RATE_OVERRIDE'" v-if="approving" :title="isFree ? t('freeQuotas.approvalTitle') : t('rateOverride.approvalTitle')" :message="isFree ? t('freeQuotas.approvalMessage') : t('rateOverride.approvalMessage')" :busy="busy" :error="dialogError" @approve="(a) => submit(a, overriding)" @cancel="approving = false" />
 </template>

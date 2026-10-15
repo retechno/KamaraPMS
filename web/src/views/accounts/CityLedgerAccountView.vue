@@ -693,6 +693,6 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </div>
     </CardContent>
   </Card>
-  <ApprovalDialog v-if="adjusting?.asking" :title="t('clAccount.approveAdjust')" :busy="busy" :error="dialogError" @approve="submitAdjust" @cancel="adjusting = null; dialogError = null" />
-  <ApprovalDialog v-if="voiding?.asking" :title="t('clAccount.approveVoid')" :busy="busy" :error="dialogError" @approve="approveVoid" @cancel="voiding = null" />
+  <ApprovalDialog kind="CITY_LEDGER_CREDIT" :amount="adjusting?.mode === 'writeoff' ? adjusting.amount : undefined" v-if="adjusting?.asking" :title="t('clAccount.approveAdjust')" :busy="busy" :error="dialogError" @approve="submitAdjust" @cancel="adjusting = null; dialogError = null" />
+  <ApprovalDialog :kind="voiding?.kind === 'adjustment' ? 'CITY_LEDGER_CREDIT' : 'CITY_LEDGER_VOID'" v-if="voiding?.asking" :title="t('clAccount.approveVoid')" :busy="busy" :error="dialogError" @approve="approveVoid" @cancel="voiding = null" />
 </template>

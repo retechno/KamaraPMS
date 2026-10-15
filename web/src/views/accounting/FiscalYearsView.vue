@@ -151,5 +151,5 @@ watch(() => pid.value, () => {
       </DataTable>
     </Card>
   </template>
-  <ApprovalDialog v-if="reopening?.asking" :title="t('accounting.approveReopen')" :busy="busy" :error="dialogError" @approve="reopen" @cancel="reopening = null; dialogError = null" />
+  <ApprovalDialog kind="FISCAL_YEAR" v-if="reopening?.asking" :title="t('accounting.approveReopen')" :busy="busy" :error="dialogError" @approve="reopen" @cancel="reopening = null; dialogError = null" />
 </template>

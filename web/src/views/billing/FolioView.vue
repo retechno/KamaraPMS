@@ -381,6 +381,27 @@ const dialogTitle = computed(() => {
   }
 })
 
+// The kind and the amount of the correction waiting for its approval, for the rule of the property: the amount of the line corrected (or the one typed).
+const correctionKind = computed(() => {
+  switch (pending.value?.kind) {
+    case 'adjust': return 'FOLIO_ADJUSTMENT' as const
+    case 'refund': return 'REFUND' as const
+    case 'move': return 'FOLIO_TRANSFER' as const
+    default: return 'FOLIO_REVERSAL' as const
+  }
+})
+const unsigned = (v: string): string => v.replace(/^-/, '')
+const correctionAmount = computed(() => {
+  const p = pending.value
+  if (!p) return undefined
+  switch (p.kind) {
+    case 'adjust': return unsigned(adjust.amount) || undefined
+    case 'refund': return correction.amount || undefined
+    case 'void': return p.item.credit
+    default: return Number(p.item.debit) > 0 ? p.item.debit : p.item.credit
+  }
+})
+
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
 
 // On a phone the table is cards (a table of eight columns is cut off at the right, where the amounts are): the description is the title, the date the line under it, the code the mark in the corner, and the group and the
@@ -654,7 +675,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </form>
     </Card>
 
-    <ApprovalDialog v-if="approving && pending" :title="dialogTitle" :busy="busy" :error="dialogError" @approve="approve" @cancel="cancelCorrection" />
+    <ApprovalDialog :kind="correctionKind" :amount="correctionAmount" v-if="approving && pending" :title="dialogTitle" :busy="busy" :error="dialogError" @approve="approve" @cancel="cancelCorrection" />
     <TransferDialog
       v-if="transferOpen" :key="transferOpen" :folio="folio" :items="selectedItems" :code-id="pickedByCode || undefined" :tab="transferOpen" @done="transferDone" @close="transferOpen = null"
     />

@@ -163,14 +163,37 @@ func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, 
 
 // transferApproval verifies the approval of a transfer, before the transaction (a wrong password is counted by iam, which a rolled back transaction would undo). A transfer to an unrelated
 // folio needs folio.transfer_any on the person and on the approver; the others the approval every correction needs.
-func (s *Service) transferApproval(ctx context.Context, propertyID int64, scope string, in *iam.ApprovalInput) (iam.Approval, error) {
+// The amount the rule of the property sees is the sum of everything the request moves.
+func (s *Service) transferApproval(ctx context.Context, propertyID int64, scope string, in *iam.ApprovalInput, amount decimal.Decimal) (iam.Approval, error) {
+	req := iam.ApprovalRequest{PropertyID: propertyID, Input: in, Kind: iam.KindFolioTransfer, Amount: amount}
 	if scope == ScopeAny {
 		if err := s.authz.Require(ctx, propertyID, auth.PermFolioTransferAny); err != nil {
 			return iam.Approval{}, err
 		}
-		return s.iam.VerifyApprovalFor(ctx, propertyID, in, auth.PermFolioTransferAny)
+		req.Permission = auth.PermFolioTransferAny
 	}
-	return s.iam.VerifyApproval(ctx, propertyID, in)
+	return s.iam.Verify(ctx, req)
+}
+
+// transferItemsAmount is what a transfer of charges moves, read before the locks to know the amount the rule sees: the sum of the
+// charges named, or of the charges of the code that can still move. The charges are selected again under the locks.
+func (s *Service) transferItemsAmount(ctx context.Context, tenantID, propertyID, folioID int64, in TransferItemsInput) (decimal.Decimal, error) {
+	q := s.q(ctx)
+	var items []foliosdb.FolioItem
+	var err error
+	if in.ChargeCodeID != nil {
+		items, err = q.ListMovableItemsOfCode(ctx, foliosdb.ListMovableItemsOfCodeParams{TenantID: tenantID, PropertyID: propertyID, FolioID: folioID, ChargeCodeID: in.ChargeCodeID, RowLimit: MaxTransferItems + 1})
+	} else {
+		items, err = q.ListItemsByIDs(ctx, foliosdb.ListItemsByIDsParams{TenantID: tenantID, PropertyID: propertyID, Ids: in.ItemIDs})
+	}
+	if err != nil {
+		return decimal.Zero, err
+	}
+	total := decimal.Zero
+	for _, it := range items {
+		total = total.Add(it.Debit.Sub(it.Credit).Abs())
+	}
+	return total, nil
 }
 
 // preScope classifies a pair of folios as they are now, without a lock, to know what approval to ask for. The scope is decided again under the locks.
@@ -313,8 +336,8 @@ func (s *Service) moveItem(ctx context.Context, m movement, item foliosdb.FolioI
 	}
 	if err := s.audit.Write(ctx, audit.Entry{TenantID: m.p.TenantID, PropertyID: &m.propertyID, BusinessDate: &m.bd, UserID: m.p.ActorID(),
 		Action: action, EntityType: "folio_item", EntityID: itemID, EntityLabel: auditlabel.FolioOfItem(ctx, m.propertyID, itemID),
-		New: map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "reversal_item_id": rev.ID, "new_item_id": moved.ID, "from_folio_id": m.src.ID, "to_folio_id": m.tgt.ID,
-			"origin_folio_id": origin, "returns_transfer_id": returns, "reason": m.reason, "actor": m.p.ActorID(), "approved_by": m.approval.UserID(), "room_night": isNight}}); err != nil {
+		New: m.approval.AuditFields(map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "reversal_item_id": rev.ID, "new_item_id": moved.ID, "from_folio_id": m.src.ID, "to_folio_id": m.tgt.ID,
+			"origin_folio_id": origin, "returns_transfer_id": returns, "reason": m.reason, "actor": m.p.ActorID(), "room_night": isNight})}); err != nil {
 		return TransferredItem{}, err
 	}
 	return TransferredItem{TransferID: row.ID, FromFolioID: m.src.ID, ToFolioID: m.tgt.ID, OriginalItemID: &itemID, OutItemID: rev.ID, InItemID: moved.ID, Amount: item.Debit.String()}, nil
@@ -366,7 +389,11 @@ func (s *Service) transferItems(ctx context.Context, propertyID, sourceFolioID i
 	if onlyScope != "" && pre != onlyScope {
 		return TransferResult{}, errTransferInvalid("a charge moves only between the folios of one reservation")
 	}
-	approval, err := s.transferApproval(ctx, propertyID, pre, in.Approval)
+	moving, err := s.transferItemsAmount(ctx, p.TenantID, propertyID, sourceFolioID, in)
+	if err != nil {
+		return TransferResult{}, err
+	}
+	approval, err := s.transferApproval(ctx, propertyID, pre, in.Approval, moving)
 	if err != nil {
 		return TransferResult{}, err
 	}
@@ -424,8 +451,8 @@ func (s *Service) moveSelected(ctx context.Context, p auth.Principal, propertyID
 		out.Moved = append(out.Moved, moved)
 	}
 	if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: "folio.items_transferred",
-		EntityType: "folio", EntityID: src.ID, EntityLabel: src.FolioNumber, New: map[string]any{"batch_id": batch.ID, "scope": scope, "to_folio_id": tgt.ID, "items": len(items),
-			"reason": reason, "actor": p.ActorID(), "approved_by": approval.UserID()}}); err != nil {
+		EntityType: "folio", EntityID: src.ID, EntityLabel: src.FolioNumber, New: approval.AuditFields(map[string]any{"batch_id": batch.ID, "scope": scope, "to_folio_id": tgt.ID, "items": len(items),
+			"reason": reason, "actor": p.ActorID()})}); err != nil {
 		return TransferResult{}, err
 	}
 	out.Balances, err = s.balances(ctx, propertyID, decimals, src.ID, tgt.ID)
@@ -608,8 +635,8 @@ func (s *Service) moveBalance(ctx context.Context, m movement, amount decimal.De
 		action = "folio.transfer_returned"
 	}
 	if err := s.audit.Write(ctx, audit.Entry{TenantID: m.p.TenantID, PropertyID: &m.propertyID, BusinessDate: &m.bd, UserID: m.p.ActorID(), Action: action,
-		EntityType: "folio", EntityID: m.src.ID, EntityLabel: m.src.FolioNumber, New: map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "amount": fixed(amount, decimals),
-			"from_folio_id": m.src.ID, "to_folio_id": m.tgt.ID, "out_item_id": out.ID, "in_item_id": in.ID, "returns_transfer_id": returns, "reason": m.reason, "actor": m.p.ActorID(), "approved_by": m.approval.UserID()}}); err != nil {
+		EntityType: "folio", EntityID: m.src.ID, EntityLabel: m.src.FolioNumber, New: m.approval.AuditFields(map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "amount": fixed(amount, decimals),
+			"from_folio_id": m.src.ID, "to_folio_id": m.tgt.ID, "out_item_id": out.ID, "in_item_id": in.ID, "returns_transfer_id": returns, "reason": m.reason, "actor": m.p.ActorID()})}); err != nil {
 		return TransferredItem{}, err
 	}
 	return TransferredItem{TransferID: row.ID, FromFolioID: m.src.ID, ToFolioID: m.tgt.ID, OutItemID: out.ID, InItemID: in.ID, Amount: fixed(amount, decimals)}, nil
@@ -651,7 +678,7 @@ func (s *Service) TransferBalance(ctx context.Context, propertyID, sourceFolioID
 			if err != nil {
 				return TransferResult{}, err
 			}
-			approval, err := s.transferApproval(ctx, propertyID, pre, in.Approval)
+			approval, err := s.transferApproval(ctx, propertyID, pre, in.Approval, amount)
 			if err != nil {
 				return TransferResult{}, err
 			}
@@ -763,11 +790,13 @@ func (s *Service) ReturnTransfers(ctx context.Context, propertyID, holderFolioID
 	}
 	// before the transaction: where each goes, and so what approval is asked
 	pre := ScopeReturn
+	returning := decimal.Zero
 	for _, id := range ids {
 		t, err := q.GetTransfer(ctx, foliosdb.GetTransferParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
 		if err != nil {
 			return TransferResult{}, orNotFound(err, apperr.NotFound("TRANSFER_NOT_FOUND", "the transfer does not exist in this property"))
 		}
+		returning = returning.Add(t.Amount.Abs())
 		to, err := targetOf(t)
 		if err != nil {
 			return TransferResult{}, err
@@ -783,7 +812,7 @@ func (s *Service) ReturnTransfers(ctx context.Context, propertyID, holderFolioID
 			pre = ScopeAny
 		}
 	}
-	approval, err := s.transferApproval(ctx, propertyID, pre, in.Approval)
+	approval, err := s.transferApproval(ctx, propertyID, pre, in.Approval, returning)
 	if err != nil {
 		return TransferResult{}, err
 	}
