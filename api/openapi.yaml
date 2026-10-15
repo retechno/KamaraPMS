@@ -8337,6 +8337,709 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosOutlets
+      summary: "The outlets of the property (pos.manage, pos.order, pos.cashier, pos.kds or folio.outlet_charge_open)"
+      tags: [pos]
+      parameters:
+        - { name: active, in: query, description: Only the ones in use (true) or switched off (false)., schema: { type: boolean } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosOutlet" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createPosOutlet
+      summary: "Add an outlet (pos.manage)"
+      description: "The code is 1 to 6 letters and is the start of its bill numbers; it never changes. 409 `CODE_TAKEN`."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosOutletInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosOutlet" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosOutlet
+      summary: "One outlet"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosOutlet" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updatePosOutlet
+      summary: "Replace the settings of an outlet (pos.manage)"
+      description: "The whole form with the `version` that was loaded (409 `VERSION_CONFLICT`). A change of `comp_treatment` is audited with the old and the new value and applies to the bills opened afterwards."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosOutletInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosOutlet" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/floor-plan:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosFloorPlan
+      summary: "The floor plan of an outlet: its areas with tables and marks"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosFloorPlan" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/areas:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: createPosArea
+      summary: "Add an empty area to the floor of an outlet (pos.manage)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosAreaInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosArea" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/areas/{id}/layout:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: savePosLayout
+      summary: "Save a whole area: its size, its tables and its marks (pos.manage)"
+      description: "The `layout_version` that was loaded must still be the current one (409 `VERSION_CONFLICT`). A table that is not in the list is switched off, not deleted. Table codes are unique in the outlet (409 `CODE_TAKEN`); a table outside the plan is 422 `OUT_OF_PLAN`."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosLayoutInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosArea" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/sold-out:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listPosSoldOut
+      summary: "The products marked sold out today at an outlet"
+      description: "The ids of the products; the marks clear themselves when the business day changes."
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { type: integer, format: int64 } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/sold-out/{productId}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: productId, in: path, required: true, schema: { type: integer, format: int64 } }
+    put:
+      operationId: markPosSoldOut
+      summary: "Mark a product sold out for the business day"
+      tags: [pos]
+      responses:
+        "204":
+          description: Done.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: clearPosSoldOut
+      summary: "Mark a product available again"
+      tags: [pos]
+      responses:
+        "204":
+          description: Done.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/printers:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosPrinters
+      summary: "The printers of the property"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosPrinter" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createPosPrinter
+      summary: "Add a printer (pos.manage)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosPrinterInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosPrinter" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/printers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: updatePosPrinter
+      summary: "Replace a printer (pos.manage)"
+      description: "The whole form is sent. The code, where there is one, never changes."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosPrinterInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosPrinter" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/stations:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosStations
+      summary: "The stations of the property"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosStation" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createPosStation
+      summary: "Add a station (pos.manage)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosStationInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosStation" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/stations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: updatePosStation
+      summary: "Replace a station (pos.manage)"
+      description: "The whole form is sent. The code, where there is one, never changes."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosStationInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosStation" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/rule-profiles:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosRuleProfiles
+      summary: "The tax and service profiles of the property"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosRuleProfile" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createPosRuleProfile
+      summary: "Add a tax and service profile (pos.manage)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRuleProfileInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRuleProfile" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/rule-profiles/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: updatePosRuleProfile
+      summary: "Replace a tax and service profile (pos.manage)"
+      description: "The whole form is sent. The code, where there is one, never changes."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosRuleProfileInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosRuleProfile" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/price-lists:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosPriceLists
+      summary: "The price lists of the property"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosPriceList" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createPosPriceList
+      summary: "Add a price list (pos.manage)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosPriceListInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosPriceList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/price-lists/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: updatePosPriceList
+      summary: "Replace a price list (pos.manage)"
+      description: "The whole form is sent. The code, where there is one, never changes."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosPriceListInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosPriceList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/categories:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosCategories
+      summary: "The categorys of the property"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosCategory" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createPosCategory
+      summary: "Add a category (pos.manage)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosCategoryInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosCategory" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: updatePosCategory
+      summary: "Replace a category (pos.manage)"
+      description: "The whole form is sent. The code, where there is one, never changes."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosCategoryInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosCategory" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/price-lists/{id}/items:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listPosPriceItems
+      summary: "The prices of a price list"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosPriceItem" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setPosPriceItems
+      summary: "Set the prices of some products in a price list (pos.manage)"
+      description: "The products that are not named keep their price."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/PosPriceItemInput" } } } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosPriceItem" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/products:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosProducts
+      summary: "The products of the property"
+      description: "With `outlet_id` each product carries the price and whether it is sold at that outlet."
+      tags: [pos]
+      parameters:
+        - { name: active, in: query, description: Only the ones in use (true) or switched off (false)., schema: { type: boolean } }
+        - { name: outlet_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosProduct" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createPosProduct
+      summary: "Add a product with its option groups and prices (pos.manage)"
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosProductInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosProduct" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/products/import:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: importPosProducts
+      summary: "Import products from a CSV (pos.manage)"
+      description: "A header row names the columns: `code`, `name`, `category`, `charge_code` (required), `short_name`, `station`, `profile`, `price_list`, `price`, `is_sold`. All or nothing: with `dry_run=true`, or when a row is wrong, nothing is written and the rows that are wrong are listed. A product that exists (by code) is updated; its variants and add-ons are not touched. The body is `text/csv` or `{ \"csv\": \"...\" }`."
+      tags: [pos]
+      parameters:
+        - { name: dry_run, in: query, schema: { type: boolean } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [csv], properties: { csv: { type: string } } }
+          text/csv:
+            schema: { type: string }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosImportResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/products/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosProduct
+      summary: "One product with its option groups and prices"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosProduct" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updatePosProduct
+      summary: "Replace a product, its option groups and its prices (pos.manage)"
+      description: "The `version` that was loaded (409 `VERSION_CONFLICT`)."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosProductInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosProduct" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/setup-check:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getPosSetupCheck
+      summary: "What is wrong with the configuration of the outlets (pos.manage)"
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosSetupIssue" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/outlet-lock:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getFolioOutletLock
+      summary: "The lock of a folio for outlet charges (folio.outlet_charge_open or folio.read)"
+      description: "A folio that was never opened is LOCKED with reason `NEVER_OPENED`. `used` is what the outlets have charged in the current period, never the balance of the folio."
+      tags: [folios]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolioOutletLock" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setFolioOutletLock
+      summary: "Open a folio for outlet charges, or change the open lock (folio.outlet_charge_open)"
+      description: "The limit is required. Opening starts a new period. Changing needs the `version` of the lock; a limit below what was used is 409 `LIMIT_BELOW_USED`. A folio that cannot be opened (closed, not in house, a master of an inactive group) is 409 `OUTLET_LOCK_NOT_ALLOWED`."
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FolioOutletLockInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolioOutletLock" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/folios/{id}/outlet-lock/lock:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: lockFolioOutlet
+      summary: "Lock a folio for outlet charges by hand (folio.outlet_charge_open)"
+      tags: [folios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FolioOutletLockPatch" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolioOutletLock" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/outlet-charges:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listOutletCharges
+      summary: "The outlet charges that came in on a business date, accepted and refused (folio.outlet_charge_open or folio.read)"
+      tags: [folios]
+      parameters:
+        - { name: date, in: query, description: The business date; the open one by default., schema: { $ref: "#/components/schemas/Date" } }
+        - { name: result, in: query, schema: { type: string, enum: [ACCEPTED, REJECTED] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OutletChargeList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -15415,3 +16118,442 @@ components:
         taxes: { type: array, items: { $ref: "#/components/schemas/TaxFilingLiabilityLine" } }
         accounts: { type: array, items: { $ref: "#/components/schemas/TaxFilingLiabilityAccount" } }
         owed: { type: string }
+    PosOutletInput:
+      type: object
+      required: [code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id, uses_tables, guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval, block_night_audit_with_open_bills]
+      properties:
+        code: { type: string, description: 1 to 6 letters; the start of the bill numbers. Never changes. }
+        name: { type: string }
+        outlet_type: { type: string, enum: [RESTAURANT, BAR, CAFE, ROOM_SERVICE, SPA, LAUNDRY, BUSINESS_CENTER, MINIBAR, OTHER] }
+        order_mode: { type: string, enum: [PRINT, KDS, DIRECT] }
+        department_id: { type: integer, format: int64 }
+        rule_profile_id: { type: integer, format: int64 }
+        price_list_id: { type: integer, format: int64 }
+        drawer: { type: [string, "null"], description: The cashier drawer label of the outlet; empty when it takes no cash. }
+        receipt_printer_id: { type: [integer, "null"], format: int64 }
+        uses_tables: { type: boolean }
+        guest_count_required: { type: boolean }
+        rounding_unit: { type: integer, enum: [0, 100, 500, 1000] }
+        allow_room_charge: { type: boolean }
+        allow_company_charge: { type: boolean }
+        allow_comp: { type: boolean }
+        comp_treatment: { type: string, enum: [PAYMENT_COMP, DISCOUNT_100] }
+        max_discount_pct_no_approval: { type: string, description: "Decimal as a string." }
+        block_night_audit_with_open_bills: { type: boolean }
+        is_active: { type: [boolean, "null"] }
+        sort_order: { type: integer }
+        version: { type: integer, description: Required to replace an outlet. }
+    PosOutlet:
+      type: object
+      required: [id, code, name, outlet_type, order_mode, department_id, department_name, rule_profile_id, rule_profile_name, price_list_id, price_list_name, drawer, receipt_printer_id, uses_tables, guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval, block_night_audit_with_open_bills, is_active, sort_order, version]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        outlet_type: { type: string }
+        order_mode: { type: string, enum: [PRINT, KDS, DIRECT] }
+        department_id: { type: integer, format: int64 }
+        department_name: { type: string }
+        rule_profile_id: { type: integer, format: int64 }
+        rule_profile_name: { type: string }
+        price_list_id: { type: integer, format: int64 }
+        price_list_name: { type: string }
+        drawer: { type: [string, "null"] }
+        receipt_printer_id: { type: [integer, "null"], format: int64 }
+        receipt_printer_name: { type: [string, "null"] }
+        uses_tables: { type: boolean }
+        guest_count_required: { type: boolean }
+        rounding_unit: { type: integer }
+        allow_room_charge: { type: boolean }
+        allow_company_charge: { type: boolean }
+        allow_comp: { type: boolean }
+        comp_treatment: { type: string, enum: [PAYMENT_COMP, DISCOUNT_100] }
+        max_discount_pct_no_approval: { type: string, description: "Decimal as a string." }
+        block_night_audit_with_open_bills: { type: boolean }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        version: { type: integer }
+    PosPrinterInput:
+      type: object
+      required: [name, kind, paper_width_mm, codepage]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [RECEIPT, KITCHEN, LABEL] }
+        connection_info: { type: string, description: "Where the print agent finds it, for example 192.168.1.50:9100." }
+        paper_width_mm: { type: integer, enum: [58, 80] }
+        codepage: { type: string }
+        opens_drawer: { type: boolean }
+        is_active: { type: [boolean, "null"] }
+    PosPrinter:
+      type: object
+      required: [id, name, kind, connection_info, paper_width_mm, codepage, opens_drawer, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { type: string }
+        connection_info: { type: string }
+        paper_width_mm: { type: integer }
+        codepage: { type: string }
+        opens_drawer: { type: boolean }
+        is_active: { type: boolean }
+    PosStationInput:
+      type: object
+      required: [code, name, kds_enabled, late_after_minutes]
+      properties:
+        code: { type: string, description: Never changes. }
+        name: { type: string }
+        printer_id: { type: [integer, "null"], format: int64 }
+        kds_enabled: { type: boolean }
+        late_after_minutes: { type: integer, minimum: 1, maximum: 240 }
+        is_active: { type: [boolean, "null"] }
+    PosStation:
+      type: object
+      required: [id, code, name, printer_id, kds_enabled, late_after_minutes, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        printer_id: { type: [integer, "null"], format: int64 }
+        printer_name: { type: [string, "null"] }
+        kds_enabled: { type: boolean }
+        late_after_minutes: { type: integer }
+        is_active: { type: boolean }
+    PosRuleInput:
+      type: object
+      properties:
+        tax_id: { type: [integer, "null"], format: int64 }
+        service_charge_id: { type: [integer, "null"], format: int64 }
+    PosRuleProfileInput:
+      type: object
+      required: [code, name, price_mode, rules]
+      properties:
+        code: { type: string, description: Never changes. }
+        name: { type: string }
+        price_mode: { type: string, enum: [EXCLUSIVE, INCLUSIVE] }
+        is_active: { type: [boolean, "null"] }
+        rules: { type: array, description: "In the order of calculation: one tax or one service charge each.", items: { $ref: "#/components/schemas/PosRuleInput" } }
+    PosRuleRef:
+      type: object
+      required: [rule_type, code, name, rate, sequence, is_active]
+      properties:
+        rule_type: { type: string, enum: [TAX, SERVICE] }
+        tax_id: { type: [integer, "null"], format: int64 }
+        service_charge_id: { type: [integer, "null"], format: int64 }
+        code: { type: string }
+        name: { type: string }
+        rate: { type: string, description: A percentage. }
+        tax_on_service: { type: [boolean, "null"] }
+        sequence: { type: integer }
+        is_active: { type: boolean }
+    PosRuleProfile:
+      type: object
+      required: [id, code, name, price_mode, is_active, rules]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        price_mode: { type: string, enum: [EXCLUSIVE, INCLUSIVE] }
+        is_active: { type: boolean }
+        rules: { type: array, items: { $ref: "#/components/schemas/PosRuleRef" } }
+    PosPriceListInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, description: Never changes. }
+        name: { type: string }
+        is_active: { type: [boolean, "null"] }
+    PosPriceList:
+      type: object
+      required: [id, code, name, is_active, item_count]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+        item_count: { type: integer }
+    PosPriceItemInput:
+      type: object
+      required: [product_id, price, is_sold]
+      properties:
+        product_id: { type: integer, format: int64 }
+        price: { type: string, description: "Decimal as a string." }
+        is_sold: { type: boolean }
+        station_id: { type: [integer, "null"], format: int64, description: Overrides the station of the product at the outlets that use this list. }
+    PosPriceItem:
+      type: object
+      required: [price_list_id, product_id, price, is_sold]
+      properties:
+        price_list_id: { type: integer, format: int64 }
+        product_id: { type: integer, format: int64 }
+        price: { type: string, description: "Decimal as a string." }
+        is_sold: { type: boolean }
+        station_id: { type: [integer, "null"], format: int64 }
+    PosCategoryInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, description: Never changes. }
+        name: { type: string }
+        parent_id: { type: [integer, "null"], format: int64, description: One level only; never changes. }
+        sort_order: { type: integer }
+        is_active: { type: [boolean, "null"] }
+    PosCategory:
+      type: object
+      required: [id, code, name, parent_id, sort_order, is_active, product_count]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        parent_id: { type: [integer, "null"], format: int64 }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+        product_count: { type: integer }
+    PosOption:
+      type: object
+      required: [name, price_delta, is_default, max_qty, sort_order, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        price_delta: { type: string, description: "A variant may be cheaper (negative); an add-on is zero or more." }
+        is_default: { type: boolean }
+        max_qty: { type: integer, minimum: 1, maximum: 99 }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+    PosOptionGroup:
+      type: object
+      required: [name, kind, min_select, max_select, options]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { type: string, enum: [VARIANT, MODIFIER], description: A variant is pick one (min 1 = required); an add-on takes min to max choices. }
+        min_select: { type: integer }
+        max_select: { type: integer }
+        sort_order: { type: integer }
+        options: { type: array, items: { $ref: "#/components/schemas/PosOption" } }
+    PosProductPriceIn:
+      type: object
+      required: [price_list_id, price, is_sold]
+      properties:
+        price_list_id: { type: integer, format: int64 }
+        price: { type: string, description: "Decimal as a string." }
+        is_sold: { type: boolean }
+        station_id: { type: [integer, "null"], format: int64 }
+    PosProductInput:
+      type: object
+      required: [code, name, category_id, charge_code_id]
+      properties:
+        code: { type: string, description: Never changes. }
+        name: { type: string }
+        short_name: { type: [string, "null"], description: Up to 24 characters; printed on the kitchen ticket. }
+        category_id: { type: integer, format: int64 }
+        charge_code_id: { type: integer, format: int64, description: Decides the revenue account and the department; not a room or transfer code. }
+        rule_profile_id: { type: [integer, "null"], format: int64, description: Tax and service of this product; empty follows the outlet. }
+        station_id: { type: [integer, "null"], format: int64 }
+        is_active: { type: [boolean, "null"] }
+        version: { type: integer, description: Required to replace a product. }
+        option_groups: { type: array, items: { $ref: "#/components/schemas/PosOptionGroup" } }
+        prices: { type: array, items: { $ref: "#/components/schemas/PosProductPriceIn" } }
+    PosProduct:
+      type: object
+      required: [id, code, name, category_id, category_name, charge_code_id, charge_code, charge_code_name, is_active, version]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        short_name: { type: [string, "null"] }
+        category_id: { type: integer, format: int64 }
+        category_name: { type: string }
+        charge_code_id: { type: integer, format: int64 }
+        charge_code: { type: string }
+        charge_code_name: { type: string }
+        rule_profile_id: { type: [integer, "null"], format: int64 }
+        station_id: { type: [integer, "null"], format: int64 }
+        is_active: { type: boolean }
+        version: { type: integer }
+        option_groups: { type: array, items: { $ref: "#/components/schemas/PosOptionGroup" } }
+        prices: { type: array, items: { $ref: "#/components/schemas/PosPriceItem" } }
+        price: { type: string, description: The price at the outlet asked for. }
+        is_sold: { type: boolean, description: Whether it is sold at the outlet asked for. }
+    PosTable:
+      type: object
+      required: [code, capacity, shape, x, y, w, h, is_active]
+      properties:
+        id: { type: integer, format: int64, description: Absent for a table that is new. }
+        area_id: { type: integer, format: int64 }
+        code: { type: string }
+        capacity: { type: integer }
+        shape: { type: string, enum: [SQUARE, RECT, ROUND] }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        is_active: { type: boolean }
+    PosMark:
+      type: object
+      required: [kind, label, x, y, w, h]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [WINDOW, DOOR, CASHIER, OTHER] }
+        label: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+    PosArea:
+      type: object
+      required: [id, outlet_id, name, sort_order, grid_w, grid_h, layout_version, is_active, tables, marks]
+      properties:
+        id: { type: integer, format: int64 }
+        outlet_id: { type: integer, format: int64 }
+        name: { type: string }
+        sort_order: { type: integer }
+        grid_w: { type: integer }
+        grid_h: { type: integer }
+        layout_version: { type: integer }
+        is_active: { type: boolean }
+        tables: { type: array, items: { $ref: "#/components/schemas/PosTable" } }
+        marks: { type: array, items: { $ref: "#/components/schemas/PosMark" } }
+    PosAreaInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        sort_order: { type: integer }
+        grid_w: { type: integer, description: Grid units, 40 by default. }
+        grid_h: { type: integer, description: Grid units, 24 by default. }
+    PosLayoutInput:
+      type: object
+      required: [name, grid_w, grid_h, layout_version, tables, marks]
+      properties:
+        name: { type: string }
+        sort_order: { type: integer }
+        grid_w: { type: integer }
+        grid_h: { type: integer }
+        is_active: { type: [boolean, "null"] }
+        layout_version: { type: integer }
+        tables: { type: array, items: { $ref: "#/components/schemas/PosTable" } }
+        marks: { type: array, items: { $ref: "#/components/schemas/PosMark" } }
+    PosFloorPlan:
+      type: object
+      required: [outlet_id, areas]
+      properties:
+        outlet_id: { type: integer, format: int64 }
+        areas: { type: array, items: { $ref: "#/components/schemas/PosArea" } }
+    PosSetupIssue:
+      type: object
+      required: [code, severity]
+      properties:
+        code: { type: string, enum: [OUTLET_NO_PRODUCTS, OUTLET_NO_TABLES, OUTLET_NO_RECEIPT_PRINTER, OUTLET_NO_DRAWER, PRODUCT_NO_STATION, PRODUCT_STATION_NO_OUTPUT] }
+        severity: { type: string, enum: [ERROR, WARNING] }
+        outlet: { type: string }
+        product: { type: string }
+        station: { type: string }
+    PosImportRowError:
+      type: object
+      required: [row, field, code]
+      properties:
+        row: { type: integer }
+        field: { type: string }
+        code: { type: string }
+        detail: { type: string }
+    PosImportResult:
+      type: object
+      required: [dry_run, rows, created, updated, errors]
+      properties:
+        dry_run: { type: boolean }
+        rows: { type: integer }
+        created: { type: integer }
+        updated: { type: integer }
+        errors: { type: array, items: { $ref: "#/components/schemas/PosImportRowError" } }
+    FolioOutletLockInput:
+      type: object
+      required: [limit_amount, valid_mode, outlet_ids]
+      properties:
+        limit_amount: { type: string, description: Required and above zero; there is no unlimited. }
+        valid_mode: { type: string, enum: [UNTIL_CLOSE, TODAY], description: Until check-out (or until the master closes), or this business day only. }
+        outlet_ids: { type: array, items: { type: integer, format: int64 }, description: The outlets that may charge this folio; at least one. }
+        version: { type: integer, description: The version of the lock that was loaded; required to change an open lock. }
+    FolioOutletLockPatch:
+      type: object
+      properties:
+        version: { type: integer }
+    PosOutletRef:
+      type: object
+      required: [id, code, name, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+    FolioOutletLockEvent:
+      type: object
+      required: [id, kind, business_date, actor_name, at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [OPENED, CHANGED, LOCKED] }
+        reason: { type: [string, "null"] }
+        old: { type: [object, "null"], additionalProperties: true }
+        new: { type: [object, "null"], additionalProperties: true }
+        business_date: { $ref: "#/components/schemas/Date" }
+        actor_name: { type: string }
+        at: { type: string, format: date-time }
+    FolioOutletLock:
+      type: object
+      required: [folio_id, folio_number, folio_type, folio_status, checkout_date, status, reason, can_open, why_not, limit_amount, used, remaining, valid_mode, valid_on, period_no, outlets, version, folio_version, business_date]
+      properties:
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        folio_type: { type: string }
+        folio_status: { type: string }
+        room_number: { type: string }
+        guest_name: { type: string }
+        group_name: { type: string }
+        checkout_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: "The departure date of the stay, which is what valid until check-out means." }
+        status: { type: string, enum: [OPEN, LOCKED] }
+        reason: { type: [string, "null"], description: "Why it is locked: NEVER_OPENED, MANUAL, LIMIT_REACHED, CHECKOUT, EXPIRED or FOLIO_CLOSED." }
+        can_open: { type: boolean }
+        why_not: { type: [string, "null"], description: "FOLIO_CLOSED, STAY_NOT_IN_HOUSE, GROUP_INACTIVE or FOLIO_TYPE." }
+        limit_amount: { type: [string, "null"] }
+        used: { type: [string, "null"], description: What outlets charged in the current period, less what was returned; never the balance. }
+        remaining: { type: [string, "null"] }
+        valid_mode: { type: [string, "null"] }
+        valid_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        period_no: { type: integer }
+        outlets: { type: array, items: { $ref: "#/components/schemas/PosOutletRef" } }
+        opened_at: { type: [string, "null"], format: date-time }
+        updated_at: { type: [string, "null"], format: date-time }
+        version: { type: integer }
+        folio_version: { type: integer }
+        business_date: { $ref: "#/components/schemas/Date" }
+        events: { type: array, items: { $ref: "#/components/schemas/FolioOutletLockEvent" } }
+    OutletChargeRow:
+      type: object
+      required: [id, source, folio_id, folio_number, folio_type, outlet_id, outlet_code, outlet_name, amount, result, code, context, at]
+      properties:
+        id: { type: integer, format: int64 }
+        source: { type: string, enum: [CHARGE, MOVE] }
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        folio_type: { type: string }
+        room_number: { type: string }
+        guest_name: { type: string }
+        group_name: { type: string }
+        outlet_id: { type: integer, format: int64 }
+        outlet_code: { type: string }
+        outlet_name: { type: string }
+        bill_number: { type: string }
+        amount: { type: string }
+        result: { type: string, enum: [ACCEPTED, REJECTED] }
+        code: { type: [string, "null"], description: "OUTLET_FOLIO_LOCKED, OUTLET_NOT_ALLOWED, OUTLET_LIMIT_EXCEEDED or FOLIO_CLOSED when refused." }
+        context: { type: object, additionalProperties: true }
+        lock_status: { type: string, enum: ["", OPEN, LOCKED] }
+        created_by_name: { type: string }
+        at: { type: string, format: date-time }
+    OutletChargeList:
+      type: object
+      required: [business_date, data, accepted, rejected]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        data: { type: array, items: { $ref: "#/components/schemas/OutletChargeRow" } }
+        accepted: { type: integer }
+        rejected: { type: integer }

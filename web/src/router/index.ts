@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { watch } from 'vue'
 import { i18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useSubscriptionStore } from '@/stores/subscription'
 import { usePropertyStore } from '@/stores/property'
 import { routeTitle } from '@/utils/routeTitle'
 import HomeView from '@/views/HomeView.vue'
@@ -11,6 +12,7 @@ declare module 'vue-router' {
     title?: string
     public?: boolean // reachable without signing in
     adminOnly?: boolean // tenant administrators only
+    module?: string // an optional module of the plan the page belongs to (POS): a tenant without it goes home
     permission?: string | string[] // a permission of the open property that the page needs (the one that manages what it shows); the pages of setup name it
   }
 }
@@ -50,6 +52,12 @@ export const router = createRouter({
       component: () => import('@/views/rooms/LostFoundView.vue'),
       meta: { title: 'Lost and found' },
     },
+    { path: '/pos/outlets', name: 'pos-outlets', component: () => import('@/views/pos/PosOutletsView.vue'), meta: { title: 'Outlets', permission: 'pos.manage', module: 'POS' } },
+    { path: '/pos/products', name: 'pos-products', component: () => import('@/views/pos/PosProductsView.vue'), meta: { title: 'Products and menu', permission: 'pos.manage', module: 'POS' } },
+    { path: '/pos/menu', name: 'pos-menu', component: () => import('@/views/pos/PosMenuSetupView.vue'), meta: { title: 'Categories, prices and profiles', permission: 'pos.manage', module: 'POS' } },
+    { path: '/pos/floor-plan', name: 'pos-floor-plan', component: () => import('@/views/pos/PosFloorPlanView.vue'), meta: { title: 'Floor plan', permission: 'pos.manage', module: 'POS' } },
+    { path: '/pos/stations', name: 'pos-stations', component: () => import('@/views/pos/PosStationsView.vue'), meta: { title: 'Stations and printers', permission: 'pos.manage', module: 'POS' } },
+    { path: '/outlet-charges', name: 'outlet-charges', component: () => import('@/views/pos/OutletChargesView.vue'), meta: { title: 'Outlet charges', permission: ['folio.outlet_charge_open', 'folio.read'], module: 'POS' } },
     { path: '/accounting/accounts', name: 'accounting-accounts', component: () => import('@/views/accounting/ChartOfAccountsView.vue'), meta: { title: 'Chart of accounts' } },
     { path: '/accounting/mapping', name: 'accounting-mapping', component: () => import('@/views/accounting/AccountMappingView.vue'), meta: { title: 'System accounts' } },
     { path: '/accounting/journals', name: 'accounting-journals', component: () => import('@/views/accounting/JournalsView.vue'), meta: { title: 'Journals' } },
@@ -236,6 +244,12 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
   }
   if (to.meta.adminOnly && !auth.isAdmin) return { name: 'home' }
+  // A page of a module that is not in the plan of the tenant goes home (the server refuses its routes in any case).
+  if (to.meta.module) {
+    const subscription = useSubscriptionStore()
+    await subscription.load()
+    if (!subscription.has(to.meta.module)) return { name: 'home' }
+  }
   // A page of setup needs the permission that manages what it shows: the menu leaves it out, and a typed address goes home.
   if (to.meta.permission) {
     const property = usePropertyStore()

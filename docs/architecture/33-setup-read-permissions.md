@@ -55,3 +55,7 @@ Not changed, because the operational screens need them: `properties/{id}` (the s
 ## 6. Not in this plan
 
 A new permission to read the reference data (the any-of lists use the permissions that exist); a compact endpoint for each list (the screens that use the data need its fields).
+
+## 7. Added with POS stage 1 (`34-pos.md`)
+
+`pos.manage` is one of the permissions that read the reference data an outlet needs: `taxes` and `service-charges` (with `billing_config.manage`, `cityledger.credit_note`, `tax.manage`), `charge-codes` (with `billing_config.manage`, `folio.read`, `rate.manage`) and `departments` (with `accounting.view`). The list of outlets is read by `pos.manage`, `pos.order`, `pos.cashier`, `pos.kds` and `folio.outlet_charge_open`; the rest of the catalogue by the first four.

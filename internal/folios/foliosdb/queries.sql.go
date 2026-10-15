@@ -237,6 +237,21 @@ func (q *Queries) DeleteLineInstructions(ctx context.Context, arg DeleteLineInst
 	return err
 }
 
+const deleteLockOutlets = `-- name: DeleteLockOutlets :exec
+DELETE FROM folio_outlet_lock_outlets WHERE tenant_id = $1 AND property_id = $2 AND folio_id = $3
+`
+
+type DeleteLockOutletsParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    int64
+}
+
+func (q *Queries) DeleteLockOutlets(ctx context.Context, arg DeleteLockOutletsParams) error {
+	_, err := q.db.Exec(ctx, deleteLockOutlets, arg.TenantID, arg.PropertyID, arg.FolioID)
+	return err
+}
+
 const findUnlinkedOpenFolio = `-- name: FindUnlinkedOpenFolio :one
 SELECT id FROM folios
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = $3 AND stay_id IS NULL AND status = 'OPEN'
@@ -429,6 +444,63 @@ func (q *Queries) GetFolio(ctx context.Context, arg GetFolioParams) (Folio, erro
 		&i.ClosedOn,
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
+	)
+	return i, err
+}
+
+const getFolioForOutletLock = `-- name: GetFolioForOutletLock :one
+SELECT f.id, f.folio_number, f.folio_type, f.status, f.stay_id, f.booking_group_id, f.version, COALESCE(st.status, '')::text AS stay_status,
+       COALESCE(cr.room_number, '')::text AS room_number, g.first_name, g.last_name, COALESCE(bg.name, '')::text AS group_name, rrm.departure_date AS checkout_date
+FROM folios f
+LEFT JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
+LEFT JOIN reservation_rooms rrm ON rrm.property_id = st.property_id AND rrm.id = st.reservation_room_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+                    WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = f.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+WHERE f.tenant_id = $1 AND f.property_id = $2 AND f.id = $3
+`
+
+type GetFolioForOutletLockParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetFolioForOutletLockRow struct {
+	ID             int64
+	FolioNumber    string
+	FolioType      string
+	Status         string
+	StayID         *int64
+	BookingGroupID *int64
+	Version        int32
+	StayStatus     string
+	RoomNumber     string
+	FirstName      *string
+	LastName       *string
+	GroupName      string
+	CheckoutDate   *civil.Date
+}
+
+func (q *Queries) GetFolioForOutletLock(ctx context.Context, arg GetFolioForOutletLockParams) (GetFolioForOutletLockRow, error) {
+	row := q.db.QueryRow(ctx, getFolioForOutletLock, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetFolioForOutletLockRow
+	err := row.Scan(
+		&i.ID,
+		&i.FolioNumber,
+		&i.FolioType,
+		&i.Status,
+		&i.StayID,
+		&i.BookingGroupID,
+		&i.Version,
+		&i.StayStatus,
+		&i.RoomNumber,
+		&i.FirstName,
+		&i.LastName,
+		&i.GroupName,
+		&i.CheckoutDate,
 	)
 	return i, err
 }
@@ -868,6 +940,55 @@ func (q *Queries) GetMasterFolio(ctx context.Context, arg GetMasterFolioParams) 
 		&i.ClosedOn,
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
+	)
+	return i, err
+}
+
+const getOutletLock = `-- name: GetOutletLock :one
+
+SELECT folio_id, status, limit_amount, valid_mode, valid_on, period_no, locked_reason, opened_by, opened_at, updated_by, updated_at, version
+FROM folio_outlet_locks WHERE tenant_id = $1 AND property_id = $2 AND folio_id = $3
+`
+
+type GetOutletLockParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    int64
+}
+
+type GetOutletLockRow struct {
+	FolioID      int64
+	Status       string
+	LimitAmount  decimal.Decimal
+	ValidMode    string
+	ValidOn      *civil.Date
+	PeriodNo     int32
+	LockedReason *string
+	OpenedBy     *int64
+	OpenedAt     time.Time
+	UpdatedBy    *int64
+	UpdatedAt    time.Time
+	Version      int32
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The lock of a folio for outlet charges (docs/architecture/34-pos.md section 6).
+func (q *Queries) GetOutletLock(ctx context.Context, arg GetOutletLockParams) (GetOutletLockRow, error) {
+	row := q.db.QueryRow(ctx, getOutletLock, arg.TenantID, arg.PropertyID, arg.FolioID)
+	var i GetOutletLockRow
+	err := row.Scan(
+		&i.FolioID,
+		&i.Status,
+		&i.LimitAmount,
+		&i.ValidMode,
+		&i.ValidOn,
+		&i.PeriodNo,
+		&i.LockedReason,
+		&i.OpenedBy,
+		&i.OpenedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+		&i.Version,
 	)
 	return i, err
 }
@@ -1330,6 +1451,55 @@ func (q *Queries) GetUserName(ctx context.Context, id int64) (string, error) {
 	return full_name, err
 }
 
+const insertChargeAttempt = `-- name: InsertChargeAttempt :one
+INSERT INTO pos_room_charge_attempts (tenant_id, property_id, source, folio_id, requested_stay_id, outlet_id, bill_id, bill_number, amount, result, code, context,
+                                      pos_room_charge_id, business_date, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12::jsonb, $13, $14, $15)
+RETURNING id
+`
+
+type InsertChargeAttemptParams struct {
+	TenantID        int64
+	PropertyID      int64
+	Source          string
+	FolioID         int64
+	RequestedStayID *int64
+	OutletID        int64
+	BillID          *int64
+	BillNumber      *string
+	Amount          decimal.Decimal
+	Result          string
+	Code            *string
+	Context         []byte
+	PosRoomChargeID *int64
+	BusinessDate    civil.Date
+	ActorID         *int64
+}
+
+func (q *Queries) InsertChargeAttempt(ctx context.Context, arg InsertChargeAttemptParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertChargeAttempt,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Source,
+		arg.FolioID,
+		arg.RequestedStayID,
+		arg.OutletID,
+		arg.BillID,
+		arg.BillNumber,
+		arg.Amount,
+		arg.Result,
+		arg.Code,
+		arg.Context,
+		arg.PosRoomChargeID,
+		arg.BusinessDate,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertCompanyFolio = `-- name: InsertCompanyFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, 'COMPANY', $6, $7, $7)
@@ -1709,6 +1879,27 @@ func (q *Queries) InsertInstruction(ctx context.Context, arg InsertInstructionPa
 	return err
 }
 
+const insertLockOutlet = `-- name: InsertLockOutlet :exec
+INSERT INTO folio_outlet_lock_outlets (tenant_id, property_id, folio_id, outlet_id) VALUES ($1, $2, $3, $4)
+`
+
+type InsertLockOutletParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    int64
+	OutletID   int64
+}
+
+func (q *Queries) InsertLockOutlet(ctx context.Context, arg InsertLockOutletParams) error {
+	_, err := q.db.Exec(ctx, insertLockOutlet,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioID,
+		arg.OutletID,
+	)
+	return err
+}
+
 const insertMasterFolio = `-- name: InsertMasterFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, booking_group_id, bill_to_company_id, created_by, updated_by)
 VALUES ($1, $2, $3, 'MASTER', $4, $5, $6, $6)
@@ -1756,6 +1947,72 @@ func (q *Queries) InsertMasterFolio(ctx context.Context, arg InsertMasterFolioPa
 		&i.BookingGroupID,
 	)
 	return i, err
+}
+
+const insertOutletLock = `-- name: InsertOutletLock :exec
+INSERT INTO folio_outlet_locks (folio_id, tenant_id, property_id, status, limit_amount, valid_mode, valid_on, period_no, locked_reason, opened_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+`
+
+type InsertOutletLockParams struct {
+	FolioID      int64
+	TenantID     int64
+	PropertyID   int64
+	Status       string
+	LimitAmount  decimal.Decimal
+	ValidMode    string
+	ValidOn      *civil.Date
+	PeriodNo     int32
+	LockedReason *string
+	ActorID      *int64
+}
+
+func (q *Queries) InsertOutletLock(ctx context.Context, arg InsertOutletLockParams) error {
+	_, err := q.db.Exec(ctx, insertOutletLock,
+		arg.FolioID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Status,
+		arg.LimitAmount,
+		arg.ValidMode,
+		arg.ValidOn,
+		arg.PeriodNo,
+		arg.LockedReason,
+		arg.ActorID,
+	)
+	return err
+}
+
+const insertOutletLockEvent = `-- name: InsertOutletLockEvent :exec
+INSERT INTO folio_outlet_lock_events (tenant_id, property_id, folio_id, kind, reason, old_value, new_value, business_date, actor_id)
+VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
+`
+
+type InsertOutletLockEventParams struct {
+	TenantID     int64
+	PropertyID   int64
+	FolioID      int64
+	Kind         string
+	Reason       *string
+	OldValue     []byte
+	NewValue     []byte
+	BusinessDate civil.Date
+	ActorID      *int64
+}
+
+func (q *Queries) InsertOutletLockEvent(ctx context.Context, arg InsertOutletLockEventParams) error {
+	_, err := q.db.Exec(ctx, insertOutletLockEvent,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioID,
+		arg.Kind,
+		arg.Reason,
+		arg.OldValue,
+		arg.NewValue,
+		arg.BusinessDate,
+		arg.ActorID,
+	)
+	return err
 }
 
 const insertPayment = `-- name: InsertPayment :one
@@ -1854,6 +2111,53 @@ func (q *Queries) InsertPayment(ctx context.Context, arg InsertPaymentParams) (P
 		&i.MdrVat,
 	)
 	return i, err
+}
+
+const insertRoomChargeAccepted = `-- name: InsertRoomChargeAccepted :one
+INSERT INTO pos_room_charges (tenant_id, property_id, outlet_id, bill_id, bill_number, from_folio_id, to_folio_id, stay_id, amount, lock_period_no, transfer_batch_id,
+                              business_date, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14)
+RETURNING id
+`
+
+type InsertRoomChargeAcceptedParams struct {
+	TenantID        int64
+	PropertyID      int64
+	OutletID        int64
+	BillID          *int64
+	BillNumber      *string
+	FromFolioID     *int64
+	ToFolioID       int64
+	StayID          *int64
+	Amount          decimal.Decimal
+	PeriodNo        int32
+	TransferBatchID *int64
+	BusinessDate    civil.Date
+	IdempotencyKey  *string
+	ActorID         *int64
+}
+
+func (q *Queries) InsertRoomChargeAccepted(ctx context.Context, arg InsertRoomChargeAcceptedParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertRoomChargeAccepted,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.OutletID,
+		arg.BillID,
+		arg.BillNumber,
+		arg.FromFolioID,
+		arg.ToFolioID,
+		arg.StayID,
+		arg.Amount,
+		arg.PeriodNo,
+		arg.TransferBatchID,
+		arg.BusinessDate,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertTransfer = `-- name: InsertTransfer :one
@@ -2063,6 +2367,35 @@ func (q *Queries) LinkFolioToStay(ctx context.Context, arg LinkFolioToStayParams
 	return i, err
 }
 
+const listActiveOutletIDs = `-- name: ListActiveOutletIDs :many
+SELECT id FROM pos_outlets WHERE tenant_id = $1 AND property_id = $2 AND is_active ORDER BY id
+`
+
+type ListActiveOutletIDsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+func (q *Queries) ListActiveOutletIDs(ctx context.Context, arg ListActiveOutletIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listActiveOutletIDs, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBatchTransfers = `-- name: ListBatchTransfers :many
 SELECT id, tenant_id, property_id, batch_id, from_folio_id, to_folio_id, out_item_id, in_item_id, original_item_id, amount, origin_folio_id, previous_folio_id, returns_transfer_id, created_at FROM folio_transfers WHERE property_id = $1 AND batch_id = $2 ORDER BY id
 `
@@ -2146,6 +2479,141 @@ func (q *Queries) ListBatchesByKeyPrefix(ctx context.Context, arg ListBatchesByK
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChargeAttempts = `-- name: ListChargeAttempts :many
+SELECT a.id, a.source, a.folio_id, f.folio_number, f.folio_type, a.requested_stay_id, a.outlet_id, o.code AS outlet_code, o.name AS outlet_name, a.bill_number, a.amount, a.result, a.code,
+       a.context, a.business_date, a.created_at, COALESCE(u.full_name, '')::text AS created_by_name,
+       COALESCE(cr.room_number, '')::text AS room_number, COALESCE(NULLIF(trim(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')), ''), '')::text AS guest_name,
+       COALESCE(bg.name, '')::text AS group_name,
+       COALESCE((SELECT l.status FROM folio_outlet_locks l WHERE l.folio_id = a.folio_id), '')::text AS lock_status
+FROM pos_room_charge_attempts a
+JOIN folios f ON f.property_id = a.property_id AND f.id = a.folio_id
+JOIN pos_outlets o ON o.property_id = a.property_id AND o.id = a.outlet_id
+LEFT JOIN users u ON u.id = a.created_by
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = COALESCE(a.requested_stay_id, f.stay_id)
+LEFT JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN booking_groups bg ON bg.property_id = f.property_id AND bg.id = f.booking_group_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+                    WHERE sr.property_id = st.property_id AND sr.stay_id = st.id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests g ON g.tenant_id = f.tenant_id AND g.id = COALESCE(st.guest_id, res.guest_id)
+WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.business_date = $3
+  AND ($4::text IS NULL OR a.result = $4::text)
+ORDER BY a.id DESC
+LIMIT $5
+`
+
+type ListChargeAttemptsParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate civil.Date
+	Result       *string
+	RowLimit     int32
+}
+
+type ListChargeAttemptsRow struct {
+	ID              int64
+	Source          string
+	FolioID         int64
+	FolioNumber     string
+	FolioType       string
+	RequestedStayID *int64
+	OutletID        int64
+	OutletCode      string
+	OutletName      string
+	BillNumber      *string
+	Amount          decimal.Decimal
+	Result          string
+	Code            *string
+	Context         []byte
+	BusinessDate    civil.Date
+	CreatedAt       time.Time
+	CreatedByName   string
+	RoomNumber      string
+	GuestName       string
+	GroupName       string
+	LockStatus      string
+}
+
+// The incoming outlet charges of a business date, every room, with the attempts that were refused.
+func (q *Queries) ListChargeAttempts(ctx context.Context, arg ListChargeAttemptsParams) ([]ListChargeAttemptsRow, error) {
+	rows, err := q.db.Query(ctx, listChargeAttempts,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BusinessDate,
+		arg.Result,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChargeAttemptsRow{}
+	for rows.Next() {
+		var i ListChargeAttemptsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.FolioID,
+			&i.FolioNumber,
+			&i.FolioType,
+			&i.RequestedStayID,
+			&i.OutletID,
+			&i.OutletCode,
+			&i.OutletName,
+			&i.BillNumber,
+			&i.Amount,
+			&i.Result,
+			&i.Code,
+			&i.Context,
+			&i.BusinessDate,
+			&i.CreatedAt,
+			&i.CreatedByName,
+			&i.RoomNumber,
+			&i.GuestName,
+			&i.GroupName,
+			&i.LockStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExpiredTodayLocks = `-- name: ListExpiredTodayLocks :many
+SELECT folio_id FROM folio_outlet_locks
+WHERE tenant_id = $1 AND property_id = $2 AND status = 'OPEN' AND valid_mode = 'TODAY' AND valid_on <= $3
+ORDER BY folio_id
+`
+
+type ListExpiredTodayLocksParams struct {
+	TenantID     int64
+	PropertyID   int64
+	BusinessDate *civil.Date
+}
+
+func (q *Queries) ListExpiredTodayLocks(ctx context.Context, arg ListExpiredTodayLocksParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listExpiredTodayLocks, arg.TenantID, arg.PropertyID, arg.BusinessDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var folio_id int64
+		if err := rows.Scan(&folio_id); err != nil {
+			return nil, err
+		}
+		items = append(items, folio_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -2957,6 +3425,51 @@ func (q *Queries) ListLineInstructions(ctx context.Context, arg ListLineInstruct
 	return items, nil
 }
 
+const listLockOutlets = `-- name: ListLockOutlets :many
+SELECT o.id, o.code, o.name, o.is_active
+FROM folio_outlet_lock_outlets l JOIN pos_outlets o ON o.property_id = l.property_id AND o.id = l.outlet_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.folio_id = $3
+ORDER BY o.sort_order, o.name, o.id
+`
+
+type ListLockOutletsParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    int64
+}
+
+type ListLockOutletsRow struct {
+	ID       int64
+	Code     string
+	Name     string
+	IsActive bool
+}
+
+func (q *Queries) ListLockOutlets(ctx context.Context, arg ListLockOutletsParams) ([]ListLockOutletsRow, error) {
+	rows, err := q.db.Query(ctx, listLockOutlets, arg.TenantID, arg.PropertyID, arg.FolioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLockOutletsRow{}
+	for rows.Next() {
+		var i ListLockOutletsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMovableItemsOfCode = `-- name: ListMovableItemsOfCode :many
 SELECT i.id, i.tenant_id, i.property_id, i.folio_id, i.business_date, i.transaction_at, i.service_date, i.transaction_type, i.charge_code_id, i.payment_id, i.reverses_item_id, i.stay_id, i.stay_room_id, i.reference_type, i.reference_id, i.description, i.quantity, i.unit_price, i.price_mode, i.base_amount, i.discount_amount, i.net_amount, i.rounding_adjustment, i.service_charge_total, i.tax_total, i.debit, i.credit, i.source, i.reason, i.idempotency_key, i.created_at, i.created_by, i.approved_by, i.revenue_account_code, i.department_id FROM folio_items i
 WHERE i.tenant_id = $1 AND i.property_id = $2 AND i.folio_id = $3 AND i.charge_code_id = $4 AND i.transaction_type = 'CHARGE'
@@ -3025,6 +3538,98 @@ func (q *Queries) ListMovableItemsOfCode(ctx context.Context, arg ListMovableIte
 			&i.ApprovedBy,
 			&i.RevenueAccountCode,
 			&i.DepartmentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenOutletLocksOfStay = `-- name: ListOpenOutletLocksOfStay :many
+SELECT l.folio_id, l.period_no FROM folio_outlet_locks l JOIN folios f ON f.property_id = l.property_id AND f.id = l.folio_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND f.stay_id = $3 AND l.status = 'OPEN'
+`
+
+type ListOpenOutletLocksOfStayParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayID     *int64
+}
+
+type ListOpenOutletLocksOfStayRow struct {
+	FolioID  int64
+	PeriodNo int32
+}
+
+// The open locks of the folios of a stay (the check-out locks them).
+func (q *Queries) ListOpenOutletLocksOfStay(ctx context.Context, arg ListOpenOutletLocksOfStayParams) ([]ListOpenOutletLocksOfStayRow, error) {
+	rows, err := q.db.Query(ctx, listOpenOutletLocksOfStay, arg.TenantID, arg.PropertyID, arg.StayID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenOutletLocksOfStayRow{}
+	for rows.Next() {
+		var i ListOpenOutletLocksOfStayRow
+		if err := rows.Scan(&i.FolioID, &i.PeriodNo); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOutletLockEvents = `-- name: ListOutletLockEvents :many
+SELECT e.id, e.kind, e.reason, e.old_value, e.new_value, e.business_date, e.actor_id, COALESCE(u.full_name, '')::text AS actor_name, e.created_at
+FROM folio_outlet_lock_events e LEFT JOIN users u ON u.id = e.actor_id
+WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.folio_id = $3
+ORDER BY e.id DESC LIMIT 50
+`
+
+type ListOutletLockEventsParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    int64
+}
+
+type ListOutletLockEventsRow struct {
+	ID           int64
+	Kind         string
+	Reason       *string
+	OldValue     []byte
+	NewValue     []byte
+	BusinessDate civil.Date
+	ActorID      *int64
+	ActorName    string
+	CreatedAt    time.Time
+}
+
+func (q *Queries) ListOutletLockEvents(ctx context.Context, arg ListOutletLockEventsParams) ([]ListOutletLockEventsRow, error) {
+	rows, err := q.db.Query(ctx, listOutletLockEvents, arg.TenantID, arg.PropertyID, arg.FolioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOutletLockEventsRow{}
+	for rows.Next() {
+		var i ListOutletLockEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Reason,
+			&i.OldValue,
+			&i.NewValue,
+			&i.BusinessDate,
+			&i.ActorID,
+			&i.ActorName,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -3782,6 +4387,63 @@ func (q *Queries) ListTransfersOfItems(ctx context.Context, arg ListTransfersOfI
 	return items, nil
 }
 
+const outletChargesUsed = `-- name: OutletChargesUsed :one
+SELECT COALESCE(sum(amount), 0)::numeric AS used
+FROM pos_room_charges
+WHERE tenant_id = $1 AND property_id = $2 AND to_folio_id = $3 AND lock_period_no = $4 AND returned_at IS NULL
+`
+
+type OutletChargesUsedParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    int64
+	PeriodNo   int32
+}
+
+// What counts against the limit: the accepted charges of the lock period that were not returned or moved away through POS. Never the balance of the folio.
+func (q *Queries) OutletChargesUsed(ctx context.Context, arg OutletChargesUsedParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, outletChargesUsed,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioID,
+		arg.PeriodNo,
+	)
+	var used decimal.Decimal
+	err := row.Scan(&used)
+	return used, err
+}
+
+const outletInfo = `-- name: OutletInfo :one
+SELECT id, code, name, is_active, allow_room_charge FROM pos_outlets WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type OutletInfoParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type OutletInfoRow struct {
+	ID              int64
+	Code            string
+	Name            string
+	IsActive        bool
+	AllowRoomCharge bool
+}
+
+func (q *Queries) OutletInfo(ctx context.Context, arg OutletInfoParams) (OutletInfoRow, error) {
+	row := q.db.QueryRow(ctx, outletInfo, arg.TenantID, arg.PropertyID, arg.ID)
+	var i OutletInfoRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.IsActive,
+		&i.AllowRoomCharge,
+	)
+	return i, err
+}
+
 const paymentTotals = `-- name: PaymentTotals :many
 SELECT payment_method,
        COALESCE(sum(amount) FILTER (WHERE payment_type = 'PAYMENT'), 0)::numeric AS paid,
@@ -4083,6 +4745,46 @@ func (q *Queries) UnlinkFolioFromStay(ctx context.Context, arg UnlinkFolioFromSt
 		&i.BookingGroupID,
 	)
 	return i, err
+}
+
+const updateOutletLock = `-- name: UpdateOutletLock :exec
+UPDATE folio_outlet_locks SET status = $1, limit_amount = $2, valid_mode = $3, valid_on = $4, period_no = $5,
+       locked_reason = $6, opened_by = COALESCE($7::bigint, opened_by), opened_at = COALESCE($8::timestamptz, opened_at),
+       updated_by = $9, version = version + 1
+WHERE tenant_id = $10 AND property_id = $11 AND folio_id = $12
+`
+
+type UpdateOutletLockParams struct {
+	Status       string
+	LimitAmount  decimal.Decimal
+	ValidMode    string
+	ValidOn      *civil.Date
+	PeriodNo     int32
+	LockedReason *string
+	OpenedBy     *int64
+	OpenedAt     *time.Time
+	ActorID      *int64
+	TenantID     int64
+	PropertyID   int64
+	FolioID      int64
+}
+
+func (q *Queries) UpdateOutletLock(ctx context.Context, arg UpdateOutletLockParams) error {
+	_, err := q.db.Exec(ctx, updateOutletLock,
+		arg.Status,
+		arg.LimitAmount,
+		arg.ValidMode,
+		arg.ValidOn,
+		arg.PeriodNo,
+		arg.LockedReason,
+		arg.OpenedBy,
+		arg.OpenedAt,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioID,
+	)
+	return err
 }
 
 const voidPayment = `-- name: VoidPayment :one

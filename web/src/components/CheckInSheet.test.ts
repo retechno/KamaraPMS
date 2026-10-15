@@ -10,7 +10,8 @@ import CheckInSheet from './CheckInSheet.vue'
 let GET = vi.fn()
 let POST = vi.fn()
 let PATCH = vi.fn()
-vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PATCH: (...a: unknown[]) => PATCH(...a) } }))
+let PUT = vi.fn()
+vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PATCH: (...a: unknown[]) => PATCH(...a), PUT: (...a: unknown[]) => PUT(...a) } }))
 const openPdf = vi.fn()
 vi.mock('@/utils/documents', async (orig) => ({ ...(await orig<typeof import('@/utils/documents')>()), openPdf: (...a: unknown[]) => openPdf(...a) }))
 
@@ -51,6 +52,7 @@ function setup(o: Setup = {}) {
     if (path === '/api/v1/guests/{id}/history') return { data: { data: o.history ?? [{ type: 'STAY', id: 1, number: 'STY1', role: 'PRIMARY', status: 'COMPLETED', property_id: 7, property_code: 'BALI', property_name: 'Hotel Bali', arrival_date: '2026-08-01', departure_date: '2026-08-03' }, { type: 'STAY', id: 2, number: 'STY2', role: 'PRIMARY', status: 'COMPLETED', property_id: 7, property_code: 'BALI', property_name: 'Hotel Bali', arrival_date: '2026-06-01', departure_date: '2026-06-02' }], hidden_count: 0 } }
     if (path.endsWith('/room-types')) return { data: { data: types } }
     if (path.endsWith('/availability/rooms')) return { data: { data: rooms } }
+    if (path.endsWith('/pos/outlets')) return { data: { data: [{ id: 1, code: 'RESTO', name: 'Restoran Teratai', is_active: true }, { id: 2, code: 'BAR', name: 'Bar Kolam', is_active: true }] } }
     if (path.endsWith('/reservations/{id}')) return o.estimate === null ? { data: { rooms: [] } } : { data: { rooms: [{ id: 4, estimate: { net: '2000000', service: '0', tax: '340000', total: o.estimate ?? '2340000' } }] } }
     if (path.endsWith('/emails')) return { data: { enabled: true, data: [] } }
     if (path === '/api/v1/guests') return { data: { data: [guest({ id: 8, first_name: 'Siti', last_name: 'Nur', code: 'GST000008' })] } }
@@ -573,5 +575,87 @@ describe('the keyboard and the steps', () => {
     await flushPromises()
     await flushPromises()
     expect(document.activeElement?.getAttribute('data-testid')).toBe('checkin-next')
+  })
+})
+
+describe('the check-in sheet: open the folio for outlets', () => {
+  const rights = ['reservation.read', 'reservation.update', 'frontdesk.checkin', 'payment.post', 'guest.write']
+  const toDeposit = async () => {
+    await flushPromises()
+    await enter()
+    await enter()
+    expect(stepNow()).toBe('checkin-step-deposit')
+  }
+  const type = async (sel: string, value: string) => {
+    const input = find(sel).element as HTMLInputElement
+    input.value = value
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+  }
+  beforeEach(() => {
+    PUT = vi.fn().mockResolvedValue({ data: { status: 'OPEN' } })
+  })
+
+  it('is not offered to a desk that may not open folios for outlets', async () => {
+    setup({ permissions: rights })
+    await toDeposit()
+    expect(has('[data-testid=deposit-outlets]')).toBe(false)
+  })
+
+  it('asks for a limit and an outlet, then opens the folio after the check-in, as a request of its own', async () => {
+    setup({ permissions: [...rights, 'folio.outlet_charge_open'] })
+    POST = vi.fn(async (path: string) => {
+      if (path.endsWith('/deposits')) return { data: { payment: { id: 91, payment_number: 'PAY000091', amount: '2840000' } } }
+      if (path.endsWith('/check-in')) return { data: { stay: { id: 55, stay_number: 'STY000055' }, stay_room: { room_number: '102' }, folio: { id: 412, folio_number: 'FOL000412' } } }
+      return { data: {} }
+    })
+    await toDeposit()
+    expect(has('[data-testid=outlet-lock-form]')).toBe(false)
+    await find('[data-testid=open-for-outlets]').setValue(true)
+    await flushPromises()
+    expect(has('[data-testid=outlet-lock-form]')).toBe(true)
+    // the sheet cannot be confirmed without the limit and an outlet
+    expect(find('[data-testid=outlets-missing]').text()).toContain('limit')
+    expect(find('[data-testid=checkin-submit]').attributes('disabled')).toBeDefined()
+    await type('input[name=outlet_limit]', '500000')
+    await find('[data-testid=lock-outlet-RESTO]').setValue(true)
+    await find('[data-testid=lock-outlet-BAR]').setValue(true)
+    expect(find('[data-testid=checkin-submit]').attributes('disabled')).toBeUndefined()
+    await find('[data-testid=checkin-submit]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(stepNow()).toBe('checkin-step-done')
+    expect(PUT).toHaveBeenCalledTimes(1)
+    const [path, opts] = PUT.mock.calls[0] as [string, { params: { path: { id: number } }; body: Record<string, unknown> }]
+    expect(path).toBe('/api/v1/properties/{propertyId}/folios/{id}/outlet-lock')
+    expect(opts.params.path.id).toBe(412)
+    expect(opts.body).toMatchObject({ limit_amount: '500000', valid_mode: 'UNTIL_CLOSE', outlet_ids: [1, 2] })
+    expect(find('[data-testid=done-outlets]').text()).toContain('open for outlet charges')
+  })
+
+  it('keeps the check-in when the folio cannot be opened, and offers to try again', async () => {
+    setup({ permissions: [...rights, 'folio.outlet_charge_open'], estimate: null })
+    POST = vi.fn(async (path: string) => {
+      if (path.endsWith('/check-in')) return { data: { stay: { id: 55, stay_number: 'STY000055' }, stay_room: { room_number: '102' }, folio: { id: 412, folio_number: 'FOL000412' } } }
+      return { data: {} }
+    })
+    PUT = vi.fn().mockRejectedValueOnce(new ApiError({ type: 'about:blank', title: 'x', status: 409, code: 'OUTLET_LOCK_NOT_ALLOWED', detail: 'no' })).mockResolvedValue({ data: { status: 'OPEN' } })
+    await toDeposit()
+    await find('[data-testid=open-for-outlets]').setValue(true)
+    await flushPromises()
+    await type('input[name=outlet_limit]', '100000')
+    await find('[data-testid=lock-outlet-RESTO]').setValue(true)
+    // no deposit is asked from this desk's proposal: continue without it
+    const without = el('[data-testid=checkin-no-deposit]')
+    if (without) await new DOMWrapper(without).trigger('click')
+    else await find('[data-testid=checkin-submit]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(stepNow()).toBe('checkin-step-done')
+    expect(has('[data-testid=done-outlets-failed]')).toBe(true)
+    await find('[data-testid=done-outlets-retry]').trigger('click')
+    await flushPromises()
+    expect(PUT).toHaveBeenCalledTimes(2)
+    expect(has('[data-testid=done-outlets]')).toBe(true)
   })
 })

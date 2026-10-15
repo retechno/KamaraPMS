@@ -277,6 +277,10 @@ func (s *Service) CloseStayFolios(ctx context.Context, p auth.Principal, propert
 		}
 		out = append(out, ClosedFolio{ID: c.ID, FolioNumber: c.FolioNumber, Status: c.Status})
 	}
+	// The folios are closed: they cannot be charged by outlets any more, and an open lock says why it ended (docs/architecture/34-pos.md 6.5). The folios are held FOR UPDATE.
+	if err := s.lockOnClose(ctx, p, propertyID, ids, LockReasonCheckout); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

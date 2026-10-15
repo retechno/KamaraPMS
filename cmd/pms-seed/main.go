@@ -3,6 +3,7 @@
 //
 //	pms-seed rooms -tenant DEMO -property BALI [-floors 10] [-per-floor 10] [-dry-run]
 //	pms-seed rates -tenant DEMO -property BALI [-days 90] [-plan RO] [-dry-run]
+//	pms-seed pos   -tenant DEMO -property BALI [-dry-run]
 //
 // rooms: creates the room types Standard, Superior, Deluxe and Suite when the property lacks them and rooms numbered
 // floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states and a bed type each
@@ -12,7 +13,10 @@
 // grid of every room type for the next days from the business date: a weekday price and a higher weekend price
 // (Friday and Saturday).
 //
-// Both are safe to run again (rooms that exist are left alone; rates are written again with the same prices). They
+// pos: the demo of the POS (docs/architecture/34-pos.md): the tax and service profiles, the price lists, four outlets, their stations and
+// printers, food and drinks for the restaurant and room service, and laundry services in a price list of the laundry alone, and floor plans.
+//
+// All are safe to run again (rooms that exist are left alone; rates are written again with the same prices). They
 // refuse to run against a production configuration. They read PMS_DATABASE_URL from the environment or ./.env.
 package main
 
@@ -49,7 +53,8 @@ func main() {
 
 const usage = `usage:
   pms-seed rooms -tenant CODE -property CODE [-floors N] [-per-floor N] [-dry-run]
-  pms-seed rates -tenant CODE -property CODE [-days N] [-plan CODE] [-dry-run]`
+  pms-seed rates -tenant CODE -property CODE [-days N] [-plan CODE] [-dry-run]
+  pms-seed pos   -tenant CODE -property CODE [-dry-run]`
 
 // A room type the seed creates when the property has no type with that code, and the price of its nights.
 type typeSpec struct {
@@ -80,10 +85,14 @@ type env struct {
 	rm         *rooms.Service
 	rt         *rates.Service
 	bc         *billingconfig.Service
+	txm        *db.TxManager
+	clk        clock.Clock
+	aw         *audit.Writer
+	authz      auth.Authorizer
 }
 
 func run(args []string) error {
-	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates") {
+	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates" && args[0] != "pos") {
 		return fmt.Errorf("%s", usage)
 	}
 	cmd := args[0]
@@ -113,6 +122,9 @@ func run(args []string) error {
 		return err
 	}
 	defer closePool()
+	if cmd == "pos" {
+		return seedPos(e, *dryRun)
+	}
 	if cmd == "rooms" {
 		return seedRooms(e, strings.ToUpper(*propertyCode), *floors, *perFloor, *dryRun)
 	}
@@ -151,7 +163,7 @@ func open(tenantCode, propertyCode string) (*env, func(), error) {
 	avail := availability.NewService(txm)
 	e := &env{
 		ten: ten, rm: rooms.NewService(txm, clk, aw, authz, ten, hk, avail), rt: rates.NewService(txm, clk, aw, authz, ten, avail),
-		bc: billingconfig.NewService(txm, clk, aw, authz, ten),
+		bc: billingconfig.NewService(txm, clk, aw, authz, ten), txm: txm, clk: clk, aw: aw, authz: authz,
 	}
 
 	tenant, err := ten.TenantByCode(ctx, tenantCode)

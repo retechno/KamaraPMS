@@ -402,6 +402,36 @@ func (q *Queries) GetChargeCodeForUpdate(ctx context.Context, arg GetChargeCodeF
 	return i, err
 }
 
+const getRuleProfile = `-- name: GetRuleProfile :one
+SELECT id, code, price_mode, is_active FROM pos_rule_profiles WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetRuleProfileParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetRuleProfileRow struct {
+	ID        int64
+	Code      string
+	PriceMode string
+	IsActive  bool
+}
+
+// The tax and service profile of an outlet or a product (docs/architecture/34-pos.md 4.3): the rules of a charge calculation that replace the ones mapped to the charge code.
+func (q *Queries) GetRuleProfile(ctx context.Context, arg GetRuleProfileParams) (GetRuleProfileRow, error) {
+	row := q.db.QueryRow(ctx, getRuleProfile, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetRuleProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.PriceMode,
+		&i.IsActive,
+	)
+	return i, err
+}
+
 const getServiceCharge = `-- name: GetServiceCharge :one
 SELECT id, tenant_id, property_id, code, name, rate, is_active, created_at, created_by, updated_at, updated_by, gl_account_code FROM service_charges WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -686,6 +716,106 @@ func (q *Queries) ListChargeCodes(ctx context.Context, arg ListChargeCodesParams
 			&i.UpdatedBy,
 			&i.GlAccountCode,
 			&i.DepartmentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProfileServiceRules = `-- name: ListProfileServiceRules :many
+SELECT r.sequence, s.id AS service_charge_id, s.code, s.name, s.rate, s.is_active AS service_is_active
+FROM pos_rule_profile_rules r JOIN service_charges s ON s.property_id = r.property_id AND s.id = r.service_charge_id
+WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.profile_id = $3
+ORDER BY r.sequence, r.id
+`
+
+type ListProfileServiceRulesParams struct {
+	TenantID   int64
+	PropertyID int64
+	ProfileID  int64
+}
+
+type ListProfileServiceRulesRow struct {
+	Sequence        int16
+	ServiceChargeID int64
+	Code            string
+	Name            string
+	Rate            decimal.Decimal
+	ServiceIsActive bool
+}
+
+func (q *Queries) ListProfileServiceRules(ctx context.Context, arg ListProfileServiceRulesParams) ([]ListProfileServiceRulesRow, error) {
+	rows, err := q.db.Query(ctx, listProfileServiceRules, arg.TenantID, arg.PropertyID, arg.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProfileServiceRulesRow{}
+	for rows.Next() {
+		var i ListProfileServiceRulesRow
+		if err := rows.Scan(
+			&i.Sequence,
+			&i.ServiceChargeID,
+			&i.Code,
+			&i.Name,
+			&i.Rate,
+			&i.ServiceIsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProfileTaxRules = `-- name: ListProfileTaxRules :many
+SELECT r.sequence, t.id AS tax_id, t.code, t.name, t.rate, t.tax_on_service, t.is_active AS tax_is_active
+FROM pos_rule_profile_rules r JOIN taxes t ON t.property_id = r.property_id AND t.id = r.tax_id
+WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.profile_id = $3
+ORDER BY r.sequence, r.id
+`
+
+type ListProfileTaxRulesParams struct {
+	TenantID   int64
+	PropertyID int64
+	ProfileID  int64
+}
+
+type ListProfileTaxRulesRow struct {
+	Sequence     int16
+	TaxID        int64
+	Code         string
+	Name         string
+	Rate         decimal.Decimal
+	TaxOnService bool
+	TaxIsActive  bool
+}
+
+func (q *Queries) ListProfileTaxRules(ctx context.Context, arg ListProfileTaxRulesParams) ([]ListProfileTaxRulesRow, error) {
+	rows, err := q.db.Query(ctx, listProfileTaxRules, arg.TenantID, arg.PropertyID, arg.ProfileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProfileTaxRulesRow{}
+	for rows.Next() {
+		var i ListProfileTaxRulesRow
+		if err := rows.Scan(
+			&i.Sequence,
+			&i.TaxID,
+			&i.Code,
+			&i.Name,
+			&i.Rate,
+			&i.TaxOnService,
+			&i.TaxIsActive,
 		); err != nil {
 			return nil, err
 		}

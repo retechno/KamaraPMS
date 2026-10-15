@@ -165,3 +165,19 @@ SELECT a.code::text AS code, a.name::text AS name, a.department_requirement::tex
 FROM gl_accounts a
 LEFT JOIN departments d ON d.property_id = a.property_id AND d.id = a.default_department_id
 WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.code = @code;
+
+-- The tax and service profile of an outlet or a product (docs/architecture/34-pos.md 4.3): the rules of a charge calculation that replace the ones mapped to the charge code.
+-- name: GetRuleProfile :one
+SELECT id, code, price_mode, is_active FROM pos_rule_profiles WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: ListProfileTaxRules :many
+SELECT r.sequence, t.id AS tax_id, t.code, t.name, t.rate, t.tax_on_service, t.is_active AS tax_is_active
+FROM pos_rule_profile_rules r JOIN taxes t ON t.property_id = r.property_id AND t.id = r.tax_id
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.profile_id = @profile_id
+ORDER BY r.sequence, r.id;
+
+-- name: ListProfileServiceRules :many
+SELECT r.sequence, s.id AS service_charge_id, s.code, s.name, s.rate, s.is_active AS service_is_active
+FROM pos_rule_profile_rules r JOIN service_charges s ON s.property_id = r.property_id AND s.id = r.service_charge_id
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.profile_id = @profile_id
+ORDER BY r.sequence, r.id;

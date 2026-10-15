@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { type ActiveNav, type NavSection, visibleNavigation } from '@/navigation'
 import { useAuthStore } from '@/stores/auth'
+import { useSubscriptionStore } from '@/stores/subscription'
 import { usePropertyStore } from '@/stores/property'
 
 /**
@@ -10,8 +11,9 @@ import { usePropertyStore } from '@/stores/property'
 export function useVisibleNavigation() {
   const auth = useAuthStore()
   const property = usePropertyStore()
+  const subscription = useSubscriptionStore()
 
-  const sections = computed<NavSection[]>(() => visibleNavigation(auth.isAdmin, (permission) => auth.can(permission, property.currentId)))
+  const sections = computed<NavSection[]>(() => visibleNavigation(auth.isAdmin, (permission) => auth.can(permission, property.currentId), undefined, (module) => subscription.has(module)))
   const items = computed<ActiveNav[]>(() => sections.value.flatMap((section) => section.items.map((item) => ({ section, item }))))
   /** The visible item with this id; undefined when it is not in the menu, or not for this person. */
   const byId = (id: string): ActiveNav | undefined => items.value.find((x) => x.item.id === id)

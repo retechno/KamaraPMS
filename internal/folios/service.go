@@ -394,6 +394,9 @@ func (s *Service) CloseFolio(ctx context.Context, propertyID, id int64, version 
 			map[string]any{"status": f.Status}, map[string]any{"status": closed.Status})); err != nil {
 			return err
 		}
+		if err := s.lockOnClose(ctx, p, propertyID, []int64{id}, LockReasonFolioClosed); err != nil {
+			return err
+		}
 		out, err = s.loadFolio(ctx, p.TenantID, propertyID, closed)
 		return err
 	})
