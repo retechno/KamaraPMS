@@ -49,12 +49,14 @@ func (s *Service) writer(ctx context.Context, propertyID int64) (auth.Principal,
 	return p, s.authz.Require(ctx, propertyID, auth.PermRateManage)
 }
 
-func (s *Service) reader(ctx context.Context, propertyID int64) (auth.Principal, error) {
+// reader authorizes a read of the rates and rules of sale: rate.manage, or one of the permissions of the screens that use the data
+// (docs/architecture/33-setup-read-permissions.md).
+func (s *Service) reader(ctx context.Context, propertyID int64, perms ...auth.Permission) (auth.Principal, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {
 		return p, err
 	}
-	return p, s.authz.CanAccess(ctx, propertyID)
+	return p, auth.RequireAny(ctx, s.authz, propertyID, append([]auth.Permission{auth.PermRateManage}, perms...)...)
 }
 
 func apply[T any](dst *T, v *T) {
@@ -68,7 +70,7 @@ func apply[T any](dst *T, v *T) {
 
 // ListRatePlans lists rate plans by id after afterID.
 func (s *Service) ListRatePlans(ctx context.Context, propertyID, afterID int64, active *bool, limit int) ([]RatePlan, error) {
-	p, err := s.reader(ctx, propertyID)
+	p, err := s.reader(ctx, propertyID, auth.PermReservationRead)
 	if err != nil {
 		return nil, err
 	}

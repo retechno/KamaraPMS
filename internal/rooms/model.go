@@ -200,6 +200,7 @@ const (
 type RoomBlock struct {
 	ID          int64      `json:"id"`
 	RoomID      int64      `json:"room_id"`
+	RoomNumber  string     `json:"room_number,omitempty"` // read with the list and the block, so that who may not list the rooms still sees which room it is
 	BlockType   string     `json:"block_type"`
 	StartDate   civil.Date `json:"start_date"`
 	EndDate     civil.Date `json:"end_date"`

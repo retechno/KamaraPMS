@@ -16,7 +16,7 @@ const rooms = [
   { id: 2, room_type_id: 1, room_number: '202', is_active: true },
 ]
 const block = {
-  id: 9, room_id: 2, block_type: 'OOO', start_date: '2026-10-02', end_date: '2026-10-05', reason: 'AC repair', status: 'ACTIVE',
+  id: 9, room_id: 2, room_number: '202', block_type: 'OOO', start_date: '2026-10-02', end_date: '2026-10-05', reason: 'AC repair', status: 'ACTIVE',
 }
 
 function mountCalendar(permissions: string[]) {
@@ -100,6 +100,9 @@ describe('RoomBlocksView', () => {
     expect(w.find('[data-testid=block-form]').exists()).toBe(false)
     expect(w.find('[data-testid=block-9] button').exists()).toBe(false)
     expect(w.find('[data-testid=cal-202] [data-testid=bar]').exists()).toBe(true)
+    // the list of rooms is not read without room_block.manage: the rows are the rooms of the blocks, with the number the block carries
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/rooms'))).toBe(false)
+    expect(w.find('[data-testid=cal-201]').exists()).toBe(false)
   })
 
   it('names the weekday over each date, shades the weekend and highlights the business date', async () => {

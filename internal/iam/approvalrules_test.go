@@ -276,7 +276,7 @@ func TestApprovalRuleOfAKindWithoutAnAmount(t *testing.T) {
 
 func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 	w := newApprovalWorld(t)
-	list, err := w.rules.List(w.clerk, w.prop, 2)
+	list, err := w.rules.List(w.managers, w.prop, 2)
 	if err != nil || len(list) != len(iam.ApprovalKinds()) || len(list) != 18 {
 		t.Fatalf("every kind is answered: %d %v", len(list), err)
 	}
@@ -284,6 +284,15 @@ func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 		if r.Rule != "FREE" || r.Threshold != nil {
 			t.Fatalf("a kind without a rule is FREE: %+v", r)
 		}
+	}
+	// the full table is for who manages the property; the dialog of approval reads only the rule in force, any grant may
+	_, err = w.rules.List(w.clerk, w.prop, 2)
+	wantCode(t, err, "PERMISSION_DENIED")
+	_, err = w.rules.List(w.nobody, w.prop, 2)
+	wantCode(t, err, "PERMISSION_DENIED")
+	inForce, err := w.rules.InForce(w.nobody, w.prop, 2)
+	if err != nil || len(inForce) != 18 {
+		t.Fatalf("the rule in force is read by any grant: %d %v", len(inForce), err)
 	}
 	// invalid
 	bad := func(in iam.ApprovalRuleInput, field string) {
@@ -334,7 +343,7 @@ func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 	}
 	// the list says the rule, the limit and how many people besides the administrators can approve
 	w.set(t, "FOLIO_ADJUSTMENT", "DISTINCT_ABOVE", ptr("500000"))
-	list, err = w.rules.List(w.nobody, w.prop, 2)
+	list, err = w.rules.List(w.managers, w.prop, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,6 +360,23 @@ func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 	if r := got["BANK"]; r.HasAmount || r.Rule != "FREE" {
 		t.Fatalf("BANK: %+v", r)
 	}
+	// and what the dialog reads says the same, without the permission or the people
+	inForce, err = w.rules.InForce(w.nobody, w.prop, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range inForce {
+		switch r.Kind {
+		case "REFUND":
+			if r.Rule != "DISTINCT" || r.Threshold != nil {
+				t.Fatalf("REFUND in force: %+v", r)
+			}
+		case "FOLIO_ADJUSTMENT":
+			if r.Rule != "DISTINCT_ABOVE" || r.Threshold == nil || *r.Threshold != "500000" {
+				t.Fatalf("FOLIO_ADJUSTMENT in force: %+v", r)
+			}
+		}
+	}
 }
 
 // Another tenant's property is not found, whoever asks.
@@ -359,6 +385,8 @@ func TestApprovalRulesStayInTheTenant(t *testing.T) {
 	w.tenantWithAdmin(t, "XYZ", "admin@xyz.com")
 	xyz := w.as(t, w.login(t, "XYZ", "admin@xyz.com", pw))
 	_, err := w.rules.List(xyz, w.prop, 0)
+	wantCode(t, err, "PROPERTY_NOT_FOUND")
+	_, err = w.rules.InForce(xyz, w.prop, 0)
 	wantCode(t, err, "PROPERTY_NOT_FOUND")
 	wantCode(t, w.rules.Set(xyz, w.prop, 0, []iam.ApprovalRuleInput{{Kind: "REFUND", Rule: "DISTINCT"}}), "PROPERTY_NOT_FOUND")
 	// a rule of one tenant's property never applies in another's: the rule is read by the property

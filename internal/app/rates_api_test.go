@@ -110,8 +110,8 @@ func TestRatesAPIFlow(t *testing.T) {
 	if r := clerk.do(http.MethodPost, "/api/v1/auth/login", map[string]string{"tenant_code": "ABC", "email": "clerk@hotel.com", "password": testPassword}); r.status != 200 {
 		t.Fatalf("login: %d", r.status)
 	}
-	if r := clerk.do(http.MethodGet, base+"/rates?rate_plan_id="+idOf(plan)+"&from=2026-10-01&to=2026-10-04", nil); r.status != 200 {
-		t.Fatalf("clerk read: %d", r.status)
+	if r := clerk.do(http.MethodGet, base+"/rates?rate_plan_id="+idOf(plan)+"&from=2026-10-01&to=2026-10-04", nil); r.status != 403 {
+		t.Fatalf("clerk read: %d", r.status) // the grid is read by who manages the rates (docs/architecture/33-setup-read-permissions.md)
 	}
 	for _, c := range []struct {
 		method, path string

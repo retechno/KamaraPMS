@@ -16,7 +16,7 @@ async function mountDialog(rule: R | null, props: Record<string, unknown> = {}, 
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'clerk@hotel.com', is_tenant_admin: admin }, properties: [] } as never
-  if (rule) useApprovalRulesStore().rules = [{ kind: 'REFUND' as ApprovalKind, rule: rule.rule, threshold: rule.threshold ?? null, has_amount: true, permission: 'correction.approve', approvers: 3, updated_at: null }]
+  if (rule) useApprovalRulesStore().rules = [{ kind: 'REFUND' as ApprovalKind, rule: rule.rule, threshold: rule.threshold ?? null }]
   const w = mount(ApprovalDialog, { props: { title: 'Approve refund', kind: 'REFUND', ...props }, global: { plugins: [pinia] }, attachTo: document.body })
   await flushPromises()
   return w
@@ -84,7 +84,7 @@ describe('ApprovalDialog and the rule of the property', () => {
   it('does not wipe the email the person has typed when the rule arrives', async () => {
     const w = await mountDialog(null, { amount: '100' })
     await $('input[name=approval_email]').setValue('manager@hotel.com')
-    useApprovalRulesStore().rules = [{ kind: 'REFUND' as ApprovalKind, rule: 'DISTINCT', threshold: null, has_amount: true, permission: 'correction.approve', approvers: 3, updated_at: null }]
+    useApprovalRulesStore().rules = [{ kind: 'REFUND' as ApprovalKind, rule: 'DISTINCT', threshold: null }]
     await flushPromises()
     expect(emailValue()).toBe('manager@hotel.com')
     w.unmount()

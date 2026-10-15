@@ -18,7 +18,7 @@ func (s *Service) ListBedTypes(ctx context.Context, propertyID int64, active *bo
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authz.CanAccess(ctx, propertyID); err != nil {
+	if err := auth.RequireAny(ctx, s.authz, propertyID, auth.PermRoomManage, auth.PermReservationRead); err != nil {
 		return nil, err
 	}
 	rows, err := s.q(ctx).ListBedTypes(ctx, roomsdb.ListBedTypesParams{TenantID: p.TenantID, PropertyID: propertyID, Active: active})

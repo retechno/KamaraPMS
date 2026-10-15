@@ -925,6 +925,43 @@ func (q *Queries) ListRooms(ctx context.Context, arg ListRoomsParams) ([]Room, e
 	return items, nil
 }
 
+const roomNumbersOf = `-- name: RoomNumbersOf :many
+SELECT id, room_number FROM rooms
+WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
+`
+
+type RoomNumbersOfParams struct {
+	TenantID   int64
+	PropertyID int64
+	Ids        []int64
+}
+
+type RoomNumbersOfRow struct {
+	ID         int64
+	RoomNumber string
+}
+
+// The numbers of some rooms (the list of room blocks names the room without the person reading the list of rooms).
+func (q *Queries) RoomNumbersOf(ctx context.Context, arg RoomNumbersOfParams) ([]RoomNumbersOfRow, error) {
+	rows, err := q.db.Query(ctx, roomNumbersOf, arg.TenantID, arg.PropertyID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RoomNumbersOfRow{}
+	for rows.Next() {
+		var i RoomNumbersOfRow
+		if err := rows.Scan(&i.ID, &i.RoomNumber); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const seedBedTypes = `-- name: SeedBedTypes :one
 WITH ins AS (
     INSERT INTO bed_types (tenant_id, property_id, code, name, sort_order, created_by, updated_by)

@@ -87,39 +87,24 @@ var signedInRoutes = map[string]string{
 	"GET /api/v1/subscription":   "the caller's tenant's plan, modules and access state, which every screen needs to know what to show",
 }
 
-// propertyReads are the reads that ask for a grant on the property and for no permission (the services call CanAccess and not a permission). They are configuration and reference data of the
-// property a user already works in. This list is the current behaviour and is pinned on purpose: a route that starts to ask for a permission must leave it (the test fails when an entry
+// propertyReads are the reads that ask for a grant on the property and for no permission (the services call CanAccess and not a permission). They are what every screen of the property needs
+// to work: the business date, the board of housekeeping, the blocks, the calculators. The reference data that a screen of setup also reads (room types, rate plans, charge codes...) asks for
+// the permission that manages it or one of the permissions of the screens that use it (docs/architecture/33-setup-read-permissions.md); it is not in this list. This list is the current behaviour and is pinned on purpose: a route that starts to ask for a permission must leave it (the test fails when an entry
 // answers 403), and a new read that asks for none must be added here, which is a decision.
 const propertyRead = "configuration or reference data of a property the caller has a grant on; asks for the grant, not for a permission"
 
 var propertyReads = map[string]string{
 	"GET /api/v1/properties/{propertyId}":                                  propertyRead,
-	"GET /api/v1/properties/{propertyId}/approval-rules":                   propertyRead,
-	"GET /api/v1/properties/{propertyId}/bed-types":                        propertyRead,
+	"GET /api/v1/properties/{propertyId}/approval-rules/in-force":          "the rule in force of each kind, which the dialog of approval of everyone who corrects something says: the kind, the rule and the limit, nothing else",
 	"GET /api/v1/properties/{propertyId}/business-date":                    propertyRead,
 	"GET /api/v1/properties/{propertyId}/business-days":                    propertyRead,
-	"GET /api/v1/properties/{propertyId}/charge-codes":                     propertyRead,
-	"GET /api/v1/properties/{propertyId}/charge-codes/{id}":                propertyRead,
 	"GET /api/v1/properties/{propertyId}/housekeeping":                     propertyRead,
 	"GET /api/v1/properties/{propertyId}/housekeeping/tasks":               propertyRead,
-	"GET /api/v1/properties/{propertyId}/rate-plans":                       propertyRead,
-	"GET /api/v1/properties/{propertyId}/rate-plans/{id}/bed-adjustments":  propertyRead,
 	"GET /api/v1/properties/{propertyId}/rate-quotes":                      propertyRead,
-	"GET /api/v1/properties/{propertyId}/rate-restrictions":                propertyRead,
-	"GET /api/v1/properties/{propertyId}/rate-restrictions/effective":      propertyRead,
-	"GET /api/v1/properties/{propertyId}/rates":                            propertyRead,
 	"GET /api/v1/properties/{propertyId}/room-blocks":                      propertyRead,
 	"GET /api/v1/properties/{propertyId}/room-blocks/{id}":                 propertyRead,
-	"GET /api/v1/properties/{propertyId}/room-types":                       propertyRead,
-	"GET /api/v1/properties/{propertyId}/room-types/{id}":                  propertyRead,
-	"GET /api/v1/properties/{propertyId}/rooms":                            propertyRead,
-	"GET /api/v1/properties/{propertyId}/rooms/{id}":                       propertyRead,
 	"GET /api/v1/properties/{propertyId}/rooms/{roomId}/housekeeping/logs": propertyRead,
 	"GET /api/v1/properties/{propertyId}/rooms/{roomId}/summary":           "the room panel: the room is read like the room board (the grant), every other part asks the permission of the module that owns it and is left out without it (TestRoomPanelAPI)",
-	"GET /api/v1/properties/{propertyId}/service-charges":                  propertyRead,
-	"GET /api/v1/properties/{propertyId}/taxes":                            propertyRead,
-	"GET /api/v1/properties/{propertyId}/yield-rules":                      propertyRead,
-	"GET /api/v1/properties/{propertyId}/yield-rules/{id}":                 propertyRead,
 	// a calculation of a charge code of the property (taxes and service charge of an amount); it writes nothing
 	"POST /api/v1/properties/{propertyId}/charge-calculations": "a calculator over the charge codes of the property: asks for the grant, writes nothing",
 }

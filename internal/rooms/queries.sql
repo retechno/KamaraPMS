@@ -182,3 +182,8 @@ SELECT id, reservation_id, arrival_date, departure_date FROM reservation_rooms
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND room_id = @room_id AND status = 'CONFIRMED' AND bed_locked
   AND requested_bed_type_id <> @bed_type_id AND departure_date > @business_date::date
 ORDER BY arrival_date, id;
+
+-- The numbers of some rooms (the list of room blocks names the room without the person reading the list of rooms).
+-- name: RoomNumbersOf :many
+SELECT id, room_number FROM rooms
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);

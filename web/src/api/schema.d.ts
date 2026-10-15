@@ -375,6 +375,29 @@ export interface paths {
         patch: operations["updateRoomType"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/approval-rules/in-force": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The rule in force for each kind of correction (a grant on the property)
+         * @description What the dialog of approval says to whoever makes a correction: the kind, the rule and the limit, nothing else (not the permission of the approver and not
+         *     how many people can approve, which `GET approval-rules` answers to `property.manage`). A kind without a rule is `FREE`.
+         */
+        get: operations["listApprovalRulesInForce"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/approval-rules": {
         parameters: {
             query?: never;
@@ -385,7 +408,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The rule of approval of each kind of correction (a grant on the property)
+         * The rule of approval of each kind of correction, with who can approve it (property.manage)
          * @description Who may approve a correction (docs/architecture/32-distinct-approver.md). Every kind is answered, with `FREE` for a kind without a rule:
          *     anyone who holds the permission may approve, including the person who makes the change. `DISTINCT`: the approver must be someone other than
          *     the person who makes the change. `DISTINCT_ABOVE`: the person who makes the change may approve their own correction up to and including
@@ -7648,6 +7671,8 @@ export interface components {
             id: number;
             /** Format: int64 */
             room_id: number;
+            /** @description The number of the room, given with the list and the read of a block (not with the answer of a change). */
+            room_number?: string;
             block_type: components["schemas"]["BlockType"];
             start_date: components["schemas"]["Date"];
             /** @description Exclusive. */
@@ -8230,6 +8255,11 @@ export interface components {
         ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE";
         /** @enum {string} */
         ApprovalRuleType: "FREE" | "DISTINCT" | "DISTINCT_ABOVE";
+        ApprovalRuleInForce: {
+            kind: components["schemas"]["ApprovalKind"];
+            rule: components["schemas"]["ApprovalRuleType"];
+            threshold: string | null;
+        };
         ApprovalRule: {
             kind: components["schemas"]["ApprovalKind"];
             rule: components["schemas"]["ApprovalRuleType"];
@@ -15031,6 +15061,32 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listApprovalRulesInForce: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRuleInForce"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     listApprovalRules: {

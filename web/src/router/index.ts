@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { watch } from 'vue'
 import { i18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { usePropertyStore } from '@/stores/property'
 import { routeTitle } from '@/utils/routeTitle'
 import HomeView from '@/views/HomeView.vue'
 
@@ -10,6 +11,7 @@ declare module 'vue-router' {
     title?: string
     public?: boolean // reachable without signing in
     adminOnly?: boolean // tenant administrators only
+    permission?: string | string[] // a permission of the open property that the page needs (the one that manages what it shows); the pages of setup name it
   }
 }
 
@@ -88,12 +90,12 @@ export const router = createRouter({
       path: '/setup/room-types',
       name: 'room-types',
       component: () => import('@/views/rooms/RoomTypesView.vue'),
-      meta: { title: 'Room types' },
+      meta: { title: 'Room types', permission: 'room.manage' },
     },
-    { path: '/setup/approval-rules', name: 'approval-rules', component: () => import('@/views/setup/ApprovalRulesView.vue'), meta: { title: 'Approval rules' } },
-    { path: '/setup/free-quotas', name: 'free-quotas', component: () => import('@/views/rates/FreeNightQuotasView.vue'), meta: { title: 'Free night quotas' } },
-    { path: '/setup/bed-types', name: 'bed-types', component: () => import('@/views/rooms/BedTypesView.vue'), meta: { title: 'Bed types' } },
-    { path: '/setup/rooms', name: 'rooms', component: () => import('@/views/rooms/RoomsView.vue'), meta: { title: 'Rooms' } },
+    { path: '/setup/approval-rules', name: 'approval-rules', component: () => import('@/views/setup/ApprovalRulesView.vue'), meta: { title: 'Approval rules', permission: 'property.manage' } },
+    { path: '/setup/free-quotas', name: 'free-quotas', component: () => import('@/views/rates/FreeNightQuotasView.vue'), meta: { title: 'Free night quotas', permission: 'rate.manage' } },
+    { path: '/setup/bed-types', name: 'bed-types', component: () => import('@/views/rooms/BedTypesView.vue'), meta: { title: 'Bed types', permission: 'room.manage' } },
+    { path: '/setup/rooms', name: 'rooms', component: () => import('@/views/rooms/RoomsView.vue'), meta: { title: 'Rooms', permission: 'room.manage' } },
     { path: '/guests', name: 'guests', component: () => import('@/views/guests/GuestsView.vue'), meta: { title: 'Guests' } },
     {
       path: '/guests/:id(\\d+)',
@@ -102,14 +104,14 @@ export const router = createRouter({
       props: true,
       meta: { title: 'Guest' },
     },
-    { path: '/setup/taxes', name: 'taxes', component: () => import('@/views/billing/TaxesView.vue'), meta: { title: 'Taxes and service charges' } },
-    { path: '/setup/charge-codes', name: 'charge-codes', component: () => import('@/views/billing/ChargeCodesView.vue'), meta: { title: 'Charge codes' } },
-    { path: '/setup/rate-plans', name: 'rate-plans', component: () => import('@/views/rates/RatePlansView.vue'), meta: { title: 'Rate plans' } },
-    { path: '/setup/bed-supplements', name: 'bed-supplements', component: () => import('@/views/rates/BedSupplementsView.vue'), meta: { title: 'Bed supplements' } },
-    { path: '/setup/restrictions', name: 'restrictions', component: () => import('@/views/rates/RestrictionsView.vue'), meta: { title: 'Restrictions' } },
-    { path: '/setup/yield-rules', name: 'yield-rules', component: () => import('@/views/rates/YieldRulesView.vue'), meta: { title: 'Yield rules' } },
-    { path: '/setup/rates', name: 'rate-grid', component: () => import('@/views/rates/RateGridView.vue'), meta: { title: 'Rate grid' } },
-    { path: '/setup/companies', name: 'companies', component: () => import('@/views/accounts/CompaniesView.vue'), meta: { title: 'Companies' } },
+    { path: '/setup/taxes', name: 'taxes', component: () => import('@/views/billing/TaxesView.vue'), meta: { title: 'Taxes and service charges', permission: 'billing_config.manage' } },
+    { path: '/setup/charge-codes', name: 'charge-codes', component: () => import('@/views/billing/ChargeCodesView.vue'), meta: { title: 'Charge codes', permission: 'billing_config.manage' } },
+    { path: '/setup/rate-plans', name: 'rate-plans', component: () => import('@/views/rates/RatePlansView.vue'), meta: { title: 'Rate plans', permission: 'rate.manage' } },
+    { path: '/setup/bed-supplements', name: 'bed-supplements', component: () => import('@/views/rates/BedSupplementsView.vue'), meta: { title: 'Bed supplements', permission: 'rate.manage' } },
+    { path: '/setup/restrictions', name: 'restrictions', component: () => import('@/views/rates/RestrictionsView.vue'), meta: { title: 'Restrictions', permission: 'rate.manage' } },
+    { path: '/setup/yield-rules', name: 'yield-rules', component: () => import('@/views/rates/YieldRulesView.vue'), meta: { title: 'Yield rules', permission: 'rate.manage' } },
+    { path: '/setup/rates', name: 'rate-grid', component: () => import('@/views/rates/RateGridView.vue'), meta: { title: 'Rate grid', permission: 'rate.manage' } },
+    { path: '/setup/companies', name: 'companies', component: () => import('@/views/accounts/CompaniesView.vue'), meta: { title: 'Companies', permission: 'company.manage' } },
     { path: '/groups', name: 'groups', component: () => import('@/views/accounts/GroupsView.vue'), meta: { title: 'Groups' } },
     {
       path: '/groups/:id(\\d+)',
@@ -183,7 +185,7 @@ export const router = createRouter({
       name: 'property-edit',
       component: () => import('@/views/setup/PropertyFormView.vue'),
       props: true,
-      meta: { title: 'Property' },
+      meta: { title: 'Property', permission: 'property.manage' },
     },
     { path: '/setup/users', name: 'users', component: () => import('@/views/setup/UsersView.vue'), meta: { title: 'Users', adminOnly: true } },
     {
@@ -234,6 +236,12 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
   }
   if (to.meta.adminOnly && !auth.isAdmin) return { name: 'home' }
+  // A page of setup needs the permission that manages what it shows: the menu leaves it out, and a typed address goes home.
+  if (to.meta.permission) {
+    const property = usePropertyStore()
+    if (!property.loaded) await property.loadProperties()
+    if (![to.meta.permission].flat().some((p) => auth.can(p, property.currentId))) return { name: 'home' }
+  }
   return true
 })
 

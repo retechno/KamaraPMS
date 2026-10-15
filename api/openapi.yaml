@@ -481,12 +481,36 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/approval-rules/in-force:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listApprovalRulesInForce
+      summary: The rule in force for each kind of correction (a grant on the property)
+      description: |
+        What the dialog of approval says to whoever makes a correction: the kind, the rule and the limit, nothing else (not the permission of the approver and not
+        how many people can approve, which `GET approval-rules` answers to `property.manage`). A kind without a rule is `FREE`.
+      tags: [properties]
+      responses:
+        "200":
+          description: The rules in force.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApprovalRuleInForce" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/approval-rules:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: listApprovalRules
-      summary: The rule of approval of each kind of correction (a grant on the property)
+      summary: The rule of approval of each kind of correction, with who can approve it (property.manage)
       description: |
         Who may approve a correction (docs/architecture/32-distinct-approver.md). Every kind is answered, with `FREE` for a kind without a rule:
         anyone who holds the permission may approve, including the person who makes the change. `DISTINCT`: the approver must be someone other than
@@ -8790,6 +8814,7 @@ components:
       properties:
         id: { type: integer, format: int64 }
         room_id: { type: integer, format: int64 }
+        room_number: { type: string, description: "The number of the room, given with the list and the read of a block (not with the answer of a change)." }
         block_type: { $ref: "#/components/schemas/BlockType" }
         start_date: { $ref: "#/components/schemas/Date" }
         end_date: { $ref: "#/components/schemas/Date", description: Exclusive. }
@@ -9425,6 +9450,13 @@ components:
     ApprovalRuleType:
       type: string
       enum: [FREE, DISTINCT, DISTINCT_ABOVE]
+    ApprovalRuleInForce:
+      type: object
+      required: [kind, rule, threshold]
+      properties:
+        kind: { $ref: "#/components/schemas/ApprovalKind" }
+        rule: { $ref: "#/components/schemas/ApprovalRuleType" }
+        threshold: { type: [string, "null"] }
     ApprovalRule:
       type: object
       required: [kind, rule, threshold, has_amount, permission, approvers, updated_at]

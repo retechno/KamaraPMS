@@ -23,6 +23,8 @@ import { permissionText } from '@/utils/permissions'
 const auth = useAuthStore()
 const property = usePropertyStore()
 const store = useApprovalRulesStore()
+// The full table (with who can approve each kind) needs property.manage; the store keeps what the dialog of approval reads.
+const table = ref<ApprovalRule[]>([])
 
 type Draft = { rule: ApprovalRuleType; threshold: string }
 const draft = reactive<Record<string, Draft>>({})
@@ -34,7 +36,7 @@ const limitErrors = reactive<Record<string, boolean>>({})
 
 const canManage = computed(() => auth.can('property.manage', property.currentId))
 const decimals = computed(() => property.current?.currency_decimals ?? 0)
-const rows = computed<ApprovalRule[]>(() => store.rules)
+const rows = computed<ApprovalRule[]>(() => table.value)
 
 function adopt(list: ApprovalRule[]): void {
   for (const r of list) draft[r.kind] = { rule: r.rule, threshold: r.threshold ?? '' }
@@ -57,9 +59,16 @@ async function load(): Promise<void> {
   notice.value = ''
   error.value = null
   const propertyId = property.currentId
-  await store.load(propertyId, true)
-  error.value = store.error
-  adopt(store.rules)
+  table.value = []
+  if (propertyId !== null && canManage.value) {
+    try {
+      const { data } = await api.GET('/api/v1/properties/{propertyId}/approval-rules', { params: { path: { propertyId } } })
+      table.value = data?.data ?? []
+    } catch (e) {
+      error.value = e instanceof ApiError ? e : null
+    }
+  }
+  adopt(table.value)
   loaded.value = true
 }
 
@@ -88,8 +97,9 @@ async function save(): Promise<void> {
   saving.value = true
   try {
     const { data } = await api.PUT('/api/v1/properties/{propertyId}/approval-rules', { params: { path: { propertyId } }, body: { rules: body } })
-    store.set(propertyId, data?.data ?? [])
-    adopt(store.rules)
+    table.value = data?.data ?? []
+    store.set(propertyId, table.value.map((r) => ({ kind: r.kind, rule: r.rule, threshold: r.threshold })))
+    adopt(table.value)
     notice.value = t('approvalRules.saved')
   } catch (e) {
     error.value = e instanceof ApiError ? e : null

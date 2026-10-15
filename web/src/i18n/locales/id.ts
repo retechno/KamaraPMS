@@ -4941,7 +4941,7 @@ export const id: Messages = {
     warnNobody: 'Tidak ada yang bisa menyetujui ini selain admin: setiap persetujuan harus oleh admin.',
     warnOne: 'Hanya satu orang yang bisa menyetujui ini; ia tidak boleh menyetujui miliknya sendiri, jadi perlu seorang admin.',
     saved: 'Aturan tersimpan.',
-    readOnly: 'Peran Anda dapat melihat aturan tetapi tidak mengubahnya: perlu izin {permission}.',
+    readOnly: 'Aturan persetujuan untuk pengelola properti: perlu izin {permission}.',
     unchanged: 'Tidak ada yang berubah.',
     limitRequired: 'Isi batasnya.',
     kind_FOLIO_ADJUSTMENT: 'Penyesuaian folio',
