@@ -69,18 +69,19 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 }
 
 type createRequest struct {
-	Code             string `json:"code"`
-	Name             string `json:"name"`
-	ContactName      string `json:"contact_name"`
-	Email            string `json:"email"`
-	Phone            string `json:"phone"`
-	Address          string `json:"address"`
-	City             string `json:"city"`
-	TaxID            string `json:"tax_id"`
-	CreditLimit      string `json:"credit_limit"`
-	PaymentTermsDays *int   `json:"payment_terms_days"`
-	Notes            string `json:"notes"`
-	IsActive         *bool  `json:"is_active"`
+	Code              string `json:"code"`
+	Name              string `json:"name"`
+	ContactName       string `json:"contact_name"`
+	Email             string `json:"email"`
+	Phone             string `json:"phone"`
+	Address           string `json:"address"`
+	City              string `json:"city"`
+	TaxID             string `json:"tax_id"`
+	CreditLimit       string `json:"credit_limit"`
+	PaymentTermsDays  *int   `json:"payment_terms_days"`
+	Notes             string `json:"notes"`
+	IsActive          *bool  `json:"is_active"`
+	PosBillingAllowed bool   `json:"pos_billing_allowed"`
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
@@ -98,7 +99,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) error {
 	}
 	c, err := h.svc.Create(r.Context(), pid, Input{
 		Code: req.Code, Name: req.Name, ContactName: req.ContactName, Email: req.Email, Phone: req.Phone, Address: req.Address, City: req.City, TaxID: req.TaxID,
-		CreditLimit: req.CreditLimit, PaymentTermsDays: terms, Notes: req.Notes, IsActive: req.IsActive == nil || *req.IsActive,
+		CreditLimit: req.CreditLimit, PaymentTermsDays: terms, Notes: req.Notes, IsActive: req.IsActive == nil || *req.IsActive, PosBillingAllowed: req.PosBillingAllowed,
 	})
 	if err != nil {
 		return err
@@ -130,17 +131,18 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) error {
 }
 
 type patchRequest struct {
-	Name             *string `json:"name"`
-	ContactName      *string `json:"contact_name"`
-	Email            *string `json:"email"`
-	Phone            *string `json:"phone"`
-	Address          *string `json:"address"`
-	City             *string `json:"city"`
-	TaxID            *string `json:"tax_id"`
-	CreditLimit      *string `json:"credit_limit"`
-	PaymentTermsDays *int    `json:"payment_terms_days"`
-	Notes            *string `json:"notes"`
-	IsActive         *bool   `json:"is_active"`
+	Name              *string `json:"name"`
+	ContactName       *string `json:"contact_name"`
+	Email             *string `json:"email"`
+	Phone             *string `json:"phone"`
+	Address           *string `json:"address"`
+	City              *string `json:"city"`
+	TaxID             *string `json:"tax_id"`
+	CreditLimit       *string `json:"credit_limit"`
+	PaymentTermsDays  *int    `json:"payment_terms_days"`
+	Notes             *string `json:"notes"`
+	IsActive          *bool   `json:"is_active"`
+	PosBillingAllowed *bool   `json:"pos_billing_allowed"`
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) error {

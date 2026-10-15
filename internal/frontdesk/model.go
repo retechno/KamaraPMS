@@ -432,4 +432,6 @@ type CheckOutResult struct {
 	RoomCharges []folios.RoomChargeFolio `json:"room_charges"`
 	// RoomChargesMaster is the open master folio the room charges of this room go to by the routing of its group (nil when they go to the guest's folio); it is what the screen says when the check-out posted none.
 	RoomChargesMaster *folios.MasterRef `json:"room_charges_master"`
+	// OpenOutletBills are the bills of the outlets still open for this room (room service, a bar tab): a warning, never a block; the room is locked for outlets now, so they are paid another way.
+	OpenOutletBills []folios.OpenBillOfStay `json:"open_outlet_bills"`
 }

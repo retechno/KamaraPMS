@@ -34,3 +34,7 @@ Thumbs.db
 web/screenshots/
 web/screenshots.zip
 screenshots/
+
+# Screenshots of the screens made while building are never committed: the comparison with the mockups is text in the design documents
+docs/screenshots/
+.playwright-mcp/

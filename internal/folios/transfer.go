@@ -43,6 +43,9 @@ const (
 	ScopeGroupMaster = "GROUP_MASTER"
 	ScopeAny         = "ANY"
 	ScopeReturn      = "RETURN"
+	// ScopeOutletBill is a split or a merge of the bills of an outlet; ScopeOutletCharge a bill charged to a room (docs/architecture/34-pos.md). Neither needs an approval: it is the cashier's own act.
+	ScopeOutletBill   = "OUTLET_BILL"
+	ScopeOutletCharge = "OUTLET_CHARGE"
 
 	KindItem    = "ITEM"
 	KindBalance = "BALANCE"
@@ -116,6 +119,12 @@ type TransferResult struct {
 // folio of a reservation has none. A folio of the same reservation, or of a reservation of the same group, is related; the master folio of a group and a folio of a member of that group are
 // related (GROUP_MASTER); anything else is ANY, which needs folio.transfer_any on the person and on the approver. Two master folios do not transfer to each other.
 func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, tgt foliosdb.Folio) (string, error) {
+	if src.FolioType == FolioTypeOutlet || tgt.FolioType == FolioTypeOutlet { // the way back of an outlet charge, or a split or merge of bills: never "any folio"
+		if src.FolioType == FolioTypeOutlet && tgt.FolioType == FolioTypeOutlet && src.OutletID != nil && tgt.OutletID != nil && *src.OutletID != *tgt.OutletID {
+			return "", errTransferInvalid("a bill moves only between the bills of one outlet")
+		}
+		return ScopeOutletBill, nil
+	}
 	if src.FolioType == "MASTER" && tgt.FolioType == "MASTER" {
 		return "", errTransferInvalid("a master folio does not transfer to another master folio")
 	}
@@ -240,6 +249,24 @@ type movement struct {
 	approval   iam.Approval
 	reason     string
 	scope      string
+	// outDesc and inDesc name the two lines of a balance transfer when the text is not the default (an outlet charge reads "{outlet} · {bill}" on the guest folio).
+	outDesc, inDesc string
+}
+
+// sourceOf is the source of the ledger rows of a transfer: TRANSFER, and POS for what an outlet does on its own (a split, a merge, a charge to a room), which has no approver.
+func (m movement) sourceOf() string {
+	if m.scope == ScopeOutletBill || m.scope == ScopeOutletCharge {
+		return SourcePOS
+	}
+	return "TRANSFER"
+}
+
+// auditFields adds the approver to an audit entry of a transfer: an outlet's own transfers (a split, a merge, a charge to a room) have none.
+func (m movement) auditFields(f map[string]any) map[string]any {
+	if m.approval.IsZero() {
+		return f
+	}
+	return m.approval.AuditFields(f)
 }
 
 func (s *Service) balances(ctx context.Context, propertyID int64, decimals int32, folioIDs ...int64) ([]FolioBalance, error) {
@@ -288,7 +315,13 @@ func (s *Service) moveItem(ctx context.Context, m movement, item foliosdb.FolioI
 
 	ref := ReferenceFolioTransfer
 	refID := strconv.FormatInt(itemID, 10)
-	rev, err := s.posting(m.p, m.propertyID, m.bd, m.src).reverseAs(ctx, item, m.reason, m.approval, &ref, &refID) // flips the register row of a room night
+	ps := s.posting(m.p, m.propertyID, m.bd, m.src)
+	var rev foliosdb.FolioItem
+	if m.approval.IsZero() && m.scope == ScopeOutletBill { // the split or merge of a bill of an outlet: the cashier's own move, no approver
+		rev, err = ps.reverseBy(ctx, item, m.reason, nil, &ref, &refID)
+	} else {
+		rev, err = ps.reverseAs(ctx, item, m.reason, m.approval, &ref, &refID) // flips the register row of a room night
+	}
 	if err != nil {
 		return TransferredItem{}, err
 	}
@@ -304,7 +337,7 @@ func (s *Service) moveItem(ctx context.Context, m movement, item foliosdb.FolioI
 		}
 	}
 	moved, err := s.posting(m.p, m.propertyID, m.bd, m.tgt).insert(ctx, itemSpec{
-		transactionType: TypeCharge, chargeCodeID: item.ChargeCodeID, copiesItemID: &itemID, stayRoomID: item.StayRoomID, stayID: copyStay(item, m.tgt), source: "TRANSFER",
+		transactionType: TypeCharge, chargeCodeID: item.ChargeCodeID, copiesItemID: &itemID, stayRoomID: item.StayRoomID, stayID: copyStay(item, m.tgt), source: m.sourceOf(),
 		referenceType: &ref, referenceID: &refID, serviceDate: item.ServiceDate, description: item.Description, reason: &m.reason, components: copied,
 		amounts: itemAmounts{
 			quantity: item.Quantity, unitPrice: item.UnitPrice, priceMode: item.PriceMode, base: item.BaseAmount, discount: item.DiscountAmount, net: item.NetAmount,
@@ -336,7 +369,7 @@ func (s *Service) moveItem(ctx context.Context, m movement, item foliosdb.FolioI
 	}
 	if err := s.audit.Write(ctx, audit.Entry{TenantID: m.p.TenantID, PropertyID: &m.propertyID, BusinessDate: &m.bd, UserID: m.p.ActorID(),
 		Action: action, EntityType: "folio_item", EntityID: itemID, EntityLabel: auditlabel.FolioOfItem(ctx, m.propertyID, itemID),
-		New: m.approval.AuditFields(map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "reversal_item_id": rev.ID, "new_item_id": moved.ID, "from_folio_id": m.src.ID, "to_folio_id": m.tgt.ID,
+		New: m.auditFields(map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "reversal_item_id": rev.ID, "new_item_id": moved.ID, "from_folio_id": m.src.ID, "to_folio_id": m.tgt.ID,
 			"origin_folio_id": origin, "returns_transfer_id": returns, "reason": m.reason, "actor": m.p.ActorID(), "room_night": isNight})}); err != nil {
 		return TransferredItem{}, err
 	}
@@ -411,6 +444,9 @@ func (s *Service) transferItems(ctx context.Context, propertyID, sourceFolioID i
 		if err != nil {
 			return err
 		}
+		if err := refuseOutletFolios(src, tgt); err != nil {
+			return err
+		}
 		scope, err := s.scopeOf(ctx, p.TenantID, propertyID, src, tgt)
 		if err != nil {
 			return err
@@ -436,7 +472,7 @@ func (s *Service) moveSelected(ctx context.Context, p auth.Principal, propertyID
 	}
 	batch, err := s.q(ctx).InsertTransferBatch(ctx, foliosdb.InsertTransferBatchParams{
 		TenantID: p.TenantID, PropertyID: propertyID, Kind: KindItem, FromFolioID: src.ID, ToFolioID: tgt.ID, Scope: scope, Reason: reason, BusinessDate: bd,
-		ApprovedBy: approval.UserID(), IdempotencyKey: key, ActorID: p.ActorID(),
+		ApprovedBy: ptr(approval.UserID()), IdempotencyKey: key, ActorID: p.ActorID(),
 	})
 	if err != nil {
 		return TransferResult{}, err
@@ -585,10 +621,13 @@ func (s *Service) transferLine(ctx context.Context, m movement, folio foliosdb.F
 	by := m.approval.UserID()
 	spec := itemSpec{
 		transactionType: TypeCharge, chargeCodeID: &trf, serviceDate: m.bd, description: description, amounts: amountsOf(b), components: componentsOf(b),
-		reason: &m.reason, source: "TRANSFER", referenceType: &ref, referenceID: &refID, revenueAccount: &account,
+		reason: &m.reason, source: m.sourceOf(), referenceType: &ref, referenceID: &refID, revenueAccount: &account,
 	}
-	if sign < 0 { // the credit is an adjustment: it carries the approver, like every correction (a charge carries none)
-		spec.transactionType, spec.approvedBy = TypeAdjustment, &by
+	if sign < 0 { // the credit is an adjustment: it carries the approver, like every correction (a charge carries none); the charge of an outlet to a room has none
+		spec.transactionType = TypeAdjustment
+		if !m.approval.IsZero() {
+			spec.approvedBy = &by
+		}
 	}
 	return s.posting(m.p, m.propertyID, m.bd, folio).insert(ctx, spec)
 }
@@ -615,11 +654,18 @@ func (s *Service) moveBalance(ctx context.Context, m movement, amount decimal.De
 	if amount.GreaterThan(balance) {
 		return TransferredItem{}, apperr.Conflict("TRANSFER_EXCEEDS_BALANCE", "the transfer is more than the folio's balance").WithContext("balance", fixed(balance, decimals)).WithContext("folio_id", m.src.ID)
 	}
-	out, err := s.transferLine(ctx, m, m.src, code.ID, acct.Code, amount, -1, "Transfer to "+m.tgt.FolioNumber)
+	outDesc, inDesc := "Transfer to "+m.tgt.FolioNumber, "Transfer from "+m.src.FolioNumber
+	if m.outDesc != "" {
+		outDesc = m.outDesc
+	}
+	if m.inDesc != "" {
+		inDesc = m.inDesc
+	}
+	out, err := s.transferLine(ctx, m, m.src, code.ID, acct.Code, amount, -1, outDesc)
 	if err != nil {
 		return TransferredItem{}, err
 	}
-	in, err := s.transferLine(ctx, m, m.tgt, code.ID, acct.Code, amount, +1, "Transfer from "+m.src.FolioNumber)
+	in, err := s.transferLine(ctx, m, m.tgt, code.ID, acct.Code, amount, +1, inDesc)
 	if err != nil {
 		return TransferredItem{}, err
 	}
@@ -635,7 +681,7 @@ func (s *Service) moveBalance(ctx context.Context, m movement, amount decimal.De
 		action = "folio.transfer_returned"
 	}
 	if err := s.audit.Write(ctx, audit.Entry{TenantID: m.p.TenantID, PropertyID: &m.propertyID, BusinessDate: &m.bd, UserID: m.p.ActorID(), Action: action,
-		EntityType: "folio", EntityID: m.src.ID, EntityLabel: m.src.FolioNumber, New: m.approval.AuditFields(map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "amount": fixed(amount, decimals),
+		EntityType: "folio", EntityID: m.src.ID, EntityLabel: m.src.FolioNumber, New: m.auditFields(map[string]any{"transfer_id": row.ID, "batch_id": m.batchID, "scope": m.scope, "amount": fixed(amount, decimals),
 			"from_folio_id": m.src.ID, "to_folio_id": m.tgt.ID, "out_item_id": out.ID, "in_item_id": in.ID, "returns_transfer_id": returns, "reason": m.reason, "actor": m.p.ActorID()})}); err != nil {
 		return TransferredItem{}, err
 	}
@@ -692,6 +738,9 @@ func (s *Service) TransferBalance(ctx context.Context, propertyID, sourceFolioID
 				if err != nil {
 					return err
 				}
+				if err := refuseOutletFolios(src, tgt); err != nil {
+					return err
+				}
 				scope, err := s.scopeOf(ctx, p.TenantID, propertyID, src, tgt)
 				if err != nil {
 					return err
@@ -701,7 +750,7 @@ func (s *Service) TransferBalance(ctx context.Context, propertyID, sourceFolioID
 				}
 				batch, err := s.q(ctx).InsertTransferBatch(ctx, foliosdb.InsertTransferBatchParams{
 					TenantID: p.TenantID, PropertyID: propertyID, Kind: KindBalance, FromFolioID: src.ID, ToFolioID: tgt.ID, Scope: scope, Reason: reason, BusinessDate: day.BusinessDate,
-					ApprovedBy: approval.UserID(), IdempotencyKey: nullable(key), ActorID: p.ActorID(),
+					ApprovedBy: ptr(approval.UserID()), IdempotencyKey: nullable(key), ActorID: p.ActorID(),
 				})
 				if err != nil {
 					return err
@@ -899,7 +948,7 @@ func (s *Service) ReturnTransfers(ctx context.Context, propertyID, holderFolioID
 			if !ok {
 				if b, err = q.InsertTransferBatch(ctx, foliosdb.InsertTransferBatchParams{
 					TenantID: p.TenantID, PropertyID: propertyID, Kind: kind, IsReturn: true, FromFolioID: holderFolioID, ToFolioID: to, Scope: ScopeReturn, Reason: reason,
-					BusinessDate: day.BusinessDate, ApprovedBy: approval.UserID(), ActorID: p.ActorID(),
+					BusinessDate: day.BusinessDate, ApprovedBy: ptr(approval.UserID()), ActorID: p.ActorID(),
 				}); err != nil {
 					return err
 				}

@@ -103,8 +103,8 @@ func TestANewPropertyGetsTheStandardChart(t *testing.T) {
 		got[e.Key] = e.AccountCode
 	}
 	want := map[string]string{"CASH": "1110", "CARD": "1150", "BANK_TRANSFER": "1130", "OTHER_PAYMENT": "1160", "CITY_LEDGER": "1220", "GUEST_LEDGER": "1210",
-		"ADVANCE_DEPOSITS": "2310", "TAX_PAYABLE": "2410", "SERVICE_PAYABLE": "2430", "SUSPENSE": "2990", "RETAINED_EARNINGS": "3200", "ACCOUNTS_PAYABLE": "2110", "INPUT_VAT": "1425", "FOLIO_TRANSFER": "1215", "CASH_OVER_SHORT": "6195", "QRIS": "1155"}
-	if len(m) != 16 || len(got) != 16 {
+		"ADVANCE_DEPOSITS": "2310", "TAX_PAYABLE": "2410", "SERVICE_PAYABLE": "2430", "SUSPENSE": "2990", "RETAINED_EARNINGS": "3200", "ACCOUNTS_PAYABLE": "2110", "INPUT_VAT": "1425", "FOLIO_TRANSFER": "1215", "CASH_OVER_SHORT": "6195", "QRIS": "1155", "COMP": "6196"}
+	if len(m) != 17 || len(got) != 17 {
 		t.Fatalf("map: %+v", m)
 	}
 	for k, v := range want {
@@ -122,7 +122,7 @@ func TestANewPropertyGetsTheStandardChart(t *testing.T) {
 		t.Fatalf("charge codes: %s %s", room, rest)
 	}
 	rep, err := f.Accounting.UnmappedCodes(f.admin, f.propID)
-	if err != nil || rep.Checked != 10 || len(rep.Issues) != 0 {
+	if err != nil || rep.Checked != 11 || len(rep.Issues) != 0 {
 		t.Fatalf("every standard charge code is mapped: %+v %v", rep, err)
 	}
 	// filters
@@ -278,7 +278,7 @@ func TestAccountMap(t *testing.T) {
 	bank2, err := f.Accounting.CreateAccount(f.admin, f.propID, accounting.AccountInput{Code: "1135", Name: "Bank - USD account", AccountType: "ASSET", StatementGroup: "CASH"})
 	must(t, err)
 	m, err := f.Accounting.SetAccountMap(f.admin, f.propID, []accounting.MapInput{{Key: "BANK_TRANSFER", AccountID: bank2.ID}})
-	if err != nil || len(m) != 16 {
+	if err != nil || len(m) != 17 {
 		t.Fatalf("set: %+v %v", m, err)
 	}
 	for _, e := range m {
@@ -352,7 +352,7 @@ func TestUnmappedCodesAreFoundAndSaySeWhereTheyGo(t *testing.T) {
 		got[i.Kind+"/"+i.Code] = i
 	}
 	// the inactive tax is not checked; the mapped tax is fine
-	if rep.Checked != 13 || len(got) != 4 {
+	if rep.Checked != 14 || len(got) != 4 {
 		t.Fatalf("report: %+v", rep)
 	}
 	for key, want := range map[string]struct{ problem, posted string }{

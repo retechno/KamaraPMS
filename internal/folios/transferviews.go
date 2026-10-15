@@ -149,7 +149,7 @@ func (s *Service) ListTransfers(ctx context.Context, propertyID, folioID int64, 
 	for i, r := range rows {
 		t := FolioTransfer{
 			ID: r.ID, BatchID: r.BatchID, Kind: r.Kind, IsReturn: r.IsReturn, Scope: r.Scope, Reason: r.Reason, BusinessDate: r.BusinessDate, CreatedAt: r.CreatedAt,
-			By: s.userName(ctx, r.CreatedBy), ApprovedBy: s.userName(ctx, &r.ApprovedBy),
+			By: s.userName(ctx, r.CreatedBy), ApprovedBy: s.userName(ctx, r.ApprovedBy),
 			From: FolioRef{ID: r.FromFolioID, Number: r.FromNumber, Room: r.FromRoom}, To: FolioRef{ID: r.ToFolioID, Number: r.ToNumber, Room: r.ToRoom},
 			Origin: FolioRef{ID: r.OriginFolioID, Number: r.OriginNumber}, Previous: FolioRef{ID: r.PreviousFolioID, Number: r.PreviousNumber},
 			Amount: fixed(r.Amount, decimals), Description: r.Description, ChargeCode: r.ChargeCode, OriginalItemID: r.OriginalItemID, InItemID: r.InItemID, OutItemID: r.OutItemID,

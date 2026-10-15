@@ -31,6 +31,7 @@ const error = ref<ApiError | null>(null)
 const notice = ref('')
 // The check-out of the last room of a group says the master folio of the group is open. It is kept here, not in the wizard: the wizard goes away when the stay reloads as checked out.
 const masterOpen = ref<CheckOutResult['master_folio']>(null)
+const openOutletBills = ref<NonNullable<CheckOutResult['open_outlet_bills']>>([])
 const reversing = ref(false)
 const reason = ref('')
 const busy = ref(false)
@@ -125,6 +126,7 @@ async function checkedOut(result: CheckOutResult): Promise<void> {
     notice.value = t('stay.checkedOutMaster', { folio: result.room_charges_master.folio_number })
   }
   masterOpen.value = result.master_folio ?? null
+  openOutletBills.value = result.open_outlet_bills ?? []
   await load()
 }
 
@@ -144,6 +146,12 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </ul>
   </div>
   <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
+  <div v-if="openOutletBills.length" class="alert warning" role="status" data-testid="checkout-outlet-bills">
+    {{ t('stay.openOutletBills') }}
+    <ul class="m-0 mt-1 pl-5">
+      <li v-for="b in openOutletBills" :key="b.bill_id"><RouterLink :to="`/pos/bills/${b.bill_id}`">{{ b.bill_number }}</RouterLink> · {{ b.outlet_name }}</li>
+    </ul>
+  </div>
   <p v-if="masterOpen" class="alert warning" role="status" data-testid="checkout-master">
     {{ t('groupMaster.lastCheckout', { group: masterOpen.group_code, folio: masterOpen.folio_number, balance: $money(masterOpen.balance) }) }}
     <RouterLink :to="`/folios/${masterOpen.folio_id}`">{{ masterOpen.folio_number }}</RouterLink>

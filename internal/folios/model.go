@@ -49,6 +49,10 @@ const methodCash = "CASH"
 
 var paymentMethods = []string{"CASH", "CARD", "BANK_TRANSFER", "OTHER", "QRIS"}
 
+// MethodComp is the payment method of a complimentary bill of an outlet (docs/architecture/34-pos.md 7.5): it settles the guest ledger against an expense account. Only the POS posts it; it is not a way
+// to pay on a folio and is not in paymentMethods.
+const MethodComp = "COMP"
+
 // hasAcquirerFee reports whether a payment by the method is paid out by an acquirer, net of its fee (MDR): the payment keeps a snapshot of the fee rule of the day (cards, e-wallets, QRIS).
 func hasAcquirerFee(method string) bool {
 	return method == "CARD" || method == "OTHER" || method == "QRIS"
@@ -95,6 +99,10 @@ type PaymentInput struct {
 	Remarks         string `json:"remarks"`
 
 	companyID *int64 // set by Transfer only: a city ledger transfer is not a payment a client may post
+	drawer    string // set by the POS only: the drawer of the outlet, whose open shift the cash goes on
+	// shiftID, with shiftSet, is the shift the POS resolved and locked before the payments of its request (the lock order allows one shift lock before the first document number).
+	shiftID  *int64
+	shiftSet bool
 }
 
 // TransferInput moves part of a folio's balance to a company's city ledger account.
@@ -120,6 +128,7 @@ type FolioFilter struct {
 	StayID         *int64
 	BookingGroupID *int64
 	FolioType      string
+	OutletID       *int64 // the bills of one outlet (with FolioType OUTLET)
 	Status         string
 	// CancelledWithBalance keeps the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee.
 	CancelledWithBalance bool
@@ -235,6 +244,15 @@ type Item struct {
 	ApprovedBy *int64 `json:"approved_by"`
 	// Transfer marks a line that a transfer between folios made or moved (nil: none); see ItemTransfer.
 	Transfer *ItemTransfer `json:"transfer"`
+	// PosBill names the bill of an outlet a line was charged from (the line "{outlet} · {bill}" a charge to a room made); nil on the others.
+	PosBill *ItemPosBill `json:"pos_bill"`
+}
+
+// ItemPosBill is the bill of an outlet behind a line of a guest folio.
+type ItemPosBill struct {
+	ID         int64  `json:"id"`
+	Number     string `json:"bill_number"`
+	OutletName string `json:"outlet_name"`
 }
 
 // Totals are the debit and credit sums of a folio.
@@ -257,6 +275,10 @@ type Folio struct {
 	BookingGroupID   *int64 `json:"booking_group_id"`
 	BookingGroupCode string `json:"booking_group_code,omitempty"`
 	BookingGroupName string `json:"booking_group_name,omitempty"`
+	// OutletID, OutletCode and OutletName name the outlet of a bill (a folio of type OUTLET); empty on the others.
+	OutletID   *int64 `json:"outlet_id"`
+	OutletCode string `json:"outlet_code,omitempty"`
+	OutletName string `json:"outlet_name,omitempty"`
 	// The contact of the group, for the master folio only: the party of its invoice when the group has no company.
 	BookingGroupContactName  string     `json:"booking_group_contact_name,omitempty"`
 	BookingGroupContactEmail string     `json:"booking_group_contact_email,omitempty"`
@@ -282,6 +304,10 @@ type FolioSummary struct {
 	// BookingGroupCode and BookingGroupName name the group of a master folio (empty on the others).
 	BookingGroupCode string `json:"booking_group_code,omitempty"`
 	BookingGroupName string `json:"booking_group_name,omitempty"`
+	// OutletID, OutletCode and OutletName name the outlet of a bill (a folio of type OUTLET).
+	OutletID   *int64 `json:"outlet_id"`
+	OutletCode string `json:"outlet_code,omitempty"`
+	OutletName string `json:"outlet_name,omitempty"`
 	// ConfirmationNumber is the number of that reservation ("RES000012"), so a list can name it instead of showing its id.
 	ConfirmationNumber string    `json:"confirmation_number"`
 	StayID             *int64    `json:"stay_id"`

@@ -34,28 +34,29 @@ func (q *Queries) CompanyOwes(ctx context.Context, arg CompanyOwesParams) (decim
 
 const createCompany = `-- name: CreateCompany :one
 
-INSERT INTO companies (tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_by, updated_by)
+INSERT INTO companies (tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, pos_billing_allowed, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15, $15)
-RETURNING id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by
+        $11, $12, $13, $14, $15, $16, $16)
+RETURNING id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by, pos_billing_allowed
 `
 
 type CreateCompanyParams struct {
-	TenantID         int64
-	PropertyID       int64
-	Code             string
-	Name             string
-	ContactName      *string
-	Email            *string
-	Phone            *string
-	Address          *string
-	City             *string
-	TaxID            *string
-	CreditLimit      *decimal.Decimal
-	PaymentTermsDays int16
-	Notes            *string
-	IsActive         bool
-	ActorID          *int64
+	TenantID          int64
+	PropertyID        int64
+	Code              string
+	Name              string
+	ContactName       *string
+	Email             *string
+	Phone             *string
+	Address           *string
+	City              *string
+	TaxID             *string
+	CreditLimit       *decimal.Decimal
+	PaymentTermsDays  int16
+	Notes             *string
+	IsActive          bool
+	PosBillingAllowed bool
+	ActorID           *int64
 }
 
 // Companies (corporate accounts). Every query is scoped by tenant_id and property_id.
@@ -75,6 +76,7 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 		arg.PaymentTermsDays,
 		arg.Notes,
 		arg.IsActive,
+		arg.PosBillingAllowed,
 		arg.ActorID,
 	)
 	var i Company
@@ -98,12 +100,13 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.PosBillingAllowed,
 	)
 	return i, err
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by, pos_billing_allowed FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetCompanyParams struct {
@@ -135,12 +138,13 @@ func (q *Queries) GetCompany(ctx context.Context, arg GetCompanyParams) (Company
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.PosBillingAllowed,
 	)
 	return i, err
 }
 
 const getCompanyForUpdate = `-- name: GetCompanyForUpdate :one
-SELECT id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by, pos_billing_allowed FROM companies WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetCompanyForUpdateParams struct {
@@ -172,12 +176,13 @@ func (q *Queries) GetCompanyForUpdate(ctx context.Context, arg GetCompanyForUpda
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.PosBillingAllowed,
 	)
 	return i, err
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by FROM companies
+SELECT id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by, pos_billing_allowed FROM companies
 WHERE tenant_id = $1 AND property_id = $2 AND id > $3
   AND ($4::boolean IS NULL OR is_active = $4::boolean)
   AND ($5::text IS NULL OR code ILIKE '%' || $5::text || '%' OR name ILIKE '%' || $5::text || '%')
@@ -230,6 +235,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.PosBillingAllowed,
 		); err != nil {
 			return nil, err
 		}
@@ -245,27 +251,28 @@ const updateCompany = `-- name: UpdateCompany :one
 UPDATE companies SET
     name = $1, contact_name = $2, email = $3, phone = $4, address = $5,
     city = $6, tax_id = $7, credit_limit = $8, payment_terms_days = $9,
-    notes = $10, is_active = $11, updated_by = $12
-WHERE tenant_id = $13 AND property_id = $14 AND id = $15
-RETURNING id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by
+    notes = $10, is_active = $11, pos_billing_allowed = $12, updated_by = $13
+WHERE tenant_id = $14 AND property_id = $15 AND id = $16
+RETURNING id, tenant_id, property_id, code, name, contact_name, email, phone, address, city, tax_id, credit_limit, payment_terms_days, notes, is_active, created_at, created_by, updated_at, updated_by, pos_billing_allowed
 `
 
 type UpdateCompanyParams struct {
-	Name             string
-	ContactName      *string
-	Email            *string
-	Phone            *string
-	Address          *string
-	City             *string
-	TaxID            *string
-	CreditLimit      *decimal.Decimal
-	PaymentTermsDays int16
-	Notes            *string
-	IsActive         bool
-	ActorID          *int64
-	TenantID         int64
-	PropertyID       int64
-	ID               int64
+	Name              string
+	ContactName       *string
+	Email             *string
+	Phone             *string
+	Address           *string
+	City              *string
+	TaxID             *string
+	CreditLimit       *decimal.Decimal
+	PaymentTermsDays  int16
+	Notes             *string
+	IsActive          bool
+	PosBillingAllowed bool
+	ActorID           *int64
+	TenantID          int64
+	PropertyID        int64
+	ID                int64
 }
 
 func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error) {
@@ -281,6 +288,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 		arg.PaymentTermsDays,
 		arg.Notes,
 		arg.IsActive,
+		arg.PosBillingAllowed,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -307,6 +315,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.PosBillingAllowed,
 	)
 	return i, err
 }

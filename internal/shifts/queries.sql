@@ -22,6 +22,9 @@ WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @id;
 -- name: OpenShiftOfUser :one
 SELECT id FROM cashier_shifts WHERE tenant_id = @tenant_id AND property_id = @property_id AND user_id = @user_id AND status = 'OPEN';
 
+-- name: OpenShiftOfUserDrawer :one
+SELECT id FROM cashier_shifts WHERE tenant_id = @tenant_id AND property_id = @property_id AND user_id = @user_id AND drawer = @drawer AND status = 'OPEN';
+
 -- name: ListShifts :many
 SELECT s.*, COALESCE(u.full_name, '')::text AS user_name
 FROM cashier_shifts s JOIN users u ON u.id = s.user_id

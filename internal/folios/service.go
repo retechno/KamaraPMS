@@ -49,6 +49,8 @@ type CompanyGate interface {
 type ShiftGate interface {
 	// CashShift is the open shift of the caller, or nil when the property does not need one; 409 NO_OPEN_SHIFT when it does and there is none.
 	CashShift(ctx context.Context, propertyID int64) (*int64, error)
+	// CashShiftOfDrawer is the open shift of the caller on that drawer (the cash of an outlet), under the same rules.
+	CashShiftOfDrawer(ctx context.Context, propertyID int64, drawer string) (*int64, error)
 }
 
 // SetShiftGate wires the cashier shifts; without it cash is taken on no shift.
@@ -183,6 +185,14 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 	if err != nil {
 		return nil, err
 	}
+	bills := map[int64]*ItemPosBill{}
+	if br, err := s.q(ctx).ListPosBillsOfItems(ctx, foliosdb.ListPosBillsOfItemsParams{TenantID: tenantID, PropertyID: propertyID, Ids: ids}); err != nil {
+		return nil, err
+	} else {
+		for _, b := range br {
+			bills[b.ItemID] = &ItemPosBill{ID: b.BillID, Number: b.BillNumber, OutletName: b.OutletName}
+		}
+	}
 	out := make([]Item, len(rows))
 	for i, r := range rows {
 		cs := byItem[r.ID]
@@ -197,7 +207,7 @@ func (s *Service) itemViews(ctx context.Context, tenantID, propertyID int64, row
 			RoundingAdjustment: fixed(r.RoundingAdjustment, decimals), ServiceChargeTotal: fixed(r.ServiceChargeTotal, decimals),
 			TaxTotal: fixed(r.TaxTotal, decimals), Debit: fixed(r.Debit, decimals), Credit: fixed(r.Credit, decimals), Components: cs,
 			PaymentID: r.PaymentID, ReversesItemID: r.ReversesItemID, ReversedByItemID: r.ReversedByItemID, GroupCode: r.GroupCode, Reason: deref(r.Reason),
-			RoomNumber: r.RoomNumber, StayID: stayShown(r.StayID, r.GuestName), GuestName: r.GuestName, CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy, Transfer: marks[r.ID],
+			RoomNumber: r.RoomNumber, StayID: stayShown(r.StayID, r.GuestName), GuestName: r.GuestName, CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy, Transfer: marks[r.ID], PosBill: bills[r.ID],
 		}
 	}
 	return out, nil
@@ -229,7 +239,7 @@ func (s *Service) loadFolio(ctx context.Context, tenantID, propertyID int64, f f
 	}
 	out := Folio{
 		ID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType, BillToCompanyID: f.BillToCompanyID, BillToCompanyName: company, Status: f.Status, ReservationID: f.ReservationID, StayID: f.StayID,
-		BookingGroupID: f.BookingGroupID, OpenedAt: f.OpenedAt, ClosedAt: f.ClosedAt, Version: f.Version, Balance: fixed(balance, decimals),
+		BookingGroupID: f.BookingGroupID, OutletID: f.OutletID, OpenedAt: f.OpenedAt, ClosedAt: f.ClosedAt, Version: f.Version, Balance: fixed(balance, decimals),
 		Totals: Totals{Debit: fixed(totals.Debit, decimals), Credit: fixed(totals.Credit, decimals)}, Items: items,
 	}
 	if f.BookingGroupID != nil {
@@ -239,6 +249,13 @@ func (s *Service) loadFolio(ctx context.Context, tenantID, propertyID int64, f f
 		}
 		out.BookingGroupCode, out.BookingGroupName = g.Code, g.Name
 		out.BookingGroupContactName, out.BookingGroupContactEmail, out.BookingGroupContactPhone = deref(g.ContactName), deref(g.ContactEmail), deref(g.ContactPhone)
+	}
+	if f.OutletID != nil {
+		o, err := s.q(ctx).GetOutletBrief(ctx, foliosdb.GetOutletBriefParams{PropertyID: propertyID, ID: *f.OutletID})
+		if err != nil {
+			return Folio{}, err
+		}
+		out.OutletCode, out.OutletName = o.Code, o.Name
 	}
 	return out, nil
 }
@@ -295,7 +312,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 		return FolioList{}, err
 	}
 	rows, err := s.q(ctx).ListFoliosOrdered(ctx, foliosdb.ListFoliosOrderedParams{
-		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), Status: nullable(f.Status), CancelledWithBalance: f.CancelledWithBalance,
+		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), OutletID: f.OutletID, Status: nullable(f.Status), CancelledWithBalance: f.CancelledWithBalance,
 		AfterID: after.ID, AfterText: after.Text, AfterNum: after.Num, RowLimit: rowLimit(limit + 1),
 	})
 	if err != nil {
@@ -325,7 +342,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 	}
 	out.Data = make([]FolioSummary, len(rows))
 	for i, r := range rows {
-		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, BookingGroupID: r.BookingGroupID, BookingGroupCode: r.GroupCode, BookingGroupName: r.GroupName, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
+		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, BookingGroupID: r.BookingGroupID, BookingGroupCode: r.GroupCode, BookingGroupName: r.GroupName, OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
 			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Balance, decimals)}
 	}
 	return out, nil

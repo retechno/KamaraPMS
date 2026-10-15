@@ -11,23 +11,24 @@ import (
 )
 
 type Company struct {
-	ID               int64
-	TenantID         int64
-	PropertyID       int64
-	Code             string
-	Name             string
-	ContactName      *string
-	Email            *string
-	Phone            *string
-	Address          *string
-	City             *string
-	TaxID            *string
-	CreditLimit      *decimal.Decimal
-	PaymentTermsDays int16
-	Notes            *string
-	IsActive         bool
-	CreatedAt        time.Time
-	CreatedBy        *int64
-	UpdatedAt        time.Time
-	UpdatedBy        *int64
+	ID                int64
+	TenantID          int64
+	PropertyID        int64
+	Code              string
+	Name              string
+	ContactName       *string
+	Email             *string
+	Phone             *string
+	Address           *string
+	City              *string
+	TaxID             *string
+	CreditLimit       *decimal.Decimal
+	PaymentTermsDays  int16
+	Notes             *string
+	IsActive          bool
+	CreatedAt         time.Time
+	CreatedBy         *int64
+	UpdatedAt         time.Time
+	UpdatedBy         *int64
+	PosBillingAllowed bool
 }

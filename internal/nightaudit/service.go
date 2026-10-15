@@ -35,7 +35,18 @@ type Service struct {
 	hk      *housekeeping.Service
 	journal Journaler
 	shifts  ShiftChecker
+	outlets OutletChecker
 }
+
+// OutletChecker is the point of sale at the close of the day: what its open bills say, and the end of the locks of outlet charges that were for this business day only (pos.Service through an
+// adapter, folios.Service).
+type OutletChecker interface {
+	NightAuditOutlets(ctx context.Context, tenantID, propertyID int64) (blockers, warnings []OutletIssue, err error)
+	ExpireOutletLocks(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error
+}
+
+// SetOutletChecker wires the point of sale; without it no bill is looked at.
+func (s *Service) SetOutletChecker(c OutletChecker) { s.outlets = c }
 
 // Journaler makes the general ledger journal of a business date (accounting.Service). It runs inside the night audit's
 // transaction, so a day cannot close without its journal.
@@ -88,9 +99,9 @@ type analysis struct {
 func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, decimals int32, withWarnings bool) (analysis, error) {
 	q := s.q(ctx)
 	a := analysis{
-		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}, AccountingReadiness: []accounting.ReadinessBlocker{}},
+		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}, AccountingReadiness: []accounting.ReadinessBlocker{}, OutletBills: []OutletIssue{}},
 		missing:  MissingCharges{Items: []roomcharge.Result{}},
-		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, ClosedMasters: []ClosedMaster{}, BlocksEnding: []EndingBlock{}},
+		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, ClosedMasters: []ClosedMaster{}, BlocksEnding: []EndingBlock{}, OutletBills: []OutletIssue{}},
 	}
 	arrivals, err := q.ListUnresolvedArrivals(ctx, nightauditdb.ListUnresolvedArrivalsParams{TenantID: p.TenantID, PropertyID: propertyID, Bd: bd})
 	if err != nil {
@@ -118,6 +129,16 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 		}
 		if blocks && len(open) > 0 {
 			a.blockers.OpenShifts = open
+		}
+	}
+	if s.outlets != nil {
+		bl, wr, err := s.outlets.NightAuditOutlets(ctx, p.TenantID, propertyID)
+		if err != nil {
+			return a, err
+		}
+		a.blockers.OutletBills = append(a.blockers.OutletBills, bl...)
+		if withWarnings {
+			a.warnings.OutletBills = append(a.warnings.OutletBills, wr...)
 		}
 	}
 	if s.journal != nil { // a day must not close without its journal: the same check is made again, with the accounting row locked, just before the journal (Run)
@@ -313,6 +334,11 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 				return apperr.Conflict("NIGHT_AUDIT_BLOCKED", "room charges are still due after posting").WithContext("ready", r.Ready)
 			}
 			return blocked(b)
+		}
+		if s.outlets != nil { // the locks of outlet charges that were for this business day only end with it (a lock at level 42, before the accounting row at 46)
+			if err := s.outlets.ExpireOutletLocks(ctx, p, propertyID, bd); err != nil {
+				return err
+			}
 		}
 		if s.journal != nil {
 			// the authoritative check: the accounting settings row is locked FOR SHARE from here to the commit, so the setup cannot change between this check and the journal.

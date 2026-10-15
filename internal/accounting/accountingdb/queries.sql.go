@@ -1942,11 +1942,28 @@ func (q *Queries) SeedChart(ctx context.Context, arg SeedChartParams) (int32, er
 	return created, err
 }
 
+const seedPosRoundingAccount = `-- name: SeedPosRoundingAccount :exec
+UPDATE charge_codes c SET gl_account_code = '4591'
+ WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.code = 'POS_ROUNDING' AND c.gl_account_code IS NULL
+   AND EXISTS (SELECT 1 FROM gl_accounts a WHERE a.property_id = c.property_id AND a.code = '4591')
+`
+
+type SeedPosRoundingAccountParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The revenue account of the rounding of the outlets: the system code POS_ROUNDING of a new property gets the account 4591 once the chart exists.
+func (q *Queries) SeedPosRoundingAccount(ctx context.Context, arg SeedPosRoundingAccountParams) error {
+	_, err := q.db.Exec(ctx, seedPosRoundingAccount, arg.TenantID, arg.PropertyID)
+	return err
+}
+
 const seedRetainedEarningsMap = `-- name: SeedRetainedEarningsMap :exec
 INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated_by)
 SELECT a.tenant_id, a.property_id, m.map_key, a.id, $1
   FROM gl_accounts a
-  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155'), ('FOLIO_TRANSFER', '1215')) AS m (map_key, code) ON m.code = a.code
+  JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155'), ('FOLIO_TRANSFER', '1215'), ('COMP', '6196')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = $2 AND a.property_id = $3
 ON CONFLICT (property_id, map_key) DO NOTHING
 `

@@ -99,6 +99,9 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 	if err := s.q(ctx).SeedRetainedEarningsMap(ctx, accountingdb.SeedRetainedEarningsMapParams{TenantID: in.TenantID, PropertyID: in.PropertyID, ActorID: in.ActorID}); err != nil {
 		return err
 	}
+	if err := s.q(ctx).SeedPosRoundingAccount(ctx, accountingdb.SeedPosRoundingAccountParams{TenantID: in.TenantID, PropertyID: in.PropertyID}); err != nil {
+		return err
+	}
 	bd := in.BusinessDate
 	return s.audit.Write(ctx, audit.Entry{
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,

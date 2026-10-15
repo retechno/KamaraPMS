@@ -266,13 +266,13 @@ INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price
     (tn('ABC'), pr('BALI'), 'NETT',        'Room nett',   'ROOM',    'INCLUSIVE'),
     (tn('ABC'), pr('BALI'), 'LAUNDRY',     'Laundry',     'SERVICE', 'EXCLUSIVE');
 
-SELECT expect_ok('seeding creates the eleven standard charge codes once (idempotent)',
-    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 11 THEN 1 ELSE 0 END)$q$,
+SELECT expect_ok('seeding creates the twelve standard charge codes once (idempotent)',
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 12 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 0 THEN 1 ELSE 0 END)$q$,
-    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_codes WHERE property_id = pr('SG') AND is_system AND price_mode = 'EXCLUSIVE') = 11 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_codes WHERE property_id = pr('SG') AND is_system AND price_mode = 'EXCLUSIVE') = 12 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_code_taxes WHERE property_id = pr('SG')) = 0 THEN 1 ELSE 0 END)$q$);
 SELECT expect_ok('seeding only fills gaps and leaves existing codes alone',
-    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('ABC'), pr('BALI'), NULL) = 8 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('ABC'), pr('BALI'), NULL) = 9 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN (SELECT NOT is_system FROM charge_codes WHERE id = cc('ROOM')) THEN 1 ELSE 0 END)$q$);
 
 INSERT INTO charge_code_taxes (tenant_id, property_id, charge_code_id, tax_id, sequence) VALUES
@@ -1938,7 +1938,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('reservation_room_rates', 'PLAN', 'the nightly price of a booking: money to be charged, kept as a snapshot, not a transaction'),
     ('reservation_rooms', 'PLAN', 'bookings'), ('reservations', 'PLAN', 'bookings'), ('stays', 'PLAN', 'stays'), ('stay_rooms', 'PLAN', 'stays'),
     ('pos_options', 'CONFIG', 'add-on and variant price differences'), ('pos_price_list_items', 'CONFIG', 'prices of an outlet'), ('folio_outlet_locks', 'CONFIG', 'the limit of outlet charges of a folio'),
-    ('pos_room_charge_attempts', 'PLAN', 'a request of an outlet to charge a room, kept as a trail; the money is in the ledger');
+    ('pos_room_charge_attempts', 'PLAN', 'a request of an outlet to charge a room, kept as a trail; the money is in the ledger'),
+    ('pos_bill_lines', 'PLAN', 'the line of an order with its price snapshot; the money is the ledger row it posts when it is sent');
 DO $$
 DECLARE v_missing text;
 BEGIN
@@ -2108,6 +2109,91 @@ SELECT expect_error('a refused attempt carries its code, an accepted one does no
 SELECT expect_error('an outlet charge is above zero', '23514', $q$SELECT pms_test.pos_base()$q$,
     $q$INSERT INTO pos_room_charges (tenant_id, property_id, outlet_id, to_folio_id, amount, lock_period_no, business_date)
        VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), fo('F1'), 0, 1, (SELECT max(business_date) FROM business_days WHERE property_id = pr('BALI')))$q$);
+
+------------------------------------------------------------------------------------------
+-- POS bills and the ledger of an outlet (migration 00081, docs/architecture/34-pos.md)
+------------------------------------------------------------------------------------------
+SELECT expect_ok('the folio of an outlet bill has an outlet and no reservation, stay, group or company',
+    $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id) VALUES (tn('ABC'), pr('BALI'), 'T-0001', 'OUTLET', pms_test.pos_outlet())$q$);
+SELECT expect_error('an OUTLET folio names its outlet', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, folio_type) VALUES (tn('ABC'), pr('BALI'), 'T-0002', 'OUTLET')$q$);
+SELECT expect_error('only an OUTLET folio names an outlet', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, outlet_id) VALUES (tn('ABC'), pr('BALI'), 'T-0003', rs('R1'), st('S2'), pms_test.pos_outlet())$q$);
+SELECT expect_error('an OUTLET folio belongs to no reservation', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, folio_type, outlet_id) VALUES (tn('ABC'), pr('BALI'), 'T-0004', rs('R1'), 'OUTLET', pms_test.pos_outlet())$q$);
+SELECT expect_error('an OUTLET folio is billed to no company', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'T-0005', 'OUTLET', pms_test.pos_outlet(), (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
+SELECT expect_ok('a ledger row may come from the point of sale (source POS)', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id) VALUES (tn('ABC'), pr('BALI'), 'T-0006', 'OUTLET', pms_test.pos_outlet())$q$,
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id, reference_type, reference_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source)
+       VALUES (tn('ABC'), pr('BALI'), fo('T-0006'), '2026-10-01', '2026-10-01', 'CHARGE', cc('POSX'), 'POS_BILL_LINE', 'c0a80101-0000-4000-8000-000000000001',
+               'Nasi goreng', 1, 50000, 'EXCLUSIVE', 50000, 50000, 50000, 'POS')$q$);
+SELECT expect_error('a line of a bill is posted once', '23505', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id) VALUES (tn('ABC'), pr('BALI'), 'T-0007', 'OUTLET', pms_test.pos_outlet())$q$,
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id, reference_type, reference_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source)
+       VALUES (tn('ABC'), pr('BALI'), fo('T-0007'), '2026-10-01', '2026-10-01', 'CHARGE', cc('POSX'), 'POS_BILL_LINE', 'c0a80101-0000-4000-8000-000000000002',
+               'Nasi goreng', 1, 50000, 'EXCLUSIVE', 50000, 50000, 50000, 'POS')$q$,
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id, reference_type, reference_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source)
+       VALUES (tn('ABC'), pr('BALI'), fo('T-0007'), '2026-10-01', '2026-10-01', 'CHARGE', cc('POSX'), 'POS_BILL_LINE', 'c0a80101-0000-4000-8000-000000000002',
+               'Nasi goreng again', 1, 50000, 'EXCLUSIVE', 50000, 50000, 50000, 'POS')$q$);
+SELECT expect_ok('a complimentary payment is a payment', $q$SELECT 1$q$,
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'PCOMP', fo('F1'), 'PAYMENT', 'COMP', 1000, '2026-10-01')$q$);
+SELECT expect_error('a complimentary payment is not refunded', '23514', $q$SELECT 1$q$,
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, refund_of_payment_id)
+       VALUES (tn('ABC'), pr('BALI'), 'PCOMP2', fo('F1'), 'REFUND', 'COMP', 1000, '2026-10-01', pm('P1'))$q$);
+SELECT expect_error('a complimentary payment keeps no fee snapshot', '23514', $q$SELECT 1$q$,
+    $q$INSERT INTO payments (tenant_id, property_id, payment_number, folio_id, payment_type, payment_method, amount, business_date, mdr_rate, mdr_fee, expected_settlement_date)
+       VALUES (tn('ABC'), pr('BALI'), 'PCOMP3', fo('F1'), 'PAYMENT', 'COMP', 1000, '2026-10-01', 0.7, 7, '2026-10-02')$q$);
+SELECT expect_ok('the system key COMP can be mapped', $q$DELETE FROM gl_account_map WHERE property_id = pr('BALI') AND map_key = 'COMP'$q$,
+    $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) VALUES (tn('ABC'), pr('BALI'), 'COMP', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1110'))$q$);
+SELECT expect_error('a bill made by the client is made once', '23505', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, order_type, comp_treatment, business_date_opened)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'c0a80101-0000-4000-8000-0000000000b1', 'TAKEAWAY', 'PAYMENT_COMP', '2026-10-01')$q$,
+    $q$INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, order_type, comp_treatment, business_date_opened)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'c0a80101-0000-4000-8000-0000000000b1', 'TAKEAWAY', 'PAYMENT_COMP', '2026-10-01')$q$);
+SELECT expect_error('an open bill has no closing time', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, order_type, comp_treatment, business_date_opened, closed_at)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'c0a80101-0000-4000-8000-0000000000b3', 'TAKEAWAY', 'PAYMENT_COMP', '2026-10-01', now())$q$);
+SELECT expect_error('only a bill to eat in has a table', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_areas (tenant_id, property_id, outlet_id, name, sort_order, grid_w, grid_h) VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'Indoor', 0, 40, 24)$q$,
+    $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, capacity, shape, x, y, w, h) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_areas WHERE name = 'Indoor'), 'A1', 2, 'SQUARE', 0, 0, 1, 1)$q$,
+    $q$INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, order_type, table_id, comp_treatment, business_date_opened)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'c0a80101-0000-4000-8000-0000000000b2', 'TAKEAWAY', (SELECT id FROM pos_tables WHERE code = 'A1'), 'PAYMENT_COMP', '2026-10-01')$q$);
+SELECT expect_ok('a draft line is edited and deleted freely', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_categories (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'C1', 'Cat')$q$,
+    $q$INSERT INTO pos_products (tenant_id, property_id, code, name, category_id, charge_code_id) VALUES (tn('ABC'), pr('BALI'), 'PX', 'Product', (SELECT id FROM pos_categories WHERE code = 'C1'), cc('POSX'))$q$,
+    $q$INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, order_type, comp_treatment, business_date_opened)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'c0a80101-0000-4000-8000-0000000000b4', 'TAKEAWAY', 'PAYMENT_COMP', '2026-10-01')$q$,
+    $q$INSERT INTO pos_bill_lines (tenant_id, property_id, bill_id, client_uuid, product_id, product_name, charge_code_id, quantity, unit_price)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_bills WHERE client_uuid = 'c0a80101-0000-4000-8000-0000000000b4'), 'c0a80101-0000-4000-8000-0000000000c1',
+               (SELECT id FROM pos_products WHERE code = 'PX'), 'Product', cc('POSX'), 1, 10000)$q$,
+    $q$UPDATE pos_bill_lines SET quantity = 2 WHERE client_uuid = 'c0a80101-0000-4000-8000-0000000000c1'$q$,
+    $q$DELETE FROM pos_bill_lines WHERE client_uuid = 'c0a80101-0000-4000-8000-0000000000c1'$q$);
+SELECT expect_error('a line is sent with its ledger row', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_categories (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'C1', 'Cat')$q$,
+    $q$INSERT INTO pos_products (tenant_id, property_id, code, name, category_id, charge_code_id) VALUES (tn('ABC'), pr('BALI'), 'PX', 'Product', (SELECT id FROM pos_categories WHERE code = 'C1'), cc('POSX'))$q$,
+    $q$INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, order_type, comp_treatment, business_date_opened)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'c0a80101-0000-4000-8000-0000000000b5', 'TAKEAWAY', 'PAYMENT_COMP', '2026-10-01')$q$,
+    $q$INSERT INTO pos_bill_lines (tenant_id, property_id, bill_id, client_uuid, product_id, product_name, charge_code_id, quantity, unit_price, status)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_bills WHERE client_uuid = 'c0a80101-0000-4000-8000-0000000000b5'), 'c0a80101-0000-4000-8000-0000000000c2',
+               (SELECT id FROM pos_products WHERE code = 'PX'), 'Product', cc('POSX'), 1, 10000, 'SENT')$q$);
+SELECT expect_error('a transfer between guests needs an approver, only an outlet charge does not', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id) VALUES (tn('ABC'), pr('BALI'), 'T-0010', 'OUTLET', pms_test.pos_outlet())$q$,
+    $q$INSERT INTO folio_transfer_batches (tenant_id, property_id, kind, from_folio_id, to_folio_id, scope, reason, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'BALANCE', fo('T-0010'), fo('F1'), 'ANY', 'x', '2026-10-01')$q$);
+SELECT expect_ok('the charge of a bill to a room is a transfer with no approver', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id) VALUES (tn('ABC'), pr('BALI'), 'T-0011', 'OUTLET', pms_test.pos_outlet())$q$,
+    $q$INSERT INTO folio_transfer_batches (tenant_id, property_id, kind, from_folio_id, to_folio_id, scope, reason, business_date)
+       VALUES (tn('ABC'), pr('BALI'), 'BALANCE', fo('T-0011'), fo('F1'), 'OUTLET_CHARGE', 'outlet charge', '2026-10-01')$q$);
+SELECT expect_ok('the table of a party is held for a name', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_areas (tenant_id, property_id, outlet_id, name, sort_order, grid_w, grid_h) VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'Indoor', 0, 40, 24)$q$,
+    $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, capacity, shape, x, y, w, h) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_areas WHERE name = 'Indoor'), 'A1', 2, 'SQUARE', 0, 0, 1, 1)$q$,
+    $q$INSERT INTO pos_table_holds (tenant_id, property_id, table_id, business_date, from_time, name) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_tables WHERE code = 'A1'), '2026-10-01', '19:00', 'Santoso')$q$);
 
 ------------------------------------------------------------------------------------------
 -- Ordered lists: the database must have the ICU collation (the order of the guest names depends on it) and the indexes of the orders a screen opens with

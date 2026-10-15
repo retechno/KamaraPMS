@@ -25,6 +25,8 @@ import (
 const (
 	// FolioTypeMaster is the type of the master folio of a group.
 	FolioTypeMaster = "MASTER"
+	// FolioTypeOutlet is the type of the folio of a bill of an outlet (docs/architecture/34-pos.md): it has no reservation, stay, group or company.
+	FolioTypeOutlet = "OUTLET"
 	// maxLinesInContext is how many lines an error names (the screen shows them; the rest is counted).
 	maxLinesInContext = 20
 )

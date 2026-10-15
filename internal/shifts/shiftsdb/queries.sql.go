@@ -765,6 +765,29 @@ func (q *Queries) OpenShiftOfUser(ctx context.Context, arg OpenShiftOfUserParams
 	return id, err
 }
 
+const openShiftOfUserDrawer = `-- name: OpenShiftOfUserDrawer :one
+SELECT id FROM cashier_shifts WHERE tenant_id = $1 AND property_id = $2 AND user_id = $3 AND drawer = $4 AND status = 'OPEN'
+`
+
+type OpenShiftOfUserDrawerParams struct {
+	TenantID   int64
+	PropertyID int64
+	UserID     int64
+	Drawer     string
+}
+
+func (q *Queries) OpenShiftOfUserDrawer(ctx context.Context, arg OpenShiftOfUserDrawerParams) (int64, error) {
+	row := q.db.QueryRow(ctx, openShiftOfUserDrawer,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.UserID,
+		arg.Drawer,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const shiftCash = `-- name: ShiftCash :one
 SELECT
     COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = $1 AND p.shift_id = $2::bigint AND p.payment_type = 'PAYMENT' AND p.payment_method = 'CASH' AND (p.status = 'POSTED' OR (p.status = 'VOIDED' AND p.voided_at >= $3::timestamptz))), 0)::numeric AS payments_in,

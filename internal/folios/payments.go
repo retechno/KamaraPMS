@@ -99,9 +99,16 @@ func (s *Service) paymentReplay(ctx context.Context, tenantID, propertyID int64,
 // createPayment writes a payments row (number from the sequence, last in the lock order) and its ledger entry.
 func (ps posting) createPayment(ctx context.Context, payType, method string, amount decimal.Decimal, in PaymentInput, refundOf *int64, key string, approvedBy *int64, reason string) (foliosdb.Payment, error) {
 	var shiftID *int64
-	if method == methodCash && ps.s.shifts != nil {
+	if method == methodCash && in.shiftSet {
+		shiftID = in.shiftID
+	} else if method == methodCash && ps.s.shifts != nil {
 		var err error
-		if shiftID, err = ps.s.shifts.CashShift(ctx, ps.propertyID); err != nil {
+		if in.drawer != "" { // an outlet's cash goes through its own drawer (docs/architecture/34-pos.md 7.1)
+			shiftID, err = ps.s.shifts.CashShiftOfDrawer(ctx, ps.propertyID, in.drawer)
+		} else {
+			shiftID, err = ps.s.shifts.CashShift(ctx, ps.propertyID)
+		}
+		if err != nil {
 			return foliosdb.Payment{}, err
 		}
 	}
@@ -192,6 +199,9 @@ func (s *Service) PostPayment(ctx context.Context, propertyID, folioID int64, ke
 					return err
 				}
 				if err := requireOpen(folio); err != nil {
+					return err
+				}
+				if err := refuseOutletFolios(folio); err != nil {
 					return err
 				}
 				pay, err := s.posting(p, propertyID, day.BusinessDate, folio).createPayment(ctx, PaymentTypePayment, in.PaymentMethod, amount, in, nil, key, nil, "")
@@ -756,6 +766,9 @@ func (s *Service) Transfer(ctx context.Context, propertyID, folioID int64, key s
 					return err
 				}
 				if err := requireOpen(folio); err != nil {
+					return err
+				}
+				if err := refuseOutletFolios(folio); err != nil {
 					return err
 				}
 				// a folio billed to a company can only be sent to that company's account

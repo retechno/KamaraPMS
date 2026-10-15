@@ -87,6 +87,8 @@ export const navigation: NavSection[] = [
     id: 'pos',
     icon: Store,
     items: [
+      { id: 'posFloor', to: '/pos/floor', permission: ['pos.order', 'pos.cashier'], module: 'POS' },
+      { id: 'posReport', to: '/pos/report', permission: 'pos.report', module: 'POS' },
       { id: 'posOutlets', to: '/pos/outlets', permission: 'pos.manage', module: 'POS' },
       { id: 'posProducts', to: '/pos/products', permission: 'pos.manage', module: 'POS' },
       { id: 'posMenuSetup', to: '/pos/menu', permission: 'pos.manage', module: 'POS' },

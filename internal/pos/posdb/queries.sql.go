@@ -7,10 +7,59 @@ package posdb
 
 import (
 	"context"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
+
+const billLedgerSums = `-- name: BillLedgerSums :one
+SELECT
+  COALESCE(sum(i.debit - i.credit) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS sold,
+  COALESCE(sum(i.debit - i.credit) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND c.charge_type = 'ROUNDING'), 0)::numeric AS rounding,
+  COALESCE(sum(i.credit - i.debit) FILTER (WHERE i.transaction_type IN ('PAYMENT', 'REFUND')), 0)::numeric AS paid,
+  COALESCE(sum(i.credit - i.debit) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND c.charge_type = 'TRANSFER'), 0)::numeric AS transferred,
+  COALESCE(sum(i.base_amount) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS base,
+  COALESCE(sum(i.net_amount) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS net,
+  COALESCE(sum(i.service_charge_total) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS service,
+  COALESCE(sum(i.tax_total) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS tax
+FROM folio_items i LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
+WHERE i.property_id = $1 AND i.folio_id = $2
+`
+
+type BillLedgerSumsParams struct {
+	PropertyID int64
+	FolioID    int64
+}
+
+type BillLedgerSumsRow struct {
+	Sold        decimal.Decimal
+	Rounding    decimal.Decimal
+	Paid        decimal.Decimal
+	Transferred decimal.Decimal
+	Base        decimal.Decimal
+	Net         decimal.Decimal
+	Service     decimal.Decimal
+	Tax         decimal.Decimal
+}
+
+// What a bill has sold, rounded, been paid and charged to a room, read from its folio (the ledger is the one source of the amounts).
+func (q *Queries) BillLedgerSums(ctx context.Context, arg BillLedgerSumsParams) (BillLedgerSumsRow, error) {
+	row := q.db.QueryRow(ctx, billLedgerSums, arg.PropertyID, arg.FolioID)
+	var i BillLedgerSumsRow
+	err := row.Scan(
+		&i.Sold,
+		&i.Rounding,
+		&i.Paid,
+		&i.Transferred,
+		&i.Base,
+		&i.Net,
+		&i.Service,
+		&i.Tax,
+	)
+	return i, err
+}
 
 const chargeCodeKind = `-- name: ChargeCodeKind :one
 SELECT charge_type, is_active FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = $3
@@ -55,6 +104,40 @@ func (q *Queries) ClearSoldOut(ctx context.Context, arg ClearSoldOutParams) erro
 	return err
 }
 
+const closeBill = `-- name: CloseBill :execrows
+UPDATE pos_bills SET status = $1, closed_at = $2::timestamptz, closed_business_date = $3, merged_into_bill_id = $4,
+       version = version + 1, updated_by = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'OPEN'
+`
+
+type CloseBillParams struct {
+	Status           string
+	At               time.Time
+	BusinessDate     *civil.Date
+	MergedIntoBillID *int64
+	ActorID          *int64
+	TenantID         int64
+	PropertyID       int64
+	ID               int64
+}
+
+func (q *Queries) CloseBill(ctx context.Context, arg CloseBillParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeBill,
+		arg.Status,
+		arg.At,
+		arg.BusinessDate,
+		arg.MergedIntoBillID,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deactivateTables = `-- name: DeactivateTables :exec
 UPDATE pos_tables SET is_active = false
 WHERE tenant_id = $1 AND property_id = $2 AND area_id = $3 AND NOT (id = ANY($4::bigint[]))
@@ -75,6 +158,30 @@ func (q *Queries) DeactivateTables(ctx context.Context, arg DeactivateTablesPara
 		arg.Keep,
 	)
 	return err
+}
+
+const deleteDraftLine = `-- name: DeleteDraftLine :execrows
+DELETE FROM pos_bill_lines WHERE tenant_id = $1 AND property_id = $2 AND id = $3 AND bill_id = $4 AND status = 'DRAFT'
+`
+
+type DeleteDraftLineParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+	BillID     int64
+}
+
+func (q *Queries) DeleteDraftLine(ctx context.Context, arg DeleteDraftLineParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDraftLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.BillID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteMarks = `-- name: DeleteMarks :exec
@@ -174,6 +281,349 @@ func (q *Queries) DeleteRuleProfileRules(ctx context.Context, arg DeleteRuleProf
 	return err
 }
 
+const getBill = `-- name: GetBill :one
+SELECT b.id, b.outlet_id, b.client_uuid, b.folio_id, b.bill_number, b.status, b.order_type, b.table_id, b.guest_count, b.target_stay_id, b.customer_name, b.waiter_id,
+       b.comp_treatment, b.business_date_opened, b.opened_at, b.bill_requested_at, b.closed_at, b.closed_business_date, b.merged_into_bill_id, b.note, b.version,
+       COALESCE(t.code, '')::text AS table_code, COALESCE(u.full_name, '')::text AS waiter_name,
+       COALESCE((SELECT r.room_number FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                  WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id ORDER BY sr.id DESC LIMIT 1), '')::text AS target_room
+FROM pos_bills b
+LEFT JOIN pos_tables t ON t.property_id = b.property_id AND t.id = b.table_id
+LEFT JOIN users u ON u.id = b.waiter_id
+WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.id = $3
+`
+
+type GetBillParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetBillRow struct {
+	ID                 int64
+	OutletID           int64
+	ClientUuid         pgtype.UUID
+	FolioID            *int64
+	BillNumber         *string
+	Status             string
+	OrderType          string
+	TableID            *int64
+	GuestCount         pgtype.Int2
+	TargetStayID       *int64
+	CustomerName       *string
+	WaiterID           *int64
+	CompTreatment      string
+	BusinessDateOpened civil.Date
+	OpenedAt           time.Time
+	BillRequestedAt    *time.Time
+	ClosedAt           *time.Time
+	ClosedBusinessDate *civil.Date
+	MergedIntoBillID   *int64
+	Note               *string
+	Version            int32
+	TableCode          string
+	WaiterName         string
+	TargetRoom         string
+}
+
+func (q *Queries) GetBill(ctx context.Context, arg GetBillParams) (GetBillRow, error) {
+	row := q.db.QueryRow(ctx, getBill, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetBillRow
+	err := row.Scan(
+		&i.ID,
+		&i.OutletID,
+		&i.ClientUuid,
+		&i.FolioID,
+		&i.BillNumber,
+		&i.Status,
+		&i.OrderType,
+		&i.TableID,
+		&i.GuestCount,
+		&i.TargetStayID,
+		&i.CustomerName,
+		&i.WaiterID,
+		&i.CompTreatment,
+		&i.BusinessDateOpened,
+		&i.OpenedAt,
+		&i.BillRequestedAt,
+		&i.ClosedAt,
+		&i.ClosedBusinessDate,
+		&i.MergedIntoBillID,
+		&i.Note,
+		&i.Version,
+		&i.TableCode,
+		&i.WaiterName,
+		&i.TargetRoom,
+	)
+	return i, err
+}
+
+const getBillByUUID = `-- name: GetBillByUUID :one
+SELECT id FROM pos_bills WHERE tenant_id = $1 AND property_id = $2 AND client_uuid = $3
+`
+
+type GetBillByUUIDParams struct {
+	TenantID   int64
+	PropertyID int64
+	ClientUuid pgtype.UUID
+}
+
+func (q *Queries) GetBillByUUID(ctx context.Context, arg GetBillByUUIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getBillByUUID, arg.TenantID, arg.PropertyID, arg.ClientUuid)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getBillLine = `-- name: GetBillLine :one
+SELECT id, bill_id, client_uuid, product_id, product_name, charge_code_id, rule_profile_id, options, quantity, unit_price, discount_pct, discount_amount, discount_reason, is_comp,
+       note, station_id, status, round_id, folio_item_id, voided_item_id
+FROM pos_bill_lines WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetBillLineParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetBillLineRow struct {
+	ID             int64
+	BillID         int64
+	ClientUuid     pgtype.UUID
+	ProductID      int64
+	ProductName    string
+	ChargeCodeID   int64
+	RuleProfileID  *int64
+	Options        []byte
+	Quantity       decimal.Decimal
+	UnitPrice      decimal.Decimal
+	DiscountPct    *decimal.Decimal
+	DiscountAmount decimal.Decimal
+	DiscountReason *string
+	IsComp         bool
+	Note           *string
+	StationID      *int64
+	Status         string
+	RoundID        *int64
+	FolioItemID    *int64
+	VoidedItemID   *int64
+}
+
+func (q *Queries) GetBillLine(ctx context.Context, arg GetBillLineParams) (GetBillLineRow, error) {
+	row := q.db.QueryRow(ctx, getBillLine, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetBillLineRow
+	err := row.Scan(
+		&i.ID,
+		&i.BillID,
+		&i.ClientUuid,
+		&i.ProductID,
+		&i.ProductName,
+		&i.ChargeCodeID,
+		&i.RuleProfileID,
+		&i.Options,
+		&i.Quantity,
+		&i.UnitPrice,
+		&i.DiscountPct,
+		&i.DiscountAmount,
+		&i.DiscountReason,
+		&i.IsComp,
+		&i.Note,
+		&i.StationID,
+		&i.Status,
+		&i.RoundID,
+		&i.FolioItemID,
+		&i.VoidedItemID,
+	)
+	return i, err
+}
+
+const getBillLineByUUID = `-- name: GetBillLineByUUID :one
+SELECT id FROM pos_bill_lines WHERE tenant_id = $1 AND property_id = $2 AND bill_id = $3 AND client_uuid = $4
+`
+
+type GetBillLineByUUIDParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillID     int64
+	ClientUuid pgtype.UUID
+}
+
+func (q *Queries) GetBillLineByUUID(ctx context.Context, arg GetBillLineByUUIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getBillLineByUUID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BillID,
+		arg.ClientUuid,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getBillOfFolio = `-- name: GetBillOfFolio :one
+SELECT id FROM pos_bills WHERE tenant_id = $1 AND property_id = $2 AND folio_id = $3
+`
+
+type GetBillOfFolioParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    *int64
+}
+
+func (q *Queries) GetBillOfFolio(ctx context.Context, arg GetBillOfFolioParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getBillOfFolio, arg.TenantID, arg.PropertyID, arg.FolioID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getRoomChargeForBill = `-- name: GetRoomChargeForBill :one
+SELECT id, bill_id, from_folio_id, to_folio_id, stay_id, amount, returned_at FROM pos_room_charges WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetRoomChargeForBillParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetRoomChargeForBillRow struct {
+	ID          int64
+	BillID      *int64
+	FromFolioID *int64
+	ToFolioID   int64
+	StayID      *int64
+	Amount      decimal.Decimal
+	ReturnedAt  *time.Time
+}
+
+func (q *Queries) GetRoomChargeForBill(ctx context.Context, arg GetRoomChargeForBillParams) (GetRoomChargeForBillRow, error) {
+	row := q.db.QueryRow(ctx, getRoomChargeForBill, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetRoomChargeForBillRow
+	err := row.Scan(
+		&i.ID,
+		&i.BillID,
+		&i.FromFolioID,
+		&i.ToFolioID,
+		&i.StayID,
+		&i.Amount,
+		&i.ReturnedAt,
+	)
+	return i, err
+}
+
+const getRoundByUUID = `-- name: GetRoundByUUID :one
+SELECT id, bill_id, round_no FROM pos_rounds WHERE tenant_id = $1 AND property_id = $2 AND client_uuid = $3
+`
+
+type GetRoundByUUIDParams struct {
+	TenantID   int64
+	PropertyID int64
+	ClientUuid pgtype.UUID
+}
+
+type GetRoundByUUIDRow struct {
+	ID      int64
+	BillID  int64
+	RoundNo int32
+}
+
+func (q *Queries) GetRoundByUUID(ctx context.Context, arg GetRoundByUUIDParams) (GetRoundByUUIDRow, error) {
+	row := q.db.QueryRow(ctx, getRoundByUUID, arg.TenantID, arg.PropertyID, arg.ClientUuid)
+	var i GetRoundByUUIDRow
+	err := row.Scan(&i.ID, &i.BillID, &i.RoundNo)
+	return i, err
+}
+
+const getSellableProduct = `-- name: GetSellableProduct :one
+SELECT p.id, p.name, p.short_name, p.charge_code_id, p.rule_profile_id, p.is_active, i.station_id AS list_station_id, p.station_id AS product_station_id,
+       i.price, COALESCE(i.is_sold, false)::boolean AS is_sold,
+       EXISTS (SELECT 1 FROM pos_outlet_sold_out so WHERE so.property_id = p.property_id AND so.outlet_id = $1 AND so.product_id = p.id AND so.business_date = $2)::boolean AS sold_out
+FROM pos_products p
+JOIN pos_outlets o ON o.property_id = p.property_id AND o.id = $1
+LEFT JOIN pos_price_list_items i ON i.property_id = p.property_id AND i.price_list_id = o.price_list_id AND i.product_id = p.id
+WHERE p.tenant_id = $3 AND p.property_id = $4 AND p.id = $5
+`
+
+type GetSellableProductParams struct {
+	OutletID     int64
+	BusinessDate civil.Date
+	TenantID     int64
+	PropertyID   int64
+	ProductID    int64
+}
+
+type GetSellableProductRow struct {
+	ID               int64
+	Name             string
+	ShortName        *string
+	ChargeCodeID     int64
+	RuleProfileID    *int64
+	IsActive         bool
+	ListStationID    *int64
+	ProductStationID *int64
+	Price            *decimal.Decimal
+	IsSold           bool
+	SoldOut          bool
+}
+
+// ---------------------------------------------------------------- the product as sold at an outlet (the price list of the outlet)
+func (q *Queries) GetSellableProduct(ctx context.Context, arg GetSellableProductParams) (GetSellableProductRow, error) {
+	row := q.db.QueryRow(ctx, getSellableProduct,
+		arg.OutletID,
+		arg.BusinessDate,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ProductID,
+	)
+	var i GetSellableProductRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ShortName,
+		&i.ChargeCodeID,
+		&i.RuleProfileID,
+		&i.IsActive,
+		&i.ListStationID,
+		&i.ProductStationID,
+		&i.Price,
+		&i.IsSold,
+		&i.SoldOut,
+	)
+	return i, err
+}
+
+const getTableOutlet = `-- name: GetTableOutlet :one
+SELECT t.id, t.code, t.is_active, a.outlet_id FROM pos_tables t JOIN pos_areas a ON a.property_id = t.property_id AND a.id = t.area_id
+WHERE t.tenant_id = $1 AND t.property_id = $2 AND t.id = $3
+`
+
+type GetTableOutletParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetTableOutletRow struct {
+	ID       int64
+	Code     string
+	IsActive bool
+	OutletID int64
+}
+
+func (q *Queries) GetTableOutlet(ctx context.Context, arg GetTableOutletParams) (GetTableOutletRow, error) {
+	row := q.db.QueryRow(ctx, getTableOutlet, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetTableOutletRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.IsActive,
+		&i.OutletID,
+	)
+	return i, err
+}
+
 const insertArea = `-- name: InsertArea :one
 INSERT INTO pos_areas (tenant_id, property_id, outlet_id, name, sort_order, grid_w, grid_h, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
@@ -207,6 +657,109 @@ func (q *Queries) InsertArea(ctx context.Context, arg InsertAreaParams) (int64, 
 	return id, err
 }
 
+const insertBill = `-- name: InsertBill :one
+INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, folio_id, bill_number, order_type, table_id, guest_count, target_stay_id, customer_name, waiter_id,
+                       comp_treatment, business_date_opened, opened_at, note, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+        $10, $11, $12, $13, $14, $15, $16, $12, $12)
+RETURNING id
+`
+
+type InsertBillParams struct {
+	TenantID           int64
+	PropertyID         int64
+	OutletID           int64
+	ClientUuid         pgtype.UUID
+	FolioID            *int64
+	BillNumber         *string
+	OrderType          string
+	TableID            *int64
+	GuestCount         pgtype.Int2
+	TargetStayID       *int64
+	CustomerName       *string
+	ActorID            *int64
+	CompTreatment      string
+	BusinessDateOpened civil.Date
+	OpenedAt           time.Time
+	Note               *string
+}
+
+func (q *Queries) InsertBill(ctx context.Context, arg InsertBillParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertBill,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.OutletID,
+		arg.ClientUuid,
+		arg.FolioID,
+		arg.BillNumber,
+		arg.OrderType,
+		arg.TableID,
+		arg.GuestCount,
+		arg.TargetStayID,
+		arg.CustomerName,
+		arg.ActorID,
+		arg.CompTreatment,
+		arg.BusinessDateOpened,
+		arg.OpenedAt,
+		arg.Note,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertBillLine = `-- name: InsertBillLine :one
+INSERT INTO pos_bill_lines (tenant_id, property_id, bill_id, client_uuid, product_id, product_name, charge_code_id, rule_profile_id, options, quantity, unit_price,
+                            discount_pct, discount_amount, note, station_id, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11,
+        $12, $13, $14, $15, $16)
+RETURNING id
+`
+
+type InsertBillLineParams struct {
+	TenantID       int64
+	PropertyID     int64
+	BillID         int64
+	ClientUuid     pgtype.UUID
+	ProductID      int64
+	ProductName    string
+	ChargeCodeID   int64
+	RuleProfileID  *int64
+	Options        []byte
+	Quantity       decimal.Decimal
+	UnitPrice      decimal.Decimal
+	DiscountPct    *decimal.Decimal
+	DiscountAmount decimal.Decimal
+	Note           *string
+	StationID      *int64
+	ActorID        *int64
+}
+
+// ---------------------------------------------------------------- lines
+func (q *Queries) InsertBillLine(ctx context.Context, arg InsertBillLineParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertBillLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BillID,
+		arg.ClientUuid,
+		arg.ProductID,
+		arg.ProductName,
+		arg.ChargeCodeID,
+		arg.RuleProfileID,
+		arg.Options,
+		arg.Quantity,
+		arg.UnitPrice,
+		arg.DiscountPct,
+		arg.DiscountAmount,
+		arg.Note,
+		arg.StationID,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertCategory = `-- name: InsertCategory :one
 INSERT INTO pos_categories (tenant_id, property_id, code, name, parent_id, sort_order, is_active, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
@@ -233,6 +786,43 @@ func (q *Queries) InsertCategory(ctx context.Context, arg InsertCategoryParams) 
 		arg.ParentID,
 		arg.SortOrder,
 		arg.IsActive,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertHold = `-- name: InsertHold :one
+INSERT INTO pos_table_holds (tenant_id, property_id, table_id, business_date, from_time, party_size, name, phone, note, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5::time, $6, $7, $8, $9, $10, $10)
+RETURNING id
+`
+
+type InsertHoldParams struct {
+	TenantID     int64
+	PropertyID   int64
+	TableID      int64
+	BusinessDate civil.Date
+	FromTime     civil.TimeOfDay
+	PartySize    pgtype.Int2
+	Name         string
+	Phone        *string
+	Note         *string
+	ActorID      *int64
+}
+
+func (q *Queries) InsertHold(ctx context.Context, arg InsertHoldParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertHold,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TableID,
+		arg.BusinessDate,
+		arg.FromTime,
+		arg.PartySize,
+		arg.Name,
+		arg.Phone,
+		arg.Note,
 		arg.ActorID,
 	)
 	var id int64
@@ -510,6 +1100,35 @@ func (q *Queries) InsertProduct(ctx context.Context, arg InsertProductParams) (i
 	return id, err
 }
 
+const insertRound = `-- name: InsertRound :one
+INSERT INTO pos_rounds (tenant_id, property_id, bill_id, round_no, client_uuid, sent_by)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id
+`
+
+type InsertRoundParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillID     int64
+	RoundNo    int32
+	ClientUuid pgtype.UUID
+	ActorID    *int64
+}
+
+func (q *Queries) InsertRound(ctx context.Context, arg InsertRoundParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertRound,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BillID,
+		arg.RoundNo,
+		arg.ClientUuid,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertRuleProfile = `-- name: InsertRuleProfile :one
 INSERT INTO pos_rule_profiles (tenant_id, property_id, code, name, price_mode, is_active, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
@@ -641,6 +1260,67 @@ func (q *Queries) InsertTable(ctx context.Context, arg InsertTableParams) (int64
 	return id, err
 }
 
+const insertTicket = `-- name: InsertTicket :one
+INSERT INTO pos_tickets (tenant_id, property_id, round_id, bill_id, station_id, kind)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id
+`
+
+type InsertTicketParams struct {
+	TenantID   int64
+	PropertyID int64
+	RoundID    int64
+	BillID     int64
+	StationID  *int64
+	Kind       string
+}
+
+func (q *Queries) InsertTicket(ctx context.Context, arg InsertTicketParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertTicket,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RoundID,
+		arg.BillID,
+		arg.StationID,
+		arg.Kind,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertTicketLine = `-- name: InsertTicketLine :exec
+INSERT INTO pos_ticket_lines (tenant_id, property_id, ticket_id, bill_line_id, quantity, name, options_text, note, is_void)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+
+type InsertTicketLineParams struct {
+	TenantID    int64
+	PropertyID  int64
+	TicketID    int64
+	BillLineID  int64
+	Quantity    decimal.Decimal
+	Name        string
+	OptionsText *string
+	Note        *string
+	IsVoid      bool
+}
+
+func (q *Queries) InsertTicketLine(ctx context.Context, arg InsertTicketLineParams) error {
+	_, err := q.db.Exec(ctx, insertTicketLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TicketID,
+		arg.BillLineID,
+		arg.Quantity,
+		arg.Name,
+		arg.OptionsText,
+		arg.Note,
+		arg.IsVoid,
+	)
+	return err
+}
+
 const listAreas = `-- name: ListAreas :many
 SELECT id, outlet_id, name, sort_order, grid_w, grid_h, layout_version, is_active FROM pos_areas
 WHERE tenant_id = $1 AND property_id = $2
@@ -691,6 +1371,306 @@ func (q *Queries) ListAreas(ctx context.Context, arg ListAreasParams) ([]ListAre
 			&i.GridH,
 			&i.LayoutVersion,
 			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBillLines = `-- name: ListBillLines :many
+SELECT l.id, l.bill_id, l.client_uuid, l.product_id, l.product_name, l.charge_code_id, l.rule_profile_id, l.options, l.quantity, l.unit_price, l.discount_pct, l.discount_amount,
+       l.discount_reason, l.is_comp, l.note, l.station_id, l.status, l.round_id, l.folio_item_id, l.voided_item_id, l.created_by, l.created_at, l.sent_by, l.sent_at,
+       l.voided_by, l.voided_at, l.void_approved_by, l.void_reason, COALESCE(r.round_no, 0)::int AS round_no,
+       COALESCE(i.base_amount, 0)::numeric AS item_base, COALESCE(i.discount_amount, 0)::numeric AS item_discount, COALESCE(i.net_amount, 0)::numeric AS item_net,
+       COALESCE(i.service_charge_total, 0)::numeric AS item_service, COALESCE(i.tax_total, 0)::numeric AS item_tax, COALESCE(i.debit - i.credit, 0)::numeric AS item_total,
+       COALESCE((SELECT t.status FROM pos_ticket_lines tl JOIN pos_tickets t ON t.property_id = tl.property_id AND t.id = tl.ticket_id
+                  WHERE tl.property_id = l.property_id AND tl.bill_line_id = l.id AND NOT tl.is_void ORDER BY t.id DESC LIMIT 1), '')::text AS ticket_status,
+       COALESCE((SELECT sum(a.net_amount) FROM folio_items a WHERE a.property_id = l.property_id AND a.reference_type = 'POS_BILL_LINE' AND a.reference_id = l.client_uuid::text
+                  AND a.transaction_type = 'ADJUSTMENT'), 0)::numeric AS adjusted_net,
+       COALESCE(vu.full_name, '')::text AS voided_by_name, COALESCE(au.full_name, '')::text AS approved_by_name, COALESCE(cu.full_name, '')::text AS created_by_name
+FROM pos_bill_lines l
+LEFT JOIN pos_rounds r ON r.property_id = l.property_id AND r.id = l.round_id
+LEFT JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users vu ON vu.id = l.voided_by
+LEFT JOIN users au ON au.id = l.void_approved_by
+LEFT JOIN users cu ON cu.id = l.created_by
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.bill_id = $3
+ORDER BY l.created_at, l.client_uuid
+`
+
+type ListBillLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillID     int64
+}
+
+type ListBillLinesRow struct {
+	ID             int64
+	BillID         int64
+	ClientUuid     pgtype.UUID
+	ProductID      int64
+	ProductName    string
+	ChargeCodeID   int64
+	RuleProfileID  *int64
+	Options        []byte
+	Quantity       decimal.Decimal
+	UnitPrice      decimal.Decimal
+	DiscountPct    *decimal.Decimal
+	DiscountAmount decimal.Decimal
+	DiscountReason *string
+	IsComp         bool
+	Note           *string
+	StationID      *int64
+	Status         string
+	RoundID        *int64
+	FolioItemID    *int64
+	VoidedItemID   *int64
+	CreatedBy      *int64
+	CreatedAt      time.Time
+	SentBy         *int64
+	SentAt         *time.Time
+	VoidedBy       *int64
+	VoidedAt       *time.Time
+	VoidApprovedBy *int64
+	VoidReason     *string
+	RoundNo        int32
+	ItemBase       decimal.Decimal
+	ItemDiscount   decimal.Decimal
+	ItemNet        decimal.Decimal
+	ItemService    decimal.Decimal
+	ItemTax        decimal.Decimal
+	ItemTotal      decimal.Decimal
+	TicketStatus   string
+	AdjustedNet    decimal.Decimal
+	VoidedByName   string
+	ApprovedByName string
+	CreatedByName  string
+}
+
+func (q *Queries) ListBillLines(ctx context.Context, arg ListBillLinesParams) ([]ListBillLinesRow, error) {
+	rows, err := q.db.Query(ctx, listBillLines, arg.TenantID, arg.PropertyID, arg.BillID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBillLinesRow{}
+	for rows.Next() {
+		var i ListBillLinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BillID,
+			&i.ClientUuid,
+			&i.ProductID,
+			&i.ProductName,
+			&i.ChargeCodeID,
+			&i.RuleProfileID,
+			&i.Options,
+			&i.Quantity,
+			&i.UnitPrice,
+			&i.DiscountPct,
+			&i.DiscountAmount,
+			&i.DiscountReason,
+			&i.IsComp,
+			&i.Note,
+			&i.StationID,
+			&i.Status,
+			&i.RoundID,
+			&i.FolioItemID,
+			&i.VoidedItemID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.SentBy,
+			&i.SentAt,
+			&i.VoidedBy,
+			&i.VoidedAt,
+			&i.VoidApprovedBy,
+			&i.VoidReason,
+			&i.RoundNo,
+			&i.ItemBase,
+			&i.ItemDiscount,
+			&i.ItemNet,
+			&i.ItemService,
+			&i.ItemTax,
+			&i.ItemTotal,
+			&i.TicketStatus,
+			&i.AdjustedNet,
+			&i.VoidedByName,
+			&i.ApprovedByName,
+			&i.CreatedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBillRoomCharges = `-- name: ListBillRoomCharges :many
+SELECT c.id, c.amount, c.to_folio_id, c.stay_id, c.returned_at, COALESCE(r.room_number, '')::text AS room_number
+FROM pos_room_charges c
+LEFT JOIN stay_rooms sr ON sr.property_id = c.property_id AND sr.stay_id = c.stay_id AND sr.id = (SELECT max(x.id) FROM stay_rooms x WHERE x.property_id = c.property_id AND x.stay_id = c.stay_id)
+LEFT JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.bill_id = $3
+ORDER BY c.id
+`
+
+type ListBillRoomChargesParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillID     *int64
+}
+
+type ListBillRoomChargesRow struct {
+	ID         int64
+	Amount     decimal.Decimal
+	ToFolioID  int64
+	StayID     *int64
+	ReturnedAt *time.Time
+	RoomNumber string
+}
+
+func (q *Queries) ListBillRoomCharges(ctx context.Context, arg ListBillRoomChargesParams) ([]ListBillRoomChargesRow, error) {
+	rows, err := q.db.Query(ctx, listBillRoomCharges, arg.TenantID, arg.PropertyID, arg.BillID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBillRoomChargesRow{}
+	for rows.Next() {
+		var i ListBillRoomChargesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Amount,
+			&i.ToFolioID,
+			&i.StayID,
+			&i.ReturnedAt,
+			&i.RoomNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBills = `-- name: ListBills :many
+SELECT b.id, b.client_uuid, b.folio_id, b.bill_number, b.status, b.order_type, b.table_id, b.guest_count, b.target_stay_id, b.customer_name, b.waiter_id,
+       b.opened_at, b.bill_requested_at, b.closed_at, b.business_date_opened, b.closed_business_date, b.version,
+       COALESCE(t.code, '')::text AS table_code, COALESCE(u.full_name, '')::text AS waiter_name,
+       COALESCE((SELECT sum(i.debit) - sum(i.credit) FROM folio_items i WHERE i.property_id = b.property_id AND i.folio_id = b.folio_id), 0)::numeric AS balance,
+       COALESCE((SELECT sum(i.debit) FROM folio_items i WHERE i.property_id = b.property_id AND i.folio_id = b.folio_id AND i.transaction_type = 'CHARGE'), 0)::numeric AS sold_debit,
+       (SELECT count(*) FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'DRAFT')::int AS draft_lines,
+       (SELECT count(*) FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT')::int AS sent_lines,
+       COALESCE((SELECT r.room_number FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                  WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id ORDER BY sr.id DESC LIMIT 1), '')::text AS target_room
+FROM pos_bills b
+LEFT JOIN pos_tables t ON t.property_id = b.property_id AND t.id = b.table_id
+LEFT JOIN users u ON u.id = b.waiter_id
+WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.outlet_id = $3
+  AND ($4::text IS NULL OR b.status = $4::text)
+  AND ($5::bigint IS NULL OR b.table_id = $5::bigint)
+  AND ($6::date IS NULL OR b.business_date_opened = $6::date OR b.closed_business_date = $6::date)
+  AND ($7::text IS NULL OR b.bill_number ILIKE '%' || $7::text || '%' OR COALESCE(t.code, '') ILIKE '%' || $7::text || '%'
+       OR COALESCE(b.customer_name, '') ILIKE '%' || $7::text || '%'
+       OR EXISTS (SELECT 1 FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                   WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id AND r.room_number ILIKE '%' || $7::text || '%'))
+ORDER BY b.id DESC
+LIMIT $8
+`
+
+type ListBillsParams struct {
+	TenantID   int64
+	PropertyID int64
+	OutletID   int64
+	Status     *string
+	TableID    *int64
+	Day        *civil.Date
+	Q          *string
+	RowLimit   int32
+}
+
+type ListBillsRow struct {
+	ID                 int64
+	ClientUuid         pgtype.UUID
+	FolioID            *int64
+	BillNumber         *string
+	Status             string
+	OrderType          string
+	TableID            *int64
+	GuestCount         pgtype.Int2
+	TargetStayID       *int64
+	CustomerName       *string
+	WaiterID           *int64
+	OpenedAt           time.Time
+	BillRequestedAt    *time.Time
+	ClosedAt           *time.Time
+	BusinessDateOpened civil.Date
+	ClosedBusinessDate *civil.Date
+	Version            int32
+	TableCode          string
+	WaiterName         string
+	Balance            decimal.Decimal
+	SoldDebit          decimal.Decimal
+	DraftLines         int32
+	SentLines          int32
+	TargetRoom         string
+}
+
+// The bills of an outlet with what a list shows. The balance of an open bill is the balance of its folio; a draft line is not in it (the screen adds the quote of the drafts).
+func (q *Queries) ListBills(ctx context.Context, arg ListBillsParams) ([]ListBillsRow, error) {
+	rows, err := q.db.Query(ctx, listBills,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.OutletID,
+		arg.Status,
+		arg.TableID,
+		arg.Day,
+		arg.Q,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBillsRow{}
+	for rows.Next() {
+		var i ListBillsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClientUuid,
+			&i.FolioID,
+			&i.BillNumber,
+			&i.Status,
+			&i.OrderType,
+			&i.TableID,
+			&i.GuestCount,
+			&i.TargetStayID,
+			&i.CustomerName,
+			&i.WaiterID,
+			&i.OpenedAt,
+			&i.BillRequestedAt,
+			&i.ClosedAt,
+			&i.BusinessDateOpened,
+			&i.ClosedBusinessDate,
+			&i.Version,
+			&i.TableCode,
+			&i.WaiterName,
+			&i.Balance,
+			&i.SoldDebit,
+			&i.DraftLines,
+			&i.SentLines,
+			&i.TargetRoom,
 		); err != nil {
 			return nil, err
 		}
@@ -784,6 +1764,70 @@ func (q *Queries) ListChargeCodeRefs(ctx context.Context, arg ListChargeCodeRefs
 			&i.Code,
 			&i.ChargeType,
 			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHolds = `-- name: ListHolds :many
+SELECT h.id, h.table_id, t.code AS table_code, h.business_date, h.from_time, h.party_size, h.name, h.phone, h.note, h.status
+FROM pos_table_holds h JOIN pos_tables t ON t.property_id = h.property_id AND t.id = h.table_id JOIN pos_areas a ON a.property_id = t.property_id AND a.id = t.area_id
+WHERE h.tenant_id = $1 AND h.property_id = $2 AND a.outlet_id = $3 AND h.business_date = $4 AND h.status = 'HELD'
+ORDER BY h.from_time, h.id
+`
+
+type ListHoldsParams struct {
+	TenantID     int64
+	PropertyID   int64
+	OutletID     int64
+	BusinessDate civil.Date
+}
+
+type ListHoldsRow struct {
+	ID           int64
+	TableID      int64
+	TableCode    string
+	BusinessDate civil.Date
+	FromTime     civil.TimeOfDay
+	PartySize    pgtype.Int2
+	Name         string
+	Phone        *string
+	Note         *string
+	Status       string
+}
+
+// ---------------------------------------------------------------- holds
+func (q *Queries) ListHolds(ctx context.Context, arg ListHoldsParams) ([]ListHoldsRow, error) {
+	rows, err := q.db.Query(ctx, listHolds,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.OutletID,
+		arg.BusinessDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHoldsRow{}
+	for rows.Next() {
+		var i ListHoldsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TableID,
+			&i.TableCode,
+			&i.BusinessDate,
+			&i.FromTime,
+			&i.PartySize,
+			&i.Name,
+			&i.Phone,
+			&i.Note,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -1626,6 +2670,134 @@ func (q *Queries) LockArea(ctx context.Context, arg LockAreaParams) (int32, erro
 	return layout_version, err
 }
 
+const lookupRooms = `-- name: LookupRooms :many
+SELECT s.id AS stay_id, r.room_number, btrim(COALESCE(g.first_name, '') || ' ' || g.last_name)::text AS guest_name
+FROM stays s
+JOIN stay_rooms sr ON sr.property_id = s.property_id AND sr.stay_id = s.id AND sr.check_out_at IS NULL
+JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.status = 'OPEN'
+  AND (r.room_number ILIKE $3::text || '%' OR btrim(COALESCE(g.first_name, '') || ' ' || g.last_name) ILIKE '%' || $3::text || '%')
+ORDER BY r.room_number
+LIMIT 20
+`
+
+type LookupRoomsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Q          string
+}
+
+type LookupRoomsRow struct {
+	StayID     int64
+	RoomNumber string
+	GuestName  string
+}
+
+// The rooms an outlet may look up: in-house stays whose room matches the number or the guest's name.
+func (q *Queries) LookupRooms(ctx context.Context, arg LookupRoomsParams) ([]LookupRoomsRow, error) {
+	rows, err := q.db.Query(ctx, lookupRooms, arg.TenantID, arg.PropertyID, arg.Q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LookupRoomsRow{}
+	for rows.Next() {
+		var i LookupRoomsRow
+		if err := rows.Scan(&i.StayID, &i.RoomNumber, &i.GuestName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markLineComp = `-- name: MarkLineComp :exec
+UPDATE pos_bill_lines SET is_comp = true, discount_reason = $1, discount_by = $2
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5 AND status = 'SENT'
+`
+
+type MarkLineCompParams struct {
+	Reason     *string
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) MarkLineComp(ctx context.Context, arg MarkLineCompParams) error {
+	_, err := q.db.Exec(ctx, markLineComp,
+		arg.Reason,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const markLineSent = `-- name: MarkLineSent :exec
+UPDATE pos_bill_lines SET status = 'SENT', round_id = $1, folio_item_id = $2, sent_by = $3, sent_at = $4::timestamptz
+WHERE tenant_id = $5 AND property_id = $6 AND id = $7 AND status = 'DRAFT'
+`
+
+type MarkLineSentParams struct {
+	RoundID     *int64
+	FolioItemID *int64
+	ActorID     *int64
+	At          time.Time
+	TenantID    int64
+	PropertyID  int64
+	ID          int64
+}
+
+func (q *Queries) MarkLineSent(ctx context.Context, arg MarkLineSentParams) error {
+	_, err := q.db.Exec(ctx, markLineSent,
+		arg.RoundID,
+		arg.FolioItemID,
+		arg.ActorID,
+		arg.At,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const markLineVoid = `-- name: MarkLineVoid :exec
+UPDATE pos_bill_lines SET status = 'VOID', voided_item_id = $1, voided_by = $2, voided_at = $3::timestamptz, void_approved_by = $4,
+       void_reason = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'SENT'
+`
+
+type MarkLineVoidParams struct {
+	VoidedItemID *int64
+	ActorID      *int64
+	At           time.Time
+	ApprovedBy   *int64
+	Reason       *string
+	TenantID     int64
+	PropertyID   int64
+	ID           int64
+}
+
+func (q *Queries) MarkLineVoid(ctx context.Context, arg MarkLineVoidParams) error {
+	_, err := q.db.Exec(ctx, markLineVoid,
+		arg.VoidedItemID,
+		arg.ActorID,
+		arg.At,
+		arg.ApprovedBy,
+		arg.Reason,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const markSoldOut = `-- name: MarkSoldOut :exec
 INSERT INTO pos_outlet_sold_out (tenant_id, property_id, outlet_id, product_id, business_date, marked_by)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -1651,6 +2823,812 @@ func (q *Queries) MarkSoldOut(ctx context.Context, arg MarkSoldOutParams) error 
 		arg.ActorID,
 	)
 	return err
+}
+
+const moveLineToBill = `-- name: MoveLineToBill :exec
+UPDATE pos_bill_lines SET bill_id = $1, folio_item_id = COALESCE($2::bigint, folio_item_id)
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5
+`
+
+type MoveLineToBillParams struct {
+	BillID      int64
+	FolioItemID *int64
+	TenantID    int64
+	PropertyID  int64
+	ID          int64
+}
+
+// The line moves to another bill (merge, split); a sent line follows its copy on the folio of the other bill.
+func (q *Queries) MoveLineToBill(ctx context.Context, arg MoveLineToBillParams) error {
+	_, err := q.db.Exec(ctx, moveLineToBill,
+		arg.BillID,
+		arg.FolioItemID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const nextBillNumber = `-- name: NextBillNumber :one
+
+UPDATE pos_outlets SET next_bill_no = next_bill_no + 1
+WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+RETURNING (next_bill_no - 1)::bigint AS number, code
+`
+
+type NextBillNumberParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type NextBillNumberRow struct {
+	Number int64
+	Code   string
+}
+
+// ================================================================ PR 2: bills, lines, rounds, tickets, holds (docs/architecture/34-pos.md 3.3, 5)
+// The next number of the bills of an outlet: the sequence of the outlet, the last lock of the transaction (level 50).
+func (q *Queries) NextBillNumber(ctx context.Context, arg NextBillNumberParams) (NextBillNumberRow, error) {
+	row := q.db.QueryRow(ctx, nextBillNumber, arg.TenantID, arg.PropertyID, arg.ID)
+	var i NextBillNumberRow
+	err := row.Scan(&i.Number, &i.Code)
+	return i, err
+}
+
+const nextRoundNo = `-- name: NextRoundNo :one
+SELECT (COALESCE(max(round_no), 0) + 1)::int AS round_no FROM pos_rounds WHERE property_id = $1 AND bill_id = $2
+`
+
+type NextRoundNoParams struct {
+	PropertyID int64
+	BillID     int64
+}
+
+// ---------------------------------------------------------------- rounds and tickets
+func (q *Queries) NextRoundNo(ctx context.Context, arg NextRoundNoParams) (int32, error) {
+	row := q.db.QueryRow(ctx, nextRoundNo, arg.PropertyID, arg.BillID)
+	var round_no int32
+	err := row.Scan(&round_no)
+	return round_no, err
+}
+
+const nightAuditOpenBills = `-- name: NightAuditOpenBills :many
+SELECT o.id AS outlet_id, o.code AS outlet_code, o.name AS outlet_name, o.block_night_audit_with_open_bills AS blocks,
+       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT'))::int AS with_sold_lines,
+       count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT')
+                          AND EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'DRAFT'))::int AS drafts_only
+FROM pos_bills b JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
+WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.status = 'OPEN'
+GROUP BY o.id, o.code, o.name, o.block_night_audit_with_open_bills
+ORDER BY o.code
+`
+
+type NightAuditOpenBillsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type NightAuditOpenBillsRow struct {
+	OutletID      int64
+	OutletCode    string
+	OutletName    string
+	Blocks        bool
+	WithSoldLines int32
+	DraftsOnly    int32
+}
+
+// The open bills of the outlets for the night audit: a bill with a sold line is revenue of the day whose payment nobody counted; a bill with draft lines only has nothing in the books.
+func (q *Queries) NightAuditOpenBills(ctx context.Context, arg NightAuditOpenBillsParams) ([]NightAuditOpenBillsRow, error) {
+	rows, err := q.db.Query(ctx, nightAuditOpenBills, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NightAuditOpenBillsRow{}
+	for rows.Next() {
+		var i NightAuditOpenBillsRow
+		if err := rows.Scan(
+			&i.OutletID,
+			&i.OutletCode,
+			&i.OutletName,
+			&i.Blocks,
+			&i.WithSoldLines,
+			&i.DraftsOnly,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reopenBill = `-- name: ReopenBill :execrows
+UPDATE pos_bills SET status = 'OPEN', closed_at = NULL, closed_business_date = NULL, bill_requested_at = NULL, version = version + 1, updated_by = $1
+WHERE tenant_id = $2 AND property_id = $3 AND id = $4 AND status = 'CLOSED'
+`
+
+type ReopenBillParams struct {
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) ReopenBill(ctx context.Context, arg ReopenBillParams) (int64, error) {
+	result, err := q.db.Exec(ctx, reopenBill,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const reportCashiers = `-- name: ReportCashiers :many
+SELECT COALESCE(u.full_name, '')::text AS cashier, count(*)::int AS payments, COALESCE(sum(p.amount) FILTER (WHERE p.payment_method = 'CASH'), 0)::numeric AS cash,
+       COALESCE(sum(p.amount) FILTER (WHERE p.payment_method <> 'CASH'), 0)::numeric AS other
+FROM payments p JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = $1
+LEFT JOIN users u ON u.id = p.created_by
+WHERE p.tenant_id = $2 AND p.property_id = $3 AND p.business_date BETWEEN $4 AND $5 AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+GROUP BY u.full_name
+ORDER BY u.full_name
+`
+
+type ReportCashiersParams struct {
+	OutletID   *int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportCashiersRow struct {
+	Cashier  string
+	Payments int32
+	Cash     decimal.Decimal
+	Other    decimal.Decimal
+}
+
+func (q *Queries) ReportCashiers(ctx context.Context, arg ReportCashiersParams) ([]ReportCashiersRow, error) {
+	rows, err := q.db.Query(ctx, reportCashiers,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportCashiersRow{}
+	for rows.Next() {
+		var i ReportCashiersRow
+		if err := rows.Scan(
+			&i.Cashier,
+			&i.Payments,
+			&i.Cash,
+			&i.Other,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportComps = `-- name: ReportComps :many
+SELECT COALESCE(b.bill_number, '')::text AS bill_number, p.amount::numeric AS amount, COALESCE(p.remarks, '')::text AS remarks, COALESCE(au.full_name, '')::text AS approved_by,
+       p.business_date, 'PAYMENT_COMP'::text AS treatment
+FROM payments p
+JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = $1
+LEFT JOIN pos_bills b ON b.property_id = f.property_id AND b.folio_id = f.id
+LEFT JOIN users au ON au.id = p.approved_by
+WHERE p.tenant_id = $2 AND p.property_id = $3 AND p.payment_method = 'COMP' AND p.status = 'POSTED' AND p.business_date BETWEEN $4 AND $5
+UNION ALL
+SELECT COALESCE(b.bill_number, '')::text, (i.debit - i.credit)::numeric, COALESCE(l.discount_reason, '')::text, COALESCE(cu.full_name, '')::text, i.business_date, 'DISCOUNT_100'::text
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = $1 AND b.comp_treatment = 'DISCOUNT_100'
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users cu ON cu.id = l.discount_by
+WHERE l.tenant_id = $2 AND l.property_id = $3 AND l.is_comp AND l.status = 'SENT' AND i.business_date BETWEEN $4 AND $5
+ORDER BY 5, 1
+`
+
+type ReportCompsParams struct {
+	OutletID   *int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportCompsRow struct {
+	BillNumber   string
+	Amount       decimal.Decimal
+	Remarks      string
+	ApprovedBy   string
+	BusinessDate civil.Date
+	Treatment    string
+}
+
+// Complimentary: the payments of the method COMP and the lines made complimentary by a 100% discount.
+func (q *Queries) ReportComps(ctx context.Context, arg ReportCompsParams) ([]ReportCompsRow, error) {
+	rows, err := q.db.Query(ctx, reportComps,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportCompsRow{}
+	for rows.Next() {
+		var i ReportCompsRow
+		if err := rows.Scan(
+			&i.BillNumber,
+			&i.Amount,
+			&i.Remarks,
+			&i.ApprovedBy,
+			&i.BusinessDate,
+			&i.Treatment,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportDays = `-- name: ReportDays :many
+
+SELECT i.business_date,
+       COALESCE(sum(i.net_amount) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS net,
+       COALESCE(sum(i.service_charge_total) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS service,
+       COALESCE(sum(i.tax_total) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS tax,
+       COALESCE(sum(i.debit - i.credit) FILTER (WHERE c.charge_type = 'ROUNDING'), 0)::numeric AS rounding,
+       COALESCE(sum(i.debit - i.credit) FILTER (WHERE COALESCE(c.charge_type, '') <> 'ROUNDING'), 0)::numeric AS total,
+       count(DISTINCT i.folio_id) FILTER (WHERE i.transaction_type = 'CHARGE' AND i.source = 'POS')::int AS bills
+FROM folio_items i
+JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = $1
+LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
+WHERE i.tenant_id = $2 AND i.property_id = $3 AND i.business_date BETWEEN $4 AND $5
+  AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') <> 'TRANSFER'
+  AND NOT (i.source = 'TRANSFER' OR (i.reference_type = 'FOLIO_TRANSFER'))
+GROUP BY i.business_date
+ORDER BY i.business_date
+`
+
+type ReportDaysParams struct {
+	OutletID   *int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportDaysRow struct {
+	BusinessDate civil.Date
+	Net          decimal.Decimal
+	Service      decimal.Decimal
+	Tax          decimal.Decimal
+	Rounding     decimal.Decimal
+	Total        decimal.Decimal
+	Bills        int32
+}
+
+// ================================================================ reports of an outlet (34-pos.md 13.2): everything is read from the ledger of the bills' folios, never a second set of totals
+// Sales, service and tax of each business day: the lines the bills sold less what was voided and discounted after, without the lines of the transfers between folios (a split or a merge
+// changes nothing of what was sold) and without the rounding, which has its own column.
+func (q *Queries) ReportDays(ctx context.Context, arg ReportDaysParams) ([]ReportDaysRow, error) {
+	rows, err := q.db.Query(ctx, reportDays,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportDaysRow{}
+	for rows.Next() {
+		var i ReportDaysRow
+		if err := rows.Scan(
+			&i.BusinessDate,
+			&i.Net,
+			&i.Service,
+			&i.Tax,
+			&i.Rounding,
+			&i.Total,
+			&i.Bills,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportDiscounts = `-- name: ReportDiscounts :many
+SELECT COALESCE(b.bill_number, '')::text AS bill_number, i.description, (i.base_amount - i.discount_amount)::numeric AS amount, COALESCE(i.reason, '')::text AS reason,
+       COALESCE(cu.full_name, '')::text AS given_by, COALESCE(au.full_name, '')::text AS approved_by, i.business_date, 'ADJUSTMENT'::text AS kind
+FROM folio_items i
+JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = $1
+LEFT JOIN pos_bills b ON b.property_id = f.property_id AND b.folio_id = f.id
+LEFT JOIN users cu ON cu.id = i.created_by
+LEFT JOIN users au ON au.id = i.approved_by
+WHERE i.tenant_id = $2 AND i.property_id = $3 AND i.transaction_type = 'ADJUSTMENT' AND i.source = 'POS' AND i.description LIKE 'Discount: %'
+  AND i.business_date BETWEEN $4 AND $5
+UNION ALL
+SELECT COALESCE(b.bill_number, '')::text, l.product_name, i.discount_amount::numeric, COALESCE(l.discount_reason, '')::text, COALESCE(cu.full_name, '')::text, ''::text, i.business_date, 'LINE'::text
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = $1
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users cu ON cu.id = l.discount_by
+WHERE l.tenant_id = $2 AND l.property_id = $3 AND l.status IN ('SENT', 'VOID') AND i.discount_amount > 0 AND NOT l.is_comp AND i.business_date BETWEEN $4 AND $5
+ORDER BY 7, 1
+`
+
+type ReportDiscountsParams struct {
+	OutletID   *int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportDiscountsRow struct {
+	BillNumber   string
+	Description  string
+	Amount       decimal.Decimal
+	Reason       string
+	GivenBy      string
+	ApprovedBy   string
+	BusinessDate civil.Date
+	Kind         string
+}
+
+// Discounts after the send are adjustments; discounts before it are on the line itself.
+func (q *Queries) ReportDiscounts(ctx context.Context, arg ReportDiscountsParams) ([]ReportDiscountsRow, error) {
+	rows, err := q.db.Query(ctx, reportDiscounts,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportDiscountsRow{}
+	for rows.Next() {
+		var i ReportDiscountsRow
+		if err := rows.Scan(
+			&i.BillNumber,
+			&i.Description,
+			&i.Amount,
+			&i.Reason,
+			&i.GivenBy,
+			&i.ApprovedBy,
+			&i.BusinessDate,
+			&i.Kind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportMethods = `-- name: ReportMethods :many
+SELECT p.payment_method AS method, count(*)::int AS payments, COALESCE(sum(p.amount), 0)::numeric AS amount
+FROM payments p JOIN folios f ON f.property_id = p.property_id AND f.id = p.folio_id AND f.folio_type = 'OUTLET' AND f.outlet_id = $1
+WHERE p.tenant_id = $2 AND p.property_id = $3 AND p.business_date BETWEEN $4 AND $5 AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+GROUP BY p.payment_method
+ORDER BY p.payment_method
+`
+
+type ReportMethodsParams struct {
+	OutletID   *int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportMethodsRow struct {
+	Method   string
+	Payments int32
+	Amount   decimal.Decimal
+}
+
+func (q *Queries) ReportMethods(ctx context.Context, arg ReportMethodsParams) ([]ReportMethodsRow, error) {
+	rows, err := q.db.Query(ctx, reportMethods,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportMethodsRow{}
+	for rows.Next() {
+		var i ReportMethodsRow
+		if err := rows.Scan(&i.Method, &i.Payments, &i.Amount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportOpenBills = `-- name: ReportOpenBills :one
+SELECT count(*)::int AS bills,
+       COALESCE(sum((SELECT sum(i.debit - i.credit) FROM folio_items i WHERE i.property_id = b.property_id AND i.folio_id = b.folio_id)), 0)::numeric AS balance
+FROM pos_bills b WHERE b.tenant_id = $1 AND b.property_id = $2 AND b.outlet_id = $3 AND b.status = 'OPEN'
+  AND EXISTS (SELECT 1 FROM pos_bill_lines l WHERE l.property_id = b.property_id AND l.bill_id = b.id AND l.status = 'SENT')
+`
+
+type ReportOpenBillsParams struct {
+	TenantID   int64
+	PropertyID int64
+	OutletID   int64
+}
+
+type ReportOpenBillsRow struct {
+	Bills   int32
+	Balance decimal.Decimal
+}
+
+func (q *Queries) ReportOpenBills(ctx context.Context, arg ReportOpenBillsParams) (ReportOpenBillsRow, error) {
+	row := q.db.QueryRow(ctx, reportOpenBills, arg.TenantID, arg.PropertyID, arg.OutletID)
+	var i ReportOpenBillsRow
+	err := row.Scan(&i.Bills, &i.Balance)
+	return i, err
+}
+
+const reportProducts = `-- name: ReportProducts :many
+SELECT l.product_id, l.product_name, COALESCE(cat.name, '')::text AS category, sum(l.quantity)::numeric AS quantity,
+       sum(i.base_amount)::numeric AS base, sum(i.discount_amount)::numeric AS discount, sum(i.net_amount)::numeric AS net, sum(i.service_charge_total)::numeric AS service,
+       sum(i.tax_total)::numeric AS tax, sum(i.debit - i.credit)::numeric AS total
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = $1
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = COALESCE(l.voided_item_id, l.folio_item_id)
+LEFT JOIN pos_products p ON p.property_id = l.property_id AND p.id = l.product_id
+LEFT JOIN pos_categories cat ON cat.property_id = p.property_id AND cat.id = p.category_id
+WHERE l.tenant_id = $2 AND l.property_id = $3 AND l.status = 'SENT' AND i.service_date BETWEEN $4 AND $5
+GROUP BY l.product_id, l.product_name, cat.name
+ORDER BY sum(i.debit - i.credit) DESC, l.product_name
+`
+
+type ReportProductsParams struct {
+	OutletID   int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportProductsRow struct {
+	ProductID   int64
+	ProductName string
+	Category    string
+	Quantity    decimal.Decimal
+	Base        decimal.Decimal
+	Discount    decimal.Decimal
+	Net         decimal.Decimal
+	Service     decimal.Decimal
+	Tax         decimal.Decimal
+	Total       decimal.Decimal
+}
+
+func (q *Queries) ReportProducts(ctx context.Context, arg ReportProductsParams) ([]ReportProductsRow, error) {
+	rows, err := q.db.Query(ctx, reportProducts,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportProductsRow{}
+	for rows.Next() {
+		var i ReportProductsRow
+		if err := rows.Scan(
+			&i.ProductID,
+			&i.ProductName,
+			&i.Category,
+			&i.Quantity,
+			&i.Base,
+			&i.Discount,
+			&i.Net,
+			&i.Service,
+			&i.Tax,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportRoomCharges = `-- name: ReportRoomCharges :one
+SELECT count(*) FILTER (WHERE c.returned_at IS NULL)::int AS charges, COALESCE(sum(c.amount) FILTER (WHERE c.returned_at IS NULL), 0)::numeric AS amount,
+       count(*) FILTER (WHERE c.returned_at IS NOT NULL)::int AS returned
+FROM pos_room_charges c
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.outlet_id = $3 AND c.business_date BETWEEN $4 AND $5
+`
+
+type ReportRoomChargesParams struct {
+	TenantID   int64
+	PropertyID int64
+	OutletID   int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportRoomChargesRow struct {
+	Charges  int32
+	Amount   decimal.Decimal
+	Returned int32
+}
+
+func (q *Queries) ReportRoomCharges(ctx context.Context, arg ReportRoomChargesParams) (ReportRoomChargesRow, error) {
+	row := q.db.QueryRow(ctx, reportRoomCharges,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.OutletID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	var i ReportRoomChargesRow
+	err := row.Scan(&i.Charges, &i.Amount, &i.Returned)
+	return i, err
+}
+
+const reportVoids = `-- name: ReportVoids :many
+SELECT l.id, COALESCE(b.bill_number, '')::text AS bill_number, l.product_name, l.quantity, (i.debit - i.credit)::numeric AS amount, l.void_reason,
+       COALESCE(vu.full_name, '')::text AS voided_by, COALESCE(au.full_name, '')::text AS approved_by, v.business_date
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = $1
+JOIN folio_items v ON v.property_id = l.property_id AND v.id = l.voided_item_id
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = v.reverses_item_id
+LEFT JOIN users vu ON vu.id = l.voided_by
+LEFT JOIN users au ON au.id = l.void_approved_by
+WHERE l.tenant_id = $2 AND l.property_id = $3 AND l.status = 'VOID' AND v.business_date BETWEEN $4 AND $5
+ORDER BY v.business_date, l.id
+`
+
+type ReportVoidsParams struct {
+	OutletID   int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportVoidsRow struct {
+	ID           int64
+	BillNumber   string
+	ProductName  string
+	Quantity     decimal.Decimal
+	Amount       decimal.Decimal
+	VoidReason   *string
+	VoidedBy     string
+	ApprovedBy   string
+	BusinessDate civil.Date
+}
+
+func (q *Queries) ReportVoids(ctx context.Context, arg ReportVoidsParams) ([]ReportVoidsRow, error) {
+	rows, err := q.db.Query(ctx, reportVoids,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportVoidsRow{}
+	for rows.Next() {
+		var i ReportVoidsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BillNumber,
+			&i.ProductName,
+			&i.Quantity,
+			&i.Amount,
+			&i.VoidReason,
+			&i.VoidedBy,
+			&i.ApprovedBy,
+			&i.BusinessDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reportWaiters = `-- name: ReportWaiters :many
+SELECT COALESCE(u.full_name, '')::text AS waiter, count(DISTINCT b.id)::int AS bills, COALESCE(sum(i.debit - i.credit), 0)::numeric AS total
+FROM pos_bill_lines l
+JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id AND b.outlet_id = $1
+JOIN folio_items i ON i.property_id = l.property_id AND i.id = l.folio_item_id
+LEFT JOIN users u ON u.id = COALESCE(l.created_by, b.waiter_id)
+WHERE l.tenant_id = $2 AND l.property_id = $3 AND l.status = 'SENT' AND i.service_date BETWEEN $4 AND $5
+GROUP BY u.full_name
+ORDER BY u.full_name
+`
+
+type ReportWaitersParams struct {
+	OutletID   int64
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+}
+
+type ReportWaitersRow struct {
+	Waiter string
+	Bills  int32
+	Total  decimal.Decimal
+}
+
+func (q *Queries) ReportWaiters(ctx context.Context, arg ReportWaitersParams) ([]ReportWaitersRow, error) {
+	rows, err := q.db.Query(ctx, reportWaiters,
+		arg.OutletID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReportWaitersRow{}
+	for rows.Next() {
+		var i ReportWaitersRow
+		if err := rows.Scan(&i.Waiter, &i.Bills, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setBillRequested = `-- name: SetBillRequested :exec
+UPDATE pos_bills SET bill_requested_at = $1::timestamptz, version = version + 1, updated_by = $2
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5 AND status = 'OPEN'
+`
+
+type SetBillRequestedParams struct {
+	At         time.Time
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SetBillRequested(ctx context.Context, arg SetBillRequestedParams) error {
+	_, err := q.db.Exec(ctx, setBillRequested,
+		arg.At,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const setHoldStatus = `-- name: SetHoldStatus :execrows
+UPDATE pos_table_holds SET status = $1, updated_by = $2
+WHERE tenant_id = $3 AND property_id = $4 AND id = $5 AND status = 'HELD'
+`
+
+type SetHoldStatusParams struct {
+	Status     string
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) SetHoldStatus(ctx context.Context, arg SetHoldStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setHoldStatus,
+		arg.Status,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setLineDiscount = `-- name: SetLineDiscount :execrows
+UPDATE pos_bill_lines SET discount_pct = $1, discount_amount = $2, discount_reason = $3, discount_by = $4, is_comp = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND bill_id = $9 AND status = 'DRAFT'
+`
+
+type SetLineDiscountParams struct {
+	DiscountPct    *decimal.Decimal
+	DiscountAmount decimal.Decimal
+	DiscountReason *string
+	ActorID        *int64
+	IsComp         bool
+	TenantID       int64
+	PropertyID     int64
+	ID             int64
+	BillID         int64
+}
+
+func (q *Queries) SetLineDiscount(ctx context.Context, arg SetLineDiscountParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setLineDiscount,
+		arg.DiscountPct,
+		arg.DiscountAmount,
+		arg.DiscountReason,
+		arg.ActorID,
+		arg.IsComp,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.BillID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setupCheckOutlets = `-- name: SetupCheckOutlets :many
@@ -1761,6 +3739,22 @@ func (q *Queries) SetupCheckStations(ctx context.Context, arg SetupCheckStations
 	return items, nil
 }
 
+const strikeTicketLines = `-- name: StrikeTicketLines :exec
+UPDATE pos_ticket_lines SET is_void = true WHERE tenant_id = $1 AND property_id = $2 AND bill_line_id = $3 AND NOT is_void
+`
+
+type StrikeTicketLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillLineID int64
+}
+
+// A line voided before its ticket was served: the ticket line is struck through.
+func (q *Queries) StrikeTicketLines(ctx context.Context, arg StrikeTicketLinesParams) error {
+	_, err := q.db.Exec(ctx, strikeTicketLines, arg.TenantID, arg.PropertyID, arg.BillLineID)
+	return err
+}
+
 const updateArea = `-- name: UpdateArea :exec
 UPDATE pos_areas SET name = $1, sort_order = $2, grid_w = $3, grid_h = $4, is_active = $5,
        layout_version = layout_version + 1, updated_by = $6
@@ -1794,6 +3788,42 @@ func (q *Queries) UpdateArea(ctx context.Context, arg UpdateAreaParams) error {
 	return err
 }
 
+const updateBillMeta = `-- name: UpdateBillMeta :execrows
+UPDATE pos_bills SET table_id = $1, order_type = $2, guest_count = $3, customer_name = $4, note = $5,
+       version = version + 1, updated_by = $6
+WHERE tenant_id = $7 AND property_id = $8 AND id = $9 AND status = 'OPEN'
+`
+
+type UpdateBillMetaParams struct {
+	TableID      *int64
+	OrderType    string
+	GuestCount   pgtype.Int2
+	CustomerName *string
+	Note         *string
+	ActorID      *int64
+	TenantID     int64
+	PropertyID   int64
+	ID           int64
+}
+
+func (q *Queries) UpdateBillMeta(ctx context.Context, arg UpdateBillMetaParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateBillMeta,
+		arg.TableID,
+		arg.OrderType,
+		arg.GuestCount,
+		arg.CustomerName,
+		arg.Note,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateCategory = `-- name: UpdateCategory :execrows
 UPDATE pos_categories SET name = $1, sort_order = $2, is_active = $3, updated_by = $4
 WHERE tenant_id = $5 AND property_id = $6 AND id = $7
@@ -1818,6 +3848,39 @@ func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) 
 		arg.TenantID,
 		arg.PropertyID,
 		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateDraftLine = `-- name: UpdateDraftLine :execrows
+UPDATE pos_bill_lines SET quantity = $1, options = $2::jsonb, unit_price = $3, note = $4
+WHERE tenant_id = $5 AND property_id = $6 AND id = $7 AND bill_id = $8 AND status = 'DRAFT'
+`
+
+type UpdateDraftLineParams struct {
+	Quantity   decimal.Decimal
+	Options    []byte
+	UnitPrice  decimal.Decimal
+	Note       *string
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+	BillID     int64
+}
+
+func (q *Queries) UpdateDraftLine(ctx context.Context, arg UpdateDraftLineParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateDraftLine,
+		arg.Quantity,
+		arg.Options,
+		arg.UnitPrice,
+		arg.Note,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.BillID,
 	)
 	if err != nil {
 		return 0, err

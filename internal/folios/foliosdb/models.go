@@ -31,6 +31,7 @@ type Folio struct {
 	ClosedOn        *civil.Date
 	BillToCompanyID *int64
 	BookingGroupID  *int64
+	OutletID        *int64
 }
 
 type FolioItem struct {
@@ -118,7 +119,7 @@ type FolioTransferBatch struct {
 	Scope          string
 	Reason         string
 	BusinessDate   civil.Date
-	ApprovedBy     int64
+	ApprovedBy     *int64
 	IdempotencyKey *string
 	CreatedAt      time.Time
 	CreatedBy      *int64
@@ -153,4 +154,25 @@ type Payment struct {
 	ExpectedSettlementDate *civil.Date
 	MdrVatRate             *decimal.Decimal
 	MdrVat                 *decimal.Decimal
+}
+
+type PosRoomCharge struct {
+	ID                   int64
+	TenantID             int64
+	PropertyID           int64
+	OutletID             int64
+	BillID               *int64
+	BillNumber           *string
+	FromFolioID          *int64
+	ToFolioID            int64
+	StayID               *int64
+	Amount               decimal.Decimal
+	LockPeriodNo         int32
+	TransferBatchID      *int64
+	ReturnedAt           *time.Time
+	ReturnedByTransferID *int64
+	BusinessDate         civil.Date
+	IdempotencyKey       *string
+	CreatedAt            time.Time
+	CreatedBy            *int64
 }

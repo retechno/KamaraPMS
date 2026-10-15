@@ -78,6 +78,18 @@ describe('FolioView', () => {
     expect(w.get('[data-testid=detail-1]').text()).toContain('VAT 11.0000% on 110,000 = 12,100')
   })
 
+  it('names a charge from an outlet as "outlet · bill" with one link to the bill and no repeated number', async () => {
+    const trf = item({ id: 8, description: 'Restoran Teratai · RESTO-0001', charge_code: 'TRF', pos_bill: { id: 31, bill_number: 'RESTO-0001', outlet_name: 'Restoran Teratai' }, transfer: { role: 'IN', from: { id: 40, number: 'RESTO-0001' }, to: { id: 3, number: 'FOL000001' }, origin: { id: 40, number: 'RESTO-0001' } }, components: [] })
+    const w = mountView(folio({ items: [trf] }), [...ALL, 'pos.order'])
+    await flushPromises()
+    const row = w.get('[data-testid=item-8]').text()
+    expect(row).toContain('Restoran Teratai · RESTO-0001')
+    expect(row.match(/RESTO-0001/g)).toHaveLength(1)
+    const link = w.get('[data-testid=pos-bill-8] a')
+    expect(link.text()).toBe('View details')
+    expect(link.attributes('href')).toBe('/pos/bills/31')
+  })
+
   it('offers only what is allowed: reverse a same-day charge, void or refund a payment', async () => {
     const w = mountView()
     await flushPromises()

@@ -33,6 +33,7 @@ import (
 	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/health"
@@ -135,6 +136,9 @@ func New(d Deps) *App {
 	foliosSvc.SetShiftGate(shiftsSvc) // cash goes through the shift of the cashier
 	cityLedgerSvc.SetShiftGate(shiftsSvc)
 	nightAuditSvc.SetShiftChecker(shiftsSvc) // and an open shift stops the night audit
+	posSvc := pos.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
+	posSvc.SetBilling(foliosSvc, iamSvc, billingSvc) // the bills post through the one folio service, with the approvals of iam
+	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc})
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)
@@ -157,7 +161,7 @@ func New(d Deps) *App {
 	shifts.NewHandler(shiftsSvc).Register(api)
 	budget.NewHandler(budgetSvc).Register(api)
 	departments.NewHandler(departmentsSvc).Register(api)
-	pos.NewHandler(pos.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)).Register(api)
+	pos.NewHandler(posSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)
@@ -200,4 +204,26 @@ func New(d Deps) *App {
 		httpx.Recover,
 		httpx.RateLimit(d.RateLimitPerMinute, d.Clock.Now),
 	)}
+}
+
+// outletClose is what the night audit asks of the point of sale: the findings of the open bills and the end of the locks of a day.
+type outletClose struct {
+	pos    *pos.Service
+	folios *folios.Service
+}
+
+func (o outletClose) NightAuditOutlets(ctx context.Context, tenantID, propertyID int64) (blockers, warnings []nightaudit.OutletIssue, err error) {
+	b, w, err := o.pos.NightAuditChecks(ctx, tenantID, propertyID)
+	for _, i := range b {
+		blockers = append(blockers, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref})
+	}
+	for _, i := range w {
+		warnings = append(warnings, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref})
+	}
+	return blockers, warnings, err
+}
+
+func (o outletClose) ExpireOutletLocks(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
+	_, err := o.folios.ExpireOutletLocks(ctx, p, propertyID, bd)
+	return err
 }
