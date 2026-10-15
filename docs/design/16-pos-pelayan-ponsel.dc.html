@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Pelayan · ambil pesanan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.chip{height:40px;padding:0 14px;border-radius:20px;border:1px solid #e3e6ea;background:#fff;font:inherit;font-size:14px;color:#1c2128;white-space:nowrap;flex-shrink:0}
+.row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid #eef0f2;background:#fff}
+.row .n{font-weight:600;font-size:15px}
+.row .p{font-size:13px;color:#4a5361}
+.add{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;min-width:96px;padding:0 14px;border:0;border-radius:12px;background:#e3f2ee;color:#185a4a;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.step{display:inline-flex;align-items:center;height:44px;min-width:96px;border-radius:12px;background:#1f6f5c;color:#fff}
+.step button{width:40px;height:44px;border:0;background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.step span{min-width:16px;text-align:center;font-weight:700;font-size:15px}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex;flex-direction:column;overflow:hidden">
+  <header style="background:#fff;border-bottom:1px solid #e3e6ea;padding:12px 16px;display:flex;align-items:center;gap:10px">
+    <button aria-label="Kembali ke denah" style="width:44px;height:44px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1c2128" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div style="flex:1"><div style="font-weight:700;font-size:17px">Meja 5 · 2 tamu</div><div style="font-size:12px;color:#626b77">R-0123 · Restoran Teratai</div></div>
+    <div style="width:36px;height:36px;border-radius:18px;background:#1c2128;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">KT</div>
+  </header>
+
+  <div style="padding:12px 16px 8px;background:#fff">
+    <label for="cm" style="position:absolute;left:-9999px">Cari menu</label>
+    <input id="cm" placeholder="Cari menu" style="width:100%;box-sizing:border-box;height:44px;border:1px solid #e3e6ea;border-radius:10px;padding:0 14px;font:inherit">
+  </div>
+  <div style="display:flex;gap:8px;padding:4px 16px 12px;overflow-x:auto;background:#fff">
+    <button class="chip">Makanan utama</button>
+    <button class="chip" style="background:#1f6f5c;border-color:#1f6f5c;color:#fff;font-weight:600">Minuman</button>
+    <button class="chip">Kopi &amp; teh</button>
+    <button class="chip">Pencuci mulut</button>
+  </div>
+
+  <div style="flex:1;overflow:auto">
+    <div class="row"><div style="flex:1"><div class="n">Es Teh Manis</div><div class="p">25.000</div></div><div class="step"><button aria-label="Kurangi Es Teh Manis"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><span>1</span><button aria-label="Tambah Es Teh Manis"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div></div>
+    <div class="row"><div style="flex:1"><div class="n">Jus Alpukat</div><div class="p">45.000 · sudah dipesan 2</div></div><button class="add" aria-label="Tambah Jus Alpukat"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Tambah</button></div>
+    <div class="row"><div style="flex:1"><div class="n">Jus Jeruk Segar</div><div class="p">40.000</div></div><button class="add" aria-label="Tambah Jus Jeruk Segar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Tambah</button></div>
+    <div class="row"><div style="flex:1"><div class="n">Kelapa Muda</div><div class="p">35.000</div></div><button class="add" aria-label="Tambah Kelapa Muda"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Tambah</button></div>
+    <div class="row"><div style="flex:1"><div class="n">Air Mineral 600 ml</div><div class="p">15.000</div></div><button class="add" aria-label="Tambah Air Mineral"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Tambah</button></div>
+    <div class="row"><div style="flex:1"><div class="n">Bintang 330 ml</div><div class="p">55.000</div></div><button class="add" aria-label="Tambah Bintang"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Tambah</button></div>
+    <div class="row" style="color:#626b77"><div style="flex:1"><div class="n" style="color:#626b77">Smoothie Mangga</div><div class="p" style="color:#8a5300">Habis hari ini</div></div></div>
+  </div>
+
+  <div style="background:#fff;border-top:1px solid #e3e6ea;padding:12px 16px 20px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between;font-size:13px;color:#4a5361"><span>1 item draf · bill 453.750</span><a href="#bill">Lihat bill</a></div>
+    <button style="height:52px;border:0;border-radius:12px;background:#1f6f5c;color:#fff;font:inherit;font-weight:700;font-size:16px">Kirim ke dapur &amp; bar</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

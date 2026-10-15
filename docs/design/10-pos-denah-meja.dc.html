@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Kasir · denah meja</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.tbl{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:2px solid #d5dae0;background:#ffffff;color:#1c2128;font-family:inherit;cursor:pointer;box-sizing:border-box}
+.tn{font-size:17px;font-weight:700}
+.ts{font-size:12px;font-weight:500}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex;flex-direction:column">
+  <header style="height:60px;flex-shrink:0;background:#ffffff;border-bottom:1px solid #e3e6ea;display:flex;align-items:center;gap:16px;padding:0 20px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:32px;height:32px;border-radius:8px;background:#1f6f5c;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">K</div>
+      <div style="font-weight:700;font-size:15px">KamaraPMS POS</div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#626b77">Outlet
+      <select style="height:40px;border:1px solid #e3e6ea;border-radius:8px;padding:0 12px;font:inherit;color:#1c2128;font-weight:600;background:#fff">
+        <option>Restoran Teratai</option><option>Bar Kolam</option><option>Room service</option><option>Laundry</option>
+      </select>
+    </label>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;border:1px solid #e3e6ea;border-radius:8px;padding:8px 12px;font-size:13px"><span style="width:8px;height:8px;border-radius:4px;background:#2e9d6a"></span>Shift kasir terbuka · Made</div>
+    <div style="font-size:13px;border:1px solid #e3e6ea;border-radius:8px;padding:8px 12px">Tanggal bisnis <strong>15 Okt 2026</strong></div>
+    <div style="width:36px;height:36px;border-radius:18px;background:#1c2128;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">MR</div>
+  </header>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <main style="flex:1;display:flex;flex-direction:column;padding:20px 24px;gap:16px;min-width:0">
+      <div style="display:flex;align-items:center;gap:12px">
+        <h1 style="margin:0;font-size:24px;font-weight:700">Denah meja</h1>
+        <div style="display:flex;gap:4px;background:#e9ecef;border-radius:10px;padding:4px;margin-left:12px">
+          <button style="height:36px;padding:0 16px;border:0;border-radius:8px;background:#fff;font:inherit;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)">Dalam ruangan</button>
+          <button style="height:36px;padding:0 16px;border:0;border-radius:8px;background:transparent;font:inherit;color:#4a5361">Teras</button>
+          <button style="height:36px;padding:0 16px;border:0;border-radius:8px;background:transparent;font:inherit;color:#4a5361">Bar</button>
+        </div>
+        <div style="flex:1"></div>
+        <button style="height:44px;padding:0 18px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600">Bawa pulang</button>
+        <button style="height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;color:#fff;font:inherit;font-weight:600">Bill baru tanpa meja</button>
+      </div>
+
+      <div style="display:flex;gap:16px;font-size:13px;color:#4a5361">
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;border:2px solid #d5dae0;background:#fff"></span>Kosong</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#2552c4"></span>Terisi</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;background:#fdf1dc;border:2px solid #c98a10"></span>Menunggu bayar</span>
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:4px;border:2px dashed #8b96a3;background:#fff"></span>Dipesan 19.00</span>
+      </div>
+
+      <div style="flex:1;position:relative;background:#ffffff;border:1px solid #e3e6ea;border-radius:16px;overflow:hidden">
+        <div style="position:absolute;left:24px;top:20px;font-size:12px;color:#626b77;letter-spacing:.06em;text-transform:uppercase">Jendela</div>
+        <div style="position:absolute;right:24px;bottom:20px;font-size:12px;color:#626b77;letter-spacing:.06em;text-transform:uppercase">Pintu masuk</div>
+        <div style="position:absolute;left:24px;bottom:20px;width:180px;height:56px;border-radius:10px;background:#eef0f2;display:flex;align-items:center;justify-content:center;font-size:12px;color:#626b77">Kasir</div>
+
+        <button class="tbl" style="left:60px;top:70px;width:96px;height:96px;border-radius:48px"><span class="tn">1</span><span class="ts" style="color:#626b77">2 kursi</span></button>
+        <button class="tbl" style="left:200px;top:70px;width:96px;height:96px;border-radius:48px;background:#2552c4;border-color:#2552c4;color:#fff"><span class="tn">2</span><span class="ts">2 tamu · 34 mnt</span></button>
+        <button class="tbl" style="left:340px;top:70px;width:96px;height:96px;border-radius:48px"><span class="tn">3</span><span class="ts" style="color:#626b77">2 kursi</span></button>
+        <button class="tbl" style="left:60px;top:220px;width:150px;height:96px;border-radius:12px"><span class="tn">4</span><span class="ts" style="color:#626b77">4 kursi</span></button>
+        <button class="tbl" style="left:250px;top:220px;width:150px;height:96px;border-radius:12px;background:#2552c4;border-color:#1a3e98;color:#fff;box-shadow:0 0 0 4px #b7c8f2"><span class="tn">5</span><span class="ts">2 tamu · R-0123</span><span class="ts">453.750</span></button>
+        <button class="tbl" style="left:440px;top:220px;width:150px;height:96px;border-radius:12px;background:#fdf1dc;border-color:#c98a10;color:#8a5300"><span class="tn">6</span><span class="ts">Bill dicetak</span><span class="ts">612.000</span></button>
+        <button class="tbl" style="left:60px;top:370px;width:240px;height:110px;border-radius:12px;background:#2552c4;border-color:#2552c4;color:#fff"><span class="tn">7</span><span class="ts">6 tamu · 1 j 05 mnt</span></button>
+        <button class="tbl" style="left:340px;top:370px;width:150px;height:110px;border-radius:12px;border-style:dashed;border-color:#8b96a3"><span class="tn">8</span><span class="ts" style="color:#4a5361">Dipesan 19.00</span><span class="ts" style="color:#626b77">Kel. Santoso</span></button>
+        <button class="tbl" style="left:680px;top:90px;width:96px;height:96px;border-radius:48px"><span class="tn">9</span><span class="ts" style="color:#626b77">2 kursi</span></button>
+        <button class="tbl" style="left:820px;top:90px;width:96px;height:96px;border-radius:48px;background:#2552c4;border-color:#2552c4;color:#fff"><span class="tn">10</span><span class="ts">3 tamu · 12 mnt</span></button>
+        <button class="tbl" style="left:680px;top:260px;width:236px;height:96px;border-radius:12px"><span class="tn">11</span><span class="ts" style="color:#626b77">6 kursi</span></button>
+        <button class="tbl" style="left:680px;top:400px;width:96px;height:96px;border-radius:12px"><span class="tn">12</span><span class="ts" style="color:#626b77">4 kursi</span></button>
+        <button class="tbl" style="left:820px;top:400px;width:96px;height:96px;border-radius:12px;background:#fdf1dc;border-color:#c98a10;color:#8a5300"><span class="tn">14</span><span class="ts">Bill dicetak</span></button>
+      </div>
+    </main>
+
+    <aside style="width:360px;flex-shrink:0;background:#ffffff;border-left:1px solid #e3e6ea;display:flex;flex-direction:column">
+      <div style="padding:20px 20px 12px;display:flex;align-items:baseline;justify-content:space-between">
+        <h2 style="margin:0;font-size:17px;font-weight:700">Bill terbuka</h2>
+        <span style="font-size:13px;color:#626b77">6 bill · 2.418.500</span>
+      </div>
+      <div style="padding:0 20px 12px">
+        <label style="display:block;font-size:12px;color:#626b77;margin-bottom:6px" for="cari">Cari bill, meja, atau kamar</label>
+        <input id="cari" placeholder="R-0123, meja 5, kamar 304" style="width:100%;box-sizing:border-box;height:40px;border:1px solid #e3e6ea;border-radius:8px;padding:0 12px;font:inherit">
+      </div>
+      <div style="flex:1;overflow:auto;display:flex;flex-direction:column">
+        <a href="11-pos-pesanan.dc.html" style="display:flex;gap:12px;padding:14px 20px;border-top:1px solid #eef0f2;background:#e4ebfb;text-decoration:none;color:#1c2128">
+          <div style="width:44px;height:44px;border-radius:10px;background:#2552c4;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">5</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600">R-0123 · 2 tamu</div><div style="font-size:12px;color:#4a5361">Ketut (pelayan) · 18 mnt · 1 item draf</div></div>
+          <div style="font-weight:700">453.750</div>
+        </a>
+        <div style="display:flex;gap:12px;padding:14px 20px;border-top:1px solid #eef0f2">
+          <div style="width:44px;height:44px;border-radius:10px;background:#fdf1dc;color:#8a5300;display:flex;align-items:center;justify-content:center;font-weight:700">6</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600">R-0119 · 4 tamu</div><div style="font-size:12px;color:#8a5300">Bill dicetak · menunggu bayar</div></div>
+          <div style="font-weight:700">612.000</div>
+        </div>
+        <div style="display:flex;gap:12px;padding:14px 20px;border-top:1px solid #eef0f2">
+          <div style="width:44px;height:44px;border-radius:10px;background:#2552c4;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">7</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600">R-0117 · 6 tamu</div><div style="font-size:12px;color:#4a5361">Wayan · 1 j 05 mnt</div></div>
+          <div style="font-weight:700">874.500</div>
+        </div>
+        <div style="display:flex;gap:12px;padding:14px 20px;border-top:1px solid #eef0f2">
+          <div style="width:44px;height:44px;border-radius:10px;background:#2552c4;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">2</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600">R-0120 · 2 tamu</div><div style="font-size:12px;color:#4a5361">Ketut · 34 mnt</div></div>
+          <div style="font-weight:700">198.000</div>
+        </div>
+        <div style="display:flex;gap:12px;padding:14px 20px;border-top:1px solid #eef0f2">
+          <div style="width:44px;height:44px;border-radius:10px;background:#eef0f2;color:#4a5361;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">BP</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600">R-0122 · Bawa pulang</div><div style="font-size:12px;color:#4a5361">Tamu walk-in · 6 mnt</div></div>
+          <div style="font-weight:700">121.000</div>
+        </div>
+      </div>
+      <div style="padding:16px 20px;border-top:1px solid #e3e6ea;display:flex;gap:8px">
+        <button style="flex:1;height:44px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600">Laporan shift</button>
+        <button style="flex:1;height:44px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600">Buka laci</button>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
