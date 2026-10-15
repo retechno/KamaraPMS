@@ -12,7 +12,7 @@ export function receiptHtml(bill: PosBill, tr: (key: string, params?: Record<str
     .filter((l) => l.status !== 'VOID')
     .map((l) => {
       const opts = l.options.map((o) => o.name).join(', ')
-      return `<tr><td>${esc(String(Number(l.quantity)))} × ${esc(l.product_name)}${opts ? `<br><small>${esc(opts)}</small>` : ''}</td><td class="n">${esc(formatMoney(l.total))}</td></tr>`
+      return `<tr><td>${esc(String(Number(l.quantity)))} × ${esc(l.product_name)}${opts ? `<br><small>${esc(opts)}</small>` : ''}</td><td class="n">${esc(formatMoney(l.net_amount))}</td></tr>`
     })
     .join('')
   const open = bill.status === 'OPEN'

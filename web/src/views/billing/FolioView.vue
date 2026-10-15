@@ -352,7 +352,7 @@ function transferDone(message: string): void {
 }
 const transferText = (i: FolioItem): string => {
   const tr = i.transfer
-  if (i.charge_code === 'TRF' && tr) return tr.role === 'IN' ? t('folioTransfer.trfIn', { folio: tr.from.number }) : t('folioTransfer.trfOut', { folio: tr.to.number })
+  if (i.charge_code === 'TRF' && tr && !i.pos_bill) return tr.role === 'IN' ? t('folioTransfer.trfIn', { folio: tr.from.number }) : t('folioTransfer.trfOut', { folio: tr.to.number })
   return folioDescription(i.description)
 }
 
@@ -596,14 +596,14 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           </div>
           <small class="ml-1 text-muted-foreground">{{ i.charge_code === 'TRF' ? t('folioTransfer.trfType') : statusText(i.transaction_type) }}</small>
           <div v-if="i.pos_bill && (can('pos.order') || can('pos.cashier'))" class="text-xs text-muted-foreground" :data-testid="`pos-bill-${i.id}`">
-            <RouterLink :to="`/pos/bills/${i.pos_bill.id}`" class="text-primary hover:underline">{{ t('posBill.openBill', { outlet: i.pos_bill.outlet_name, bill: i.pos_bill.bill_number }) }}</RouterLink>
+            <RouterLink :to="`/pos/bills/${i.pos_bill.id}`" class="text-primary hover:underline" :aria-label="t('posBill.openBill', { outlet: i.pos_bill.outlet_name, bill: i.pos_bill.bill_number })">{{ t('posBill.viewDetails') }}</RouterLink>
           </div>
           <div v-if="i.transfer?.role === 'IN' && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`from-${i.id}`">
             {{ t('folioTransfer.fromFolio') }}
             <RouterLink :to="`/folios/${i.transfer.from.id}`" class="text-primary hover:underline" :data-testid="`from-link-${i.id}`">{{ i.transfer.from.number }}</RouterLink><template v-if="i.transfer.from.room && folio?.folio_type !== 'MASTER'"> · {{ t('folioTransfer.room', { room: i.transfer.from.room }) }}</template>
             <template v-if="i.transfer.origin.id !== i.transfer.from.id"> · {{ t('folioTransfer.origin') }} <RouterLink :to="`/folios/${i.transfer.origin.id}`" class="text-primary hover:underline">{{ i.transfer.origin.number }}</RouterLink></template>
           </div>
-          <div v-else-if="i.charge_code === 'TRF' && i.transfer" class="text-xs text-muted-foreground" :data-testid="`trf-${i.id}`">
+          <div v-else-if="i.charge_code === 'TRF' && i.transfer && !i.pos_bill" class="text-xs text-muted-foreground" :data-testid="`trf-${i.id}`">
             <RouterLink :to="`/folios/${i.transfer.role === 'IN' ? i.transfer.from.id : i.transfer.to.id}`" class="text-primary hover:underline">{{ i.transfer.role === 'IN' ? i.transfer.from.number : i.transfer.to.number }}</RouterLink>
             <template v-if="(i.transfer.role === 'IN' ? i.transfer.from.room : i.transfer.to.room)"> · {{ t('folioTransfer.room', { room: i.transfer.role === 'IN' ? i.transfer.from.room : i.transfer.to.room }) }}</template>
           </div>

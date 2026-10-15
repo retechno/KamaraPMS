@@ -17,7 +17,7 @@ import { usePosOutlet } from '@/composables/usePosOutlet'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { formatMoney } from '@/utils/format'
+import { formatDate, formatMoney } from '@/utils/format'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { Store } from 'lucide-vue-next'
 
@@ -190,7 +190,7 @@ const minutesText = (m: number): string => t('posFloor.minutes', { n: m })
 </script>
 
 <template>
-  <PageHeader :title="t('posFloor.title')" :description="outlet ? `${outlet.name} · ${state?.business_date ?? ''}` : ''">
+  <PageHeader :title="t('posFloor.title')" :description="outlet ? `${outlet.name} · ${formatDate(state?.business_date)}` : ''">
     <template #actions>
     <div class="flex flex-wrap items-center gap-2">
       <NativeSelect v-if="outlets.length > 1" v-model="outletId" :aria-label="t('posFloor.outlet')" data-testid="outlet-select" class="w-auto">

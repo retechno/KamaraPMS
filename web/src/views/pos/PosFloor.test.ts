@@ -66,6 +66,13 @@ describe('the cashier floor plan', () => {
     expect(w.get('[data-testid=table-T7]').text()).toContain('19:00')
   })
 
+  it('shows the business date like the rest of the application', async () => {
+    const { w } = setup()
+    await flushPromises()
+    expect(w.text()).toContain('15 Oct 2026')
+    expect(w.text()).not.toContain('2026-10-15 ·')
+  })
+
   it('lists the open bills and searches them by table, number or name', async () => {
     const { w } = setup()
     await flushPromises()

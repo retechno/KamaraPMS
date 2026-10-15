@@ -75,11 +75,34 @@ describe('the order and the bill', () => {
     await flushPromises()
     expect(w.findAll('[data-testid^=product-]')).toHaveLength(3) // the category Makanan
     expect(w.get('[data-testid=line-1]').text()).toContain('Nasi goreng')
-    expect(w.get('[data-testid=line-1]').text()).toContain('121,000')
+    expect(w.get('[data-testid=line-1]').text()).toContain('100,000')
+    expect(w.get('[data-testid=line-1]').text()).not.toContain('121,000')
     expect(w.get('[data-testid=payable]').text()).toBe('121,000')
     // sold out: not offered
     expect((w.get('[data-testid=product-23]').element as HTMLButtonElement).disabled).toBe(true)
     expect(w.get('[data-testid=product-23]').text()).toContain('Sold out')
+  })
+
+  it('shows each line at its menu price and the service, tax and total only in the summary', async () => {
+    const w = await setup(bill({ lines: [line({ id: 2, status: 'SENT', round: 1, net_amount: '60000', total: '72600' }), line({ id: 4, status: 'SENT', round: 1, net_amount: '40000', total: '48400' })], totals: totals({ net: '100000', sold: '121000', drafts: '0', payable: '121000' }) }))
+    await flushPromises()
+    const amounts = ['2', '4'].map((id) => w.get(`[data-testid=amount-${id}]`).text())
+    expect(amounts).toEqual(['60,000', '40,000'])
+    expect(w.get('[data-testid=line-2]').text()).not.toContain('72,600')
+    const sum = amounts.reduce((a, x) => a + Number(x.replace(/,/g, '')), 0)
+    expect(sum).toBe(Number(totals().net))
+    expect(w.get('[data-testid=payable]').text()).toBe('121,000')
+  })
+
+  it('says the order was sent in the style of a success, and that a kitchen ticket was made', async () => {
+    const w = await setup()
+    await flushPromises()
+    await w.get('[data-testid=send]').trigger('click')
+    await flushPromises()
+    const n = w.get('[data-testid=bill-notice]')
+    expect(n.text()).toBe('Order sent. Kitchen ticket created.')
+    expect(n.classes()).toContain('notice')
+    expect(n.classes()).not.toContain('alert')
   })
 
   it('adds a plain product with one tap and a product with options through its sheet', async () => {

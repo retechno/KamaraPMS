@@ -401,7 +401,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
     </template>
   </PageHeader>
   <ErrorNotice v-if="error" :error="error" inline data-testid="bill-error" />
-  <p v-if="notice" class="alert warning" role="status" data-testid="bill-notice">{{ notice }}</p>
+  <p v-if="notice" class="notice" role="status" data-testid="bill-notice">{{ notice }}</p>
 
   <div v-if="bill" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_26rem]">
     <!-- the menu -->
@@ -447,7 +447,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
         <li v-for="l in drafts" :key="l.id" class="border-t border-border py-2 text-sm" :data-testid="`line-${l.id}`">
           <div class="flex items-baseline gap-2">
             <span class="min-w-0 flex-1"><strong>{{ l.product_name }}</strong><span v-if="l.options.length > 0" class="block text-xs text-muted-foreground">{{ optionsText(l) }}</span><span v-if="l.note" class="block text-xs italic text-muted-foreground">{{ l.note }}</span></span>
-            <span class="tabular-nums">{{ formatMoney(l.total) }}</span>
+            <span class="tabular-nums" :data-testid="`amount-${l.id}`">{{ formatMoney(l.net_amount) }}</span>
           </div>
           <div class="mt-1 flex items-center gap-1">
             <Button type="button" size="sm" variant="outline" class="size-9 p-0" :aria-label="t('posBill.less')" :data-testid="`less-${l.id}`" :disabled="busy" @click="setQuantity(l, Number(l.quantity) - 1)">−</Button>
@@ -469,7 +469,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
               <span v-if="l.options.length > 0" class="block text-xs text-muted-foreground">{{ optionsText(l) }}</span>
               <span v-if="statusKey(l)" class="block text-xs text-muted-foreground" :data-testid="`ticket-${l.id}`">{{ t(statusKey(l)) }}</span>
             </span>
-            <span class="tabular-nums">{{ formatMoney(l.total) }}</span>
+            <span class="tabular-nums" :data-testid="`amount-${l.id}`">{{ formatMoney(l.net_amount) }}</span>
             <Button v-if="isOpen && can('pos.void')" type="button" size="sm" variant="ghost" :aria-label="t('posBill.void')" :data-testid="`void-${l.id}`" @click="openSheet({ kind: 'void', line: l })">{{ t('posBill.void') }}</Button>
           </li>
         </ul>
@@ -665,7 +665,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
         <li v-for="l in bill?.lines.filter((x) => x.status !== 'VOID')" :key="l.id">
           <label class="flex min-h-11 cursor-pointer items-center gap-3 border-t border-border px-1 text-sm">
             <input v-model="splitLines" type="checkbox" :value="l.id" :data-testid="`split-line-${l.id}`">
-            <span>{{ Number(l.quantity) }} × {{ l.product_name }}</span><span class="ml-auto tabular-nums">{{ formatMoney(l.total) }}</span>
+            <span>{{ Number(l.quantity) }} × {{ l.product_name }}</span><span class="ml-auto tabular-nums">{{ formatMoney(l.net_amount) }}</span>
           </label>
         </li>
       </ul>

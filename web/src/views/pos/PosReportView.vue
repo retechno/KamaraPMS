@@ -50,6 +50,20 @@ async function load(): Promise<void> {
 }
 watch([outletId, from, to], () => void load(), { immediate: true })
 
+// The table of payments: what was paid on the folios of the bills, and what was charged to rooms (a transfer, not a payment) as one more row.
+const methodLabel = (m: string): string => {
+  if (m === 'CITY_LEDGER') return t('posReport.method_COMPANY')
+  if (m === 'COMP') return t('posReport.method_COMP')
+  return t(`posPay.method_${m}`)
+}
+const methodRows = computed(() => {
+  const r = report.value
+  if (!r) return []
+  const rows = r.methods.map((m) => ({ key: m.method, label: methodLabel(m.method), payments: m.payments, amount: m.amount }))
+  if (r.room_charges.count > 0) rows.push({ key: 'ROOM', label: t('posReport.method_ROOM'), payments: r.room_charges.count, amount: r.room_charges.amount })
+  return rows
+})
+
 function csv(): void {
   const r = report.value
   if (!r) return
@@ -100,13 +114,21 @@ function csv(): void {
         </div>
         <div class="rounded-xl border border-border bg-card p-3" data-testid="report-methods">
           <h2 class="m-0 mb-2 text-base font-semibold">{{ t('posReport.byMethod') }}</h2>
-          <EmptyState v-if="report.methods.length === 0" :title="t('posReport.none')" :description="t('posReport.noneHint')" />
+          <EmptyState v-if="methodRows.length === 0" :title="t('posReport.none')" :description="t('posReport.noneHint')" />
           <table v-else class="w-full text-sm">
-            <tbody><tr v-for="m in report.methods" :key="m.method" class="border-t border-border first:border-t-0"><td>{{ t(`posPay.method_${m.method === 'CITY_LEDGER' ? 'COMPANY' : m.method}`) }}</td><td class="text-right tabular-nums">{{ m.payments }}</td><td class="text-right tabular-nums">{{ formatMoney(m.amount) }}</td></tr></tbody>
+            <thead><tr class="text-left text-xs text-muted-foreground"><th>{{ t('posReport.method') }}</th><th class="text-right">{{ t('posReport.transactions') }}</th><th class="text-right">{{ t('posReport.amount') }}</th></tr></thead>
+            <tbody><tr v-for="m in methodRows" :key="m.key" class="border-t border-border" :data-testid="`method-${m.key}`"><td>{{ m.label }}</td><td class="text-right tabular-nums">{{ m.payments }}</td><td class="text-right tabular-nums">{{ formatMoney(m.amount) }}</td></tr></tbody>
           </table>
-          <p class="m-0 mt-2 text-xs text-muted-foreground" data-testid="report-room">{{ t('posReport.roomCharges', { n: report.room_charges.count, amount: formatMoney(report.room_charges.amount) }) }}</p>
-          <p class="m-0 text-xs text-muted-foreground" data-testid="report-open">{{ t('posReport.openBills', { n: report.open_bills.count, amount: formatMoney(report.open_bills.balance) }) }}</p>
         </div>
+      </section>
+
+      <section class="mb-4 rounded-xl border border-border bg-card p-3" data-testid="report-open">
+        <h2 class="m-0 mb-1 text-base font-semibold">{{ t('posReport.openBillsTitle') }}</h2>
+        <p class="m-0 mb-2 text-xs text-muted-foreground">{{ t('posReport.openBillsHint') }}</p>
+        <dl class="m-0 flex flex-wrap gap-x-8 gap-y-1 text-sm">
+          <div><dt class="inline text-muted-foreground">{{ t('posReport.bills') }}: </dt><dd class="m-0 inline font-semibold tabular-nums" data-testid="open-count">{{ report.open_bills.count }}</dd></div>
+          <div><dt class="inline text-muted-foreground">{{ t('posReport.balance') }}: </dt><dd class="m-0 inline font-semibold tabular-nums" data-testid="open-balance">{{ formatMoney(report.open_bills.balance) }}</dd></div>
+        </dl>
       </section>
 
       <section class="mb-4 rounded-xl border border-border bg-card p-3" data-testid="report-products">
@@ -126,7 +148,7 @@ function csv(): void {
       <section class="grid gap-4 lg:grid-cols-3">
         <div v-for="block in ([['voids', report.voids], ['discounts', report.discounts], ['comps', report.comps]] as const)" :key="block[0]" class="rounded-xl border border-border bg-card p-3" :data-testid="`report-${block[0]}`">
           <h2 class="m-0 mb-2 text-base font-semibold">{{ t(`posReport.${block[0]}`) }}</h2>
-          <EmptyState v-if="block[1].length === 0" :title="t('posReport.none')" :description="t('posReport.noneHint')" />
+          <EmptyState v-if="block[1].length === 0" :title="t(`posReport.empty_${block[0]}`)" :data-testid="`empty-${block[0]}`" />
           <ul v-else class="m-0 list-none p-0 text-sm">
             <li v-for="(e, i) in block[1]" :key="i" class="border-t border-border py-1.5 first:border-t-0">
               <strong>{{ e.bill_number }}</strong> · {{ e.what }} <span class="float-right tabular-nums">{{ formatMoney(e.amount) }}</span>

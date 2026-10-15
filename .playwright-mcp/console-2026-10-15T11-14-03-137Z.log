@@ -96,3 +96,48 @@
 [12731407ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
 [12791392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
 [12851398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12911403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[12971403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13031398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13091392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13151419ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13202392ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/availability/calendar?from=2026-09-03&to=2026-09-17:0
+[13202393ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/arrivals?status=CONFIRMED:0
+[13202394ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/arrivals?status=CHECKED_IN:0
+[13202394ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/stays/in-house?limit=50&departure_until=2026-09-03:0
+[13202397ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/housekeeping:0
+[13202398ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/city-ledger/accounts?limit=200:0
+[13202405ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/healthz:0
+[13211397ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13214065ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/src/views/rooms/RoomStatusView.vue:0
+[13214068ms] [WARNING] [VUE_ROUTER_R0010] Uncaught error during route navigation
+╰▶ fix: Register an error handler with `router.onError()` to handle navigation errors. @ http://localhost:5173/node_modules/.vite/deps/dist-C9iN58Rj.js?v=8724addc:37
+[13214069ms] [ERROR] TypeError: Failed to fetch dynamically imported module: http://localhost:5173/src/views/rooms/RoomStatusView.vue @ http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=bc17a150:2895
+[13214912ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/src/views/reservations/TapeChartView.vue:0
+[13214912ms] [WARNING] [VUE_ROUTER_R0010] Uncaught error during route navigation
+╰▶ fix: Register an error handler with `router.onError()` to handle navigation errors. @ http://localhost:5173/node_modules/.vite/deps/dist-C9iN58Rj.js?v=8724addc:37
+[13214912ms] [ERROR] TypeError: Failed to fetch dynamically imported module: http://localhost:5173/src/views/reservations/TapeChartView.vue @ http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=bc17a150:2895
+[13271406ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13322371ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/availability/calendar?from=2026-09-03&to=2026-09-17:0
+[13322371ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/arrivals?status=CONFIRMED:0
+[13322374ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/arrivals?status=CHECKED_IN:0
+[13322374ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/stays/in-house?limit=50&departure_until=2026-09-03:0
+[13322376ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/housekeeping:0
+[13322379ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/city-ledger/accounts?limit=200:0
+[13331406ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13391393ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13442350ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/availability/calendar?from=2026-09-03&to=2026-09-17:0
+[13442350ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/arrivals?status=CONFIRMED:0
+[13442351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/arrivals?status=CHECKED_IN:0
+[13442351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/stays/in-house?limit=50&departure_until=2026-09-03:0
+[13442352ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/housekeeping:0
+[13442353ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/city-ledger/accounts?limit=200:0
+[13451399ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13511403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/api/v1/properties/1/business-date:0
+[13557140ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/src/views/reservations/ReservationsView.vue:0
+[13557140ms] [WARNING] [VUE_ROUTER_R0010] Uncaught error during route navigation
+╰▶ fix: Register an error handler with `router.onError()` to handle navigation errors. @ http://localhost:5173/node_modules/.vite/deps/dist-C9iN58Rj.js?v=8724addc:37
+[13557140ms] [ERROR] TypeError: Failed to fetch dynamically imported module: http://localhost:5173/src/views/reservations/ReservationsView.vue @ http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=bc17a150:2895
+[13558595ms] [WARNING] [VUE_ROUTER_R0010] Uncaught error during route navigation
+╰▶ fix: Register an error handler with `router.onError()` to handle navigation errors. @ http://localhost:5173/node_modules/.vite/deps/dist-C9iN58Rj.js?v=8724addc:37
+[13558595ms] [ERROR] TypeError: Failed to fetch dynamically imported module: http://localhost:5173/src/views/reservations/TapeChartView.vue @ http://localhost:5173/node_modules/.vite/deps/vue-router.js?v=bc17a150:2895

@@ -47,11 +47,29 @@ describe('the report of an outlet', () => {
     await flushPromises()
     expect(w.get('[data-testid=total-net]').text()).toBe('215,000')
     expect(w.get('[data-testid=total-total]').text()).toBe('260,200')
-    expect(w.get('[data-testid=report-methods]').text()).toContain('Company')
+    expect(w.get('[data-testid=method-CITY_LEDGER]').text()).toContain('To a company')
     expect(w.get('[data-testid=report-voids]').text()).toContain('approved by Wayan')
-    expect(w.get('[data-testid=report-room]').text()).toContain('58,730')
-    expect(w.get('[data-testid=report-open]').text()).toContain('90,000')
+    expect(w.get('[data-testid=report-open]').text()).toContain('Open bills with items sold')
+    expect(w.get('[data-testid=open-count]').text()).toBe('1')
+    expect(w.get('[data-testid=open-balance]').text()).toBe('90,000')
     const q = GET.mock.calls.find((c) => String(c[0]).endsWith('/report'))![1].params.query
     expect(q).toEqual({ from: '2026-10-15', to: '2026-10-15' })
+  })
+
+  it('lists a charge to a room, a company and a complimentary as rows of the table like cash', async () => {
+    const w = setup()
+    await flushPromises()
+    const cells = (k: string) => w.findAll(`[data-testid=method-${k}] td`).map((c) => c.text())
+    expect(cells('CASH')).toEqual(['Cash', '1', '100,000'])
+    expect(cells('CITY_LEDGER')).toEqual(['To a company', '1', '60,000'])
+    expect(cells('ROOM')).toEqual(['Charged to a room', '1', '58,730'])
+  })
+
+  it('names what is missing in each empty block', async () => {
+    const w = setup()
+    await flushPromises()
+    expect(w.get('[data-testid=empty-discounts]').text()).toContain('No discounts in this range')
+    expect(w.get('[data-testid=empty-comps]').text()).toContain('No complimentary in this range')
+    expect(w.find('[data-testid=empty-voids]').exists()).toBe(false)
   })
 })
