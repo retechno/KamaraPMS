@@ -55,6 +55,19 @@ export function formatDateTime(value: string | null | undefined): string {
   return `${formatBusinessDate(`${p('year')}-${p('month')}-${p('day')}`)} ${p('hour')}:${p('minute')}`
 }
 
+/** The time of day of an instant on the wall clock of the property ("13:05"). Anything that is not an instant is returned unchanged. */
+export function formatTime(value: string | null | undefined): string {
+  if (!value) return ''
+  if (!wallClock(value)) return value
+  const at = new Date(value)
+  if (Number.isNaN(at.getTime())) return value
+  try {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: displayZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at)
+  } catch {
+    return value
+  }
+}
+
 /** A date with its weekday ("Sat, 10 Oct 2026" / "Sab, 10 Okt 2026"), as the helper line under a date input. Anything else gives ''. */
 export function formatDateWeekday(value: string | null | undefined): string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return ''

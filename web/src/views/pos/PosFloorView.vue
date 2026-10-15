@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import { useAutoRefresh } from '@/composables/useAutoRefresh'
+import { debounce, usePosEvents } from '@/composables/usePosEvents'
 import { usePosOutlet } from '@/composables/usePosOutlet'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -63,7 +63,14 @@ watch(outletId, () => {
   areaId.value = null
   void load()
 }, { immediate: true })
-useAutoRefresh(() => void load(), { everyMs: 20_000, paused: () => sheet.value !== null || busy.value, busy: () => loading.value })
+// The floor follows the stream of its outlet (a table, a bill or a hold changed anywhere); it reads again when the stream says so and after a gap.
+const refresh = debounce(() => void load(), 150)
+usePosEvents({
+  propertyId: () => pid.value,
+  channels: () => (outletId.value === null ? [] : [`outlet:${outletId.value}`]),
+  onEvent: () => refresh(),
+  onReload: () => void load(),
+})
 
 const area = computed(() => state.value?.areas.find((a) => a.id === areaId.value) ?? null)
 const matches = (b: PosBillSummary): boolean => {

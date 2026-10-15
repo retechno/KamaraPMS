@@ -21,6 +21,7 @@ import { usePropertyStore } from '@/stores/property'
 import { formatMoney } from '@/utils/format'
 import { printReceipt } from '@/utils/posReceipt'
 import { newIdempotencyKey } from '@/utils/reservations'
+import { debounce, usePosEvents } from '@/composables/usePosEvents'
 
 /**
  * The order and the bill of an outlet (docs/architecture/34-pos.md 11, mockups 11 and 16): the menu of the outlet on one side, the lines of the bill on the other, in the order they were made, with
@@ -80,6 +81,18 @@ async function loadCatalog(outletId: number): Promise<void> {
 }
 
 watch([pid, billId], () => void loadBill(), { immediate: true })
+// The bill follows the stream of its outlet: another waiter's line, the kitchen's status of a ticket, a payment at the cashier show here by themselves.
+const refreshBill = debounce(() => void loadBill(true), 150)
+usePosEvents({
+  propertyId: () => pid.value,
+  channels: () => (bill.value ? [`outlet:${bill.value.outlet_id}`] : []),
+  onEvent: (e) => {
+    if ((e.type === 'bill.updated' || e.type === 'bill.closed') && e.entity_id === billId.value) refreshBill()
+    else if (e.type === 'ticket.updated' || e.type === 'ticket.created') refreshBill()
+    else if (e.type === 'product.sold_out' && bill.value) void loadCatalog(bill.value.outlet_id)
+  },
+  onReload: () => void loadBill(true),
+})
 watch(() => bill.value?.outlet_id, (id) => { if (id && !catalog.value) void loadCatalog(id) })
 
 const products = computed(() => {

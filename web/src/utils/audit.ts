@@ -29,6 +29,9 @@ export const AUDIT_ACTIONS = [
   'pos.bill_changed',
   'pos.bill_requested',
   'pos.round_sent',
+  'pos.ticket_started',
+  'pos.ticket_ready',
+  'pos.ticket_served',
   'pos.line_voided',
   'pos.discount_given',
   'pos.bill_comped',
@@ -247,6 +250,7 @@ export const AUDIT_ACTIONS = [
 
 export const AUDIT_ENTITIES = [
   'pos_bill',
+  'pos_ticket',
   'pos_table',
   'pos_table_hold',
   'pos_outlet',

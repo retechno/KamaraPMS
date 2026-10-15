@@ -9,6 +9,15 @@ import OutletChargesView from './OutletChargesView.vue'
 
 let GET = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a) } }))
+// What the page asks of the stream, and a way to send it an event.
+let stream: { channels: () => string[]; onEvent: (e: { id: number; channel: string; type: string; entity_id: number; at: string }) => void; onReload?: () => void } | null = null
+vi.mock('@/composables/usePosEvents', async (orig) => ({
+  ...(await orig<typeof import('@/composables/usePosEvents')>()),
+  usePosEvents: (o: NonNullable<typeof stream>) => {
+    stream = o
+    return { state: { value: 'live' }, stop: () => undefined }
+  },
+}))
 
 const rows = [
   { id: 4, source: 'CHARGE', folio_id: 31, folio_number: 'FOL000031', folio_type: 'GUEST', room_number: '304', guest_name: 'Intan Permata', outlet_id: 1, outlet_code: 'RESTO', outlet_name: 'Restoran Teratai',
@@ -90,14 +99,22 @@ describe('the outlet charges of the day', () => {
     expect(w.findAll('[data-testid^=charge-][data-result]')).toHaveLength(1)
   })
 
-  it('reads again by itself', async () => {
+  it('follows the stream of the front desk instead of asking every twenty seconds', async () => {
     vi.useFakeTimers()
     try {
       setup()
       await flushPromises()
       expect(GET).toHaveBeenCalledTimes(1)
-      await vi.advanceTimersByTimeAsync(20_500)
-      expect(GET).toHaveBeenCalledTimes(2)
+      expect(stream?.channels()).toEqual(['frontdesk'])
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(GET).toHaveBeenCalledTimes(1) // no polling
+      stream?.onEvent({ id: 9, channel: 'frontdesk', type: 'outlet_charge.attempted', entity_id: 7, at: '2026-10-15T06:00:00Z' })
+      stream?.onEvent({ id: 10, channel: 'frontdesk', type: 'folio_lock.changed', entity_id: 31, at: '2026-10-15T06:00:00Z' })
+      await vi.advanceTimersByTimeAsync(400)
+      expect(GET).toHaveBeenCalledTimes(2) // two events, one read
+      stream?.onReload?.()
+      await flushPromises()
+      expect(GET).toHaveBeenCalledTimes(3)
     } finally {
       vi.useRealTimers()
     }

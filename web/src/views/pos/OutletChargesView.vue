@@ -9,7 +9,7 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Receipt } from 'lucide-vue-next'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
-import { useAutoRefresh } from '@/composables/useAutoRefresh'
+import { debounce, usePosEvents } from '@/composables/usePosEvents'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -52,7 +52,14 @@ const why = (r: OutletChargeRow): string => {
   return r.code ? t(`errors.${r.code}`) : ''
 }
 
-useAutoRefresh(() => void load(), { everyMs: 20_000 })
+// The list follows the stream of the front desk: a charge or an attempt that comes in is here without a click, and so is a lock that changed.
+const refresh = debounce(() => void load(), 150)
+usePosEvents({
+  propertyId: () => pid.value,
+  channels: () => (pid.value === null ? [] : ['frontdesk']),
+  onEvent: () => refresh(),
+  onReload: () => void load(),
+})
 watch(pid, load, { immediate: true })
 </script>
 

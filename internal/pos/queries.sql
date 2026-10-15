@@ -672,3 +672,118 @@ FROM pos_bills b JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = 
 WHERE b.tenant_id = @tenant_id AND b.property_id = @property_id AND b.status = 'OPEN'
 GROUP BY o.id, o.code, o.name, o.block_night_audit_with_open_bills
 ORDER BY o.code;
+
+-- ================================================================ PR 3a: realtime, kitchen display, print queue (docs/architecture/34-pos.md 10, 19)
+
+-- ---------------------------------------------------------------- the outbox (events.go)
+-- An event is final once its transaction is older than every transaction still running; they are read in the order (txid, id).
+-- name: EventsAfter :many
+SELECT e.id, e.txid, e.channel, e.type, e.entity_id, e.at
+FROM pos_events e
+WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.channel = ANY(@channels::text[])
+  AND (e.txid, e.id) > (@after_txid::bigint, @after_id::bigint)
+  AND e.txid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
+ORDER BY e.txid, e.id
+LIMIT @max_rows;
+
+-- name: EventPosition :one
+SELECT e.txid, e.id FROM pos_events e WHERE e.property_id = @property_id AND e.id = @id;
+
+-- The newest final event of the property: where a stream that asked for no resume point begins.
+-- name: EventHead :one
+SELECT COALESCE(max(e.txid), 0)::bigint AS txid, COALESCE(max(e.id) FILTER (WHERE e.txid = (SELECT max(f.txid) FROM pos_events f WHERE f.property_id = @property_id AND f.txid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint)), 0)::bigint AS id
+FROM pos_events e
+WHERE e.property_id = @property_id AND e.txid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint;
+
+-- name: PurgeEvents :execrows
+DELETE FROM pos_events WHERE at < @before::timestamptz;
+
+-- name: StationExists :one
+SELECT EXISTS (SELECT 1 FROM pos_stations WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id);
+
+-- name: OutletExists :one
+SELECT EXISTS (SELECT 1 FROM pos_outlets WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id);
+
+-- ---------------------------------------------------------------- the board of a station
+-- name: StationBoardTickets :many
+SELECT t.id, t.kind, t.status, t.created_at, t.started_at, t.ready_at, t.served_at, r.round_no,
+       b.id AS bill_id, COALESCE(b.bill_number, '')::text AS bill_number, b.order_type, o.id AS outlet_id, o.name AS outlet_name,
+       COALESCE(tb.code, '')::text AS table_code, COALESCE(b.customer_name, '')::text AS customer_name,
+       COALESCE(u.full_name, '')::text AS waiter_name,
+       COALESCE((SELECT r.room_number FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                  WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id ORDER BY sr.id DESC LIMIT 1), '')::text AS room_number
+FROM pos_tickets t
+JOIN pos_bills b   ON b.property_id = t.property_id AND b.id = t.bill_id
+JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
+JOIN pos_rounds r  ON r.property_id = t.property_id AND r.id = t.round_id
+LEFT JOIN pos_tables tb ON tb.property_id = b.property_id AND tb.id = b.table_id
+LEFT JOIN users u  ON u.id = b.waiter_id
+WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id AND t.station_id = @station_id AND t.kind <> 'VOID'
+  AND (t.status IN ('NEW', 'COOKING', 'READY') OR (@with_history::boolean AND t.status = 'SERVED' AND t.served_at >= @history_from::timestamptz))
+ORDER BY t.created_at, t.id;
+
+-- name: StationBoardLines :many
+SELECT tl.id, tl.ticket_id, tl.quantity, tl.name, COALESCE(tl.options_text, '')::text AS options_text, COALESCE(tl.note, '')::text AS note, tl.is_void
+FROM pos_ticket_lines tl
+WHERE tl.tenant_id = @tenant_id AND tl.property_id = @property_id AND tl.ticket_id = ANY(@ticket_ids::bigint[])
+ORDER BY tl.ticket_id, tl.id;
+
+-- The outlets that send to a station: the outlets whose products are made there.
+-- name: StationOutlets :many
+SELECT DISTINCT o.id, o.name, o.code
+FROM pos_outlets o
+JOIN pos_price_list_items pi ON pi.property_id = o.property_id AND pi.price_list_id = o.price_list_id AND pi.is_sold
+JOIN pos_products p ON p.property_id = pi.property_id AND p.id = pi.product_id
+WHERE o.tenant_id = @tenant_id AND o.property_id = @property_id AND o.is_active
+  AND COALESCE(pi.station_id, p.station_id) = @station_id
+ORDER BY o.name;
+
+-- name: GetTicketForUpdateState :one
+SELECT t.id, t.station_id, t.status, t.kind, t.bill_id FROM pos_tickets t
+WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id AND t.id = @id;
+
+-- One statement, one winner: the ticket moves only from the status the caller saw.
+-- name: AdvanceTicket :one
+UPDATE pos_tickets SET status = @to_status::varchar,
+       started_at = CASE WHEN @to_status::varchar = 'COOKING' THEN @at::timestamptz ELSE started_at END,
+       started_by = CASE WHEN @to_status::varchar = 'COOKING' THEN sqlc.narg(actor_id)::bigint ELSE started_by END,
+       ready_at   = CASE WHEN @to_status::varchar = 'READY' THEN @at::timestamptz ELSE ready_at END,
+       ready_by   = CASE WHEN @to_status::varchar = 'READY' THEN sqlc.narg(actor_id)::bigint ELSE ready_by END,
+       served_at  = CASE WHEN @to_status::varchar = 'SERVED' THEN @at::timestamptz ELSE served_at END,
+       served_by  = CASE WHEN @to_status::varchar = 'SERVED' THEN sqlc.narg(actor_id)::bigint ELSE served_by END
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = @from_status::varchar AND kind <> 'VOID'
+RETURNING id, station_id, status;
+
+-- ---------------------------------------------------------------- print jobs
+-- name: InsertPrintJob :one
+INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, created_by)
+VALUES (@tenant_id, @property_id, @printer_id, @kind, @source_type, @source_id, @dedupe_key, sqlc.narg(created_by))
+ON CONFLICT (property_id, dedupe_key) DO NOTHING
+RETURNING id;
+
+-- name: StationPrinter :one
+SELECT s.printer_id, s.kds_enabled FROM pos_stations s WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @id;
+
+-- name: ListPrintJobs :many
+SELECT j.id, j.printer_id, p.name AS printer_name, j.kind, j.source_type, j.source_id, j.status, j.attempts, j.created_at, j.printed_at,
+       COALESCE(j.error_code, '')::text AS error_code,
+       COALESCE(b.bill_number, '')::text AS bill_number, COALESCE(tb.code, '')::text AS table_code, COALESCE(s.name, '')::text AS station_name, COALESCE(t.kind, '')::text AS ticket_kind
+FROM pos_print_jobs j
+JOIN pos_printers p ON p.property_id = j.property_id AND p.id = j.printer_id
+LEFT JOIN pos_tickets t ON j.source_type = 'TICKET' AND t.property_id = j.property_id AND t.id = j.source_id
+LEFT JOIN pos_stations s ON s.property_id = t.property_id AND s.id = t.station_id
+LEFT JOIN pos_bills b ON b.property_id = t.property_id AND b.id = t.bill_id
+LEFT JOIN pos_tables tb ON tb.property_id = b.property_id AND tb.id = b.table_id
+WHERE j.tenant_id = @tenant_id AND j.property_id = @property_id
+  AND (sqlc.narg(printer_id)::bigint IS NULL OR j.printer_id = sqlc.narg(printer_id)::bigint)
+  AND (sqlc.narg(status)::text IS NULL OR j.status = sqlc.narg(status)::text)
+ORDER BY j.created_at DESC, j.id
+LIMIT @max_rows;
+
+-- name: PrintQueueDepth :many
+SELECT printer_id, count(*)::int AS queued FROM pos_print_jobs
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND status IN ('QUEUED', 'CLAIMED') GROUP BY printer_id;
+
+-- A bill touched without a change of its own (a payment on its folio): the screens re-read it.
+-- name: TouchBill :exec
+UPDATE pos_bills SET version = version + 1 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

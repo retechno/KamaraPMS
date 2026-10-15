@@ -14,6 +14,50 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const advanceTicket = `-- name: AdvanceTicket :one
+UPDATE pos_tickets SET status = $1::varchar,
+       started_at = CASE WHEN $1::varchar = 'COOKING' THEN $2::timestamptz ELSE started_at END,
+       started_by = CASE WHEN $1::varchar = 'COOKING' THEN $3::bigint ELSE started_by END,
+       ready_at   = CASE WHEN $1::varchar = 'READY' THEN $2::timestamptz ELSE ready_at END,
+       ready_by   = CASE WHEN $1::varchar = 'READY' THEN $3::bigint ELSE ready_by END,
+       served_at  = CASE WHEN $1::varchar = 'SERVED' THEN $2::timestamptz ELSE served_at END,
+       served_by  = CASE WHEN $1::varchar = 'SERVED' THEN $3::bigint ELSE served_by END
+WHERE tenant_id = $4 AND property_id = $5 AND id = $6 AND status = $7::varchar AND kind <> 'VOID'
+RETURNING id, station_id, status
+`
+
+type AdvanceTicketParams struct {
+	ToStatus   string
+	At         time.Time
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+	FromStatus string
+}
+
+type AdvanceTicketRow struct {
+	ID        int64
+	StationID *int64
+	Status    string
+}
+
+// One statement, one winner: the ticket moves only from the status the caller saw.
+func (q *Queries) AdvanceTicket(ctx context.Context, arg AdvanceTicketParams) (AdvanceTicketRow, error) {
+	row := q.db.QueryRow(ctx, advanceTicket,
+		arg.ToStatus,
+		arg.At,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.FromStatus,
+	)
+	var i AdvanceTicketRow
+	err := row.Scan(&i.ID, &i.StationID, &i.Status)
+	return i, err
+}
+
 const billLedgerSums = `-- name: BillLedgerSums :one
 SELECT
   COALESCE(sum(i.debit - i.credit) FILTER (WHERE i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(c.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')), 0)::numeric AS sold,
@@ -279,6 +323,112 @@ type DeleteRuleProfileRulesParams struct {
 func (q *Queries) DeleteRuleProfileRules(ctx context.Context, arg DeleteRuleProfileRulesParams) error {
 	_, err := q.db.Exec(ctx, deleteRuleProfileRules, arg.TenantID, arg.PropertyID, arg.ProfileID)
 	return err
+}
+
+const eventHead = `-- name: EventHead :one
+SELECT COALESCE(max(e.txid), 0)::bigint AS txid, COALESCE(max(e.id) FILTER (WHERE e.txid = (SELECT max(f.txid) FROM pos_events f WHERE f.property_id = $1 AND f.txid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint)), 0)::bigint AS id
+FROM pos_events e
+WHERE e.property_id = $1 AND e.txid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
+`
+
+type EventHeadRow struct {
+	Txid int64
+	ID   int64
+}
+
+// The newest final event of the property: where a stream that asked for no resume point begins.
+func (q *Queries) EventHead(ctx context.Context, propertyID int64) (EventHeadRow, error) {
+	row := q.db.QueryRow(ctx, eventHead, propertyID)
+	var i EventHeadRow
+	err := row.Scan(&i.Txid, &i.ID)
+	return i, err
+}
+
+const eventPosition = `-- name: EventPosition :one
+SELECT e.txid, e.id FROM pos_events e WHERE e.property_id = $1 AND e.id = $2
+`
+
+type EventPositionParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+type EventPositionRow struct {
+	Txid int64
+	ID   int64
+}
+
+func (q *Queries) EventPosition(ctx context.Context, arg EventPositionParams) (EventPositionRow, error) {
+	row := q.db.QueryRow(ctx, eventPosition, arg.PropertyID, arg.ID)
+	var i EventPositionRow
+	err := row.Scan(&i.Txid, &i.ID)
+	return i, err
+}
+
+const eventsAfter = `-- name: EventsAfter :many
+
+SELECT e.id, e.txid, e.channel, e.type, e.entity_id, e.at
+FROM pos_events e
+WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.channel = ANY($3::text[])
+  AND (e.txid, e.id) > ($4::bigint, $5::bigint)
+  AND e.txid < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
+ORDER BY e.txid, e.id
+LIMIT $6
+`
+
+type EventsAfterParams struct {
+	TenantID   int64
+	PropertyID int64
+	Channels   []string
+	AfterTxid  int64
+	AfterID    int64
+	MaxRows    int32
+}
+
+type EventsAfterRow struct {
+	ID       int64
+	Txid     int64
+	Channel  string
+	Type     string
+	EntityID int64
+	At       time.Time
+}
+
+// ================================================================ PR 3a: realtime, kitchen display, print queue (docs/architecture/34-pos.md 10, 19)
+// ---------------------------------------------------------------- the outbox (events.go)
+// An event is final once its transaction is older than every transaction still running; they are read in the order (txid, id).
+func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]EventsAfterRow, error) {
+	rows, err := q.db.Query(ctx, eventsAfter,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Channels,
+		arg.AfterTxid,
+		arg.AfterID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EventsAfterRow{}
+	for rows.Next() {
+		var i EventsAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Txid,
+			&i.Channel,
+			&i.Type,
+			&i.EntityID,
+			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getBill = `-- name: GetBill :one
@@ -620,6 +770,38 @@ func (q *Queries) GetTableOutlet(ctx context.Context, arg GetTableOutletParams) 
 		&i.Code,
 		&i.IsActive,
 		&i.OutletID,
+	)
+	return i, err
+}
+
+const getTicketForUpdateState = `-- name: GetTicketForUpdateState :one
+SELECT t.id, t.station_id, t.status, t.kind, t.bill_id FROM pos_tickets t
+WHERE t.tenant_id = $1 AND t.property_id = $2 AND t.id = $3
+`
+
+type GetTicketForUpdateStateParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetTicketForUpdateStateRow struct {
+	ID        int64
+	StationID *int64
+	Status    string
+	Kind      string
+	BillID    int64
+}
+
+func (q *Queries) GetTicketForUpdateState(ctx context.Context, arg GetTicketForUpdateStateParams) (GetTicketForUpdateStateRow, error) {
+	row := q.db.QueryRow(ctx, getTicketForUpdateState, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetTicketForUpdateStateRow
+	err := row.Scan(
+		&i.ID,
+		&i.StationID,
+		&i.Status,
+		&i.Kind,
+		&i.BillID,
 	)
 	return i, err
 }
@@ -1019,6 +1201,41 @@ func (q *Queries) InsertPriceList(ctx context.Context, arg InsertPriceListParams
 		arg.ActorID,
 	)
 	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertPrintJob = `-- name: InsertPrintJob :one
+INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (property_id, dedupe_key) DO NOTHING
+RETURNING id
+`
+
+type InsertPrintJobParams struct {
+	TenantID   int64
+	PropertyID int64
+	PrinterID  int64
+	Kind       string
+	SourceType string
+	SourceID   int64
+	DedupeKey  string
+	CreatedBy  *int64
+}
+
+// ---------------------------------------------------------------- print jobs
+func (q *Queries) InsertPrintJob(ctx context.Context, arg InsertPrintJobParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, insertPrintJob,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.PrinterID,
+		arg.Kind,
+		arg.SourceType,
+		arg.SourceID,
+		arg.DedupeKey,
+		arg.CreatedBy,
+	)
+	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -2214,6 +2431,91 @@ func (q *Queries) ListPriceLists(ctx context.Context, arg ListPriceListsParams) 
 	return items, nil
 }
 
+const listPrintJobs = `-- name: ListPrintJobs :many
+SELECT j.id, j.printer_id, p.name AS printer_name, j.kind, j.source_type, j.source_id, j.status, j.attempts, j.created_at, j.printed_at,
+       COALESCE(j.error_code, '')::text AS error_code,
+       COALESCE(b.bill_number, '')::text AS bill_number, COALESCE(tb.code, '')::text AS table_code, COALESCE(s.name, '')::text AS station_name, COALESCE(t.kind, '')::text AS ticket_kind
+FROM pos_print_jobs j
+JOIN pos_printers p ON p.property_id = j.property_id AND p.id = j.printer_id
+LEFT JOIN pos_tickets t ON j.source_type = 'TICKET' AND t.property_id = j.property_id AND t.id = j.source_id
+LEFT JOIN pos_stations s ON s.property_id = t.property_id AND s.id = t.station_id
+LEFT JOIN pos_bills b ON b.property_id = t.property_id AND b.id = t.bill_id
+LEFT JOIN pos_tables tb ON tb.property_id = b.property_id AND tb.id = b.table_id
+WHERE j.tenant_id = $1 AND j.property_id = $2
+  AND ($3::bigint IS NULL OR j.printer_id = $3::bigint)
+  AND ($4::text IS NULL OR j.status = $4::text)
+ORDER BY j.created_at DESC, j.id
+LIMIT $5
+`
+
+type ListPrintJobsParams struct {
+	TenantID   int64
+	PropertyID int64
+	PrinterID  *int64
+	Status     *string
+	MaxRows    int32
+}
+
+type ListPrintJobsRow struct {
+	ID          pgtype.UUID
+	PrinterID   int64
+	PrinterName string
+	Kind        string
+	SourceType  string
+	SourceID    int64
+	Status      string
+	Attempts    int16
+	CreatedAt   time.Time
+	PrintedAt   *time.Time
+	ErrorCode   string
+	BillNumber  string
+	TableCode   string
+	StationName string
+	TicketKind  string
+}
+
+func (q *Queries) ListPrintJobs(ctx context.Context, arg ListPrintJobsParams) ([]ListPrintJobsRow, error) {
+	rows, err := q.db.Query(ctx, listPrintJobs,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.PrinterID,
+		arg.Status,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPrintJobsRow{}
+	for rows.Next() {
+		var i ListPrintJobsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrinterID,
+			&i.PrinterName,
+			&i.Kind,
+			&i.SourceType,
+			&i.SourceID,
+			&i.Status,
+			&i.Attempts,
+			&i.CreatedAt,
+			&i.PrintedAt,
+			&i.ErrorCode,
+			&i.BillNumber,
+			&i.TableCode,
+			&i.StationName,
+			&i.TicketKind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPrinters = `-- name: ListPrinters :many
 SELECT id, name, kind, connection_info, paper_width_mm, codepage, opens_drawer, is_active
 FROM pos_printers WHERE tenant_id = $1 AND property_id = $2
@@ -2945,6 +3247,70 @@ func (q *Queries) NightAuditOpenBills(ctx context.Context, arg NightAuditOpenBil
 		return nil, err
 	}
 	return items, nil
+}
+
+const outletExists = `-- name: OutletExists :one
+SELECT EXISTS (SELECT 1 FROM pos_outlets WHERE tenant_id = $1 AND property_id = $2 AND id = $3)
+`
+
+type OutletExistsParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) OutletExists(ctx context.Context, arg OutletExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, outletExists, arg.TenantID, arg.PropertyID, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const printQueueDepth = `-- name: PrintQueueDepth :many
+SELECT printer_id, count(*)::int AS queued FROM pos_print_jobs
+WHERE tenant_id = $1 AND property_id = $2 AND status IN ('QUEUED', 'CLAIMED') GROUP BY printer_id
+`
+
+type PrintQueueDepthParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type PrintQueueDepthRow struct {
+	PrinterID int64
+	Queued    int32
+}
+
+func (q *Queries) PrintQueueDepth(ctx context.Context, arg PrintQueueDepthParams) ([]PrintQueueDepthRow, error) {
+	rows, err := q.db.Query(ctx, printQueueDepth, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PrintQueueDepthRow{}
+	for rows.Next() {
+		var i PrintQueueDepthRow
+		if err := rows.Scan(&i.PrinterID, &i.Queued); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const purgeEvents = `-- name: PurgeEvents :execrows
+DELETE FROM pos_events WHERE at < $1::timestamptz
+`
+
+func (q *Queries) PurgeEvents(ctx context.Context, before time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeEvents, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const reopenBill = `-- name: ReopenBill :execrows
@@ -3739,6 +4105,230 @@ func (q *Queries) SetupCheckStations(ctx context.Context, arg SetupCheckStations
 	return items, nil
 }
 
+const stationBoardLines = `-- name: StationBoardLines :many
+SELECT tl.id, tl.ticket_id, tl.quantity, tl.name, COALESCE(tl.options_text, '')::text AS options_text, COALESCE(tl.note, '')::text AS note, tl.is_void
+FROM pos_ticket_lines tl
+WHERE tl.tenant_id = $1 AND tl.property_id = $2 AND tl.ticket_id = ANY($3::bigint[])
+ORDER BY tl.ticket_id, tl.id
+`
+
+type StationBoardLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	TicketIds  []int64
+}
+
+type StationBoardLinesRow struct {
+	ID          int64
+	TicketID    int64
+	Quantity    decimal.Decimal
+	Name        string
+	OptionsText string
+	Note        string
+	IsVoid      bool
+}
+
+func (q *Queries) StationBoardLines(ctx context.Context, arg StationBoardLinesParams) ([]StationBoardLinesRow, error) {
+	rows, err := q.db.Query(ctx, stationBoardLines, arg.TenantID, arg.PropertyID, arg.TicketIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StationBoardLinesRow{}
+	for rows.Next() {
+		var i StationBoardLinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Quantity,
+			&i.Name,
+			&i.OptionsText,
+			&i.Note,
+			&i.IsVoid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const stationBoardTickets = `-- name: StationBoardTickets :many
+SELECT t.id, t.kind, t.status, t.created_at, t.started_at, t.ready_at, t.served_at, r.round_no,
+       b.id AS bill_id, COALESCE(b.bill_number, '')::text AS bill_number, b.order_type, o.id AS outlet_id, o.name AS outlet_name,
+       COALESCE(tb.code, '')::text AS table_code, COALESCE(b.customer_name, '')::text AS customer_name,
+       COALESCE(u.full_name, '')::text AS waiter_name,
+       COALESCE((SELECT r.room_number FROM stay_rooms sr JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
+                  WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id ORDER BY sr.id DESC LIMIT 1), '')::text AS room_number
+FROM pos_tickets t
+JOIN pos_bills b   ON b.property_id = t.property_id AND b.id = t.bill_id
+JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
+JOIN pos_rounds r  ON r.property_id = t.property_id AND r.id = t.round_id
+LEFT JOIN pos_tables tb ON tb.property_id = b.property_id AND tb.id = b.table_id
+LEFT JOIN users u  ON u.id = b.waiter_id
+WHERE t.tenant_id = $1 AND t.property_id = $2 AND t.station_id = $3 AND t.kind <> 'VOID'
+  AND (t.status IN ('NEW', 'COOKING', 'READY') OR ($4::boolean AND t.status = 'SERVED' AND t.served_at >= $5::timestamptz))
+ORDER BY t.created_at, t.id
+`
+
+type StationBoardTicketsParams struct {
+	TenantID    int64
+	PropertyID  int64
+	StationID   *int64
+	WithHistory bool
+	HistoryFrom time.Time
+}
+
+type StationBoardTicketsRow struct {
+	ID           int64
+	Kind         string
+	Status       string
+	CreatedAt    time.Time
+	StartedAt    *time.Time
+	ReadyAt      *time.Time
+	ServedAt     *time.Time
+	RoundNo      int32
+	BillID       int64
+	BillNumber   string
+	OrderType    string
+	OutletID     int64
+	OutletName   string
+	TableCode    string
+	CustomerName string
+	WaiterName   string
+	RoomNumber   string
+}
+
+// ---------------------------------------------------------------- the board of a station
+func (q *Queries) StationBoardTickets(ctx context.Context, arg StationBoardTicketsParams) ([]StationBoardTicketsRow, error) {
+	rows, err := q.db.Query(ctx, stationBoardTickets,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.StationID,
+		arg.WithHistory,
+		arg.HistoryFrom,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StationBoardTicketsRow{}
+	for rows.Next() {
+		var i StationBoardTicketsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Status,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.ReadyAt,
+			&i.ServedAt,
+			&i.RoundNo,
+			&i.BillID,
+			&i.BillNumber,
+			&i.OrderType,
+			&i.OutletID,
+			&i.OutletName,
+			&i.TableCode,
+			&i.CustomerName,
+			&i.WaiterName,
+			&i.RoomNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const stationExists = `-- name: StationExists :one
+SELECT EXISTS (SELECT 1 FROM pos_stations WHERE tenant_id = $1 AND property_id = $2 AND id = $3)
+`
+
+type StationExistsParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) StationExists(ctx context.Context, arg StationExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, stationExists, arg.TenantID, arg.PropertyID, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const stationOutlets = `-- name: StationOutlets :many
+SELECT DISTINCT o.id, o.name, o.code
+FROM pos_outlets o
+JOIN pos_price_list_items pi ON pi.property_id = o.property_id AND pi.price_list_id = o.price_list_id AND pi.is_sold
+JOIN pos_products p ON p.property_id = pi.property_id AND p.id = pi.product_id
+WHERE o.tenant_id = $1 AND o.property_id = $2 AND o.is_active
+  AND COALESCE(pi.station_id, p.station_id) = $3
+ORDER BY o.name
+`
+
+type StationOutletsParams struct {
+	TenantID   int64
+	PropertyID int64
+	StationID  *int64
+}
+
+type StationOutletsRow struct {
+	ID   int64
+	Name string
+	Code string
+}
+
+// The outlets that send to a station: the outlets whose products are made there.
+func (q *Queries) StationOutlets(ctx context.Context, arg StationOutletsParams) ([]StationOutletsRow, error) {
+	rows, err := q.db.Query(ctx, stationOutlets, arg.TenantID, arg.PropertyID, arg.StationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StationOutletsRow{}
+	for rows.Next() {
+		var i StationOutletsRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Code); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const stationPrinter = `-- name: StationPrinter :one
+SELECT s.printer_id, s.kds_enabled FROM pos_stations s WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id = $3
+`
+
+type StationPrinterParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type StationPrinterRow struct {
+	PrinterID  *int64
+	KdsEnabled bool
+}
+
+func (q *Queries) StationPrinter(ctx context.Context, arg StationPrinterParams) (StationPrinterRow, error) {
+	row := q.db.QueryRow(ctx, stationPrinter, arg.TenantID, arg.PropertyID, arg.ID)
+	var i StationPrinterRow
+	err := row.Scan(&i.PrinterID, &i.KdsEnabled)
+	return i, err
+}
+
 const strikeTicketLines = `-- name: StrikeTicketLines :exec
 UPDATE pos_ticket_lines SET is_void = true WHERE tenant_id = $1 AND property_id = $2 AND bill_line_id = $3 AND NOT is_void
 `
@@ -3752,6 +4342,22 @@ type StrikeTicketLinesParams struct {
 // A line voided before its ticket was served: the ticket line is struck through.
 func (q *Queries) StrikeTicketLines(ctx context.Context, arg StrikeTicketLinesParams) error {
 	_, err := q.db.Exec(ctx, strikeTicketLines, arg.TenantID, arg.PropertyID, arg.BillLineID)
+	return err
+}
+
+const touchBill = `-- name: TouchBill :exec
+UPDATE pos_bills SET version = version + 1 WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type TouchBillParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// A bill touched without a change of its own (a payment on its folio): the screens re-read it.
+func (q *Queries) TouchBill(ctx context.Context, arg TouchBillParams) error {
+	_, err := q.db.Exec(ctx, touchBill, arg.TenantID, arg.PropertyID, arg.ID)
 	return err
 }
 

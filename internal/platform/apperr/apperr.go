@@ -25,6 +25,7 @@ const (
 	KindBusy                     // 409: temporary contention (lock timeout, deadlock); retriable
 	KindUnavailable              // 503: dependency unavailable
 	KindRateLimited              // 429: too many attempts; retry later
+	KindGone                     // 410: it existed and is no longer held (a stream that cannot resume)
 )
 
 // HTTPStatus maps the kind to its HTTP status code.
@@ -46,6 +47,8 @@ func (k Kind) HTTPStatus() int {
 		return http.StatusServiceUnavailable
 	case KindRateLimited:
 		return http.StatusTooManyRequests
+	case KindGone:
+		return http.StatusGone
 	default:
 		return http.StatusInternalServerError
 	}
@@ -71,6 +74,8 @@ func (k Kind) String() string {
 		return "unavailable"
 	case KindRateLimited:
 		return "rate_limited"
+	case KindGone:
+		return "gone"
 	default:
 		return "internal"
 	}
@@ -131,6 +136,8 @@ func Conflict(code, message string) *Error     { return New(KindConflict, code, 
 func Unavailable(code, message string) *Error  { return New(KindUnavailable, code, message) }
 
 // Busy reports temporary contention; the client may retry the same request.
+func Gone(code, message string) *Error { return New(KindGone, code, message) }
+
 func Busy(code, message string) *Error {
 	e := New(KindBusy, code, message)
 	e.Retryable = true

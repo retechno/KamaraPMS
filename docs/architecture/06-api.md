@@ -908,3 +908,15 @@ Same module and the same `P`. `pos.order` also means `pos.cashier` (who may do m
 | `GET {P}/pos/outlets/{id}/report` | `pos.report` | `from`, `to`: days, products, methods, voids, discounts, comps, cashiers, waiters, charges to rooms, open bills |
 
 Folios: `GET {P}/folios` takes `folio_type=OUTLET` and `outlet_id`; without a `folio_type` the bills of the outlets are not listed. A folio of type `OUTLET` is changed only through the routes above (409 `OUTLET_FOLIO_USE_POS` on the generic charge, payment and transfer routes). The check-out answers `open_outlet_bills`; the night audit lists `outlet_bills` in blockers (outlets that ask for it) and warnings.
+
+
+### 24.2 POS: the stream, the kitchen display and the print queue (`34-pos.md` 19, PR 3a)
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET {P}/pos/events?channels=…` | per channel: `outlet:{id}` pos.order, pos.cashier or pos.manage; `station:{id}` pos.kds or pos.manage; `frontdesk` folio.outlet_charge_open or folio.read; `printers` pos.manage or pos.cashier | `text/event-stream`; events `{id, channel, type, entity_id, at}` (ids only); `Last-Event-ID` resumes; 410 `EVENTS_GONE`; 429 `TOO_MANY_STREAMS` (6 for a user); at most 8 channels; ends after 10 minutes with `event: reconnect`; `: heartbeat` every 20 s |
+| `GET {P}/pos/stations/{id}/board` | `pos.kds` (or `pos.manage`) | open tickets with lines, history of the last hour, the outlets of the station, the average wait, the late count |
+| `POST {P}/pos/tickets/{id}/status` | `pos.kds` for `START` and `READY`; `pos.kds`, `pos.order` or `pos.cashier` for `SERVE` | `{action}`; one conditional change, audited once; 409 `TICKET_STATUS_INVALID`; 404 `TICKET_NOT_FOUND` |
+| `GET {P}/pos/print-jobs` | `pos.manage` or `pos.cashier` | `printer_id`, `status`, `limit`; `{jobs, queued}` |
+
+An event type is one of `table.updated`, `bill.updated`, `bill.closed`, `ticket.created`, `ticket.updated`, `product.sold_out`, `print_job.updated`, `folio_lock.changed`, `outlet_charge.attempted`. The `410` is the new kind `gone` of the problem answers.
