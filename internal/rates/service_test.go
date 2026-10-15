@@ -372,13 +372,18 @@ func TestPermissionsAndIsolation(t *testing.T) {
 	in := rates.FillInput{RatePlanID: pl.ID, RoomTypeIDs: []int64{f.dlx}, From: d("2026-10-01"), To: d("2026-10-02"), Amount: "1"}
 	planIn := rates.RatePlanInput{Code: "NEW", Name: "New", MealPlan: "RO", RoomChargeCodeID: f.room, IsActive: true}
 
-	if _, err := f.Rates.ListRatePlans(reader, f.bali, 0, nil, 10); err != nil {
-		t.Fatalf("read needs property access only: %v", err)
+	// the plans are read by whoever manages the rates or sells with them; the grid of rates only by who manages them (docs/architecture/33-setup-read-permissions.md)
+	_, err := f.Rates.ListRatePlans(reader, f.bali, 0, nil, 10)
+	wantCode(t, err, "PERMISSION_DENIED")
+	if _, err := f.Rates.ListRatePlans(f.User(t, f.tenantID, f.bali, auth.PermReservationRead), f.bali, 0, nil, 10); err != nil {
+		t.Fatalf("a screen of reservations reads the plans: %v", err)
 	}
-	if _, err := f.Rates.Rates(reader, f.bali, pl.ID, nil, d("2026-10-01"), d("2026-10-03")); err != nil {
+	_, err = f.Rates.Rates(reader, f.bali, pl.ID, nil, d("2026-10-01"), d("2026-10-03"))
+	wantCode(t, err, "PERMISSION_DENIED")
+	if _, err := f.Rates.Rates(manager, f.bali, pl.ID, nil, d("2026-10-01"), d("2026-10-03")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := f.Rates.FillRates(reader, f.bali, in)
+	_, err = f.Rates.FillRates(reader, f.bali, in)
 	wantCode(t, err, "PERMISSION_DENIED")
 	_, err = f.Rates.CreateRatePlan(reader, f.bali, planIn)
 	wantCode(t, err, "PERMISSION_DENIED")

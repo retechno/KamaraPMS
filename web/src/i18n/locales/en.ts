@@ -4943,7 +4943,7 @@ export const en = {
     warnNobody: 'Nobody besides the administrators can approve this: every approval needs an administrator.',
     warnOne: 'Only one person can approve this; they cannot approve their own, so it needs an administrator.',
     saved: 'The rules are saved.',
-    readOnly: 'Your role can view the rules but not change them: the {permission} permission is needed.',
+    readOnly: 'The rules of approval are for who manages the property: the {permission} permission is needed.',
     unchanged: 'Nothing changed.',
     limitRequired: 'Give the limit.',
     kind_FOLIO_ADJUSTMENT: 'Adjustment of a folio',

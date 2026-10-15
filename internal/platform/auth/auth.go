@@ -88,3 +88,33 @@ func RequireAuthenticated(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// RequireAny asks the authorizer for any one of perms at the property: the read of reference data that a screen of setup and the
+// screens that use the data are each allowed (docs/architecture/33-setup-read-permissions.md). A property the caller has no access
+// to is 404 whatever the permission; none of the permissions is 403 PERMISSION_DENIED, naming them in the context.
+func RequireAny(ctx context.Context, a Authorizer, propertyID int64, perms ...Permission) error {
+	if len(perms) == 0 {
+		return apperr.Forbidden("PERMISSION_DENIED", "no permission is named")
+	}
+	var denied error
+	for _, perm := range perms {
+		err := a.Require(ctx, propertyID, perm)
+		if err == nil {
+			return nil
+		}
+		if e, ok := apperr.As(err); !ok || e.Kind != apperr.KindForbidden {
+			return err
+		}
+		if denied == nil {
+			denied = err
+		}
+	}
+	if e, ok := apperr.As(denied); ok {
+		names := make([]string, len(perms))
+		for i, p := range perms {
+			names[i] = string(p)
+		}
+		_ = e.WithContext("permissions", names)
+	}
+	return denied
+}

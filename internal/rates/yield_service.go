@@ -7,6 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/platform/apperr"
+	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/rates/ratesdb"
@@ -248,10 +249,13 @@ type Quote struct {
 	Missing    int          `json:"missing_nights"`
 }
 
-// Quote prices a stay as a booking made now would be, showing each rule that moved a night (any user of the property).
+// Quote prices a stay as a booking made now would be, showing each rule that moved a night (any user of the property: it is a calculation for the screens of sale, not the rules themselves).
 func (s *Service) Quote(ctx context.Context, propertyID, ratePlanID, roomTypeID int64, arrival, departure civil.Date) (Quote, error) {
-	p, err := s.reader(ctx, propertyID)
+	p, err := auth.Require(ctx)
 	if err != nil {
+		return Quote{}, err
+	}
+	if err := s.authz.CanAccess(ctx, propertyID); err != nil {
 		return Quote{}, err
 	}
 	decimals, err := s.currencyDecimals(ctx, propertyID)

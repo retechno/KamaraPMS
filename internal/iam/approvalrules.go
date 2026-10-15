@@ -86,14 +86,54 @@ type Rules struct {
 // NewRules wires the rules of approval.
 func NewRules(svc *Service, authz auth.Authorizer) *Rules { return &Rules{svc: svc, authz: authz} }
 
-// List answers every kind with its rule (FREE for a kind without a row). Any grant on the property may read it: the dialog of
-// approval says the rule in force.
-func (r *Rules) List(ctx context.Context, propertyID int64, decimals int32) ([]ApprovalRuleView, error) {
+// InForce is the rule of each kind as the dialog of approval says it: the kind, the rule and the limit, and nothing else. Any grant on the
+// property reads it (everyone who makes a correction sees the rule that applies to it).
+type InForce struct {
+	Kind      ApprovalKind `json:"kind"`
+	Rule      string       `json:"rule"`
+	Threshold *string      `json:"threshold"`
+}
+
+// InForce answers the rule of every kind (FREE for a kind without a row).
+func (r *Rules) InForce(ctx context.Context, propertyID int64, decimals int32) ([]InForce, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if err := r.authz.CanAccess(ctx, propertyID); err != nil {
+		return nil, err
+	}
+	rows, err := r.svc.q(ctx).ListApprovalRules(ctx, iamdb.ListApprovalRulesParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	byKind := map[string]iamdb.ListApprovalRulesRow{}
+	for _, row := range rows {
+		byKind[row.Kind] = row
+	}
+	out := make([]InForce, 0, len(approvalKinds))
+	for _, ki := range approvalKinds {
+		v := InForce{Kind: ki.Kind, Rule: RuleFree}
+		if row, ok := byKind[string(ki.Kind)]; ok {
+			v.Rule = row.Rule
+			if row.Threshold != nil {
+				t := row.Threshold.StringFixed(decimals)
+				v.Threshold = &t
+			}
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// List answers every kind with its rule (FREE for a kind without a row), the permission its approver needs and how many people can approve
+// it: the screen of the rules, which needs property.manage (the dialog of approval reads InForce).
+func (r *Rules) List(ctx context.Context, propertyID int64, decimals int32) ([]ApprovalRuleView, error) {
+	p, err := auth.Require(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.authz.Require(ctx, propertyID, auth.PermPropertyManage); err != nil {
 		return nil, err
 	}
 	q := r.svc.q(ctx)
@@ -262,6 +302,21 @@ func (r *Rules) RegisterRules(mux *http.ServeMux, propertyID func(*http.Request)
 			return err
 		}
 		out, err := r.List(req.Context(), pid, places)
+		if err != nil {
+			return err
+		}
+		return httpx.WriteJSON(w, http.StatusOK, map[string]any{"data": out})
+	}))
+	mux.Handle("GET "+p+"/in-force", httpx.HandlerFunc(func(w http.ResponseWriter, req *http.Request) error {
+		pid, err := propertyID(req)
+		if err != nil {
+			return err
+		}
+		places, err := decimals(req.Context(), pid)
+		if err != nil {
+			return err
+		}
+		out, err := r.InForce(req.Context(), pid, places)
 		if err != nil {
 			return err
 		}

@@ -414,8 +414,25 @@ func TestPermissionsAndIsolation(t *testing.T) {
 
 	reader := e.User(t, abc.ID, bali.ID) // a grant with no permissions
 	in := rooms.RoomTypeInput{Code: "STD", Name: "Std", MaxAdult: 1, MaxChild: 0, MaxOccupancy: 1, BaseOccupancy: 1, IsActive: true}
-	if _, err := e.Rooms.ListRoomTypes(reader, bali.ID, 0, nil, 10); err != nil {
-		t.Fatalf("read needs property access only: %v", err)
+	// the reference data is read by whoever manages it or uses it (docs/architecture/33-setup-read-permissions.md); a grant with no permission reads none of it
+	_, err = e.Rooms.ListRoomTypes(reader, bali.ID, 0, nil, 10)
+	wantCode(t, err, "PERMISSION_DENIED")
+	_, err = e.Rooms.ListRooms(reader, bali.ID, 0, rooms.RoomFilter{}, 10)
+	wantCode(t, err, "PERMISSION_DENIED")
+	_, err = e.Rooms.ListBedTypes(reader, bali.ID, nil)
+	wantCode(t, err, "PERMISSION_DENIED")
+	desk := e.User(t, abc.ID, bali.ID, auth.PermReservationRead)
+	if _, err := e.Rooms.ListRoomTypes(desk, bali.ID, 0, nil, 10); err != nil {
+		t.Fatalf("a screen of reservations reads the room types: %v", err)
+	}
+	if _, err := e.Rooms.ListBedTypes(desk, bali.ID, nil); err != nil {
+		t.Fatalf("and the bed types: %v", err)
+	}
+	_, err = e.Rooms.ListRooms(desk, bali.ID, 0, rooms.RoomFilter{}, 10)
+	wantCode(t, err, "PERMISSION_DENIED") // the list of rooms is for the setup of rooms and the blocks
+	picker := e.User(t, abc.ID, bali.ID, auth.PermRoomBlockManage)
+	if _, err := e.Rooms.ListRooms(picker, bali.ID, 0, rooms.RoomFilter{}, 10); err != nil {
+		t.Fatalf("the blocks pick a room: %v", err)
 	}
 	_, err = e.Rooms.CreateRoomType(reader, bali.ID, in)
 	wantCode(t, err, "PERMISSION_DENIED")

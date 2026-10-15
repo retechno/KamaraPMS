@@ -11,6 +11,7 @@ import (
 	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/platform/apperr"
+	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/httpx"
@@ -360,7 +361,7 @@ func intPtr(v pgtype.Int2) *int {
 
 // EffectiveRestrictions is what each date of [from, to) is under for a room type and a rate plan, by the one precedence of the availability engine.
 func (s *Service) EffectiveRestrictions(ctx context.Context, propertyID, roomTypeID, ratePlanID int64, from, to civil.Date) ([]availability.EffectiveDay, error) {
-	p, err := s.reader(ctx, propertyID)
+	p, err := s.reader(ctx, propertyID, auth.PermReservationRead)
 	if err != nil {
 		return nil, err
 	}

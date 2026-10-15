@@ -429,13 +429,23 @@ func TestPermissionsAndIsolation(t *testing.T) {
 	manager := f.User(t, f.tenantID, f.bali, auth.PermBillingConfigManage)
 	in := billingconfig.TaxInput{Code: "CITY", Name: "City", Rate: "1", IsActive: true}
 
-	if _, err := f.Billing.ListTaxes(reader, f.bali, 0, nil, 10); err != nil {
-		t.Fatalf("reading needs property access only: %v", err)
+	// the configuration is read by whoever manages it or uses it (docs/architecture/33-setup-read-permissions.md); a grant with no permission reads none of it
+	_, err := f.Billing.ListTaxes(reader, f.bali, 0, nil, 10)
+	wantCode(t, err, "PERMISSION_DENIED")
+	_, err = f.Billing.ListServiceCharges(reader, f.bali, 0, nil, 10)
+	wantCode(t, err, "PERMISSION_DENIED")
+	_, err = f.Billing.ListChargeCodes(reader, f.bali, 0, billingconfig.ChargeCodeFilter{}, 10)
+	wantCode(t, err, "PERMISSION_DENIED")
+	if _, err := f.Billing.ListChargeCodes(f.User(t, f.tenantID, f.bali, auth.PermFolioRead), f.bali, 0, billingconfig.ChargeCodeFilter{}, 10); err != nil {
+		t.Fatalf("the folio reads the charge codes: %v", err)
 	}
-	if _, err := f.Billing.ListChargeCodes(reader, f.bali, 0, billingconfig.ChargeCodeFilter{}, 10); err != nil {
-		t.Fatal(err)
+	if _, err := f.Billing.ListTaxes(f.User(t, f.tenantID, f.bali, auth.PermCityLedgerCreditNote), f.bali, 0, nil, 10); err != nil {
+		t.Fatalf("a credit note reads the taxes: %v", err)
 	}
-	_, err := f.Billing.CreateTax(reader, f.bali, in)
+	if _, err := f.Billing.ListTaxes(manager, f.bali, 0, nil, 10); err != nil {
+		t.Fatalf("billing_config.manage reads: %v", err)
+	}
+	_, err = f.Billing.CreateTax(reader, f.bali, in)
 	wantCode(t, err, "PERMISSION_DENIED")
 	_, err = f.Billing.UpdateTax(reader, f.bali, vat.ID, billingconfig.TaxPatch{Name: new(string)})
 	wantCode(t, err, "PERMISSION_DENIED")

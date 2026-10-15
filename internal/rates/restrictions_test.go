@@ -180,16 +180,18 @@ func TestAFillIsChecked(t *testing.T) {
 	_ = bar
 }
 
-func TestTheGridIsReadByAnyoneAtThePropertyAndWrittenByRateManage(t *testing.T) {
+func TestTheGridIsReadByWhoManagesTheRatesAndWrittenByRateManage(t *testing.T) {
 	f := newFixture(t)
 	f.fillR(t, rates.FillRestrictionsInput{From: d("2026-12-01"), To: d("2026-12-03"), Set: rates.RestrictionSet{StopSell: bp(true)}})
 	reader := f.User(t, f.tenantID, f.bali, auth.PermReservationRead)
-	if _, err := f.Rates.ListRestrictions(reader, f.bali, d("2026-12-01"), d("2026-12-03"), nil, nil); err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	_, err := f.Rates.FillRestrictions(reader, f.bali, rates.FillRestrictionsInput{From: d("2026-12-01"), To: d("2026-12-03"), Set: rates.RestrictionSet{StopSell: bp(false)}})
+	_, err := f.Rates.ListRestrictions(reader, f.bali, d("2026-12-01"), d("2026-12-03"), nil, nil)
+	wantCode(t, err, "PERMISSION_DENIED") // the grid of restrictions is read by who manages the rates (docs/architecture/33-setup-read-permissions.md)
+	_, err = f.Rates.FillRestrictions(reader, f.bali, rates.FillRestrictionsInput{From: d("2026-12-01"), To: d("2026-12-03"), Set: rates.RestrictionSet{StopSell: bp(false)}})
 	wantCode(t, err, "PERMISSION_DENIED")
 	manager := f.User(t, f.tenantID, f.bali, auth.PermRateManage)
+	if _, err := f.Rates.ListRestrictions(manager, f.bali, d("2026-12-01"), d("2026-12-03"), nil, nil); err != nil {
+		t.Fatalf("read: %v", err)
+	}
 	if _, err := f.Rates.FillRestrictions(manager, f.bali, rates.FillRestrictionsInput{From: d("2026-12-01"), To: d("2026-12-03"), Set: rates.RestrictionSet{StopSell: bp(false)}}); err != nil {
 		t.Fatalf("rate.manage: %v", err)
 	}

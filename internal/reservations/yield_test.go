@@ -186,9 +186,11 @@ func TestYieldRuleManagement(t *testing.T) {
 	_, err = f.Rates.UpdateYieldRule(f.admin, f.propID, 999999, in)
 	wantCode(t, err, "YIELD_RULE_NOT_FOUND")
 
-	// permissions: anyone at the property reads, rate.manage writes
+	// permissions: rate.manage reads and writes (docs/architecture/33-setup-read-permissions.md); a grant without it reads nothing of the rules
 	reader := f.User(t, f.tenantID, f.propID, auth.PermFolioRead)
-	list, err := f.Rates.ListYieldRules(reader, f.propID, nil)
+	_, err = f.Rates.ListYieldRules(reader, f.propID, nil)
+	wantCode(t, err, "PERMISSION_DENIED")
+	list, err := f.Rates.ListYieldRules(f.User(t, f.tenantID, f.propID, auth.PermRateManage), f.propID, nil)
 	must(t, err)
 	if len(list) != 2 {
 		t.Fatalf("list: %+v", list)

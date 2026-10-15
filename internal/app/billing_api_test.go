@@ -119,7 +119,8 @@ func TestBillingConfigAPIFlow(t *testing.T) {
 	if r := clerk.do(http.MethodPost, "/api/v1/auth/login", map[string]string{"tenant_code": "ABC", "email": "clerk@hotel.com", "password": testPassword}); r.status != 200 {
 		t.Fatalf("login: %d", r.status)
 	}
-	if r := clerk.do(http.MethodGet, base+"/charge-codes/"+roomID, nil); r.status != 200 {
+	// a grant with no permission reads none of the configuration (docs/architecture/33-setup-read-permissions.md)
+	if r := clerk.do(http.MethodGet, base+"/charge-codes/"+roomID, nil); r.status != 403 {
 		t.Fatalf("clerk read: %d", r.status)
 	}
 	for _, c := range []struct {

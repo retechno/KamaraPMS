@@ -37,7 +37,43 @@ describe('navigation', () => {
       expect(asUser).not.toContain(id)
       expect(asAdmin).toContain(id)
     }
-    expect(asUser).toContain('roomTypes')
+    // the pages of setup are for who manages what they show (docs/architecture/33-setup-read-permissions.md): nothing of setup without a permission
+    expect(asUser).not.toContain('roomTypes')
+  })
+
+  describe('the section of setup (docs/architecture/33-setup-read-permissions.md)', () => {
+    const sectionsOf = (held: string[]) => visibleNavigation(false, (p) => held.includes(p)).map((s) => s.id)
+    const setupOf = (held: string[]) => visibleNavigation(false, (p) => held.includes(p)).find((s) => s.id === 'setup')?.items.map((i) => i.id) ?? []
+
+    it('is not shown to housekeeping or to the reception, whatever they read', () => {
+      expect(sectionsOf(['housekeeping.update', 'housekeeping.assign', 'maintenance.report'])).not.toContain('setup')
+      const reception = ['reservation.read', 'reservation.create', 'reservation.update', 'frontdesk.checkin', 'frontdesk.checkout', 'folio.read', 'payment.post', 'guest.read', 'guest.write', 'cityledger.read']
+      expect(sectionsOf(reception)).not.toContain('setup')
+      expect(visibleNavigation(false).map((s) => s.id)).not.toContain('setup')
+    })
+
+    it('shows each page to the permission that manages what it shows', () => {
+      expect(setupOf(['room.manage'])).toEqual(['roomTypes', 'bedTypes', 'roomsSetup'])
+      expect(setupOf(['billing_config.manage'])).toEqual(['taxesService', 'chargeCodes'])
+      expect(setupOf(['rate.manage'])).toEqual(['ratePlans', 'freeQuotas', 'rateGrid', 'bedSupplements', 'restrictions', 'yieldRules'])
+      expect(setupOf(['property.manage'])).toEqual(['approvalRules'])
+      expect(setupOf(['company.manage'])).toEqual(['companies'])
+      expect(setupOf(['audit.read'])).toEqual(['auditTrail'])
+    })
+
+    it('names a manage permission on every page that is not for administrators only', () => {
+      const setup = navigation.find((s) => s.id === 'setup')!.items
+      for (const i of setup.filter((x) => !x.adminOnly && x.id !== 'auditTrail')) expect(String([i.permission]), i.id).toMatch(/\.manage$/)
+    })
+
+    it('has the permission of the menu on the route of the page, so that a typed address is turned back', () => {
+      const setup = navigation.find((s) => s.id === 'setup')!.items.filter((i) => i.permission && !i.adminOnly && i.to.startsWith('/setup/'))
+      for (const i of setup) {
+        const route = router.resolve(i.to).matched.at(-1)
+        expect(route?.meta.permission, i.to).toEqual(i.permission)
+      }
+      expect(router.resolve('/setup/properties/3').matched.at(-1)?.meta.permission).toBe('property.manage')
+    })
   })
 
   it('finds the item of a path by its longest route', () => {
@@ -115,7 +151,7 @@ describe('navigation', () => {
   })
 
   it('names the permission of the read endpoint on every page, except the ones that every member of the property may read', () => {
-    const open = ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'roomBlocks', 'properties', 'users', 'roles', 'roomTypes', 'bedTypes', 'roomsSetup', 'taxesService', 'chargeCodes', 'ratePlans', 'freeQuotas', 'approvalRules', 'rateGrid', 'bedSupplements', 'restrictions', 'yieldRules']
+    const open = ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'roomBlocks', 'properties', 'users', 'roles']
     const bare = items.filter((i) => !i.permission && !i.adminOnly).map((i) => i.id)
     expect(bare.sort()).toEqual(open.filter((id) => !['properties', 'users', 'roles', 'myTasks'].includes(id)).sort())
   })

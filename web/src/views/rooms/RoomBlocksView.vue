@@ -44,7 +44,7 @@ const dates = computed(() => (windowStart.value ? windowDates(windowStart.value,
 const sortedRooms = computed(() =>
   rooms.value.filter((r) => r.is_active).sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true })),
 )
-const roomNumber = (id: number) => rooms.value.find((r) => r.id === id)?.room_number ?? String(id)
+const roomNumber = (id: number) => rooms.value.find((r) => r.id === id)?.room_number ?? blocks.value.find((b) => b.room_id === id)?.room_number ?? String(id)
 // A calendar date has one weekday whatever the time zone: read it in UTC, in the language of the page.
 const weekday = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(i18n.global.locale.value, { weekday: 'short', timeZone: 'UTC' })
 const isWeekend = (d: string) => [0, 6].includes(new Date(`${d}T00:00:00Z`).getUTCDay())
@@ -90,18 +90,22 @@ async function load(): Promise<void> {
   try {
     const from = windowStart.value
     const to = addDays(from, days.value)
+    // The list of rooms is read by who may block a room (it fills the picker); the others see the blocks, each with its room number.
     const [r, b] = await Promise.all([
-      fetchAll((cursor) =>
-        api.GET('/api/v1/properties/{propertyId}/rooms', { params: { path: { propertyId }, query: { limit: 200, cursor } } }),
-      ),
+      canManage.value
+        ? fetchAll((cursor) => api.GET('/api/v1/properties/{propertyId}/rooms', { params: { path: { propertyId }, query: { limit: 200, cursor } } }))
+        : Promise.resolve([] as Room[]),
       fetchAll((cursor) =>
         api.GET('/api/v1/properties/{propertyId}/room-blocks', {
           params: { path: { propertyId }, query: { status: 'ACTIVE', from, to, limit: 200, cursor } },
         }),
       ),
     ])
-    rooms.value = r
     blocks.value = b.sort((x, y) => x.start_date.localeCompare(y.start_date) || x.id - y.id)
+    // Without the list of rooms the calendar has the rooms that are blocked in the window, named by the number the block carries.
+    rooms.value = canManage.value
+      ? r
+      : [...new Map(blocks.value.map((x) => [x.room_id, { id: x.room_id, room_number: x.room_number ?? String(x.room_id), is_active: true } as Room])).values()]
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {

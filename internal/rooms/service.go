@@ -66,7 +66,7 @@ func (s *Service) ListRoomTypes(ctx context.Context, propertyID, afterID int64, 
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authz.CanAccess(ctx, propertyID); err != nil {
+	if err := auth.RequireAny(ctx, s.authz, propertyID, auth.PermRoomManage, auth.PermReservationRead, auth.PermFrontdeskCheckin); err != nil {
 		return nil, err
 	}
 	rows, err := s.q(ctx).ListRoomTypes(ctx, roomsdb.ListRoomTypesParams{
@@ -88,7 +88,7 @@ func (s *Service) GetRoomType(ctx context.Context, propertyID, id int64) (RoomTy
 	if err != nil {
 		return RoomType{}, err
 	}
-	if err := s.authz.CanAccess(ctx, propertyID); err != nil {
+	if err := auth.RequireAny(ctx, s.authz, propertyID, auth.PermRoomManage, auth.PermReservationRead, auth.PermFrontdeskCheckin); err != nil {
 		return RoomType{}, err
 	}
 	row, err := s.q(ctx).GetRoomType(ctx, roomsdb.GetRoomTypeParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
@@ -247,7 +247,7 @@ func (s *Service) ListRooms(ctx context.Context, propertyID, afterID int64, f Ro
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authz.CanAccess(ctx, propertyID); err != nil {
+	if err := auth.RequireAny(ctx, s.authz, propertyID, auth.PermRoomManage, auth.PermRoomBlockManage); err != nil {
 		return nil, err
 	}
 	rows, err := s.q(ctx).ListRooms(ctx, roomsdb.ListRoomsParams{
@@ -269,7 +269,7 @@ func (s *Service) GetRoom(ctx context.Context, propertyID, id int64) (Room, erro
 	if err != nil {
 		return Room{}, err
 	}
-	if err := s.authz.CanAccess(ctx, propertyID); err != nil {
+	if err := auth.RequireAny(ctx, s.authz, propertyID, auth.PermRoomManage, auth.PermRoomBlockManage); err != nil {
 		return Room{}, err
 	}
 	row, err := s.q(ctx).GetRoom(ctx, roomsdb.GetRoomParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
@@ -578,8 +578,23 @@ func (s *Service) ListBlocks(ctx context.Context, propertyID int64, beforeID *in
 		return nil, err
 	}
 	out := make([]RoomBlock, len(rows))
+	ids := make([]int64, len(rows))
 	for i, r := range rows {
 		out[i] = toBlock(r)
+		ids[i] = r.RoomID
+	}
+	if len(ids) > 0 {
+		numbers, err := s.q(ctx).RoomNumbersOf(ctx, roomsdb.RoomNumbersOfParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: ids})
+		if err != nil {
+			return nil, err
+		}
+		byID := make(map[int64]string, len(numbers))
+		for _, n := range numbers {
+			byID[n.ID] = n.RoomNumber
+		}
+		for i := range out {
+			out[i].RoomNumber = byID[out[i].RoomID]
+		}
 	}
 	return out, nil
 }
@@ -597,7 +612,11 @@ func (s *Service) GetBlock(ctx context.Context, propertyID, id int64) (RoomBlock
 	if err != nil {
 		return RoomBlock{}, orNotFound(err, errBlockNotFound())
 	}
-	return toBlock(row), nil
+	b := toBlock(row)
+	if numbers, err := s.q(ctx).RoomNumbersOf(ctx, roomsdb.RoomNumbersOfParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: []int64{row.RoomID}}); err == nil && len(numbers) == 1 {
+		b.RoomNumber = numbers[0].RoomNumber
+	}
+	return b, nil
 }
 
 // lockRoomForBlock takes L2 (the room's type) and L3 (the room) and returns the

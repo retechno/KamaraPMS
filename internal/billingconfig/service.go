@@ -61,13 +61,14 @@ func (s *Service) writer(ctx context.Context, propertyID int64) (auth.Principal,
 	return p, s.authz.Require(ctx, propertyID, auth.PermBillingConfigManage)
 }
 
-// reader authorizes a read: any access to the property.
-func (s *Service) reader(ctx context.Context, propertyID int64) (auth.Principal, error) {
+// reader authorizes a read of the configuration of billing: the permission that manages it, or one of the permissions of the screens that
+// use it (docs/architecture/33-setup-read-permissions.md). A person with none of them does not read it.
+func (s *Service) reader(ctx context.Context, propertyID int64, perms ...auth.Permission) (auth.Principal, error) {
 	p, err := auth.Require(ctx)
 	if err != nil {
 		return p, err
 	}
-	return p, s.authz.CanAccess(ctx, propertyID)
+	return p, auth.RequireAny(ctx, s.authz, propertyID, append([]auth.Permission{auth.PermBillingConfigManage}, perms...)...)
 }
 
 // SeedProperty creates the standard charge codes of a new property. It is registered as a property
@@ -103,7 +104,7 @@ func apply[T any](dst *T, v *T) {
 
 // ListTaxes lists taxes by id after afterID.
 func (s *Service) ListTaxes(ctx context.Context, propertyID, afterID int64, active *bool, limit int) ([]Tax, error) {
-	p, err := s.reader(ctx, propertyID)
+	p, err := s.reader(ctx, propertyID, auth.PermCityLedgerCreditNote, auth.PermTaxManage)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +234,7 @@ func (s *Service) UpdateTax(ctx context.Context, propertyID, id int64, patch Tax
 
 // ListServiceCharges lists service charges by id after afterID.
 func (s *Service) ListServiceCharges(ctx context.Context, propertyID, afterID int64, active *bool, limit int) ([]ServiceCharge, error) {
-	p, err := s.reader(ctx, propertyID)
+	p, err := s.reader(ctx, propertyID, auth.PermCityLedgerCreditNote, auth.PermTaxManage)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +394,7 @@ func (s *Service) attachRules(ctx context.Context, tenantID, propertyID int64, o
 
 // ListChargeCodes lists charge codes (with their rules) by id after afterID.
 func (s *Service) ListChargeCodes(ctx context.Context, propertyID, afterID int64, f ChargeCodeFilter, limit int) ([]ChargeCode, error) {
-	p, err := s.reader(ctx, propertyID)
+	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage)
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +436,7 @@ func (s *Service) loadChargeCode(ctx context.Context, tenantID, propertyID, id i
 
 // GetChargeCode returns one charge code with its rules.
 func (s *Service) GetChargeCode(ctx context.Context, propertyID, id int64) (ChargeCode, error) {
-	p, err := s.reader(ctx, propertyID)
+	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage)
 	if err != nil {
 		return ChargeCode{}, err
 	}

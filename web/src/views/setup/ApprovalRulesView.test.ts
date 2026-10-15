@@ -101,7 +101,9 @@ describe('ApprovalRulesView', () => {
     await flushPromises()
     expect(w.find('[data-testid=read-only]').exists()).toBe(true)
     expect(w.find('[data-testid=save]').exists()).toBe(false)
-    expect(w.get('select[name=rule_REFUND]').attributes('disabled')).toBeDefined()
+    // the table (with who can approve each kind) is for property.manage: it is not even asked for
+    expect(GET).not.toHaveBeenCalled()
+    expect(w.find('select[name=rule_REFUND]').exists()).toBe(false)
   })
 
   it('names the permission of the approver in words, not as a code', async () => {
