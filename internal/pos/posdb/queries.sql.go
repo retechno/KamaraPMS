@@ -4052,7 +4052,8 @@ func (q *Queries) SetupCheckOutlets(ctx context.Context, arg SetupCheckOutletsPa
 }
 
 const setupCheckStations = `-- name: SetupCheckStations :many
-SELECT o.id AS outlet_id, o.code AS outlet_code, p.id AS product_id, p.code AS product_code, s.id AS station_id, s.code AS station_code
+SELECT o.id AS outlet_id, o.code AS outlet_code, o.order_mode, p.id AS product_id, p.code AS product_code, s.id AS station_id, s.code AS station_code,
+       COALESCE(s.is_active, false)::boolean AS station_active, (s.printer_id IS NOT NULL)::boolean AS station_has_printer, COALESCE(s.kds_enabled, false)::boolean AS station_has_kds
 FROM pos_outlets o
 JOIN pos_price_list_items i ON i.property_id = o.property_id AND i.price_list_id = o.price_list_id AND i.is_sold
 JOIN pos_products p ON p.property_id = i.property_id AND p.id = i.product_id AND p.is_active
@@ -4068,12 +4069,16 @@ type SetupCheckStationsParams struct {
 }
 
 type SetupCheckStationsRow struct {
-	OutletID    int64
-	OutletCode  string
-	ProductID   int64
-	ProductCode string
-	StationID   *int64
-	StationCode *string
+	OutletID          int64
+	OutletCode        string
+	OrderMode         string
+	ProductID         int64
+	ProductCode       string
+	StationID         *int64
+	StationCode       *string
+	StationActive     bool
+	StationHasPrinter bool
+	StationHasKds     bool
 }
 
 // ---------------------------------------------------------------- the check of the setup
@@ -4090,10 +4095,14 @@ func (q *Queries) SetupCheckStations(ctx context.Context, arg SetupCheckStations
 		if err := rows.Scan(
 			&i.OutletID,
 			&i.OutletCode,
+			&i.OrderMode,
 			&i.ProductID,
 			&i.ProductCode,
 			&i.StationID,
 			&i.StationCode,
+			&i.StationActive,
+			&i.StationHasPrinter,
+			&i.StationHasKds,
 		); err != nil {
 			return nil, err
 		}

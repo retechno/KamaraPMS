@@ -15958,6 +15958,18 @@ export interface components {
             outlet?: string;
             product?: string;
             station?: string;
+            /**
+             * @description The order mode of the outlet that makes the station insufficient.
+             * @enum {string}
+             */
+            order_mode?: "PRINT" | "KDS";
+            /** @enum {string} */
+            reason?: "NO_STATION" | "STATION_INACTIVE" | "NO_PRINTER" | "NO_KDS";
+            /**
+             * @description What the station has instead of what the outlet needs.
+             * @enum {string}
+             */
+            other_output?: "KDS" | "PRINTER";
         };
         PosImportRowError: {
             row: number;

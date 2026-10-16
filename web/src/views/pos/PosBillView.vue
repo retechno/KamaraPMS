@@ -435,7 +435,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
           class="relative flex min-h-20 flex-col items-start justify-between gap-1 rounded-lg border border-border bg-card p-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           :data-testid="`product-${p.id}`" @click="tapProduct(p)"
         >
-          <strong class="leading-tight">{{ p.name }}</strong>
+          <strong class="line-clamp-2 pr-7 leading-tight">{{ p.name }}</strong>
           <span class="tabular-nums text-muted-foreground">{{ formatMoney(p.price ?? '') }}</span>
           <span v-if="soldOut(p.id)" class="text-xs font-medium text-destructive">{{ t('posBill.soldOut') }}</span>
           <span v-else-if="alreadyOrdered(p.id) > 0" class="absolute right-1 top-1 rounded-full bg-primary px-1.5 text-xs text-primary-foreground" :data-testid="`ordered-${p.id}`">{{ alreadyOrdered(p.id) }}</span>

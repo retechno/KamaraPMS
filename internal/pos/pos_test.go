@@ -618,3 +618,49 @@ func TestEveryReadAndWriteAsksForItsPermission(t *testing.T) {
 	_, err := f.svc.ListOutlets(stranger, f.propID, nil)
 	wantCode(t, err, "PROPERTY_NOT_FOUND")
 }
+
+// The rule is of the order mode of the outlet: a PRINT outlet needs a printer on the station and a KDS outlet needs the screen, whatever else the station has. The check says which and why.
+func TestTheSetupCheckNamesTheReasonAStationDoesNotReachTheKitchen(t *testing.T) {
+	f := setup(t)
+	k := f.kit(t)
+	f.outlet(t, k, "RESTO")
+	_, err := f.svc.CreateOutlet(f.admin, f.propID, pos.OutletInput{Code: "BARK", Name: "Bar", OutletType: "BAR", OrderMode: "KDS", DepartmentID: f.dept, RuleProfileID: k.profile.ID,
+		PriceListID: k.priceList.ID, CompTreatment: "PAYMENT_COMP"})
+	must(t, err)
+	food := f.chargeCode(t, "RESTAURANT")
+	st, err := f.svc.CreateStation(f.admin, f.propID, pos.StationInput{Code: "BAR", Name: "Bar", KDSEnabled: true, LateAfterMinutes: 10})
+	must(t, err)
+	_, err = f.svc.CreateProduct(f.admin, f.propID, pos.ProductInput{Code: "TEA", Name: "Tea", CategoryID: k.cat.ID, ChargeCodeID: food, StationID: &st.ID,
+		Prices: []pos.ProductPriceIn{{PriceListID: k.priceList.ID, Price: dec("1000"), IsSold: true}}})
+	must(t, err)
+	find := func(outlet string) *pos.SetupIssue {
+		issues, err := f.svc.SetupCheck(f.admin, f.propID)
+		must(t, err)
+		for i := range issues {
+			if strings.HasPrefix(issues[i].Code, "PRODUCT_") && issues[i].Outlet == outlet {
+				return &issues[i]
+			}
+		}
+		return nil
+	}
+	// a station with a screen and no printer: fine for the KDS outlet, not for the PRINT outlet, and the issue says the station has a screen
+	if i := find("BARK"); i != nil {
+		t.Fatalf("a KDS outlet is served by a station with a screen: %+v", i)
+	}
+	i := find("RESTO")
+	if i == nil || i.Reason != "NO_PRINTER" || i.OrderMode != "PRINT" || i.OtherOutput != "KDS" || i.Station != "BAR" {
+		t.Fatalf("a PRINT outlet needs a printer, the station has only a screen: %+v", i)
+	}
+	// the other way round: a printer and no screen
+	pr, err := f.svc.CreatePrinter(f.admin, f.propID, pos.PrinterInput{Name: "Bar printer", Kind: "KITCHEN", PaperWidthMM: 80, Codepage: "CP437", ConnectionInfo: "192.168.1.60:9100"})
+	must(t, err)
+	_, err = f.svc.UpdateStation(f.admin, f.propID, st.ID, pos.StationInput{Name: "Bar", PrinterID: &pr.ID, KDSEnabled: false, LateAfterMinutes: 10})
+	must(t, err)
+	if i := find("RESTO"); i != nil {
+		t.Fatalf("a PRINT outlet is served by a station with a printer: %+v", i)
+	}
+	i = find("BARK")
+	if i == nil || i.Reason != "NO_KDS" || i.OrderMode != "KDS" || i.OtherOutput != "PRINTER" {
+		t.Fatalf("a KDS outlet needs the screen, the station has only a printer: %+v", i)
+	}
+}

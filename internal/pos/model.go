@@ -359,6 +359,11 @@ type SetupIssue struct {
 	Outlet   string `json:"outlet,omitempty"`
 	Product  string `json:"product,omitempty"`
 	Station  string `json:"station,omitempty"`
+	// OrderMode and Reason say why a product of an outlet cannot reach the kitchen: the outlet sends by PRINT or KDS, and the station lacks the printer (NO_PRINTER),
+	// the screen (NO_KDS), is switched off (STATION_INACTIVE) or is missing (NO_STATION). OtherOutput names what the station has instead: "KDS" or "PRINTER".
+	OrderMode   string `json:"order_mode,omitempty"`
+	Reason      string `json:"reason,omitempty"`
+	OtherOutput string `json:"other_output,omitempty"`
 }
 
 // ImportRowError is one row of a CSV import that was not accepted.

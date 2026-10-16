@@ -54,7 +54,7 @@ export const router = createRouter({
     },
     { path: '/pos/floor', name: 'pos-floor', component: () => import('@/views/pos/PosFloorView.vue'), meta: { title: 'Floor plan and bills', permission: ['pos.order', 'pos.cashier'], module: 'POS' } },
     { path: '/pos/bills/:id', name: 'pos-bill', component: () => import('@/views/pos/PosBillView.vue'), meta: { title: 'Bill', permission: ['pos.order', 'pos.cashier'], module: 'POS' } },
-    { path: '/pos/waiter', name: 'pos-waiter', component: () => import('@/views/pos/PosWaiterFloorView.vue'), meta: { title: 'Waiter: tables and orders', permission: 'pos.order', module: 'POS' } },
+    { path: '/pos/waiter', name: 'pos-waiter', component: () => import('@/views/pos/PosWaiterFloorView.vue'), meta: { title: 'Waiter', permission: 'pos.order', module: 'POS' } },
     { path: '/pos/waiter/bills/:id', name: 'pos-waiter-bill', component: () => import('@/views/pos/PosWaiterOrderView.vue'), meta: { title: 'Order', permission: 'pos.order', module: 'POS' } },
     { path: '/pos/kds', name: 'pos-kds', component: () => import('@/views/pos/PosKdsView.vue'), meta: { title: 'Kitchen display', permission: 'pos.kds', module: 'POS' } },
     { path: '/pos/report', name: 'pos-report', component: () => import('@/views/pos/PosReportView.vue'), meta: { title: 'Outlet report', permission: 'pos.report', module: 'POS' } },

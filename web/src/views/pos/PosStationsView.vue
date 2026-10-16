@@ -135,7 +135,35 @@ async function savePrinter(): Promise<void> {
   }
 }
 
-const issueText = (i: PosSetupIssue): string => t(`pos.check.${i.code}`, { outlet: i.outlet ?? '', product: i.product ?? '', station: i.station ?? '' })
+// What the check found, one line per outlet + station + reason (not one per product): up to 5 products are named, then "+N more". A problem that stops an order reaching the kitchen is
+// blocking (red, "Blocking"); the rest is advice (grey, "Advice"): the label says it, the colour is only a hint.
+interface IssueLine { key: string; blocking: boolean; text: string; code: string }
+const MAX_NAMED = 5
+const issueLines = computed<IssueLine[]>(() => {
+  const lines: IssueLine[] = []
+  const groups = new Map<string, { head: PosSetupIssue; products: string[] }>()
+  for (const i of issues.value) {
+    if (!i.code.startsWith('PRODUCT_')) {
+      lines.push({ key: `${i.code}|${i.outlet ?? ''}`, blocking: i.severity === 'ERROR', code: i.code, text: t(`pos.check.${i.code}`, { outlet: i.outlet ?? '' }) })
+      continue
+    }
+    const key = `${i.outlet ?? ''}|${i.station ?? ''}|${i.reason ?? i.code}`
+    const g = groups.get(key) ?? { head: i, products: [] }
+    if (i.product) g.products.push(i.product)
+    groups.set(key, g)
+  }
+  for (const [key, g] of groups) {
+    const names = g.products.slice(0, MAX_NAMED).join(', ')
+    const more = g.products.length > MAX_NAMED ? t('pos.check.more', { n: g.products.length - MAX_NAMED }) : ''
+    const reason = g.head.reason ?? 'NO_STATION'
+    const other = g.head.other_output ? `_${g.head.other_output}` : ''
+    lines.push({
+      key, blocking: g.head.severity === 'ERROR', code: g.head.code,
+      text: t(`pos.check.group_${reason}${other}`, { outlet: g.head.outlet ?? '', station: g.head.station ?? '', n: g.products.length, products: names + more }),
+    })
+  }
+  return lines.sort((a, b) => Number(b.blocking) - Number(a.blocking))
+})
 watch(pid, load, { immediate: true })
 </script>
 
@@ -150,7 +178,10 @@ watch(pid, load, { immediate: true })
     <section v-if="issues.length" class="mb-4 rounded-xl border border-border bg-card p-4" data-testid="setup-check">
       <h2 class="m-0 mb-2 text-sm font-semibold">{{ t('pos.check.title') }}</h2>
       <ul class="m-0 list-none space-y-1 p-0 text-sm">
-        <li v-for="(i, n) in issues" :key="n" :class="i.severity === 'ERROR' ? 'text-destructive' : 'text-muted-foreground'" :data-code="i.code">{{ issueText(i) }}</li>
+        <li v-for="l in issueLines" :key="l.key" class="flex items-start gap-2" :class="l.blocking ? 'text-destructive' : 'text-muted-foreground'" :data-code="l.code" :data-level="l.blocking ? 'blocking' : 'advice'">
+          <span class="mt-0.5 shrink-0 rounded border border-current px-1.5 text-[11px] font-semibold uppercase leading-5" data-testid="issue-level">{{ t(l.blocking ? 'pos.check.levelBlocking' : 'pos.check.levelAdvice') }}</span>
+          <span class="min-w-0">{{ l.text }}</span>
+        </li>
       </ul>
     </section>
 

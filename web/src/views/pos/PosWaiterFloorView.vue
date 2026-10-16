@@ -123,7 +123,7 @@ function seat(): void {
       </NativeSelect>
       <p v-else-if="outlet" class="m-0 text-sm text-muted-foreground">{{ outlet.name }}</p>
 
-      <div v-if="state" class="flex gap-2 overflow-x-auto pb-1" role="tablist" :aria-label="t('posFloor.areas')">
+      <div v-if="state" class="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" :aria-label="t('posFloor.areas')">
         <button
           v-for="a in state.areas" :key="a.id" type="button" role="tab" :aria-selected="a.id === areaId" :data-testid="`area-${a.id}`"
           class="h-10 shrink-0 cursor-pointer rounded-full border px-4 text-sm"

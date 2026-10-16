@@ -191,7 +191,7 @@ const statusKey = (l: PosBillLine): string => (l.ticket_status ? `posBill.ticket
 <template>
   <div class="mx-auto flex w-full max-w-[430px] flex-col pb-40" data-testid="waiter-order">
     <div class="mb-1 flex items-center gap-2">
-      <Button type="button" variant="ghost" size="sm" class="size-10 p-0" :aria-label="t('posWaiter.backToTables')" data-testid="waiter-back" @click="router.push('/pos/waiter')">‹</Button>
+      <Button type="button" variant="ghost" size="sm" class="size-[44px] min-h-[44px] min-w-[44px] shrink-0 p-0 text-3xl leading-none" :aria-label="t('posWaiter.backToTables')" data-testid="waiter-back" @click="router.push('/pos/waiter')"><span aria-hidden="true">‹</span></Button>
       <div class="min-w-0 flex-1" data-testid="waiter-title">
         <PageHeader :title="title || t('posWaiter.orderTitle')" :description="bill ? `${bill.bill_number} · ${bill.outlet_name}` : ''" class="mb-0" />
       </div>
@@ -204,7 +204,7 @@ const statusKey = (l: PosBillLine): string => (l.ticket_status ? `posBill.ticket
 
     <template v-if="catalog">
       <Input v-model="search" type="search" name="search" :placeholder="t('posWaiter.search')" :aria-label="t('posWaiter.search')" class="mb-2 h-11" data-testid="waiter-search" />
-      <div v-if="!search" class="mb-2 flex gap-2 overflow-x-auto pb-1" role="tablist">
+      <div v-if="!search" class="mb-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
         <button
           v-for="c in catalog.categories" :key="c.id" type="button" role="tab" :aria-selected="c.id === categoryId" :data-testid="`cat-${c.id}`"
           class="h-10 shrink-0 cursor-pointer rounded-full border px-4 text-sm"

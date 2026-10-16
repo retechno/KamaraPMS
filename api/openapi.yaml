@@ -17174,6 +17174,9 @@ components:
         outlet: { type: string }
         product: { type: string }
         station: { type: string }
+        order_mode: { type: string, enum: [PRINT, KDS], description: "The order mode of the outlet that makes the station insufficient." }
+        reason: { type: string, enum: [NO_STATION, STATION_INACTIVE, NO_PRINTER, NO_KDS] }
+        other_output: { type: string, enum: [KDS, PRINTER], description: "What the station has instead of what the outlet needs." }
     PosImportRowError:
       type: object
       required: [row, field, code]
