@@ -1,6 +1,6 @@
 import type { App } from 'vue'
 import { currentLocale, t, type Locale } from '@/i18n'
-import { formatBusinessDate, wallClock } from './dates'
+import { formatBusinessDate, formatBusinessDateShort, wallClock } from './dates'
 
 /** Group and decimal separators of a language. */
 const SEPARATORS: Record<Locale, { group: string; decimal: string }> = {
@@ -25,6 +25,9 @@ export function formatMoney(value: string | number | null | undefined): string {
 
 /** A business date ("2026-09-30") in the language of the page; anything else is returned unchanged. */
 export const formatDate = (value: string | null | undefined): string => (value ? formatBusinessDate(value) : '')
+
+/** A business date without its year ("3 Sep"), for a dense list. */
+export const formatDateShort = (value: string | null | undefined): string => (value ? formatBusinessDateShort(value) : '')
 
 /** The business dates inside a sentence written by the server ("Day close 2026-09-02") in the language of the page ("Day close 2 Sep 2026"). */
 export const localizeDates = (text: string | null | undefined): string => (text ?? '').replace(/\b\d{4}-\d{2}-\d{2}\b/g, (d) => formatBusinessDate(d))

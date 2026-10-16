@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { BedDouble, BookOpen, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Store, Truck } from 'lucide-vue-next'
+import { BedDouble, BookOpen, Boxes, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Store, Truck } from 'lucide-vue-next'
 
 /**
  * Application navigation. Labels are translation keys (`nav.items.<id>`, `nav.sections.<id>`), so the menu follows the
@@ -96,6 +96,18 @@ export const navigation: NavSection[] = [
       { id: 'posMenuSetup', to: '/pos/menu', permission: 'pos.manage', module: 'POS' },
       { id: 'posFloorPlan', to: '/pos/floor-plan', permission: 'pos.manage', module: 'POS' },
       { id: 'posStations', to: '/pos/stations', permission: 'pos.manage', module: 'POS' },
+    ],
+  },
+  {
+    id: 'inventory',
+    icon: Boxes,
+    items: [
+      { id: 'inventoryItems', to: '/inventory/items', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
+      { id: 'inventoryOpenings', to: '/inventory/openings', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
+      { id: 'inventoryWarehouses', to: '/inventory/warehouses', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
+      { id: 'inventoryCategories', to: '/inventory/categories', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
+      { id: 'inventoryUnits', to: '/inventory/units', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
+      { id: 'inventoryCosting', to: '/inventory/costing', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
     ],
   },
   {

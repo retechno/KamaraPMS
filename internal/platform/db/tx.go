@@ -29,6 +29,8 @@ type txKey struct{}
 type txState struct {
 	tx    pgx.Tx
 	level LockLevel // highest lock level taken so far (see locks.go)
+	// stockRank is the highest table of LevelStock taken so far (documents, warehouse, balances: see LockTable.stockRank)
+	stockRank int
 }
 
 func stateFrom(ctx context.Context) *txState {

@@ -112,6 +112,29 @@ section up "$(ls "$ROOT"/migrations/00077_*.sql)" | psql_run
 rp_after=$(psql_run -tA -c "SELECT count(*) FROM role_permissions")
 if [ "$rp_before" != "$rp_after" ]; then echo "FAIL: running 00077 again changed the rights ($rp_before -> $rp_after)" >&2; exit 1; fi
 
+echo "==> migration 00084 (inventory) on properties with and without the accounts it adds"
+M84="$(ls "$ROOT"/migrations/00084_*.sql)"
+section down "$M84" | psql_run
+psql_run < "$ROOT/db/tests/migration_00084_pre.sql"
+section up "$M84" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
+psql_run < "$ROOT/db/tests/migration_00084_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# the data step of the Up can run again: a property that has the key is left as it is
+accounts_before=$(psql_run -tA -c "SELECT count(*) FROM gl_accounts")
+section up "$M84" | awk '/^DO \$\$/,/^\$\$;/' | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    again: /p'
+accounts_after=$(psql_run -tA -c "SELECT count(*) FROM gl_accounts")
+if [ "$accounts_before" != "$accounts_after" ]; then echo "FAIL: running the data step of 00084 again added accounts ($accounts_before -> $accounts_after)" >&2; exit 1; fi
+# the Down is refused while the module holds anything, and changes nothing
+psql_run -c "INSERT INTO inventory_settings (tenant_id, property_id) SELECT tenant_id, id FROM properties WHERE code = 'I1'"
+if section down "$M84" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m84-down.err"; then echo "FAIL: the Down of 00084 ran while the inventory held data" >&2; exit 1; fi
+grep -q "cannot roll back 00084" "${TMPDIR:-/tmp}/m84-down.err" || { echo "FAIL: the Down of 00084 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m84-down.err" >&2; exit 1; }
+echo "    down refused while the inventory holds data"
+psql_run -c "DELETE FROM inventory_settings"
+# an account its user changed is not deleted by the Down
+psql_run -c "UPDATE gl_accounts SET name = 'Beban susut (diubah pengguna)' WHERE id = (SELECT account_id FROM gl_account_map WHERE map_key = 'INV_WASTE' AND property_id = (SELECT id FROM properties WHERE code = 'I2'))"
+section down "$M84" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
+psql_run < "$ROOT/db/tests/migration_00084_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M84" | psql_run >/dev/null
+
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
   echo "    down $(basename "$f")"

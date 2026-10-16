@@ -28,6 +28,7 @@ import (
 	"kamarapms/internal/guests"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/inventory"
 	"kamarapms/internal/lostfound"
 	"kamarapms/internal/maintenance"
 	"kamarapms/internal/nightaudit"
@@ -144,6 +145,9 @@ func New(d Deps) *App {
 		posSvc.SetEventPool(pool) // the streams of events wake on NOTIFY (they also read on a timer)
 	}
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc})
+	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
+	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})  // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
+	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc}) // and the close asks the stock whether its books agree
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)
@@ -167,6 +171,7 @@ func New(d Deps) *App {
 	budget.NewHandler(budgetSvc).Register(api)
 	departments.NewHandler(departmentsSvc).Register(api)
 	pos.NewHandler(posSvc).Register(api)
+	inventory.NewHandler(inventorySvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)

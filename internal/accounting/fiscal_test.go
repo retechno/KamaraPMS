@@ -199,7 +199,7 @@ func TestAYearWithoutResultClosesWithoutAJournalAndTheMapIsComplete(t *testing.T
 			found = true
 		}
 	}
-	if !found || len(m) != 17 {
+	if !found || len(m) != 25 {
 		t.Fatalf("map: %+v", m)
 	}
 	other := h.Tenant(t, "XYZ")

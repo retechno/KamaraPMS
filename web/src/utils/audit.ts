@@ -4,6 +4,20 @@
  * adds later still shows in the list (in readable words, see `labelOf`) but is not offered as a filter until it is added here.
  */
 export const AUDIT_ACTIONS = [
+  'inventory.settings_changed',
+  'inventory.costing_method_set',
+  'inventory.costing_locked',
+  'inventory.unit_created',
+  'inventory.unit_updated',
+  'inventory.category_created',
+  'inventory.category_updated',
+  'inventory.item_created',
+  'inventory.item_updated',
+  'inventory.item_units_set',
+  'inventory.warehouse_created',
+  'inventory.warehouse_updated',
+  'inventory.levels_set',
+  'inventory.opening_posted',
   'pos.outlet_created',
   'pos.outlet_updated',
   'pos.outlet_comp_treatment_changed',
@@ -255,6 +269,12 @@ export const AUDIT_ACTIONS = [
 ] as const
 
 export const AUDIT_ENTITIES = [
+  'inventory_settings',
+  'inv_unit',
+  'inv_category',
+  'inv_item',
+  'inv_warehouse',
+  'inv_opening',
   'pos_bill',
   'pos_ticket',
   'pos_device',

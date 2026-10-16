@@ -30,6 +30,7 @@ const (
 	LevelPayments     LockLevel = 43 // L4
 	LevelCompanies    LockLevel = 44 // L4: a city ledger account (serialises its credit limit checks and receipts)
 	LevelGroups       LockLevel = 45 // L4: a booking group (its dates and company are stable while a reservation joins it)
+	LevelStock        LockLevel = 45 // L4: stock, shared with the booking groups (a booking never touches stock; the lock-order test holds it): documents, then the warehouse, then the balances ascending (docs/architecture/35-inventory.md 5.1)
 	LevelAccounting   LockLevel = 46 // L4: a property's accounting settings row (the chart, the system accounts and the periods are edited under it)
 	LevelPayables     LockLevel = 47 // L4: a supplier (serialises its bills, payments and what they settle; taken after the accounting settings)
 	LevelBank         LockLevel = 48 // L4: a bank account (serialises the matching and reconciling of its statements; taken after the accounting settings)
@@ -65,6 +66,19 @@ func (t LockTable) String() string { return t.name }
 // Level returns the table's position in the lock order.
 func (t LockTable) Level() LockLevel { return t.level }
 
+// stockRank is the order of the stock tables inside LevelStock: the documents of the use case (1), then the warehouse (2), then the balance rows (3). 0 for every other table.
+func (t LockTable) stockRank() int {
+	switch t.name {
+	case "inv_openings":
+		return 1
+	case "inv_warehouses":
+		return 2
+	case "inv_balances":
+		return 3
+	}
+	return 0
+}
+
 var (
 	RoomTypes        = LockTable{"room_types", LevelRoomTypes}
 	Rooms            = LockTable{"rooms", LevelRooms}
@@ -76,12 +90,16 @@ var (
 	CashierShifts    = LockTable{"cashier_shifts", LevelPayments} // taken after the payments of the same level: a payment is posted on a shift
 	Companies        = LockTable{"companies", LevelCompanies}
 	Groups           = LockTable{"booking_groups", LevelGroups}
-	Accounting       = LockTable{"accounting_settings", LevelAccounting}
-	Suppliers        = LockTable{"suppliers", LevelPayables}
-	BankAccounts     = LockTable{"bank_accounts", LevelBank}
-	TaxProfiles      = LockTable{"tax_filing_profiles", LevelTax}
-	TaxSettings      = LockTable{"property_tax_settings", LevelTax}
-	Budgets          = LockTable{"budgets", LevelBudget}
+	// The stock tables, all of LevelStock. Inside the level the order is fixed: the documents of the use case, then the warehouse, then the balance rows, ascending id in one call.
+	StockOpenings = LockTable{"inv_openings", LevelStock}   // the documents of stock: the opening stock now; the requests, orders, receipts and counts come with their PRs, in the same group
+	Warehouses    = LockTable{"inv_warehouses", LevelStock} // after the documents; FOR SHARE for a mutation (so it sees a freeze), FOR UPDATE to start or end a count
+	StockBalances = LockTable{"inv_balances", LevelStock}   // last, all the balance rows the use case touches, in one call
+	Accounting    = LockTable{"accounting_settings", LevelAccounting}
+	Suppliers     = LockTable{"suppliers", LevelPayables}
+	BankAccounts  = LockTable{"bank_accounts", LevelBank}
+	TaxProfiles   = LockTable{"tax_filing_profiles", LevelTax}
+	TaxSettings   = LockTable{"property_tax_settings", LevelTax}
+	Budgets       = LockTable{"budgets", LevelBudget}
 )
 
 // EnterLockLevel records that the caller is about to take a lock at level with
@@ -94,6 +112,10 @@ func EnterLockLevel(ctx context.Context, level LockLevel) error {
 	}
 	if level < st.level {
 		return fmt.Errorf("%w: level %d requested after level %d", ErrLockOrder, level, st.level)
+	}
+	traceLock(ctx, "", level)
+	if level > st.level {
+		st.stockRank = 0 // a new level: the order inside LevelStock starts again if it is entered again
 	}
 	st.level = level
 	return nil
@@ -110,6 +132,14 @@ func LockRows(ctx context.Context, table LockTable, mode LockMode, propertyID in
 	if err := EnterLockLevel(ctx, table.level); err != nil {
 		return err
 	}
+	if rank := table.stockRank(); rank > 0 {
+		st := stateFrom(ctx)
+		if rank < st.stockRank {
+			return fmt.Errorf("%w: %s requested after a later table of the stock level", ErrLockOrder, table.name)
+		}
+		st.stockRank = rank
+	}
+	traceLock(ctx, table.name, table.level)
 	ids = slices.Clone(ids)
 	slices.Sort(ids)
 	ids = slices.Compact(ids)

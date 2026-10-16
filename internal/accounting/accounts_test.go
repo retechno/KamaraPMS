@@ -103,8 +103,9 @@ func TestANewPropertyGetsTheStandardChart(t *testing.T) {
 		got[e.Key] = e.AccountCode
 	}
 	want := map[string]string{"CASH": "1110", "CARD": "1150", "BANK_TRANSFER": "1130", "OTHER_PAYMENT": "1160", "CITY_LEDGER": "1220", "GUEST_LEDGER": "1210",
-		"ADVANCE_DEPOSITS": "2310", "TAX_PAYABLE": "2410", "SERVICE_PAYABLE": "2430", "SUSPENSE": "2990", "RETAINED_EARNINGS": "3200", "ACCOUNTS_PAYABLE": "2110", "INPUT_VAT": "1425", "FOLIO_TRANSFER": "1215", "CASH_OVER_SHORT": "6195", "QRIS": "1155", "COMP": "6196"}
-	if len(m) != 17 || len(got) != 17 {
+		"ADVANCE_DEPOSITS": "2310", "TAX_PAYABLE": "2410", "SERVICE_PAYABLE": "2430", "SUSPENSE": "2990", "RETAINED_EARNINGS": "3200", "ACCOUNTS_PAYABLE": "2110", "INPUT_VAT": "1425", "FOLIO_TRANSFER": "1215", "CASH_OVER_SHORT": "6195", "QRIS": "1155", "COMP": "6196",
+		"INV_GRNI": "2130", "INV_PPV": "5299", "INV_WASTE": "5290", "INV_COUNT_VARIANCE": "5295", "INV_COGS_FOOD": "5210", "INV_COGS_BEVERAGE": "5220", "INV_STAFF_MEAL": "5240", "INV_ENTERTAINMENT": "6170"}
+	if len(m) != 25 || len(got) != 25 {
 		t.Fatalf("map: %+v", m)
 	}
 	for k, v := range want {
@@ -112,7 +113,7 @@ func TestANewPropertyGetsTheStandardChart(t *testing.T) {
 			t.Fatalf("%s -> %s, want %s", k, got[k], v)
 		}
 	}
-	if m[0].Key != "CASH" || m[len(m)-1].Key != "CASH_OVER_SHORT" || m[0].Meaning == "" {
+	if m[0].Key != "CASH" || m[len(m)-1].Key != "INV_ENTERTAINMENT" || m[0].Meaning == "" {
 		t.Fatalf("map order: %+v", m)
 	}
 	var room, rest string
@@ -278,7 +279,7 @@ func TestAccountMap(t *testing.T) {
 	bank2, err := f.Accounting.CreateAccount(f.admin, f.propID, accounting.AccountInput{Code: "1135", Name: "Bank - USD account", AccountType: "ASSET", StatementGroup: "CASH"})
 	must(t, err)
 	m, err := f.Accounting.SetAccountMap(f.admin, f.propID, []accounting.MapInput{{Key: "BANK_TRANSFER", AccountID: bank2.ID}})
-	if err != nil || len(m) != 17 {
+	if err != nil || len(m) != 25 {
 		t.Fatalf("set: %+v %v", m, err)
 	}
 	for _, e := range m {

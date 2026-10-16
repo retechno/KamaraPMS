@@ -303,6 +303,8 @@ const (
 	SeqMaintenance SequenceType = "MAINTENANCE"
 	// SeqLostFound numbers lost and found items.
 	SeqLostFound SequenceType = "LOST_FOUND"
+	// SeqInvOpening numbers the opening stock documents of the inventory.
+	SeqInvOpening SequenceType = "INV_OPENING"
 )
 
 // defaultSequences are created with every property.
@@ -329,4 +331,5 @@ var defaultSequences = []struct {
 	{SeqShift, "SHF"},
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
+	{SeqInvOpening, "OPN-"},
 }

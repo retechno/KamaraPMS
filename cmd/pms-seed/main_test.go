@@ -69,3 +69,54 @@ func TestPosDemoKeepsTheLaundryApartFromTheKitchen(t *testing.T) {
 		}
 	}
 }
+
+// The demo data of the inventory refers only to what it creates: a unit, a category, a warehouse; an item is opened once per warehouse and has one default unit of each kind at most.
+func TestInventoryDemoRefersOnlyToWhatItCreates(t *testing.T) {
+	units := map[string]bool{}
+	for _, u := range invUnits {
+		units[u[0]] = true
+	}
+	cats := map[string]bool{}
+	for _, c := range invCategories {
+		cats[c.code] = true
+	}
+	whs := map[string]bool{}
+	for _, w := range invWarehouses {
+		whs[w.code] = true
+	}
+	codes := map[string]bool{}
+	for _, it := range invItems {
+		if codes[it.code] {
+			t.Errorf("%s: two items with the code", it.code)
+		}
+		codes[it.code] = true
+		if !cats[it.category] || !units[it.unit] {
+			t.Errorf("%s: category %q or unit %q is not made by the seed", it.code, it.category, it.unit)
+		}
+		dp, dr := 0, 0
+		for _, x := range it.extra {
+			if !units[x.UnitCode] || x.StockNum < 1 || x.StockDen < 1 || x.UnitCode == it.unit {
+				t.Errorf("%s: the unit %+v", it.code, x)
+			}
+			if x.IsDefaultPurchase {
+				dp++
+			}
+			if x.IsDefaultRecipe {
+				dr++
+			}
+		}
+		if dp > 1 || dr > 1 {
+			t.Errorf("%s: more than one default unit", it.code)
+		}
+		opened := map[string]bool{}
+		for _, o := range it.open {
+			if !whs[o.warehouse] || opened[o.warehouse] {
+				t.Errorf("%s: opening in %q", it.code, o.warehouse)
+			}
+			opened[o.warehouse] = true
+		}
+	}
+	if len(invItems) < 35 {
+		t.Errorf("%d items, about forty are expected", len(invItems))
+	}
+}

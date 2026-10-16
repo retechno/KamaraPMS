@@ -122,6 +122,11 @@ const (
 	PermPOSApprove    Permission = "pos.approve"
 	PermPOSKDS        Permission = "pos.kds"
 	PermPOSReport     Permission = "pos.report"
+
+	// Inventory (docs/architecture/35-inventory.md 9.1). Granted to no existing role: the tenant gives them to the roles it wants. The other permissions of the module come with the PRs that use them.
+	PermInventoryView    Permission = "inventory.view"
+	PermInventoryManage  Permission = "inventory.manage"
+	PermInventoryOpening Permission = "inventory.opening"
 )
 
 // Catalogue is the complete, ordered list of permissions (the only valid codes).
@@ -232,6 +237,10 @@ var Catalogue = []PermissionInfo{
 	{PermPOSApprove, "POS", "Approve a void, a discount, a complimentary or the reopening of a bill of an outlet, with own credentials", "S4"},
 	{PermPOSKDS, "POS", "Use the kitchen display and change the status of tickets", "S4"},
 	{PermPOSReport, "POS", "View the reports of the outlets", "S4"},
+
+	{PermInventoryView, "Inventory", "Read items, warehouses, stock, the stock card and the opening stock", "S5"},
+	{PermInventoryManage, "Inventory", "Set up the inventory: the costing method, units, categories with their accounts, items, warehouses and minimum levels", "S5"},
+	{PermInventoryOpening, "Inventory", "Post the opening stock of a warehouse", "S5"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

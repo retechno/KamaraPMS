@@ -159,6 +159,15 @@ func (po *Poster) CheckAccount(ctx context.Context, id int64, field string) erro
 			return apperr.Invalid("the account is invalid", fieldErr(field, "CONTROL_ACCOUNT", "only the day close posts to this account"))
 		}
 	}
+	if !po.allowed[KeyInventory] { // from the first stock movement the inventory accounts and goods received not invoiced are the inventory's own (35-inventory.md 6.4)
+		stock, err := po.svc.stockControlAccounts(ctx, po.p.TenantID, po.propertyID)
+		if err != nil {
+			return err
+		}
+		if stock[id] {
+			return apperr.Invalid("the account is invalid", fieldErr(field, "CONTROL_ACCOUNT", "only the inventory posts to this account"))
+		}
+	}
 	return nil
 }
 

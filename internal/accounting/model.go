@@ -56,6 +56,16 @@ const (
 	KeyQRIS             = "QRIS"
 	KeyFolioTransfer    = "FOLIO_TRANSFER"
 	KeyComp             = "COMP"
+	// The keys of the stock (docs/architecture/35-inventory.md 3.1, F14). KeyInventory is not a map key: it names the right of the inventory path to post to its control accounts.
+	KeyInventory        = "INVENTORY"
+	KeyInvGRNI          = "INV_GRNI"
+	KeyInvPPV           = "INV_PPV"
+	KeyInvWaste         = "INV_WASTE"
+	KeyInvCountVariance = "INV_COUNT_VARIANCE"
+	KeyInvCogsFood      = "INV_COGS_FOOD"
+	KeyInvCogsBeverage  = "INV_COGS_BEVERAGE"
+	KeyInvStaffMeal     = "INV_STAFF_MEAL"
+	KeyInvEntertainment = "INV_ENTERTAINMENT"
 )
 
 // mapKeys lists the keys with the account type each must point to ("" = any).
@@ -77,6 +87,14 @@ var mapKeys = []struct{ Key, Type, Meaning string }{
 	{KeyInputVAT, TypeAsset, "VAT paid on purchases that is claimed or kept apart (input VAT)"},
 	{KeyComp, TypeExpense, "Complimentary and house use: what a complimentary bill of an outlet costs"},
 	{KeyCashOverShort, TypeExpense, "Where the cash over and short of a cashier shift is booked"},
+	{KeyInvGRNI, TypeLiability, "Goods received not invoiced: what the inventory owes for goods received that no supplier bill covers yet"},
+	{KeyInvPPV, TypeExpense, "Purchase price variance: the part of the price difference of a bill that is no longer in stock"},
+	{KeyInvWaste, TypeExpense, "Stock waste and spoilage"},
+	{KeyInvCountVariance, TypeExpense, "Stock count variance"},
+	{KeyInvCogsFood, TypeExpense, "Cost of food sales: the cost of the stock that a food sale of an outlet uses"},
+	{KeyInvCogsBeverage, TypeExpense, "Cost of beverage sales: the cost of the stock that a beverage sale of an outlet uses"},
+	{KeyInvStaffMeal, TypeExpense, "Staff meals taken from stock"},
+	{KeyInvEntertainment, TypeExpense, "Entertainment and officer checks taken from stock"},
 }
 
 // Account is an account of the chart.
