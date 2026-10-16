@@ -66,15 +66,24 @@ func (t LockTable) String() string { return t.name }
 // Level returns the table's position in the lock order.
 func (t LockTable) Level() LockLevel { return t.level }
 
-// stockRank is the order of the stock tables inside LevelStock: the documents of the use case (1), then the warehouse (2), then the balance rows (3). 0 for every other table.
+// stockRank is the order of the stock tables inside LevelStock: the documents of the use case first, in the order of a purchase (a request, a draft bill, a receipt, a return, an order), then the
+// warehouse, then the balance rows. 0 for every other table.
 func (t LockTable) stockRank() int {
 	switch t.name {
-	case "inv_openings":
+	case "inv_openings", "inv_requests":
 		return 1
-	case "inv_warehouses":
+	case "inv_bill_drafts":
 		return 2
-	case "inv_balances":
+	case "inv_receipts":
 		return 3
+	case "inv_returns":
+		return 4
+	case "inv_purchase_orders":
+		return 5
+	case "inv_warehouses":
+		return 10
+	case "inv_balances":
+		return 11
 	}
 	return 0
 }
@@ -91,15 +100,20 @@ var (
 	Companies        = LockTable{"companies", LevelCompanies}
 	Groups           = LockTable{"booking_groups", LevelGroups}
 	// The stock tables, all of LevelStock. Inside the level the order is fixed: the documents of the use case, then the warehouse, then the balance rows, ascending id in one call.
-	StockOpenings = LockTable{"inv_openings", LevelStock}   // the documents of stock: the opening stock now; the requests, orders, receipts and counts come with their PRs, in the same group
-	Warehouses    = LockTable{"inv_warehouses", LevelStock} // after the documents; FOR SHARE for a mutation (so it sees a freeze), FOR UPDATE to start or end a count
-	StockBalances = LockTable{"inv_balances", LevelStock}   // last, all the balance rows the use case touches, in one call
-	Accounting    = LockTable{"accounting_settings", LevelAccounting}
-	Suppliers     = LockTable{"suppliers", LevelPayables}
-	BankAccounts  = LockTable{"bank_accounts", LevelBank}
-	TaxProfiles   = LockTable{"tax_filing_profiles", LevelTax}
-	TaxSettings   = LockTable{"property_tax_settings", LevelTax}
-	Budgets       = LockTable{"budgets", LevelBudget}
+	StockOpenings   = LockTable{"inv_openings", LevelStock}        // the documents of stock: the opening stock now; the requests, orders, receipts and counts come with their PRs, in the same group
+	StockRequests   = LockTable{"inv_requests", LevelStock}        // the purchase request (PR 2): first of the documents
+	StockBillDrafts = LockTable{"inv_bill_drafts", LevelStock}     // the draft bill of a receipt
+	StockReceipts   = LockTable{"inv_receipts", LevelStock}        // the goods receipt
+	StockReturns    = LockTable{"inv_returns", LevelStock}         // the return to a supplier
+	StockOrders     = LockTable{"inv_purchase_orders", LevelStock} // the purchase order: last of the documents
+	Warehouses      = LockTable{"inv_warehouses", LevelStock}      // after the documents; FOR SHARE for a mutation (so it sees a freeze), FOR UPDATE to start or end a count
+	StockBalances   = LockTable{"inv_balances", LevelStock}        // last, all the balance rows the use case touches, in one call
+	Accounting      = LockTable{"accounting_settings", LevelAccounting}
+	Suppliers       = LockTable{"suppliers", LevelPayables}
+	BankAccounts    = LockTable{"bank_accounts", LevelBank}
+	TaxProfiles     = LockTable{"tax_filing_profiles", LevelTax}
+	TaxSettings     = LockTable{"property_tax_settings", LevelTax}
+	Budgets         = LockTable{"budgets", LevelBudget}
 )
 
 // EnterLockLevel records that the caller is about to take a lock at level with

@@ -148,6 +148,9 @@ func New(d Deps) *App {
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})  // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
 	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc}) // and the close asks the stock whether its books agree
+	inventorySvc.SetPayables(payablesSvc)                        // the bills of the purchasing are posted by the payables, on goods received not invoiced
+	inventorySvc.SetApprover(iamSvc)                             // and a price difference above the tolerance is approved with credentials
+	payablesSvc.SetVoidGuard(inventorySvc)                       // a bill matched to goods received is voided only by unmatching it
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)

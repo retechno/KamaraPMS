@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { InventoryCategory, InventoryItem, InventoryUnit } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
+import MoneyInput from '@/components/app/MoneyInput.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -180,7 +181,7 @@ const ready = computed(() => form.name.trim() !== '' && form.code.trim() !== '' 
         </template>
       </FormField>
       <FormField :label="t('inventory.itemForm.referenceCost')" :hint="t('inventory.itemForm.referenceCostHint')" :error="fieldError('reference_cost')">
-        <template #default="{ id, invalid }"><Input :id="id" v-model="form.reference_cost" name="reference_cost" inputmode="decimal" :aria-invalid="invalid" class="max-w-40" /></template>
+        <template #default="{ id, invalid }"><MoneyInput :id="id" v-model="form.reference_cost" name="reference_cost" :decimals="6" :aria-invalid="invalid" class="max-w-40" /></template>
       </FormField>
       <FormField :label="t('inventory.itemForm.barcode')" :error="fieldError('barcode')">
         <template #default="{ id, invalid }"><Input :id="id" v-model="form.barcode" name="barcode" maxlength="40" :aria-invalid="invalid" /></template>

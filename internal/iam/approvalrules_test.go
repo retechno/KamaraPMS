@@ -277,7 +277,7 @@ func TestApprovalRuleOfAKindWithoutAnAmount(t *testing.T) {
 func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 	w := newApprovalWorld(t)
 	list, err := w.rules.List(w.managers, w.prop, 2)
-	if err != nil || len(list) != len(iam.ApprovalKinds()) || len(list) != 22 {
+	if err != nil || len(list) != len(iam.ApprovalKinds()) || len(list) != 23 {
 		t.Fatalf("every kind is answered: %d %v", len(list), err)
 	}
 	for _, r := range list {
@@ -291,7 +291,7 @@ func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 	_, err = w.rules.List(w.nobody, w.prop, 2)
 	wantCode(t, err, "PERMISSION_DENIED")
 	inForce, err := w.rules.InForce(w.nobody, w.prop, 2)
-	if err != nil || len(inForce) != 22 {
+	if err != nil || len(inForce) != 23 {
 		t.Fatalf("the rule in force is read by any grant: %d %v", len(inForce), err)
 	}
 	// invalid
@@ -394,5 +394,36 @@ func TestApprovalRulesStayInTheTenant(t *testing.T) {
 	sg := w.property(t, xyz, "SG")
 	if _, err := w.iam.Verify(xyz, iam.ApprovalRequest{PropertyID: sg, Input: &iam.ApprovalInput{Email: "admin@xyz.com", Password: pw}, Kind: iam.KindRefund, Amount: amount("1")}); err != nil {
 		t.Fatalf("the other tenant has no rule: %v", err)
+	}
+}
+
+// The mode Decision (35-inventory.md F6, 9.2): the signed-in user is the approver, needs the permission of the kind, and the rule compares them with the Subject, the person whose work is approved.
+func TestADecisionIsTheSignedInApproversAndTheRuleComparesItWithTheSubject(t *testing.T) {
+	w := newApprovalWorld(t)
+	decide := func(ctx context.Context, subject int64) (iam.Approval, error) {
+		return w.iam.Verify(ctx, iam.ApprovalRequest{PropertyID: w.prop, Kind: iam.KindRefund, Amount: amount("500000"), Decision: true, Subject: subject})
+	}
+	// free by default: anyone who holds the permission decides, whoever the subject is
+	if ap, err := decide(w.clerk, userID(t, w.clerk)); err != nil || ap.UserID() != userID(t, w.clerk) {
+		t.Fatalf("free: %+v %v", ap, err)
+	}
+	w.set(t, "REFUND", "DISTINCT", nil)
+	_, err := decide(w.clerk, userID(t, w.clerk))
+	wantCode(t, err, "APPROVAL_SAME_USER")
+	if ap, err := decide(w.other, userID(t, w.clerk)); err != nil || ap.UserID() != userID(t, w.other) {
+		t.Fatalf("another person: %+v %v", ap, err)
+	}
+	// the administrator who is the subject is accepted and marked, as for any correction
+	ap, err := decide(w.admin, userID(t, w.admin))
+	if err != nil || !ap.SelfApprovedByAdmin() {
+		t.Fatalf("admin: %+v %v", ap, err)
+	}
+	// without the permission the decision is refused, whatever the rule
+	_, err = decide(w.nobody, userID(t, w.clerk))
+	wantCode(t, err, "APPROVAL_NOT_PERMITTED")
+	// above a limit only
+	w.set(t, "REFUND", "DISTINCT_ABOVE", ptr("1000000"))
+	if _, err := decide(w.clerk, userID(t, w.clerk)); err != nil {
+		t.Fatalf("under the limit the subject may decide: %v", err)
 	}
 }

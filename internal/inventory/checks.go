@@ -76,6 +76,14 @@ func (s *Service) StockValueByAccount(ctx context.Context, tenantID, propertyID 
 	for _, r := range rows {
 		out[r.AccountID] = out[r.AccountID].Add(r.Value)
 	}
+	// goods received not invoiced is the second control of the stock (6.3): what the receipts, the returns, the bills and the credit notes leave on it, in the sign of the ledger (debits less credits)
+	g, err := s.q(ctx).GRNIFromSources(ctx, inventorydb.GRNIFromSourcesParams{TenantID: tenantID, PropertyID: propertyID, AsOf: asOf})
+	if err != nil {
+		return nil, err
+	}
+	if g.AccountID != 0 {
+		out[g.AccountID] = g.Balance
+	}
 	return out, nil
 }
 
@@ -191,6 +199,9 @@ func (s *Service) GLMismatches(ctx context.Context, tenantID, propertyID int64) 
 	for _, a := range accs {
 		names[a.ID] = a
 	}
+	if g, err := q.GetAccountByKey(ctx, inventorydb.GetAccountByKeyParams{TenantID: tenantID, PropertyID: propertyID, MapKey: "INV_GRNI"}); err == nil {
+		names[g.ID] = inventorydb.ListInventoryAccountsRow{ID: g.ID, Code: g.Code, Name: g.Name}
+	}
 	for _, id := range ids {
 		if !gl[id].Equal(book[id]) {
 			a := names[id]
@@ -205,11 +216,12 @@ const (
 	FindBalanceDrift = "INVENTORY_BALANCE_DRIFT"
 	FindGLMismatch   = "INVENTORY_GL_MISMATCH"
 	FindNegative     = "INVENTORY_NEGATIVE_STOCK"
+	FindUnbilled     = "INVENTORY_RECEIPT_UNBILLED"
 )
 
 // NightAuditStock is the stock's part of the analysis of the close of a business day (35-inventory.md 5.7): a blocker when a balance disagrees with the ledger or the stock value
 // disagrees with the general ledger, a warning for the balances below zero. It reads only.
-func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int64, _ civil.Date) (blockers, warnings []Finding, err error) {
+func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int64, bd civil.Date) (blockers, warnings []Finding, err error) {
 	d, err := s.Drift(ctx, tenantID, propertyID)
 	if err != nil {
 		return nil, nil, err
@@ -234,6 +246,13 @@ func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int6
 		return nil, nil, err
 	} else if n > 0 {
 		warnings = append(warnings, Finding{Code: FindNegative, Message: fmt.Sprintf("%d item(s) are below zero in a warehouse: stock was sold before the goods came in", n)})
+	}
+	if !bd.IsZero() { // goods received that nobody has billed for 30 days (5.7)
+		if n, err := s.q(ctx).CountUnbilledReceiptsOlderThan(ctx, inventorydb.CountUnbilledReceiptsOlderThanParams{TenantID: tenantID, PropertyID: propertyID, Before: bd.AddDays(-30)}); err != nil {
+			return nil, nil, err
+		} else if n > 0 {
+			warnings = append(warnings, Finding{Code: FindUnbilled, Message: fmt.Sprintf("%d receipt(s) older than 30 days have no bill: the supplier's invoice is missing, or the delivery was not charged", n)})
+		}
 	}
 	return blockers, warnings, nil
 }

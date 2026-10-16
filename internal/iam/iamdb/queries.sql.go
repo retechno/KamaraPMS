@@ -46,6 +46,23 @@ func (q *Queries) CountApproversWith(ctx context.Context, arg CountApproversWith
 	return count, err
 }
 
+const countDepartmentsLedBy = `-- name: CountDepartmentsLedBy :one
+SELECT count(*)::int FROM departments WHERE tenant_id = $1 AND (head_user_id = $2 OR deputy_user_id = $2)
+`
+
+type CountDepartmentsLedByParams struct {
+	TenantID int64
+	UserID   *int64
+}
+
+// The departments a user is the head or the deputy of (35-inventory.md 3.3): a user who leads one is replaced before they are switched off.
+func (q *Queries) CountDepartmentsLedBy(ctx context.Context, arg CountDepartmentsLedByParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countDepartmentsLedBy, arg.TenantID, arg.UserID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createRole = `-- name: CreateRole :one
 INSERT INTO roles (tenant_id, name, description, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $4)

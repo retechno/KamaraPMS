@@ -21,6 +21,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	const p = "/api/v1/properties/{propertyId}/departments"
 	mux.Handle("GET "+p, httpx.HandlerFunc(h.list))
 	mux.Handle("POST "+p, httpx.HandlerFunc(h.create))
+	mux.Handle("GET "+p+"/head-candidates", httpx.HandlerFunc(h.headCandidates))
 	mux.Handle("GET "+p+"/{id}", httpx.HandlerFunc(h.get))
 	mux.Handle("PATCH "+p+"/{id}", httpx.HandlerFunc(h.update))
 	mux.Handle("DELETE "+p+"/{id}", httpx.HandlerFunc(h.delete))
@@ -111,4 +112,16 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) error {
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+func (h *Handler) headCandidates(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.HeadCandidates(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, httpx.Page[HeadCandidate]{Data: list})
 }

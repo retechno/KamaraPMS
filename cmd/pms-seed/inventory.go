@@ -20,7 +20,9 @@ import (
 //	items       about forty, in Indonesian, with the units they are bought and used in (sirup: karton = 12 botol, 1 ml = 1/650 botol)
 //	opening     the stock of 1 September: one document per warehouse
 //
-// Purchasing, requisitions, counts, recipes and the amenities come with the later PRs of the module.
+//	purchasing  (PR 2) a supplier, a purchase request that waits at level 2 of the approval chain, and one that was ordered and received in part: see inventory_purchasing.go
+//
+// Requisitions, counts, recipes and the amenities come with the later PRs of the module.
 
 type invItem struct {
 	code, name, category, unit string
@@ -315,5 +317,9 @@ func seedInventory(e *env, dryRun bool) error {
 		}
 		fmt.Printf("  %s %s\n", o.Number, o.TotalValue.String())
 	}
-	return nil
+	if dryRun {
+		fmt.Println("purchasing: a supplier, a request that waits at level 2, and a request that was ordered and received in part (made once)")
+		return nil
+	}
+	return seedPurchasing(e, svc, deptSvc, unit, item, warehouse, deptID)
 }

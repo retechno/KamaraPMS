@@ -89,6 +89,7 @@ func (q *Queries) InsertDepartment(ctx context.Context, arg InsertDepartmentPara
 const listDepartments = `-- name: ListDepartments :many
 
 SELECT d.id, d.parent_id, p.code AS parent_code, d.code, d.name, d.sort_order, d.is_active,
+       d.head_user_id, hu.full_name AS head_name, d.deputy_user_id, du.full_name AS deputy_name,
        (SELECT count(*) FROM departments c WHERE c.property_id = d.property_id AND c.parent_id = d.id)::int AS child_count,
        (EXISTS (SELECT 1 FROM gl_journal_lines l WHERE l.property_id = d.property_id AND l.department_id = d.id)
         OR EXISTS (SELECT 1 FROM folio_items i WHERE i.property_id = d.property_id AND i.department_id = d.id)
@@ -98,6 +99,8 @@ SELECT d.id, d.parent_id, p.code AS parent_code, d.code, d.name, d.sort_order, d
         OR EXISTS (SELECT 1 FROM gl_accounts a WHERE a.property_id = d.property_id AND a.default_department_id = d.id))::boolean AS in_use
 FROM departments d
 LEFT JOIN departments p ON p.property_id = d.property_id AND p.id = d.parent_id
+LEFT JOIN users hu ON hu.tenant_id = d.tenant_id AND hu.id = d.head_user_id
+LEFT JOIN users du ON du.tenant_id = d.tenant_id AND du.id = d.deputy_user_id
 WHERE d.tenant_id = $1 AND d.property_id = $2
   AND ($3::bigint IS NULL OR d.id = $3::bigint)
   AND ($4::boolean IS NULL OR d.is_active = $4::boolean)
@@ -112,15 +115,19 @@ type ListDepartmentsParams struct {
 }
 
 type ListDepartmentsRow struct {
-	ID         int64
-	ParentID   *int64
-	ParentCode *string
-	Code       string
-	Name       string
-	SortOrder  int32
-	IsActive   bool
-	ChildCount int32
-	InUse      bool
+	ID           int64
+	ParentID     *int64
+	ParentCode   *string
+	Code         string
+	Name         string
+	SortOrder    int32
+	IsActive     bool
+	HeadUserID   *int64
+	HeadName     *string
+	DeputyUserID *int64
+	DeputyName   *string
+	ChildCount   int32
+	InUse        bool
 }
 
 // Departments of a property. Every query is scoped by tenant_id and property_id.
@@ -146,8 +153,57 @@ func (q *Queries) ListDepartments(ctx context.Context, arg ListDepartmentsParams
 			&i.Name,
 			&i.SortOrder,
 			&i.IsActive,
+			&i.HeadUserID,
+			&i.HeadName,
+			&i.DeputyUserID,
+			&i.DeputyName,
 			&i.ChildCount,
 			&i.InUse,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHeadCandidates = `-- name: ListHeadCandidates :many
+SELECT u.id, u.full_name, u.email, u.is_tenant_admin FROM users u
+ WHERE u.tenant_id = $1 AND u.is_active
+   AND (u.is_tenant_admin OR EXISTS (SELECT 1 FROM user_properties up WHERE up.tenant_id = u.tenant_id AND up.user_id = u.id AND up.property_id = $2))
+ ORDER BY u.full_name, u.id
+`
+
+type ListHeadCandidatesParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListHeadCandidatesRow struct {
+	ID            int64
+	FullName      string
+	Email         string
+	IsTenantAdmin bool
+}
+
+// The people who can be the head or the deputy of a department of the property: active users who are tenant administrators or have access to it.
+func (q *Queries) ListHeadCandidates(ctx context.Context, arg ListHeadCandidatesParams) ([]ListHeadCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listHeadCandidates, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHeadCandidatesRow{}
+	for rows.Next() {
+		var i ListHeadCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FullName,
+			&i.Email,
+			&i.IsTenantAdmin,
 		); err != nil {
 			return nil, err
 		}
@@ -208,4 +264,49 @@ func (q *Queries) UpdateDepartment(ctx context.Context, arg UpdateDepartmentPara
 		arg.ID,
 	)
 	return err
+}
+
+const updateDepartmentHeads = `-- name: UpdateDepartmentHeads :exec
+UPDATE departments SET head_user_id = $1, deputy_user_id = $2, updated_by = $3
+WHERE tenant_id = $4 AND property_id = $5 AND id = $6
+`
+
+type UpdateDepartmentHeadsParams struct {
+	HeadUserID   *int64
+	DeputyUserID *int64
+	ActorID      *int64
+	TenantID     int64
+	PropertyID   int64
+	ID           int64
+}
+
+func (q *Queries) UpdateDepartmentHeads(ctx context.Context, arg UpdateDepartmentHeadsParams) error {
+	_, err := q.db.Exec(ctx, updateDepartmentHeads,
+		arg.HeadUserID,
+		arg.DeputyUserID,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const userMayLead = `-- name: UserMayLead :one
+SELECT (u.is_active AND (u.is_tenant_admin OR EXISTS (SELECT 1 FROM user_properties up WHERE up.tenant_id = u.tenant_id AND up.user_id = u.id AND up.property_id = $1)))::boolean AS ok
+FROM users u WHERE u.tenant_id = $2 AND u.id = $3
+`
+
+type UserMayLeadParams struct {
+	PropertyID int64
+	TenantID   int64
+	UserID     int64
+}
+
+// Whether a user can be the head of a department of the property: active, and either a tenant administrator or assigned to the property.
+func (q *Queries) UserMayLead(ctx context.Context, arg UserMayLeadParams) (bool, error) {
+	row := q.db.QueryRow(ctx, userMayLead, arg.PropertyID, arg.TenantID, arg.UserID)
+	var ok bool
+	err := row.Scan(&ok)
+	return ok, err
 }

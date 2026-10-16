@@ -224,6 +224,20 @@ type OutArgs struct {
 	// staff meal, an entertainment, a return to supplier and a count refuse.
 	allowShortfall  bool
 	shortfallSource string
+	// basis values the goods at the cost of a receipt line, not at the average or the oldest layers (a return to the supplier, 4.6); set by ReturnAt.
+	basis *returnBasis
+}
+
+type returnBasis struct {
+	movementID int64
+	qty, value decimal.Decimal
+}
+
+// ReturnAt values an OUT at the cost that a receipt line created (4.6): under the moving average the share of the line's value for the quantity returned, under FIFO the layer of that line first and then the
+// oldest. The structural guard lists its callers like those of AllowShortfall.
+func ReturnAt(a OutArgs, receiptMovementID int64, lineQty, lineValue decimal.Decimal) OutArgs {
+	a.basis = &returnBasis{movementID: receiptMovementID, qty: lineQty, value: lineValue}
+	return a
 }
 
 // AllowShortfall marks an OUT as one that may take the balance below zero, for the given source (POS_SALE or AMENITY). The structural guard lists its callers (stockpath_guard_test.go).
@@ -445,9 +459,18 @@ func (s *Stock) Out(ctx context.Context, a OutArgs) (Posted, error) {
 	switch {
 	case !onHand.IsPositive():
 	case s.b.Method == MethodFIFO:
-		realValue, uses, err = s.consume(ctx, q, a.Pair, onHand)
+		first := int64(0)
+		if a.basis != nil {
+			first = a.basis.movementID
+		}
+		realValue, uses, err = s.consume(ctx, q, a.Pair, onHand, first)
 		if err != nil {
 			return Posted{}, err
+		}
+	case a.basis != nil && a.basis.qty.IsPositive():
+		realValue = s.round(onHand.Mul(a.basis.value).Div(a.basis.qty))
+		if onHand.Equal(r.qty) || realValue.GreaterThan(r.value) {
+			realValue = r.value // the balance never keeps a residue and never goes below zero in value
 		}
 	case onHand.Equal(r.qty):
 		realValue = r.value // an OUT that empties the balance takes all the value that is left
@@ -499,10 +522,22 @@ type layerUse struct {
 }
 
 // consume takes qty from the oldest layers of the pair and returns the value of what it took and the pieces (4.3).
-func (s *Stock) consume(ctx context.Context, q *inventorydb.Queries, p Pair, qty decimal.Decimal) (decimal.Decimal, []layerUse, error) {
+// The layer of the receipt movement `first` (when it is not 0) is taken before the oldest ones: a return to the supplier takes back the goods of the receipt it returns.
+func (s *Stock) consume(ctx context.Context, q *inventorydb.Queries, p Pair, qty decimal.Decimal, first int64) (decimal.Decimal, []layerUse, error) {
 	layers, err := q.LedgerOpenLayers(ctx, inventorydb.LedgerOpenLayersParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, WarehouseID: p.WarehouseID, ItemID: p.ItemID})
 	if err != nil {
 		return decimal.Zero, nil, err
+	}
+	if first != 0 {
+		slices.SortStableFunc(layers, func(a, b inventorydb.LedgerOpenLayersRow) int {
+			switch {
+			case a.MovementID == first && b.MovementID != first:
+				return -1
+			case b.MovementID == first && a.MovementID != first:
+				return 1
+			}
+			return 0
+		})
 	}
 	remaining, total := qty, decimal.Zero
 	var uses []layerUse
@@ -656,6 +691,88 @@ func (s *Stock) Reverse(ctx context.Context, a ReverseArgs) (Posted, error) {
 		r.value = decimal.Zero
 	}
 	return out, s.save(ctx, q, p, r)
+}
+
+// VarianceArgs books a difference of cost that no goods carry any more (the part of a bill variance that is not stock, the purchase price variance): a COST_ADJUST row with no quantity and no value
+// in the balance, only the journal of the close. A positive amount is Dr the variance account / Cr the clearing account (the bill cost more than the receipt), a negative one the other way.
+type VarianceArgs struct {
+	Pair
+	Amount    decimal.Decimal // signed
+	Ref       Ref
+	Variance  int64 // the account of the purchase price variance
+	Clearing  int64 // goods received not invoiced
+	Dept      *int64
+	CostClass string
+}
+
+// Variance writes the row. The pair must have been locked (the row names the warehouse and the item; the balance does not change).
+func (s *Stock) Variance(ctx context.Context, a VarianceArgs) (Posted, error) {
+	amount := s.round(a.Amount)
+	if amount.IsZero() {
+		return Posted{}, apperr.Invalid("the movement is invalid", apperr.FieldError{Field: "amount", Code: "INVALID_VALUE", Message: "not zero"})
+	}
+	if _, err := s.row(a.Pair); err != nil {
+		return Posted{}, err
+	}
+	debit, credit := a.Variance, a.Clearing
+	if amount.IsNegative() {
+		debit, credit = a.Clearing, a.Variance
+	}
+	abs := amount.Abs()
+	id, err := s.insert(ctx, s.q, movementOut{pair: a.Pair, kind: KindCostAdjust, qty: decimal.Zero, value: decimal.Zero, ref: a.Ref, costClass: a.CostClass, debit: &debit, credit: &credit, dept: a.Dept, glAmount: &abs})
+	if err != nil {
+		return Posted{}, err
+	}
+	return Posted{MovementID: id, Value: amount}, nil
+}
+
+// ReverseAdjust undoes a COST_ADJUST row, whatever part of a variance it carried (unmatching a bill, 5.3.7): a row that moved the value of the goods on hand takes it back (the balance, and under FIFO the layer of the
+// receipt `forMovementID`, must still hold it), a row that only carried the journal of the purchase price variance is mirrored. The reversing row has the accounts swapped and reverses_id set.
+func (s *Stock) ReverseAdjust(ctx context.Context, movementID, forMovementID int64, ref Ref) (Posted, error) {
+	q := s.q
+	m, err := q.LedgerGetMovement(ctx, inventorydb.LedgerGetMovementParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, ID: movementID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Posted{}, apperr.NotFound("MOVEMENT_NOT_FOUND", "the movement does not exist in this property")
+	}
+	if err != nil {
+		return Posted{}, err
+	}
+	if m.Kind != KindCostAdjust || m.ReversesID != nil || !m.QtyDelta.IsZero() {
+		return Posted{}, errNotReversible("it is not a difference of cost", m.ID)
+	}
+	if done, err := q.LedgerMovementReversed(ctx, inventorydb.LedgerMovementReversedParams{PropertyID: s.b.PropertyID, ID: &m.ID}); err != nil {
+		return Posted{}, err
+	} else if done {
+		return Posted{}, apperr.Conflict("MOVEMENT_ALREADY_REVERSED", "the movement was reversed already").WithContext("movement_id", m.ID)
+	}
+	p := Pair{m.WarehouseID, m.ItemID}
+	r, err := s.row(p)
+	if err != nil {
+		return Posted{}, err
+	}
+	value := m.ValueDelta.Neg()
+	if !value.IsZero() {
+		if r.value.Add(value).IsNegative() || (!r.qty.IsPositive() && !r.value.Add(value).IsZero()) {
+			return Posted{}, errNotReversible("the goods that took the difference of cost have been used", m.ID)
+		}
+		if s.b.Method == MethodFIFO {
+			layer, err := q.LedgerGetLayerOfMovement(ctx, inventorydb.LedgerGetLayerOfMovementParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, MovementID: forMovementID})
+			if err != nil || !layer.QtyRemaining.IsPositive() || layer.ValueRemaining.Add(value).IsNegative() {
+				return Posted{}, errNotReversible("the layer of the receipt has been used", m.ID)
+			}
+			if err := q.LedgerUpdateLayer(ctx, inventorydb.LedgerUpdateLayerParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, ID: layer.ID, QtyRemaining: layer.QtyRemaining, ValueRemaining: layer.ValueRemaining.Add(value)}); err != nil {
+				return Posted{}, err
+			}
+		}
+	}
+	amount := m.GlAmount
+	id, err := s.insert(ctx, q, movementOut{pair: p, kind: KindCostAdjust, qty: decimal.Zero, value: value, ref: ref, costClass: m.CostClass, outlet: m.OutletID, reverses: &m.ID,
+		debit: m.GlCreditAccountID, credit: m.GlDebitAccountID, dept: m.GlDepartmentID, glAmount: &amount})
+	if err != nil {
+		return Posted{}, err
+	}
+	r.value = r.value.Add(value)
+	return Posted{MovementID: id, Value: value}, s.save(ctx, q, p, r)
 }
 
 // AdjustArgs moves the value of the goods on hand without moving the quantity (a bill whose price differs from the receipt, 5.3.4). ForMovementID names the receipt whose layer is

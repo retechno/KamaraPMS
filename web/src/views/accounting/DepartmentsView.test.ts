@@ -116,7 +116,7 @@ describe('DepartmentsView', () => {
     await flushPromises()
     expect(PATCH.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/departments/{id}')
     expect(PATCH.mock.calls[0]?.[1].params.path).toEqual({ propertyId: 7, id: 9 })
-    expect(PATCH.mock.calls[0]?.[1].body).toEqual({ name: 'Main restaurant', sort_order: 5 })
+    expect(PATCH.mock.calls[0]?.[1].body).toEqual({ name: 'Main restaurant', sort_order: 5, head_user_id: 0, deputy_user_id: 0 })
     expect(w.find('[data-testid=edit-form-REST]').exists()).toBe(false)
   })
 

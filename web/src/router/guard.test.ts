@@ -85,6 +85,20 @@ describe('the guard of the pages of the inventory', () => {
     for (const path of [...lists, ...forms]) expect(await goTo(path), path).toBe(path)
   })
 
+  it('opens purchasing to who works with it and keeps the chains and the forms to who may', async () => {
+    signIn(['inventory.view'])
+    useSubscriptionStore().modules = ['INVENTORY']
+    for (const path of ['/inventory/purchasing', '/inventory/requests/4', '/inventory/purchase-orders/4', '/inventory/receipts/4', '/inventory/bill-drafts', '/inventory/bill-drafts/4', '/inventory/returns/4']) expect(await goTo(path), path).toBe(path)
+    for (const path of ['/inventory/requests/new', '/inventory/purchase-orders/new', '/inventory/receipts/new', '/inventory/returns/new', '/inventory/approval-chains', '/inventory/approvals']) expect(await goTo(path), path).toBe('/')
+    signIn(['inventory.request', 'inventory.approve'])
+    useSubscriptionStore().modules = ['INVENTORY']
+    expect(await goTo('/inventory/requests/new')).toBe('/inventory/requests/new')
+    expect(await goTo('/inventory/approvals')).toBe('/inventory/approvals')
+    signIn(['inventory.view'])
+    useSubscriptionStore().modules = ['CORE']
+    expect(await goTo('/inventory/purchasing')).toBe('/')
+  })
+
   it('sends a person home when the plan has no inventory or the permission is missing', async () => {
     signIn(['inventory.manage'])
     plan(['CORE'])

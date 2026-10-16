@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/shopspring/decimal"
+)
 
 // Every position on a floor has a type, and the ten positions spread 4/3/2/1 over the four types.
 func TestTypeCodeAtSpreadsTheTenPositions(t *testing.T) {
@@ -118,5 +122,46 @@ func TestInventoryDemoRefersOnlyToWhatItCreates(t *testing.T) {
 	}
 	if len(invItems) < 35 {
 		t.Errorf("%d items, about forty are expected", len(invItems))
+	}
+}
+
+// The demo requests of the purchasing name items and units that the seed makes, in a unit the item is bought in, and stay under the third level of the default chain (5,000,000).
+func TestPurchasingDemoRefersOnlyToWhatItCreates(t *testing.T) {
+	byCode := map[string]invItem{}
+	for _, it := range invItems {
+		byCode[it.code] = it
+	}
+	for name, lines := range map[string][]demoLine{"running": demoRunningLines, "received": demoReceivedLines} {
+		total := decimal.Zero
+		for _, l := range lines {
+			it, ok := byCode[l.item]
+			if !ok {
+				t.Errorf("%s: the item %s is not made by the seed", name, l.item)
+				continue
+			}
+			bought := l.unit == it.unit
+			for _, x := range it.extra {
+				if x.UnitCode == l.unit && x.IsPurchase {
+					bought = true
+				}
+			}
+			if !bought {
+				t.Errorf("%s: %s is not bought in %s", name, l.item, l.unit)
+			}
+			q, err1 := decimal.NewFromString(l.qty)
+			p, err2 := decimal.NewFromString(l.price)
+			if err1 != nil || err2 != nil {
+				t.Fatalf("%s: %+v", name, l)
+			}
+			total = total.Add(q.Mul(p))
+		}
+		if total.GreaterThanOrEqual(decimal.NewFromInt(5000000)) {
+			t.Errorf("%s: %s reaches the third level of the chain", name, total)
+		}
+	}
+	q, err := decimal.NewFromString(demoReceivedQty)
+	first, err2 := decimal.NewFromString(demoReceivedLines[0].qty)
+	if err != nil || err2 != nil || !q.IsPositive() || !q.LessThan(first) {
+		t.Errorf("the first delivery (%s) is part of the first line (%s)", demoReceivedQty, demoReceivedLines[0].qty)
 	}
 }

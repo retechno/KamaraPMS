@@ -81,6 +81,27 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupReport
 			rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "ACCOUNT_MAP_INCOMPLETE", Ref: k, Message: fmt.Sprintf("the system account %s is not mapped (Setup > Account mapping)", k)})
 		}
 	}
+	leaders, err := q.InactiveDepartmentLeaders(ctx, inventorydb.InactiveDepartmentLeadersParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return rep, err
+	}
+	for _, l := range leaders {
+		role := "deputy"
+		if l.IsHead {
+			role = "head"
+		}
+		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "DEPARTMENT_HEAD_INACTIVE", Ref: l.Code, Message: fmt.Sprintf("%s is the %s of the department %s and is not active: choose another in Departments", l.FullName, role, l.Code)})
+	}
+	for _, doc := range []string{DocPR, DocSR} {
+		if _, err := q.GetApprovalSettings(ctx, inventorydb.GetApprovalSettingsParams{TenantID: p.TenantID, PropertyID: propertyID, DocType: doc}); err != nil {
+			continue // the chain has not been made yet: it is the default
+		}
+		if n, err := q.CountApprovalLevels(ctx, inventorydb.CountApprovalLevelsParams{TenantID: p.TenantID, PropertyID: propertyID, DocType: doc}); err != nil {
+			return rep, err
+		} else if n == 0 {
+			rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "APPROVAL_CHAIN_EMPTY", Ref: doc, Message: "the chain of " + doc + " has no level: a document is approved when it is submitted"})
+		}
+	}
 	blockers, warnings, err := s.NightAuditStock(ctx, p.TenantID, propertyID, civil.Date{})
 	if err != nil {
 		return rep, err

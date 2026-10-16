@@ -8,6 +8,7 @@ import { departmentLabel, loadDepartments } from '@/composables/useDepartments'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import QuantityInput from '@/components/app/QuantityInput.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -213,9 +214,9 @@ const unitOf = (id: number): string => items.value.find((i) => i.id === id)?.sto
                   <option v-for="it in freeItems(l.item_id)" :key="it.id" :value="it.id">{{ it.code }} · {{ it.name }}</option>
                 </NativeSelect>
               </td>
-              <td class="py-2 pr-2"><Input v-model="l.min_qty" :name="`min_${i}`" inputmode="decimal" class="w-24" :aria-label="t('inventory.warehouses.levelMin')" /> <span class="text-xs text-muted-foreground">{{ unitOf(l.item_id) }}</span></td>
-              <td class="py-2 pr-2"><Input v-model="l.max_qty" :name="`max_${i}`" inputmode="decimal" class="w-24" :aria-label="t('inventory.warehouses.levelMax')" /></td>
-              <td class="py-2 pr-2"><Input v-model="l.reorder_qty" :name="`reorder_${i}`" inputmode="decimal" class="w-24" :aria-label="t('inventory.warehouses.levelReorder')" /></td>
+              <td class="py-2 pr-2"><QuantityInput v-model="l.min_qty" :name="`min_${i}`" class="w-24" :aria-label="t('inventory.warehouses.levelMin')" /> <span class="text-xs text-muted-foreground">{{ unitOf(l.item_id) }}</span></td>
+              <td class="py-2 pr-2"><QuantityInput v-model="l.max_qty" :name="`max_${i}`" class="w-24" :aria-label="t('inventory.warehouses.levelMax')" /></td>
+              <td class="py-2 pr-2"><QuantityInput v-model="l.reorder_qty" :name="`reorder_${i}`" class="w-24" :aria-label="t('inventory.warehouses.levelReorder')" /></td>
               <td class="py-2 text-right"><Button type="button" variant="ghost" size="sm" :data-testid="`level-remove-${i}`" @click="levels.splice(i, 1)">{{ t('common.remove') }}</Button></td>
             </tr>
           </tbody>

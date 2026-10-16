@@ -37,7 +37,17 @@ type Service struct {
 	acct  *accounting.Service
 	iam   *iam.Service
 	tax   *taxfiling.Service // the PKP status on the date of a bill (how its input VAT is treated)
+	guard VoidGuard
 }
+
+// VoidGuard is asked before a bill is voided, inside the transaction: the inventory answers 409 BILL_HAS_STOCK_MATCH for a bill that is matched to goods received (35-inventory.md F13), because the way to
+// void it is to unmatch it, which reverses the clearing of its variance first.
+type VoidGuard interface {
+	CheckVoid(ctx context.Context, tenantID, propertyID, billID int64) error
+}
+
+// SetVoidGuard wires the guard; without one every bill can be voided as before.
+func (s *Service) SetVoidGuard(g VoidGuard) { s.guard = g }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, acct *accounting.Service, iamSvc *iam.Service, tax *taxfiling.Service) *Service {

@@ -60,12 +60,18 @@ func scanGo(rel string, src any) ([]string, error) {
 			if ledgerWriters[v.Sel.Name] && !inLedger {
 				out = append(out, rel+": calls "+v.Sel.Name+", which only ledger.go may")
 			}
+			if v.Sel.Name == "ReturnAt" && rel != "inventory/ledger.go" && rel != "inventory/returns.go" {
+				out = append(out, rel+": uses ReturnAt, which only the return to the supplier may (the cost of a receipt line, 4.6)")
+			}
 			if v.Sel.Name == "AllowShortfall" && !strings.HasPrefix(rel, "inventory/ledger") {
 				if _, ok := mayAllowShortfall[strings.TrimPrefix(rel, "inventory/")]; !ok {
 					out = append(out, rel+": uses AllowShortfall, which only the POS deduction and the amenities of the close may")
 				}
 			}
 		case *ast.CallExpr:
+			if id, ok := v.Fun.(*ast.Ident); ok && id.Name == "ReturnAt" && rel != "inventory/ledger.go" && rel != "inventory/returns.go" {
+				out = append(out, rel+": uses ReturnAt, which only the return to the supplier may (the cost of a receipt line, 4.6)")
+			}
 			if id, ok := v.Fun.(*ast.Ident); ok && id.Name == "AllowShortfall" && rel != "inventory/ledger.go" {
 				if _, ok := mayAllowShortfall[strings.TrimPrefix(rel, "inventory/")]; !ok {
 					out = append(out, rel+": uses AllowShortfall, which only the POS deduction and the amenities of the close may")
@@ -175,6 +181,7 @@ func TestTheGuardOfTheLedgerSeesAnotherWriter(t *testing.T) {
 		"reports/sql.go":     "package reports\nconst s = `delete from inv_layers`",
 		"app/shortfall.go":   `package app; func f() { inventory.AllowShortfall(a, "POS_SALE") }`,
 		"inventory/other.go": `package inventory; func f(q *Q) { q.LedgerUpdateBalance(nil, nil) }`,
+		"inventory/bills.go": `package inventory; func f() { ReturnAt(a, 1, q, v) }`,
 	}
 	for rel, src := range cases {
 		v, err := scanGo(rel, src)

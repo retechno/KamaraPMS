@@ -27,6 +27,11 @@ type Department struct {
 	Level      int    `json:"level"`
 	Children   int    `json:"child_count"`
 	InUse      bool   `json:"in_use"`
+	// The head and the deputy approve the first level of a purchase request of the department (docs/architecture/35-inventory.md 3.3); a sub-department with none is read through its parent.
+	HeadUserID   *int64 `json:"head_user_id"`
+	HeadName     string `json:"head_name,omitempty"`
+	DeputyUserID *int64 `json:"deputy_user_id"`
+	DeputyName   string `json:"deputy_name,omitempty"`
 }
 
 // Input creates a department: a sub-department when it has a parent.
@@ -42,9 +47,20 @@ type Patch struct {
 	Name      *string `json:"name"`
 	SortOrder *int    `json:"sort_order"`
 	Active    *bool   `json:"is_active"`
+	// HeadUserID and DeputyUserID set the head and the deputy; a value below 1 removes them. A deputy needs a head; without these fields the people are left as they are.
+	HeadUserID   *int64 `json:"head_user_id"`
+	DeputyUserID *int64 `json:"deputy_user_id"`
 }
 
 // Filter narrows the list.
 type Filter struct{ Active *bool }
 
 func normalCode(code string) string { return strings.ToUpper(strings.TrimSpace(code)) }
+
+// HeadCandidate is a person who can be the head or the deputy of a department of the property.
+type HeadCandidate struct {
+	ID            int64  `json:"id"`
+	FullName      string `json:"full_name"`
+	Email         string `json:"email"`
+	IsTenantAdmin bool   `json:"is_tenant_admin"`
+}

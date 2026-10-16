@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -313,4 +314,107 @@ func TestInventoryNightAuditBlocksWhenTheBooksDisagreeAPI(t *testing.T) {
 	if len(b) != 1 || b[0].(map[string]any)["code"] != "INVENTORY_GL_MISMATCH" || b[0].(map[string]any)["ref"] != "1310" {
 		t.Fatalf("GL mismatch: %v", b)
 	}
+}
+
+// Inventory, PR 2, through the router (docs/architecture/35-inventory.md 5.3, 5.8): a purchase request passes its approval chain, becomes an order, is received in part and leaves a draft bill; the
+// permissions of each step, the own-document rule, the tenant wall, and the books that agree with the stock on the account of goods received not invoiced.
+func TestInventoryPurchasingFlowAPI(t *testing.T) {
+	w := newInvWorld(t)
+	abc := w.abc
+	item, wh := w.setup(t)
+	// the people: the requester, the head of the department, the cost controller and the buyer
+	requester := userWith(t, w.e, abc, w.prop, "requester@hotel.com", "inventory.view", "inventory.request")
+	head := userWith(t, w.e, abc, w.prop, "head@hotel.com", "inventory.view", "inventory.dept_approve")
+	headID := idOfMe(t, head)
+	cost := userWith(t, w.e, abc, w.prop, "cost@hotel.com", "inventory.view", "inventory.cost_control")
+	buyer := userWith(t, w.e, abc, w.prop, "buyer@hotel.com", "inventory.view", "inventory.purchase", "inventory.receive", "inventory.bill")
+
+	sup := w.must(t, abc.do(http.MethodPost, w.prefix+"/payables/suppliers", map[string]any{"code": "SUMBER", "name": "CV Sumber Segar"}), 201)
+	deps := w.must(t, abc.do(http.MethodGet, w.prefix+"/departments", nil), 200).body["data"].([]any)
+	dep := deps[0].(map[string]any)["id"]
+	w.must(t, abc.do(http.MethodPatch, w.prefix+"/departments/"+strconv.FormatInt(int64(dep.(float64)), 10), map[string]any{"head_user_id": headID}), 200)
+
+	line := []map[string]any{{"item_id": item, "unit_id": w.unit["kg"], "qty": "10", "est_unit_price": "50000", "supplier_id": sup.body["id"]}}
+	pr := w.must(t, requester.do(http.MethodPost, w.base+"/requests", map[string]any{"client_uuid": "1d1f0c2a-0c4e-4b5a-9a77-3b6f0a1c2d01", "department_id": dep, "lines": line}), 201)
+	id := idOf(pr)
+	// only the requester writes it; a person without the permission cannot
+	w.must(t, buyer.do(http.MethodPost, w.base+"/requests", map[string]any{"client_uuid": "1d1f0c2a-0c4e-4b5a-9a77-3b6f0a1c2d02", "department_id": dep, "lines": line}), 403)
+	w.must(t, requester.do(http.MethodPost, w.base+"/requests/"+id+"/submit", nil), 200)
+
+	// level 1 waits for the head: the inbox of the head has it, the inbox of the requester and of the cost controller does not (yet)
+	if n := len(w.must(t, head.do(http.MethodGet, w.base+"/approvals/inbox", nil), 200).body["data"].([]any)); n != 1 {
+		t.Fatalf("the inbox of the head: %d", n)
+	}
+	if n := len(w.must(t, cost.do(http.MethodGet, w.base+"/approvals/inbox", nil), 200).body["data"].([]any)); n != 0 {
+		t.Fatalf("the inbox of the cost controller before level 1: %d", n)
+	}
+	// the cost controller cannot jump the queue, and the requester cannot approve their own request
+	w.must(t, cost.do(http.MethodPost, w.base+"/requests/"+id+"/approve", map[string]any{}), 403)
+	w.must(t, requester.do(http.MethodPost, w.base+"/requests/"+id+"/approve", map[string]any{}), 403)
+	w.must(t, head.do(http.MethodPost, w.base+"/requests/"+id+"/approve", map[string]any{}), 200)
+	got := w.must(t, cost.do(http.MethodPost, w.base+"/requests/"+id+"/approve", map[string]any{}), 200)
+	if got.body["status"] != "APPROVED" {
+		t.Fatalf("after both levels: %v", got.body["status"])
+	}
+
+	// the order, from the request, split by supplier; sent at once
+	ord := w.must(t, buyer.do(http.MethodPost, w.base+"/requests/"+id+"/purchase-orders", map[string]any{"send": true, "warehouse_id": wh,
+		"orders": []map[string]any{{"client_uuid": "2e2f0c2a-0c4e-4b5a-9a77-3b6f0a1c2d01", "supplier_id": sup.body["id"], "lines": []map[string]any{{"line_no": 1, "unit_price": "50000"}}}}}), 201)
+	orders := ord.body["data"].([]any)
+	if len(orders) != 1 || orders[0].(map[string]any)["status"] != "ORDERED" {
+		t.Fatalf("orders: %v", ord.body)
+	}
+	po := orders[0].(map[string]any)["id"]
+
+	// the receipt: 4 of the 10, at the price of the order; the stock and the draft bill follow
+	rc := w.must(t, buyer.do(http.MethodPost, w.base+"/receipts", map[string]any{"client_uuid": "3f3f0c2a-0c4e-4b5a-9a77-3b6f0a1c2d01", "supplier_id": sup.body["id"], "po_id": po, "warehouse_id": wh,
+		"lines": []map[string]any{{"po_line_no": 1, "item_id": item, "unit_id": w.unit["kg"], "qty": "4"}}}), 201)
+	if rc.body["total_value"] != "200000" {
+		t.Fatalf("the receipt: %v", rc.body)
+	}
+	w.must(t, requester.do(http.MethodPost, w.base+"/receipts", map[string]any{"client_uuid": "3f3f0c2a-0c4e-4b5a-9a77-3b6f0a1c2d02", "supplier_id": sup.body["id"], "po_id": po, "warehouse_id": wh,
+		"lines": []map[string]any{{"po_line_no": 1, "item_id": item, "unit_id": w.unit["kg"], "qty": "1"}}}), 403)
+	// more than the order allows (10 ordered, 4 in, 5% over-receipt): refused
+	w.must(t, buyer.do(http.MethodPost, w.base+"/receipts", map[string]any{"client_uuid": "3f3f0c2a-0c4e-4b5a-9a77-3b6f0a1c2d03", "supplier_id": sup.body["id"], "po_id": po, "warehouse_id": wh,
+		"lines": []map[string]any{{"po_line_no": 1, "item_id": item, "unit_id": w.unit["kg"], "qty": "7"}}}), 409)
+	drafts := w.must(t, buyer.do(http.MethodGet, w.base+"/bill-drafts?open=true", nil), 200).body["data"].([]any)
+	if len(drafts) != 1 || drafts[0].(map[string]any)["status"] != "OPEN" || drafts[0].(map[string]any)["remaining_value"] != "200000" {
+		t.Fatalf("the draft bills: %v", drafts)
+	}
+	if o := w.must(t, buyer.do(http.MethodGet, w.base+"/purchase-orders/"+strconv.FormatInt(int64(po.(float64)), 10), nil), 200); o.body["status"] != "PARTIAL" {
+		t.Fatalf("the order after a part: %v", o.body["status"])
+	}
+
+	// the books: the stock is ahead of the ledger by the day that is open; after the close the account of goods received not invoiced agrees with the receipts
+	w.must(t, abc.do(http.MethodPost, w.prefix+"/night-audit/run", map[string]any{"business_date": "2026-09-30"}), 200)
+	rec := w.must(t, abc.do(http.MethodGet, w.prefix+"/accounting/reconciliation", nil), 200)
+	var seen bool
+	for _, c := range rec.body["controls"].([]any) {
+		if m := c.(map[string]any); m["key"] == "INVENTORY_2130" {
+			seen = true
+			if m["difference"] != "0" || m["source"] != "-200000" {
+				t.Fatalf("the control of goods received not invoiced: %v", m)
+			}
+		}
+	}
+	if !seen {
+		t.Fatalf("no control for goods received not invoiced: %v", rec.body["controls"])
+	}
+
+	// the tenant wall: another tenant finds neither the property nor the request
+	xyz := w.e.login("XYZ")
+	w.must(t, xyz.do(http.MethodGet, w.base+"/requests/"+id, nil), 404)
+	// the module is not for who has no permission of it at all
+	nobody := userWith(t, w.e, abc, w.prop, "nobody@hotel.com", "folio.read")
+	w.must(t, nobody.do(http.MethodGet, w.base+"/requests/"+id, nil), 403)
+}
+
+// idOfMe is the id of the signed-in user.
+func idOfMe(t *testing.T, c *client) int64 {
+	t.Helper()
+	me := c.do(http.MethodGet, "/api/v1/auth/me", nil)
+	if me.status != 200 {
+		t.Fatalf("me: %d %v", me.status, me.body)
+	}
+	return int64(me.body["user"].(map[string]any)["id"].(float64))
 }

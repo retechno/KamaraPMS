@@ -95,6 +95,11 @@ var signedInRoutes = map[string]string{
 	"GET /api/v1/permissions":    "the catalogue of permission names, the same for everyone",
 	"GET /api/v1/properties":     "lists the properties the caller has a grant on",
 	"GET /api/v1/subscription":   "the caller's tenant's plan, modules and access state, which every screen needs to know what to show",
+	// the bell and the inbox of the approvals of the inventory (35-inventory.md 5.8): the caller's own notices and the documents they can decide now; the query is the caller's, so no permission of the module is asked
+	"GET /api/v1/properties/{propertyId}/inventory/approvals/inbox":    "the documents the caller can decide now: their own query",
+	"GET /api/v1/properties/{propertyId}/inventory/notices":            "the caller's own notices",
+	"POST /api/v1/properties/{propertyId}/inventory/notices/{id}/seen": "marks one of the caller's own notices seen",
+	"POST /api/v1/properties/{propertyId}/inventory/notices/seen-all":  "marks the caller's own notices seen",
 }
 
 // propertyReads are the reads that ask for a grant on the property and for no permission (the services call CanAccess and not a permission). They are what every screen of the property needs

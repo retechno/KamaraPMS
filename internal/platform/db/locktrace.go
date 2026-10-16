@@ -9,6 +9,8 @@ import (
 type LockEvent struct {
 	Table string
 	Level LockLevel
+	// Begin marks the start of a transaction: the order of the locks starts again.
+	Begin bool
 }
 
 // LockTrace records the locks of the transactions that run with its context. It is for tests only: a test that wants to see the locks of a use case runs it with WithLockTrace and reads
@@ -37,6 +39,14 @@ func traceLock(ctx context.Context, table string, level LockLevel) {
 	if t, ok := ctx.Value(lockTraceKey{}).(*LockTrace); ok {
 		t.mu.Lock()
 		t.events = append(t.events, LockEvent{Table: table, Level: level})
+		t.mu.Unlock()
+	}
+}
+
+func traceBegin(ctx context.Context) {
+	if t, ok := ctx.Value(lockTraceKey{}).(*LockTrace); ok {
+		t.mu.Lock()
+		t.events = append(t.events, LockEvent{Begin: true})
 		t.mu.Unlock()
 	}
 }

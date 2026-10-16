@@ -75,6 +75,11 @@ type ApprovalRequest struct {
 	// Own is set by a use case whose actor holds the approver permission themselves: they approve their own without a
 	// password, unless the rule of the property asks for someone else (then the credentials of someone else are needed).
 	Own bool
+	// Decision is a decision of the signed-in approver, not a correction with the approver's credentials next to the person who acts (35-inventory.md F6, 9.2): the caller is the approver, needs the
+	// permission of the kind, and the rule of the property compares the caller with Subject (the person whose work is approved) instead of with the actor. A tenant administrator who is the subject is
+	// accepted and marked, as for any correction.
+	Decision bool
+	Subject  int64
 }
 
 var errApprovalInvalid = apperr.Unauthorized("APPROVAL_INVALID_CREDENTIALS", "the approver's email or password is incorrect")
@@ -118,6 +123,9 @@ func (s *Service) Verify(ctx context.Context, req ApprovalRequest) (Approval, er
 			e = e.WithContext("threshold", rule.Threshold.String())
 		}
 		return e
+	}
+	if req.Decision {
+		return s.decide(ctx, p, req, perm, distinct, withRule)
 	}
 	blank := in == nil || strings.TrimSpace(in.Email) == "" || in.Password == ""
 	if req.Own && !distinct {
@@ -204,6 +212,31 @@ func (s *Service) Verify(ctx context.Context, req ApprovalRequest) (Approval, er
 		return Approval{}, withRule(apperr.Forbidden("APPROVAL_SAME_USER", "the rule of this property asks for an approver other than the person who makes the change"))
 	}
 	return Approval{userID: user.ID}, nil
+}
+
+// decide is the mode Decision of Verify: the signed-in user approves, with the permission of the kind at the property, and the rule asks for someone other than Subject.
+func (s *Service) decide(ctx context.Context, p auth.Principal, req ApprovalRequest, perm auth.Permission, distinct bool, withRule func(*apperr.Error) *apperr.Error) (Approval, error) {
+	allowed := p.IsTenantAdmin
+	if !allowed {
+		var err error
+		allowed, err = s.q(ctx).GetGrantPermission(ctx, iamdb.GetGrantPermissionParams{TenantID: p.TenantID, UserID: p.UserID, PropertyID: req.PropertyID, PermissionCode: string(perm)})
+		if errors.Is(err, pgx.ErrNoRows) {
+			allowed, err = false, nil
+		}
+		if err != nil {
+			return Approval{}, err
+		}
+	}
+	if !allowed {
+		return Approval{}, apperr.Forbidden("APPROVAL_NOT_PERMITTED", "the approver may not approve this at this property").WithContext("permission", string(perm))
+	}
+	if distinct && req.Subject != 0 && p.UserID == req.Subject {
+		if p.IsTenantAdmin {
+			return Approval{userID: p.UserID, selfAdmin: true}, nil
+		}
+		return Approval{}, withRule(apperr.Forbidden("APPROVAL_SAME_USER", "the rule of this property asks for an approver other than the person whose work this is"))
+	}
+	return Approval{userID: p.UserID}, nil
 }
 
 func approvalInvalid() error { c := *errApprovalInvalid; return &c }

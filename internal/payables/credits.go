@@ -195,6 +195,7 @@ func (s *Service) postCredit(ctx context.Context, p auth.Principal, propertyID i
 		if err != nil {
 			return err
 		}
+		po.AllowControl(accounting.KeyInventory) // a bill line on goods received not invoiced was written by the inventory: its credit note credits the same account
 		q := s.q(ctx)
 		supplierID, err := q.BillSupplier(ctx, payablesdb.BillSupplierParams{TenantID: p.TenantID, PropertyID: propertyID, ID: in.BillID})
 		if isNoRows(err) {

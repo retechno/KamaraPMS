@@ -114,6 +114,9 @@ if [ "$rp_before" != "$rp_after" ]; then echo "FAIL: running 00077 again changed
 
 echo "==> migration 00084 (inventory) on properties with and without the accounts it adds"
 M84="$(ls "$ROOT"/migrations/00084_*.sql)"
+M85="$(ls "$ROOT"/migrations/00085_*.sql)"
+# 00085 stands on 00084: it goes first, and comes back after 00084 does
+section down "$M85" | psql_run
 section down "$M84" | psql_run
 psql_run < "$ROOT/db/tests/migration_00084_pre.sql"
 section up "$M84" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
@@ -134,6 +137,19 @@ psql_run -c "UPDATE gl_accounts SET name = 'Beban susut (diubah pengguna)' WHERE
 section down "$M84" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
 psql_run < "$ROOT/db/tests/migration_00084_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M84" | psql_run >/dev/null
+
+echo "==> migration 00085 (purchasing) on the properties that exist"
+section up "$M85" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00085_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# the Down is refused while purchasing holds anything (a chain setting is enough), and changes nothing
+psql_run -c "INSERT INTO inv_approval_settings (tenant_id, property_id, doc_type) SELECT tenant_id, id, 'PR' FROM properties WHERE code = 'I1'"
+if section down "$M85" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m85-down.err"; then echo "FAIL: the Down of 00085 ran while purchasing held data" >&2; exit 1; fi
+grep -q "cannot roll back 00085" "${TMPDIR:-/tmp}/m85-down.err" || { echo "FAIL: the Down of 00085 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m85-down.err" >&2; exit 1; }
+echo "    down refused while purchasing holds data"
+psql_run -c "DELETE FROM inv_approval_settings"
+section down "$M85" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00085_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M85" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
