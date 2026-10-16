@@ -7,7 +7,6 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"kamarapms/internal/audit"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -221,29 +220,6 @@ func (s *Service) ReleaseHold(ctx context.Context, propertyID, holdID int64, sea
 	})
 }
 
-// OpenDrawer opens the drawer of the outlet without a sale: it moves no money and is audited with its reason, as the counts of the cashier would ask for it (pos.cashier).
-func (s *Service) OpenDrawer(ctx context.Context, propertyID, outletID int64, reason string) error {
-	p, err := s.cashier(ctx, propertyID)
-	if err != nil {
-		return err
-	}
-	o, err := s.outletOf(ctx, p.TenantID, propertyID, outletID)
-	if err != nil {
-		return err
-	}
-	if o.Drawer == nil {
-		return apperr.Conflict("OUTLET_NO_CASH", "this outlet has no drawer")
-	}
-	r, fields := requireReason(reason)
-	if len(fields) > 0 {
-		return invalid("drawer", fields...)
-	}
-	return s.write(ctx, propertyID, func(ctx context.Context, day civil.Date) error {
-		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &day, UserID: p.ActorID(), Action: "pos.drawer_opened", EntityType: "pos_outlet",
-			EntityID: outletID, EntityLabel: o.Code, New: map[string]any{"reason": r, "drawer": *o.Drawer}})
-	})
-}
-
 // -------------------------------------------------------------------------------------------------- the night audit
 
 // NightAuditIssue is a finding of the night audit about the bills.
@@ -346,19 +322,21 @@ type ReportPerson struct {
 
 // OutletReport is the report of an outlet for a range of business dates.
 type OutletReport struct {
-	OutletID    int64           `json:"outlet_id"`
-	OutletName  string          `json:"outlet_name"`
-	From        civil.Date      `json:"from"`
-	To          civil.Date      `json:"to"`
-	Days        []ReportDay     `json:"days"`
-	Totals      ReportTotals    `json:"totals"`
-	Products    []ReportProduct `json:"products"`
-	Methods     []ReportMethod  `json:"methods"`
-	Voids       []ReportEvent   `json:"voids"`
-	Discounts   []ReportEvent   `json:"discounts"`
-	Comps       []ReportEvent   `json:"comps"`
-	Cashiers    []ReportPerson  `json:"cashiers"`
-	Waiters     []ReportPerson  `json:"waiters"`
+	OutletID   int64           `json:"outlet_id"`
+	OutletName string          `json:"outlet_name"`
+	From       civil.Date      `json:"from"`
+	To         civil.Date      `json:"to"`
+	Days       []ReportDay     `json:"days"`
+	Totals     ReportTotals    `json:"totals"`
+	Products   []ReportProduct `json:"products"`
+	Methods    []ReportMethod  `json:"methods"`
+	Voids      []ReportEvent   `json:"voids"`
+	Discounts  []ReportEvent   `json:"discounts"`
+	Comps      []ReportEvent   `json:"comps"`
+	Cashiers   []ReportPerson  `json:"cashiers"`
+	Waiters    []ReportPerson  `json:"waiters"`
+	// DrawerOpens are the times the drawer was opened without a sale in the range, with the person and the reason (docs/architecture/34-pos.md 20).
+	DrawerOpens []DrawerOpen `json:"drawer_opens"`
 	RoomCharges struct {
 		Count    int             `json:"count"`
 		Amount   decimal.Decimal `json:"amount"`
@@ -388,7 +366,7 @@ func (s *Service) Report(ctx context.Context, propertyID, outletID int64, from, 
 	}
 	q := s.q(ctx)
 	out := OutletReport{OutletID: outletID, OutletName: o.Name, From: from, To: to, Days: []ReportDay{}, Products: []ReportProduct{}, Methods: []ReportMethod{}, Voids: []ReportEvent{},
-		Discounts: []ReportEvent{}, Comps: []ReportEvent{}, Cashiers: []ReportPerson{}, Waiters: []ReportPerson{}}
+		Discounts: []ReportEvent{}, Comps: []ReportEvent{}, Cashiers: []ReportPerson{}, Waiters: []ReportPerson{}, DrawerOpens: []DrawerOpen{}}
 	days, err := q.ReportDays(ctx, posdb.ReportDaysParams{TenantID: p.TenantID, PropertyID: propertyID, OutletID: &outletID, FromDate: from, ToDate: to})
 	if err != nil {
 		return OutletReport{}, err
@@ -459,5 +437,8 @@ func (s *Service) Report(ctx context.Context, propertyID, outletID int64, from, 
 		return OutletReport{}, err
 	}
 	out.OpenBills.Count, out.OpenBills.Balance = int(ob.Bills), ob.Balance
+	if out.DrawerOpens, err = s.drawerOpens(ctx, p.TenantID, propertyID, outletID, from, to); err != nil {
+		return OutletReport{}, err
+	}
 	return out, nil
 }

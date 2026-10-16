@@ -1,6 +1,6 @@
 # 34. POS: outlets, bills on the folio, the lock of a folio for outlet charges, kitchen and print agent
 
-Status: **approved by the owner (2026-10-15)**. **PR 1 (stage 1, migration 00080) is built: section 17. PR 2 (stage 2, migration 00081) is built: section 18. PR 3a (realtime, the waiter on a phone, the kitchen display and the print queue, migration 00082) is built: section 19.** The print agent (3b) and the rest is design only. D1 to D21 of section 15 are decided (D2 and D21 differently from the recommendation: marked there and in 7.5, 7.6, 6.3 and 9.10, 9.11). Asked by the owner on 2026-10-15; the owner's decisions are in the request (numbered 1 to 13 there, referred to here as **R1 to R13**) and are **not re-opened**. Where one of them touches a rule of the platform or of an earlier document, section 1 says so, with the reason and what this design does about it. Nothing here is built. Words in `code font` are tables, columns, permissions or error codes; every new name is a proposal until approved.
+Status: **approved by the owner (2026-10-15)**. **PR 1 (stage 1, migration 00080) is built: section 17. PR 2 (stage 2, migration 00081) is built: section 18. PR 3a (realtime, the waiter on a phone, the kitchen display and the print queue, migration 00082) is built: section 19. PR 3b (the print agent: devices, claim, ESC/POS documents, drawer, reprint, migration 00083) is built: section 20.** The rest (inventory) is design only. D1 to D21 of section 15 are decided (D2 and D21 differently from the recommendation: marked there and in 7.5, 7.6, 6.3 and 9.10, 9.11). Asked by the owner on 2026-10-15; the owner's decisions are in the request (numbered 1 to 13 there, referred to here as **R1 to R13**) and are **not re-opened**. Where one of them touches a rule of the platform or of an earlier document, section 1 says so, with the reason and what this design does about it. Nothing here is built. Words in `code font` are tables, columns, permissions or error codes; every new name is a proposal until approved.
 
 Read with: `03-financial-engines.md` (one engine, one posting path), `05-transactions-locking.md` (lock order), `18-architecture-decisions.md` 3 (folio model), `26-subscriptions.md` (module gate), `28-check-in-panel.md`, `30-group-folio.md` (master folio, `TRF`, the trail and the return, routing), `31-deposit-release.md`, `32-distinct-approver.md`, `33-setup-read-permissions.md`, `11-cashier-budget-cashflow-card.md` (shifts), `27-qris.md`.
 
@@ -683,7 +683,7 @@ Migration numbers are the next free: **00080, 00081, 00082**; if another PR take
 | **1. Masters and the lock** | 00080 | `folios` OUTLET shape (no OUTLET folio is made yet), `pos_outlets`, stations, printers (no agent), rule profiles and `RuleProfileID` in the calculation request, categories, products, options, price lists, sold-out, recipe table, areas, tables, holds, floor plan editor; `folio_outlet_locks` and its events, `OutletChargeGate`, the lock use cases and endpoints, the check-in panel option, the check-out auto-lock, "Outlet charges today" (empty until PR 2), the permissions, the module gate classification, `seed_charge_codes` and the `POS_ROUNDING` code and account, `companies.pos_billing_allowed`; `pms-seed pos` (demo outlet, products, tables) |
 | **2. Orders and payment** | 00081 | `pos_bills`, lines, rounds, tickets (rows only), `pos_room_charges` and its attempts, folio source `POS`, `COMP`, transfer scopes, the view change, the approval kinds, open / add / send / void / discount / pay / split / merge / reopen, charge to room and to company, the cashier screen with the floor plan, shifts by drawer, receipts as an HTML/PDF document (no agent yet), reports, night audit checks, the folio list tabs |
 | **3. Waiter, KDS, printing** | 00082 | the waiter layout (390 px), KDS and ticket statuses, `pos_events` and the stream, `pos_devices`, enrolments, print jobs, ESC/POS rendering, the device routes, a **simulated agent** for tests, drawer jobs, reprint |
-| 3b. Print agent program | none | the program for Windows/Linux in the hotel (own repository or `cmd/pos-agent`: D16) |
+| 3b. Print agent | 00083 | the devices and their enrolment, the claim and the result of a job, the ESC/POS documents (receipt, pre-bill, sheet of a charge to a room, kitchen ticket, drawer), the paper of an outlet and the copies, the drawer without a sale, the reprint, the printer status, and `cmd/pos-agent` for Windows and Linux (D16): section 20 |
 | **4. Inventory and recipes** | own document | stock, recipe use, movement on a sale, costing; adds the foreign key of `pos_recipe_lines` |
 
 ### Tests (real PostgreSQL; races with two goroutines and a barrier: exactly one success and a defined error for the other, as `05` 4)
@@ -862,3 +862,213 @@ The screens were checked in the running application in Indonesian (the kitchen a
 **As in the mockups.** 14: the dark theme; the station switch (Dapur, Bar) and the outlets the station serves in the header; "Rata-rata 9 mnt · 1 terlambat" and the clock; three columns Baru, Dimasak, Siap diambil with their counts; a ticket with the table or the room, the bill number and the waiter, "tambahan" for a later round, the age (and "siap 2 mnt lalu" when ready), TERLAMBAT in red with a red border; lines with the quantity, the options and the note in orange, a voided line struck through with DIBATALKAN; the buttons Mulai, Siap and Sudah diambil; "Selesai 1 jam terakhir: N tiket · Riwayat". 16: the header with the table, the guests, the bill and the outlet; "Cari menu"; the category chips; a row with the name, the price and "· sudah dipesan N"; **Tambah** and the stepper **− n +**; "Habis hari ini" for a sold-out product (not selectable); "N item draf · bill X", "Lihat bill" and "Kirim ke dapur dan bar" at the foot.
 
 **Different on purpose.** The display lives in the shell of the application (the menu is on its left) and is not a full-screen kiosk; its station chips show only the stations with a display. A new ticket has "Siap" beside "Mulai" (a bar drink is made at once). The waiter's header is the page header of the application with a back arrow; the clock and the avatar of the mockup are the top bar of the shell. The send button reads "Kirim ke dapur dan bar" as the cashier's does. The mockup's keypad-less guest entry is a stepper in a small sheet. "Lihat bill" opens a sheet instead of a page.
+
+## 20. As built: PR 3b, the print agent (migration 00083)
+
+PR 3b makes the queue of 3a print: the agent program (`cmd/pos-agent`, D16), the devices and their enrolment, the claim and the result of a job with
+its lease, ESC/POS documents rendered on the server, the drawer, the reprint, and the screens that show whether the paper works. How to install the
+agent is `docs/pos-agent.md`. The protocol of 10.3 was built as it was written; where it was made more exact it is said in 20.7.
+
+### 20.1 The data (migration 00083)
+
+- `pos_devices (tenant_id, property_id, name, kind AGENT, token_hash char(64) UK, token_prefix, status ACTIVE|REVOKED, last_seen_at, agent_version,
+  queue_depth, enrolled_by, rotated_at, revoked_at, revoked_by)`: the token is only ever a SHA-256 (CHECK: 64 hex characters), `revoked_at` is set
+  exactly when the status is REVOKED.
+- `pos_device_enrollments (code_hash UK, expires_at, used_at, device_id, created_by)`: a code lives 15 minutes and enrols one device
+  (`used_at` and `device_id` are set together).
+- `pos_printers` gains `device_id` (composite FK to `pos_devices (property_id, id)`: a printer is never served by the device of another property),
+  `last_status` (ONLINE, OFFLINE, PAPER_OUT, COVER_OPEN) and `status_reported_at`.
+- `pos_print_jobs` gains `seq` (the order of a printer: `created_at` is the start of the transaction and the same for the jobs of one payment),
+  `document jsonb` (what is on the paper, independent of the printer), `payload bytea` (the ESC/POS bytes, at most 64 KB by CHECK),
+  `payload_purged_at`, `claimed_by`, `next_attempt_at` (the backoff), `reprint_reason` and `reprint_by`; CHECKs: a CLAIMED job names its device and
+  has a lease, a PRINTED job has `printed_at`, a FAILED job has an `error_code`, a reprint has a reason, `attempts <= max_attempts`.
+- `pos_outlets` gains the paper: `receipt_title`, `receipt_hotel`, `receipt_address`, `receipt_tax_id`, `receipt_footer` (empty means "from the
+  property": its name, address and NPWP) and `receipt_copies` (0 to 5, default 1; 0 prints nothing by itself, the browser does). `pos_stations`
+  gains `ticket_copies` (1 to 5).
+- `pos_drawer_opens (outlet_id, drawer, shift_id, business_date, reason, opened_by, opened_at, job_id)`: a drawer opened without a sale.
+- `pos_events` takes two more types, `printer.updated` and `device.updated` (triggers: a change of the status of a printer, of its device or of its
+  use; a device that is enrolled or revoked), on the `printers` channel.
+
+The Down refuses while a device, a drawer open or a rendered job exists. The new constraint names are mapped in `internal/platform/db/errors.go`.
+
+### 20.2 The routes
+
+| Route | Who | Notes |
+|---|---|---|
+| `POST {P}/pos/devices/enrollments` | `pos.manage` | the code, shown once; audit `pos.device_enrollment_created` |
+| `GET {P}/pos/devices` | `pos.manage` or `pos.cashier` | devices with `online` (seen in the last 90 s) and the number of open codes; never a token |
+| `POST {P}/pos/devices/{id}/revoke`, `.../rotate-token` | `pos.manage` | 409 `DEVICE_REVOKED` when it already is; a new token is shown once |
+| `GET {P}/pos/outlets/{id}/failed-print-jobs` | `pos.cashier` or `pos.manage` | the last two days, not printed again |
+| `POST {P}/pos/print-jobs/{id}/reprint` | `pos.cashier` | `{reason, printer_id?}`; a new job `reprint_of` the original, `COPY n` on top; 409 `PRINT_DOCUMENT_PURGED` after 7 days |
+| `POST {P}/pos/bills/{id}/print` | `pos.cashier` | an open bill: the pre-bill; a paid bill: a copy of the receipt with a reason; 409 `OUTLET_NO_RECEIPT_PRINTER` |
+| `POST {P}/pos/outlets/{id}/drawer/open` | `pos.cashier` | `{reason}` required; answers `{id, job_id}` (it answered 204 in stage 2) |
+| `POST /api/v1/device/enroll` | a code | 201 `{device_id, token, poll_seconds}`; 422 `ENROLLMENT_CODE_INVALID`; limited by address |
+| `GET /api/v1/device/config` | device token | the printers of the device |
+| `GET /api/v1/device/jobs/next?wait=25` | device token | long poll, 200 job or 204 |
+| `POST /api/v1/device/jobs/{id}/result` | device token | `{status, error_code, printer_status, attempt}` |
+| `POST /api/v1/device/heartbeat` | device token | `{printers: [{id, status}], queue_depth, agent_version}`; answers the configuration |
+
+The device routes live in their own mux (`pos.DeviceHandler`), mounted at `/api/v1/device/` in front of the user API. The token of a device
+(`kpd_...`) is read there and is **not** a JWT, so the user middleware answers 401 for it everywhere else; a user's token on a device route is 401
+`DEVICE_TOKEN_INVALID`. Each route asks the subscription for the POS module (403 `MODULE_NOT_IN_PLAN`) and, for the claim, the result and the
+heartbeat, for a state that is not read-only (403 `SUBSCRIPTION_READ_ONLY`; `config` is a read). A limit by token (240 a minute) is applied before the
+lookup, so a flood of wrong tokens costs the database nothing.
+
+### 20.3 The claim, in order
+
+`jobs/next` first returns to the queue the jobs of the device whose lease ran out (their attempt counted; a job with no attempt left fails with
+`LEASE_EXPIRED`), then takes, for each printer of the device, the **oldest job that is not final**. A printer prints in order: if that job is held by
+the agent or waits for its backoff, no later job of that printer is handed out. The job is taken with
+`UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)`, so two polls (a restarted agent, two processes) never take the same job. The lease is
+60 seconds. The wait is by the hub of 19.1 (one wake-up for the process) with a three second timer under it.
+
+`result` is idempotent by job and attempt: the report of an attempt that already ended answers the state the job has; the report of an attempt that
+is not the current one (the lease was lost) is 409 `JOB_LEASE_LOST`. FAILED with attempts left is QUEUED again with `next_attempt_at` 10 s, then
+60 s ahead; at the last attempt it is FAILED for good, an audit entry `pos.print_failed` is written and `print_job.updated` reaches the screens. A
+device that is not the device of the printer of the job is answered 404.
+
+### 20.4 The documents
+
+`internal/pos/printing` is pure (no database, no clock): a **document** is a list of blocks (text, a left/right pair, a rule, a blank line), stored
+as JSON, and `Render(document, profile, mark)` turns it into ESC/POS for a width (58 mm = 32 columns, 80 mm = 48), a code page, the drawer pin and
+the cut. Non-ASCII characters are transliterated (the agent is a dumb pipe and printers disagree about code pages); money is written as the hotel
+writes it, with the decimals of the property (`1.234.567`). `Preview` gives the same lines as text; the golden files in
+`internal/pos/printing/testdata` hold both the preview and the bytes, so a change of layout is a reviewed diff.
+
+- **Receipt**: the head (hotel, address, NPWP, outlet; an empty field of the outlet is the property's), bill, time, table or room, cashier, waiter,
+  the lines at their menu price after discount as in the bill (`net_amount`), net, service, tax, rounding, total, the payments, the change, the foot
+  (free text of the outlet, or "Terima kasih").
+- **Pre-bill**: the same, with `*** BUKAN STRUK ***` and "YANG HARUS DIBAYAR"; asked by "Minta bill" (a waiter) or by Print on an open bill.
+- **Sheet of a charge to a room**: the room, the guest, the amount and a line to sign; printed with the receipt when a payment includes a charge to a
+  room, so such a bill gives two sheets.
+- **Kitchen ticket**: the outlet name in capitals, the station, **TAMBAHAN** (a later round) or **BATAL** (a cancellation) in double size, the order
+  id `RESTO-0012 | Ronde 2 | T-0345`, the table, room or customer in **double size capitals**, the waiter and the time, then the lines with quantity,
+  options (`-`) and the kitchen note (`!`). One job for each copy the station asks for.
+- **Drawer**: ESC `p` on the pin of the printer, no text.
+
+**When a payment is posted** (inside the same transaction as the payment): the DRAWER job first if the payment has cash and the receipt printer
+opens a drawer, then the copies of the receipt that the outlet asks for, then the sheet of a room charge. Each payment prints, so a split by amount
+or in equal shares gives a receipt for each payment, with the balance that is left. An outlet with no receipt printer queues nothing: the browser
+prints from the bill, as in stage 2. A problem with the paper never stops a sale: a document that cannot be made (over 64 KB) is logged and skipped.
+
+**Dedupe** (`property_id, dedupe_key`): `TICKET:{ticket}:{copy}`, `RECEIPT:{bill}:{round}:{copy}`, `RECEIPT:{bill}:{round}:ROOM`,
+`PREBILL:{bill}:{n}`, `DRAWER:{bill}:{n}`, `DRAWER:OPEN:{uuid}`, `REPRINT:{job}:{copy}`: a replay of a payment (same `Idempotency-Key`) or of a
+send makes no second job.
+
+**Reprint.** A reprint is a new job that points to the original (`reprint_of`), with the same document and `COPY n` printed first; under that line
+the bytes are the original's. It needs a reason, `pos.cashier`, and writes `pos.print_reprinted`. The reprint of a **paid bill** uses the original
+receipt job when there is one; the receipt of a bill that was printed by the browser has no original and is made from the bill, with the mark.
+
+### 20.5 The drawer without a sale, and the shift
+
+`POST .../drawer/open` needs a reason and `pos.cashier`; no supervisor is asked. It resolves the open shift of the cashier for the drawer of the outlet
+(the property may demand one: 409 `NO_OPEN_SHIFT`), queues a DRAWER job when the receipt printer of the outlet opens a drawer (without one the open is
+recorded and the drawer is opened by hand), writes `pos_drawer_opens` and the audit entry `pos.drawer_opened`. The count, the person and the reason show
+on the **report of the outlet** (`drawer_opens`) and on the **X and Z report of the shift** (`GET {P}/shifts/{id}/report`, `drawer_opens`).
+
+### 20.6 The agent and the screens
+
+`cmd/pos-agent` and `internal/posagent`: `enroll`, `run`, `status`, `test-print`, `install`/`uninstall`/`start`/`stop` (a Windows service by
+`golang.org/x/sys/windows/svc`; a systemd unit in `deploy/pos-agent.service`), one binary for Windows and Linux with no cgo. The loop holds the long
+poll, writes the bytes of a job to the printer (TCP 9100, `USB:<Windows printer>` RAW through the spooler by `winspool.drv`, `DEV:/dev/usb/lp0`),
+reports each attempt with a few retries and sends the heartbeat. A 401 stops it with a clear line in the log; read-only is waited out; a broken network is
+waited out with a growing pause. Its tests (`internal/posagent`) use `httptest` for the server and a TCP listener for the printer: no database.
+
+The web: **Setup > Stations and printers** has the **Devices** section (the code with its countdown and the command to copy, the list with state, last
+seen and version, Revoke and Replace token, the token shown once), the printers show their state and a choice of device, the stations their copies, the
+print queue the device, the attempts, the error and when it was printed; **Setup > Outlets** has the paper (head, foot, copies); the **cashier floor and
+bill** show a printer chip for each printer that has a problem, with its own cause ("Printer offline: X" when the agent is silent for more than 90 s, the device
+is offline or revoked or the printer says so; "Kertas habis: X"; "Tutup printer terbuka: X"; "Printer belum terhubung ke agen: X" for a printer with no device),
+or one "Printer siap", the jobs that failed with **Reprint**, **Print** to the printer
+(and **Print from the browser** beside it), **Reprint the receipt** (reason) and **Open drawer** (reason); the **outlet report** lists the drawer opens.
+`utils/posReceipt.ts` (the browser) is kept as the second way.
+
+### 20.7 Differences from the design (10.3, 3.4)
+
+1. **`document jsonb` beside `payload`.** The design stored the bytes only. The document is kept as well so that a reprint renders again with the mark
+   `COPY n` and nothing else changes; both are removed after seven days.
+2. **The purge has no scheduler of its own and does not depend on an agent.** It runs (a) when an agent claims, (b) when the queue of print jobs or the list of
+   failed jobs is read, each at most once an hour by process (`maybePurgePayloads`), and (c) at the **close of the day** of the property, without the throttle,
+   for that property (`outletClose.ExpireOutletLocks` calls `PurgePrintPayloadsOf`). So a property with no agent is purged too: a job that never printed in
+   seven days is failed `EXPIRED`, and the document and the bytes of every job older than that are removed; the metadata stays.
+3. **`seq` orders a printer**, and a printer is served one job at a time: a job waits for the one before it, including a job that waits for its backoff.
+4. **A ticket queued by 3a without bytes** is rendered at its first claim from the ticket (so a queue that was waiting when 3b came prints).
+5. **Config route.** `GET /api/v1/device/config` (and the answer of the heartbeat) tell the agent its printers and their `connection_info`; the job
+   carries the `connection_info` too.
+6. **The printer status is derived.** `last_status` is what the agent said; `state` is NO_DEVICE, UNKNOWN, OFFLINE (silent for more than 90 s)
+   or the status, computed when it is read, so the screens need no timer on the server.
+7. **Receipt printing is a choice by the outlet** (copies 0 to 5): 0 keeps the browser as the only way, as in stage 2.
+8. **The drawer route changed**: 200 with `{id, job_id}` instead of 204, and it asks for the shift of the drawer.
+9. **The agent probes the printer** with `DLE EOT 4` and `2` for the paper and the cover (a printer that does not answer is online).
+
+### 20.8 Tests
+
+`internal/pos/print_test.go` (real PostgreSQL): an enrolment code works once, expires and a token is only a hash; rotate and revoke; the claim in order and
+the lease that runs out; **six pollers and one printer: exactly one job is handed out**; retry with 10 s and 60 s, the final failure with its audit,
+an idempotent result and a lost lease; the receipt with its copies, the drawer first, the replay of a payment prints nothing more, a card payment does
+not pulse the drawer; the sheet of a charge to a room; zero copies and no printer; the drawer without a sale (reason, permission, audit, the X report
+of the shift, the report of the outlet); a device sees only its own printers; the purge keeps the rows; the permissions. `internal/pos/printing`:
+golden files for the receipt (58 and 80 mm), the reprint (differs only by the mark), the pre-bill, the sheet of a room charge, the tickets (new,
+addition, cancellation), the drawer pulse, transliteration, the limit of 64 KB. `internal/app/pos_device_api_test.go`: the routes through the
+router, the two kinds of token, another tenant (404), the module gate and the read-only state. `db/tests/schema_test.sql`: the tables and
+constraints of 00083. `internal/posagent`: the bytes written as they are, results, the code of a failure, the backoff, 401 and read-only, the
+status of the printer, the permissions of the configuration, the rotation of the log, and that the token is not in a log line. Web:
+`PosPrinting.test.ts` (devices panel, printer chip, failed jobs and reprint), the outlet paper and the copies and device of a printer in
+`PosMasters.test.ts`, print and reprint in `PosBill.test.ts`, the drawer opens in `PosReport.test.ts`.
+
+### 20.9 What the paper looks like (the preview of the golden files, 80 mm and 58 mm)
+
+```text
+80 mm receipt                                        58 mm receipt
+               Hotel Teratai Bali                           Hotel Teratai Bali
+         Jl. Pantai Kuta No. 8, Badung                Jl. Pantai Kuta No. 8, Badung
+           NPWP: 01.234.567.8-901.000                   NPWP: 01.234.567.8-901.000
+                Restoran Teratai                             Restoran Teratai
+------------------------------------------------   --------------------------------
+Bill RESTO-0012                 16/10/2026 19:42   Bill RESTO-0012 16/10/2026 19:42
+MEJA P1                                            MEJA P1
+2 tamu                                             2 tamu
+Kasir: Ayu                                         Kasir: Ayu
+Pelayan: Made                                      Pelayan: Made
+------------------------------------------------   --------------------------------
+2 x Nasi Goreng Kampung                  170.000   2 x Nasi Goreng Kampung  170.000
+   Reguler, Sedang                                    Reguler, Sedang
+1 x Es Teh Manis                          25.000   1 x Es Teh Manis          25.000
+------------------------------------------------   --------------------------------
+Neto                                     360.000   Neto                     360.000
+Layanan                                   36.000   Layanan                   36.000
+Pajak                                     39.600   Pajak                     39.600
+TOTAL                                    435.600   TOTAL                    435.600
+------------------------------------------------   --------------------------------
+Tunai                                    500.000   Tunai                    500.000
+Kembali                                   64.400   Kembali                   64.400
+
+    Terima kasih. Wi-Fi: teratai / kolam2026        Terima kasih. Wi-Fi: teratai /
+[CUT]                                                         kolam2026
+```
+
+```text
+80 mm kitchen ticket, a later round                  58 mm
+                RESTORAN TERATAI                            RESTORAN TERATAI
+                  Dapur utama                                 Dapur utama
+                T A M B A H A N                             T A M B A H A N
+         RESTO-0012 | Ronde 2 | T-0345                RESTO-0012 | Ronde 2 | T-0345
+                 M E J A   P 1                               M E J A   P 1
+           Pelayan: Made | Jam 19:42                    Pelayan: Made | Jam 19:42
+------------------------------------------------   --------------------------------
+2 x Nasi Goreng Kampung                            2 x Nasi Goreng Kampung
+   - Reguler, Sedang                                  - Reguler, Sedang
+   ! Tanpa bawang goreng                              ! Tanpa bawang goreng
+1 x Sate Ayam Madura                               1 x Sate Ayam Madura
+[CUT]                                              [CUT]
+```
+
+(The double size lines are drawn here with a space between the letters, which is what twice the width looks like; the room sheet, the pre-bill and
+the cancellation ticket are in the golden files.)
+
+### 20.10 Compared with the mockups
+
+No mockup of `docs/design` draws the devices, the paper of an outlet, the printer chip or the list of failed jobs: they were built from the owner's
+request of 2026-10-16 with the components of the application. What the mockups say about the paper was kept: 10 (**Buka laci** beside the open bills;
+now with a reason), 12 ("the drawer opens by itself", "the guest signs on the receipt": the second sheet of a charge to a room), 14 (the kitchen
+display stays read-only; a ticket is the same one that prints) and 16 (the waiter asks for the bill; the pre-bill prints at the cashier).

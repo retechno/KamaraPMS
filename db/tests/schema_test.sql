@@ -2267,6 +2267,109 @@ SELECT expect_error('a print job is for a printer of its property', '23503', $q$
        VALUES (tn('ABC'), pr('BALI'), 999999, 'TICKET', 'TICKET', 1, 'TICKET:3:1')$q$);
 
 ------------------------------------------------------------------------------------------
+-- POS print agent: devices, enrolments, the claim of print jobs, receipt settings, drawer opens (migration 00083, docs/architecture/34-pos.md 20)
+------------------------------------------------------------------------------------------
+CREATE FUNCTION pms_test.pos_dev(p_name text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO pos_devices (tenant_id, property_id, name, token_hash, token_prefix)
+    VALUES (tn('ABC'), pr('BALI'), p_name, md5(p_name) || md5(p_name || 'x'), 'kpd_' || left(md5(p_name), 8)) $$;
+CREATE FUNCTION pms_test.pos_prn(p_name text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO pos_printers (tenant_id, property_id, name, kind) VALUES (tn('ABC'), pr('BALI'), p_name, 'KITCHEN') $$;
+CREATE FUNCTION pms_test.pos_job(p_key text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_printers WHERE name = 'K1'), 'TICKET', 'TICKET', 1, p_key) $$;
+
+SELECT expect_ok('a device holds the hash of its token', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$);
+SELECT expect_error('the token of a device is a SHA-256 in hex', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_devices (tenant_id, property_id, name, token_hash, token_prefix) VALUES (tn('ABC'), pr('BALI'), 'PC', 'kpd_the_token_itself', 'kpd_the_')$q$);
+SELECT expect_error('two devices never share a token', '23505', $q$SELECT pms_test.pos_base()$q$,
+    $q$SELECT pms_test.pos_dev('PC')$q$,
+    $q$INSERT INTO pos_devices (tenant_id, property_id, name, token_hash, token_prefix)
+       SELECT tenant_id, property_id, 'Other', token_hash, token_prefix FROM pos_devices WHERE name = 'PC'$q$);
+SELECT expect_error('a device is active or revoked', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$,
+    $q$UPDATE pos_devices SET status = 'LOST' WHERE name = 'PC'$q$);
+SELECT expect_error('a revoked device says when', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$,
+    $q$UPDATE pos_devices SET status = 'REVOKED' WHERE name = 'PC'$q$);
+SELECT expect_ok('a device is revoked with its time', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$,
+    $q$UPDATE pos_devices SET status = 'REVOKED', revoked_at = now() WHERE name = 'PC'$q$);
+SELECT expect_error('a device belongs to a property of its tenant', '23503', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_devices (tenant_id, property_id, name, token_hash, token_prefix) VALUES (tn('XYZ'), pr('BALI'), 'PC', repeat('a', 64), 'kpd_aaaa')$q$);
+
+SELECT expect_ok('an enrolment code is used once by a device', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$,
+    $q$INSERT INTO pos_device_enrollments (tenant_id, property_id, code_hash, expires_at, used_at, device_id)
+       VALUES (tn('ABC'), pr('BALI'), repeat('b', 64), now() + interval '15 minutes', now(), (SELECT id FROM pos_devices WHERE name = 'PC'))$q$);
+SELECT expect_error('an enrolment that was used names its device', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_device_enrollments (tenant_id, property_id, code_hash, expires_at, used_at) VALUES (tn('ABC'), pr('BALI'), repeat('b', 64), now() + interval '15 minutes', now())$q$);
+SELECT expect_error('an enrolment code is unique', '23505', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_device_enrollments (tenant_id, property_id, code_hash, expires_at) VALUES (tn('ABC'), pr('BALI'), repeat('c', 64), now() + interval '15 minutes')$q$,
+    $q$INSERT INTO pos_device_enrollments (tenant_id, property_id, code_hash, expires_at) VALUES (tn('ABC'), pr('BALI'), repeat('c', 64), now() + interval '15 minutes')$q$);
+SELECT expect_error('an enrolment code is a hash, never the code', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_device_enrollments (tenant_id, property_id, code_hash, expires_at) VALUES (tn('ABC'), pr('BALI'), 'K7QM-4TXD', now() + interval '15 minutes')$q$);
+
+SELECT expect_ok('a printer is served by a device of its property', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$, $q$SELECT pms_test.pos_prn('K1')$q$,
+    $q$UPDATE pos_printers SET device_id = (SELECT id FROM pos_devices WHERE name = 'PC') WHERE name = 'K1'$q$);
+SELECT expect_error('a printer cannot be served by a device of another property', '23503', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$,
+    $q$INSERT INTO pos_devices (tenant_id, property_id, name, token_hash, token_prefix) VALUES (tn('XYZ'), pr('SG'), 'Other', repeat('d', 64), 'kpd_dddd')$q$,
+    $q$UPDATE pos_printers SET device_id = (SELECT id FROM pos_devices WHERE name = 'Other') WHERE name = 'K1'$q$);
+SELECT expect_error('a printer reports a status that exists', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$,
+    $q$UPDATE pos_printers SET last_status = 'ON_FIRE', status_reported_at = now() WHERE name = 'K1'$q$);
+SELECT expect_error('a reported status has its time', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$,
+    $q$UPDATE pos_printers SET last_status = 'ONLINE' WHERE name = 'K1'$q$);
+SELECT expect_ok('a change of the status of a printer is an event of the printers channel, once', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$,
+    $q$UPDATE pos_printers SET last_status = 'ONLINE', status_reported_at = now() WHERE name = 'K1'$q$,
+    $q$UPDATE pos_printers SET last_status = 'PAPER_OUT', status_reported_at = now() WHERE name = 'K1'$q$,
+    $q$UPDATE pos_printers SET status_reported_at = now() WHERE name = 'K1'$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM pos_events WHERE type = 'printer.updated' AND channel = 'printers'
+                              AND entity_id = (SELECT id FROM pos_printers WHERE name = 'K1')) = 1 THEN 1 ELSE 0 END)$q$);
+SELECT expect_ok('a device that enrols is an event of the printers channel', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM pos_events WHERE type = 'device.updated') = 1 THEN 1 ELSE 0 END)$q$);
+
+-- the claim of a job
+SELECT expect_ok('a job is claimed by a device with a lease', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET status = 'CLAIMED', claimed_by = (SELECT id FROM pos_devices WHERE name = 'PC'), lease_until = now() + interval '60 seconds', attempts = 1$q$);
+SELECT expect_error('a claimed job names the device that holds it', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET status = 'CLAIMED', lease_until = now() + interval '60 seconds'$q$);
+SELECT expect_error('a claimed job has a lease', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_dev('PC')$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET status = 'CLAIMED', claimed_by = (SELECT id FROM pos_devices WHERE name = 'PC')$q$);
+SELECT expect_error('a job that is printed says when', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET status = 'PRINTED'$q$);
+SELECT expect_error('a job that failed says why', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET status = 'FAILED', attempts = 3$q$);
+SELECT expect_error('a job has no more attempts than its maximum', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET attempts = 4$q$);
+SELECT expect_error('the bytes of a job are at most 64 KB', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET payload = decode(repeat('00', 65537), 'hex')$q$);
+SELECT expect_ok('a payload of 64 KB is accepted', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$UPDATE pos_print_jobs SET payload = decode(repeat('00', 65536), 'hex')$q$);
+SELECT expect_error('a reprint has a reason', '23514', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, copy_no, reprint_of)
+       SELECT tenant_id, property_id, printer_id, kind, source_type, source_id, 'T:1:2', 2, id FROM pos_print_jobs$q$);
+SELECT expect_ok('a reprint points to its original with its reason', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$, $q$SELECT pms_test.pos_job('T:1:1')$q$,
+    $q$INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, copy_no, reprint_of, reprint_reason)
+       SELECT tenant_id, property_id, printer_id, kind, source_type, source_id, 'T:1:2', 2, id, 'paper jam' FROM pos_print_jobs$q$);
+SELECT expect_ok('the jobs of a printer have an order of their own', $q$SELECT pms_test.pos_base()$q$, $q$SELECT pms_test.pos_prn('K1')$q$,
+    $q$SELECT pms_test.pos_job('T:1:1')$q$, $q$SELECT pms_test.pos_job('T:2:1')$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT seq FROM pos_print_jobs WHERE dedupe_key = 'T:1:1') < (SELECT seq FROM pos_print_jobs WHERE dedupe_key = 'T:2:1') THEN 1 ELSE 0 END)$q$);
+
+-- the paper of an outlet and of a station
+SELECT expect_error('an outlet prints 0 to 5 copies of a receipt', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$UPDATE pos_outlets SET receipt_copies = 6 WHERE code = 'T'$q$);
+SELECT expect_ok('an outlet may print no copy: the browser prints', $q$SELECT pms_test.pos_base()$q$,
+    $q$UPDATE pos_outlets SET receipt_copies = 0, receipt_footer = 'Terima kasih' WHERE code = 'T'$q$);
+SELECT expect_error('a station prints 1 to 5 copies of a ticket', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_stations (tenant_id, property_id, code, name, ticket_copies) VALUES (tn('ABC'), pr('BALI'), 'S1', 'Kitchen', 0)$q$);
+
+-- a drawer opened without a sale
+SELECT expect_ok('a drawer open has a reason and a person', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_drawer_opens (tenant_id, property_id, outlet_id, drawer, business_date, reason, opened_by)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'D1', '2026-10-01', 'change', us('ABC', 'admin@hotel.com'))$q$);
+SELECT expect_error('a drawer open without a reason is refused', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_drawer_opens (tenant_id, property_id, outlet_id, drawer, business_date, reason, opened_by)
+       VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'D1', '2026-10-01', '  ', us('ABC', 'admin@hotel.com'))$q$);
+SELECT expect_error('a drawer open is for an outlet of its property', '23503', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_drawer_opens (tenant_id, property_id, outlet_id, drawer, business_date, reason, opened_by)
+       VALUES (tn('ABC'), pr('BALI'), 999999, 'D1', '2026-10-01', 'change', us('ABC', 'admin@hotel.com'))$q$);
+
+------------------------------------------------------------------------------------------
 -- Ordered lists: the database must have the ICU collation (the order of the guest names depends on it) and the indexes of the orders a screen opens with
 ------------------------------------------------------------------------------------------
 DO $$

@@ -190,11 +190,11 @@ func (h *Handler) openDrawer(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	if err := h.svc.OpenDrawer(r.Context(), pid, id, in.Reason); err != nil {
+	v, err := h.svc.OpenDrawer(r.Context(), pid, id, in.Reason)
+	if err != nil {
 		return err
 	}
-	w.WriteHeader(http.StatusNoContent)
-	return nil
+	return httpx.WriteJSON(w, http.StatusOK, v)
 }
 
 func (h *Handler) roomLookup(w http.ResponseWriter, r *http.Request) error {

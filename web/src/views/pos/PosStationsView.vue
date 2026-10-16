@@ -2,17 +2,18 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { PosPrinter, PosPrintQueue, PosSetupIssue, PosStation } from '@/api/types'
+import type { PosDevice, PosPrinter, PosPrintQueue, PosSetupIssue, PosStation } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import PosDevicesPanel from '@/components/pos/PosDevicesPanel.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { debounce, usePosEvents } from '@/composables/usePosEvents'
-import { t } from '@/i18n'
+import { t, te } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatDateTime } from '@/utils/format'
 
@@ -24,6 +25,7 @@ const property = usePropertyStore()
 const pid = computed(() => property.currentId)
 const stations = ref<PosStation[]>([])
 const printers = ref<PosPrinter[]>([])
+const devices = ref<PosDevice[]>([])
 const issues = ref<PosSetupIssue[]>([])
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
@@ -40,6 +42,7 @@ async function loadQueue(): Promise<void> {
     queue.value = null // the queue is for who prints; the setup works without it
   }
 }
+const jobError = (code: string): string => (te(`posPrintQueue.error_${code}`) ? t(`posPrintQueue.error_${code}`) : code)
 const refreshQueue = debounce(() => void loadQueue(), 200)
 usePosEvents({
   propertyId: () => pid.value,
@@ -55,14 +58,16 @@ async function load(): Promise<void> {
   if (propertyId === null) return
   try {
     const path = { params: { path: { propertyId } } }
-    const [s, p, c] = await Promise.all([
+    const [s, p, c, d] = await Promise.all([
       api.GET('/api/v1/properties/{propertyId}/pos/stations', path),
       api.GET('/api/v1/properties/{propertyId}/pos/printers', path),
       api.GET('/api/v1/properties/{propertyId}/pos/setup-check', path),
+      api.GET('/api/v1/properties/{propertyId}/pos/devices', path),
     ])
     stations.value = s.data?.data ?? []
     printers.value = p.data?.data ?? []
     issues.value = c.data?.data ?? []
+    devices.value = d.data?.data ?? []
     void loadQueue()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -72,14 +77,14 @@ async function load(): Promise<void> {
 }
 
 // ---- stations
-const sForm = reactive({ id: null as number | null, code: '', name: '', printer_id: 0, kds_enabled: false, late_after_minutes: 15, is_active: true })
+const sForm = reactive({ id: null as number | null, code: '', name: '', printer_id: 0, kds_enabled: false, late_after_minutes: 15, is_active: true, ticket_copies: 1 })
 const sDialog = ref(false)
 const sError = ref<ApiError | null>(null)
 const busy = ref(false)
 function editStation(s?: PosStation): void {
   Object.assign(sForm, s
-    ? { id: s.id, code: s.code, name: s.name, printer_id: s.printer_id ?? 0, kds_enabled: s.kds_enabled, late_after_minutes: s.late_after_minutes, is_active: s.is_active }
-    : { id: null, code: '', name: '', printer_id: 0, kds_enabled: false, late_after_minutes: 15, is_active: true })
+    ? { id: s.id, code: s.code, name: s.name, printer_id: s.printer_id ?? 0, kds_enabled: s.kds_enabled, late_after_minutes: s.late_after_minutes, is_active: s.is_active, ticket_copies: s.ticket_copies ?? 1 }
+    : { id: null, code: '', name: '', printer_id: 0, kds_enabled: false, late_after_minutes: 15, is_active: true, ticket_copies: 1 })
   sError.value = null
   sDialog.value = true
 }
@@ -88,7 +93,7 @@ async function saveStation(): Promise<void> {
   if (propertyId === null) return
   busy.value = true
   sError.value = null
-  const body = { code: sForm.code.trim().toUpperCase(), name: sForm.name.trim(), printer_id: sForm.printer_id || null, kds_enabled: sForm.kds_enabled, late_after_minutes: sForm.late_after_minutes, is_active: sForm.is_active }
+  const body = { code: sForm.code.trim().toUpperCase(), name: sForm.name.trim(), printer_id: sForm.printer_id || null, kds_enabled: sForm.kds_enabled, late_after_minutes: sForm.late_after_minutes, is_active: sForm.is_active, ticket_copies: sForm.ticket_copies }
   try {
     if (sForm.id === null) await api.POST('/api/v1/properties/{propertyId}/pos/stations', { params: { path: { propertyId } }, body })
     else await api.PUT('/api/v1/properties/{propertyId}/pos/stations/{id}', { params: { path: { propertyId, id: sForm.id } }, body })
@@ -103,13 +108,13 @@ async function saveStation(): Promise<void> {
 }
 
 // ---- printers
-const pForm = reactive({ id: null as number | null, name: '', kind: 'RECEIPT', connection_info: '', paper_width_mm: 80, codepage: 'CP437', opens_drawer: false, is_active: true })
+const pForm = reactive({ id: null as number | null, name: '', kind: 'RECEIPT', connection_info: '', paper_width_mm: 80, codepage: 'CP437', opens_drawer: false, is_active: true, device_id: 0 })
 const pDialog = ref(false)
 const pError = ref<ApiError | null>(null)
 function editPrinter(p?: PosPrinter): void {
   Object.assign(pForm, p
-    ? { id: p.id, name: p.name, kind: p.kind, connection_info: p.connection_info, paper_width_mm: p.paper_width_mm, codepage: p.codepage, opens_drawer: p.opens_drawer, is_active: p.is_active }
-    : { id: null, name: '', kind: 'RECEIPT', connection_info: '', paper_width_mm: 80, codepage: 'CP437', opens_drawer: false, is_active: true })
+    ? { id: p.id, name: p.name, kind: p.kind, connection_info: p.connection_info, paper_width_mm: p.paper_width_mm, codepage: p.codepage, opens_drawer: p.opens_drawer, is_active: p.is_active, device_id: p.device_id ?? 0 }
+    : { id: null, name: '', kind: 'RECEIPT', connection_info: '', paper_width_mm: 80, codepage: 'CP437', opens_drawer: false, is_active: true, device_id: 0 })
   pError.value = null
   pDialog.value = true
 }
@@ -120,7 +125,7 @@ async function savePrinter(): Promise<void> {
   pError.value = null
   const body = {
     name: pForm.name.trim(), kind: pForm.kind as 'RECEIPT' | 'KITCHEN' | 'LABEL', connection_info: pForm.connection_info.trim(), paper_width_mm: pForm.paper_width_mm as 58 | 80,
-    codepage: pForm.codepage.trim(), opens_drawer: pForm.opens_drawer, is_active: pForm.is_active,
+    codepage: pForm.codepage.trim(), opens_drawer: pForm.opens_drawer, is_active: pForm.is_active, device_id: pForm.device_id || null,
   }
   try {
     if (pForm.id === null) await api.POST('/api/v1/properties/{propertyId}/pos/printers', { params: { path: { propertyId } }, body })
@@ -185,6 +190,8 @@ watch(pid, load, { immediate: true })
       </ul>
     </section>
 
+    <PosDevicesPanel v-if="pid !== null" class="mb-4" :property-id="pid" @changed="load" />
+
     <div class="grid gap-4 lg:grid-cols-2">
       <section class="rounded-xl border border-border bg-card p-4" data-testid="stations">
         <header class="mb-3 flex items-center justify-between gap-2">
@@ -196,7 +203,7 @@ watch(pid, load, { immediate: true })
           <li v-for="s in stations" :key="s.id" class="flex min-h-11 flex-wrap items-center gap-2 py-2" :data-testid="`station-${s.code}`">
             <div class="min-w-0 flex-1">
               <strong class="block truncate text-sm">{{ s.name }}</strong>
-              <span class="text-xs text-muted-foreground">{{ s.code }} · {{ s.printer_name ?? t('pos.stations.noPrinter') }}<template v-if="s.kds_enabled"> · {{ t('pos.stations.kds') }}</template> · {{ t('pos.stations.lateAfter', { n: s.late_after_minutes }) }}</span>
+              <span class="text-xs text-muted-foreground">{{ s.code }} · {{ s.printer_name ?? t('pos.stations.noPrinter') }}<template v-if="s.kds_enabled"> · {{ t('pos.stations.kds') }}</template> · {{ t('pos.stations.lateAfter', { n: s.late_after_minutes }) }}<template v-if="(s.ticket_copies ?? 1) > 1"> · {{ t('pos.stations.copiesN', { n: s.ticket_copies }) }}</template></span>
             </div>
             <Badge v-if="!s.is_active" variant="outline">{{ t('common.inactive') }}</Badge>
             <Button variant="outline" size="sm" :data-testid="`station-edit-${s.code}`" @click="editStation(s)">{{ t('common.edit') }}</Button>
@@ -210,14 +217,16 @@ watch(pid, load, { immediate: true })
           <Button size="sm" data-testid="printer-new" @click="editPrinter()">{{ t('pos.printers.new') }}</Button>
         </header>
         <p class="m-0 mb-2 text-xs text-muted-foreground">{{ t('pos.printers.agentNote') }}</p>
+        <p v-if="devices.length === 0 && printers.length > 0" class="m-0 mb-2 rounded-lg border border-dashed border-border p-2 text-xs text-muted-foreground" data-testid="printers-no-agent">{{ t('pos.printers.noAgent') }}</p>
         <p v-if="printers.length === 0" class="muted" data-testid="printers-empty">{{ t('pos.printers.empty') }}</p>
         <ul class="m-0 list-none divide-y divide-border p-0">
           <li v-for="p in printers" :key="p.id" class="flex min-h-11 flex-wrap items-center gap-2 py-2" :data-testid="`printer-${p.id}`">
             <div class="min-w-0 flex-1">
               <strong class="block truncate text-sm">{{ p.name }}</strong>
-              <span class="text-xs text-muted-foreground">{{ t(`pos.printers.kind_${p.kind}`) }} · {{ p.paper_width_mm }} mm<template v-if="p.connection_info"> · {{ p.connection_info }}</template></span>
+              <span class="text-xs text-muted-foreground">{{ t(`pos.printers.kind_${p.kind}`) }} · {{ p.paper_width_mm }} mm<template v-if="p.connection_info"> · {{ p.connection_info }}</template><template v-if="p.device_name"> · {{ p.device_name }}</template></span>
             </div>
             <Badge v-if="!p.is_active" variant="outline">{{ t('common.inactive') }}</Badge>
+            <Badge v-else :variant="p.state === 'ONLINE' ? 'success' : p.state === 'UNKNOWN' || p.state === 'NO_DEVICE' ? 'outline' : 'destructive'" :data-testid="`printer-state-${p.id}`" :data-state="p.state">{{ t(`pos.printers.state_${p.state ?? 'NO_DEVICE'}`) }}</Badge>
             <Button variant="outline" size="sm" @click="editPrinter(p)">{{ t('common.edit') }}</Button>
           </li>
         </ul>
@@ -237,16 +246,23 @@ watch(pid, load, { immediate: true })
         <p class="m-0 mt-1 text-xs text-muted-foreground">{{ t('posPrintQueue.emptyHint') }}</p>
       </div>
       <table v-else class="w-full text-sm">
-        <thead><tr class="text-left text-xs text-muted-foreground"><th>{{ t('posPrintQueue.what') }}</th><th>{{ t('posPrintQueue.printer') }}</th><th>{{ t('posPrintQueue.at') }}</th><th>{{ t('posPrintQueue.state') }}</th></tr></thead>
+        <thead><tr class="text-left text-xs text-muted-foreground"><th>{{ t('posPrintQueue.what') }}</th><th>{{ t('posPrintQueue.printer') }}</th><th>{{ t('posPrintQueue.device') }}</th><th>{{ t('posPrintQueue.at') }}</th><th>{{ t('posPrintQueue.attempts') }}</th><th>{{ t('posPrintQueue.printedAt') }}</th><th>{{ t('posPrintQueue.state') }}</th></tr></thead>
         <tbody>
           <tr v-for="j in queue.jobs" :key="j.id" class="border-t border-border" :data-testid="`job-${j.id}`" :data-status="j.status">
             <td>
-              {{ j.ticket_kind ? t(`posPrintQueue.ticket_${j.ticket_kind}`) : t('posPrintQueue.ticket') }}
+              {{ j.kind !== 'TICKET' ? t(`posPrintStatus.kind_${j.kind}`) : j.ticket_kind ? t(`posPrintQueue.ticket_${j.ticket_kind}`) : t('posPrintQueue.ticket') }}
               <span class="text-xs text-muted-foreground">{{ [j.station, j.bill_number, j.table_code].filter(Boolean).join(' · ') }}</span>
             </td>
             <td>{{ j.printer_name }}</td>
+            <td>{{ j.device_name || '—' }}</td>
             <td class="tabular-nums">{{ formatDateTime(j.created_at) }}</td>
-            <td><Badge :variant="j.status === 'FAILED' ? 'destructive' : 'outline'">{{ t(`posPrintQueue.status_${j.status}`) }}</Badge></td>
+            <td class="tabular-nums">{{ j.attempts }}/{{ j.max_attempts ?? 3 }}</td>
+            <td class="tabular-nums">{{ j.printed_at ? formatDateTime(j.printed_at) : '—' }}</td>
+            <td>
+              <Badge :variant="j.status === 'FAILED' ? 'destructive' : 'outline'">{{ t(`posPrintQueue.status_${j.status}`) }}</Badge>
+              <span v-if="j.is_reprint" class="ml-1 text-xs text-muted-foreground">{{ t('posPrintQueue.copy', { n: j.copy_no }) }}</span>
+              <span v-if="j.error_code" class="block text-xs text-destructive" data-testid="job-error">{{ jobError(j.error_code) }}</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -271,6 +287,11 @@ watch(pid, load, { immediate: true })
               <option :value="0">{{ t('pos.stations.noPrinter') }}</option>
               <option v-for="p in printers.filter((x) => x.is_active)" :key="p.id" :value="p.id">{{ p.name }}</option>
             </NativeSelect>
+          </template>
+        </FormField>
+        <FormField :label="t('pos.stations.ticketCopies')" :hint="t('pos.stations.ticketCopiesHint')" :error="sError?.fieldMessage('ticket_copies')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model.number="sForm.ticket_copies" name="ticket_copies" data-testid="ticket-copies"><option v-for="n in [1, 2, 3, 4, 5]" :key="n" :value="n">{{ n }}</option></NativeSelect>
           </template>
         </FormField>
         <FormField :label="t('pos.stations.lateAfterLabel')" :error="sError?.fieldMessage('late_after_minutes')">
@@ -308,6 +329,14 @@ watch(pid, load, { immediate: true })
             </template>
           </FormField>
         </div>
+        <FormField :label="t('pos.printers.device')" :hint="t('pos.printers.deviceHint')" :error="pError?.fieldMessage('device_id')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model.number="pForm.device_id" name="device_id" data-testid="printer-device">
+              <option :value="0">{{ t('pos.printers.noDevice') }}</option>
+              <option v-for="d in devices.filter((x) => x.status === 'ACTIVE' || x.id === pForm.device_id)" :key="d.id" :value="d.id">{{ d.name }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
         <FormField :label="t('pos.printers.connection')" :hint="t('pos.printers.connectionHint')">
           <template #default="{ id }"><Input :id="id" v-model="pForm.connection_info" name="connection_info" maxlength="200" /></template>
         </FormField>

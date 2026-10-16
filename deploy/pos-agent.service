@@ -1,0 +1,41 @@
+# systemd unit of the KamaraPMS print agent (docs/pos-agent.md).
+#
+#   sudo install -m 0755 pos-agent /usr/local/bin/pos-agent
+#   sudo useradd --system --home /var/lib/kamarapms-agent --shell /usr/sbin/nologin --groups lp kamarapms-agent
+#   sudo -u kamarapms-agent pos-agent enroll -server https://pms.example.com -code XXXX-XXXX -name "Kasir Lobby" -config /etc/kamarapms/pos-agent/config.json
+#   sudo cp pos-agent.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now pos-agent
+#
+# The agent only calls out (HTTPS to the server, TCP 9100 to the network printers); it listens on nothing.
+[Unit]
+Description=KamaraPMS print agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kamarapms-agent
+Group=kamarapms-agent
+# /dev/usb/lp0 belongs to the group lp; the account above is in it
+SupplementaryGroups=lp
+Environment=POS_AGENT_CONFIG=/etc/kamarapms/pos-agent/config.json
+ExecStart=/usr/local/bin/pos-agent run
+Restart=on-failure
+RestartSec=10
+# a token that the server does not accept ends the program with an error: do not restart it in a loop
+RestartPreventExitStatus=1
+StandardOutput=journal
+StandardError=journal
+
+# nothing here needs more than the network and the printer devices
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/etc/kamarapms/pos-agent
+DevicePolicy=closed
+DeviceAllow=char-usb rw
+DeviceAllow=/dev/usb/lp0 rw
+DeviceAllow=/dev/usb/lp1 rw
+
+[Install]
+WantedBy=multi-user.target

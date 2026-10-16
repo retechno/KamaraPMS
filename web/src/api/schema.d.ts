@@ -7833,6 +7833,267 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/pos/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The print agents of the property and the open enrolment codes (pos.manage or pos.cashier)
+         * @description A device is online when it was seen in the last 90 seconds. The token is never returned: it is shown once, when the agent enrols or the token is replaced.
+         */
+        get: operations["listPosDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/devices/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a one-time enrolment code for an agent (pos.manage)
+         * @description The code (for example `K7QM-4TXD`) lives 15 minutes, works once and is shown once; only its hash is kept. The agent sends it to `POST /api/v1/device/enroll`.
+         */
+        post: operations["createPosEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/devices/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke the token of an agent (pos.manage)
+         * @description The agent is answered 401 `DEVICE_REVOKED` and stops. Its printers stay assigned to it and their jobs wait for another agent. 409 `DEVICE_REVOKED` when it already is.
+         */
+        post: operations["revokePosDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/devices/{id}/rotate-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the token of an agent (pos.manage)
+         * @description The old token stops at once; the new one is returned once and goes into the agent's configuration file.
+         */
+        post: operations["rotatePosDeviceToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/outlets/{id}/failed-print-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The jobs of an outlet that failed for good and were not printed again (pos.cashier or pos.manage)
+         * @description The last two days, newest first. The cashier reprints them with `POST /pos/print-jobs/{id}/reprint`.
+         */
+        get: operations["listPosFailedPrintJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/print-jobs/{id}/reprint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Print a job again (pos.cashier)
+         * @description A new job that points to the original and prints the same document with `COPY n` on top. The reason is required and audited; the original is never changed. 409 `PRINT_DOCUMENT_PURGED` after seven days, 409 `PRINT_JOB_NOT_REPRINTABLE` for a drawer pulse.
+         */
+        post: operations["reprintPosJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/bills/{id}/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Print the paper of a bill at the receipt printer of its outlet (pos.cashier)
+         * @description An open bill prints the pre-bill marked `BUKAN STRUK`. A paid bill prints its receipt again as a copy (`COPY n`) and needs a reason, which is audited. 409 `OUTLET_NO_RECEIPT_PRINTER` when the outlet has none: the browser prints it then.
+         */
+        post: operations["printPosBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An agent enrols with a one-time code (no token)
+         * @description Answers the token of the device once. A wrong, used or expired code is one answer, 422 `ENROLLMENT_CODE_INVALID`. Limited by address.
+         */
+        post: operations["enrollPosDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The printers this device serves (device token)
+         * @description Authenticated by the token of a device (`kpd_...`); a token of a user is 401 here, and a token of a device is 401 on every other route. The POS module must be in the plan.
+         */
+        get: operations["getPosDeviceConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device/jobs/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Long poll for the next job of the printers of this device (device token)
+         * @description Holds up to `wait` seconds (default 25, at most 30). The oldest queued job of a printer is claimed with a lease of 60 seconds and its attempt counted; jobs of one printer come in order, so a later job waits for the one before it. A lease that runs out returns the job to the queue. 204 when there is nothing. A read-only subscription refuses the claim like any write (403 `SUBSCRIPTION_READ_ONLY`).
+         */
+        get: operations["claimNextPosJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device/jobs/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * How an attempt ended (device token)
+         * @description Idempotent by job and attempt: the same report again answers the state the job has and changes nothing. FAILED with attempts left goes back to the queue after 10 seconds, then 60; at the last attempt it is FAILED for good, an event tells the cashier and an audit entry is written. A report for an attempt whose lease was lost is 409 `JOB_LEASE_LOST`.
+         */
+        post: operations["reportPosJobResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The beat of an agent every 30 seconds (device token)
+         * @description Records that the agent is alive and the status of its printers; answers the printers the device serves now. The setup and cashier screens show a printer that has not reported in 90 seconds as offline.
+         */
+        post: operations["sendPosHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/pos/outlets/{id}/floor": {
         parameters: {
             query?: never;
@@ -7980,7 +8241,7 @@ export interface paths {
         put?: never;
         /**
          * Open the drawer without a sale (pos.cashier)
-         * @description Moves no money; the audit keeps who and why. 409 `OUTLET_NO_CASH` when the outlet has no drawer.
+         * @description Moves no money. A reason is required, the person, the shift and the business date are recorded, an audit entry is written and the count shows on the report of the outlet. No approval of a supervisor. When the receipt printer of the outlet opens a drawer a DRAWER job pulses it; without one the open is still recorded. 409 `OUTLET_NO_CASH` when the outlet has no drawer, 409 `NO_OPEN_SHIFT` when the property asks for a shift and the cashier has none for this drawer.
          */
         post: operations["openPosDrawer"];
         delete?: never;
@@ -11872,6 +12133,15 @@ export interface components {
             handed_over_to_name?: string;
             cash_payments: components["schemas"]["CashierReportPayment"][];
             other_tenders: components["schemas"]["CashierTender"][];
+            /** @description The times the drawer was opened without a sale during the shift (point of sale): who, when, why. */
+            drawer_opens: {
+                /** Format: int64 */
+                id: number;
+                /** Format: date-time */
+                opened_at: string;
+                reason: string;
+                opened_by: string;
+            }[];
         };
         CashierShift: {
             /** Format: int64 */
@@ -15584,6 +15854,18 @@ export interface components {
         PosOutletInput: {
             /** @description 1 to 6 letters; the start of the bill numbers. Never changes. */
             code: string;
+            /** @description The outlet name on the head of the paper; empty takes the name of the outlet. */
+            receipt_title?: string | null;
+            /** @description The hotel name on the head of the paper; empty takes the property. */
+            receipt_hotel?: string | null;
+            /** @description Empty takes the address of the property. */
+            receipt_address?: string | null;
+            /** @description The NPWP; empty takes the one of the property. */
+            receipt_tax_id?: string | null;
+            /** @description Free text at the foot of a receipt, for example thanks or the Wi-Fi. Empty prints `Terima kasih`. */
+            receipt_footer?: string | null;
+            /** @description Copies printed when a bill is paid (0 prints nothing: the browser prints). Absent keeps the value; 1 for a new outlet. */
+            receipt_copies?: number | null;
             name: string;
             /** @enum {string} */
             outlet_type: "RESTAURANT" | "BAR" | "CAFE" | "ROOM_SERVICE" | "SPA" | "LAUNDRY" | "BUSINESS_CENTER" | "MINIBAR" | "OTHER";
@@ -15620,6 +15902,12 @@ export interface components {
             /** Format: int64 */
             id: number;
             code: string;
+            receipt_title?: string | null;
+            receipt_hotel?: string | null;
+            receipt_address?: string | null;
+            receipt_tax_id?: string | null;
+            receipt_footer?: string | null;
+            receipt_copies?: number;
             name: string;
             outlet_type: string;
             /** @enum {string} */
@@ -15663,6 +15951,11 @@ export interface components {
             codepage: string;
             opens_drawer?: boolean;
             is_active?: boolean | null;
+            /**
+             * Format: int64
+             * @description The agent that serves the printer (from `GET /pos/devices`).
+             */
+            device_id?: number | null;
         };
         PosPrinter: {
             /** Format: int64 */
@@ -15674,6 +15967,21 @@ export interface components {
             codepage: string;
             opens_drawer: boolean;
             is_active: boolean;
+            /**
+             * Format: int64
+             * @description The agent that serves it.
+             */
+            device_id?: number | null;
+            device_name?: string | null;
+            /** @enum {string|null} */
+            last_status?: "ONLINE" | "OFFLINE" | "PAPER_OUT" | "COVER_OPEN" | null;
+            /** Format: date-time */
+            status_reported_at?: string | null;
+            /**
+             * @description Derived when read: OFFLINE when the agent has been silent for more than 90 seconds.
+             * @enum {string}
+             */
+            state?: "NO_DEVICE" | "UNKNOWN" | "OFFLINE" | "ONLINE" | "PAPER_OUT" | "COVER_OPEN";
         };
         PosStationInput: {
             /** @description Never changes. */
@@ -15684,6 +15992,8 @@ export interface components {
             kds_enabled: boolean;
             late_after_minutes: number;
             is_active?: boolean | null;
+            /** @description Copies of a ticket printed for the station. Absent keeps the value; 1 for a new station. */
+            ticket_copies?: number | null;
         };
         PosStation: {
             /** Format: int64 */
@@ -15696,6 +16006,7 @@ export interface components {
             kds_enabled: boolean;
             late_after_minutes: number;
             is_active: boolean;
+            ticket_copies?: number;
         };
         PosRuleInput: {
             /** Format: int64 */
@@ -16134,6 +16445,187 @@ export interface components {
             status: "NEW" | "COOKING" | "READY" | "SERVED";
             changed: boolean;
         };
+        PosDevice: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @enum {string} */
+            kind: "AGENT";
+            /** @description The first characters of the token, to recognise it. Never the token. */
+            token_prefix: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            last_seen_at: string | null;
+            agent_version: string | null;
+            queue_depth: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            rotated_at: string | null;
+            /** Format: date-time */
+            revoked_at: string | null;
+            /** @description How many printers are assigned to it. */
+            printers: number;
+            /** @description Active and seen in the last 90 seconds. */
+            online: boolean;
+        };
+        PosDeviceList: {
+            data: components["schemas"]["PosDevice"][];
+            pending_enrollments: number;
+            /** Format: date-time */
+            enrollment_expires_at: string | null;
+        };
+        PosEnrollment: {
+            /** @description Shown once. */
+            code: string;
+            /** Format: date-time */
+            expires_at: string;
+            expires_in_seconds: number;
+        };
+        PosDeviceToken: {
+            device: components["schemas"]["PosDevice"];
+            /** @description Shown once. */
+            token: string;
+        };
+        PosDeviceEnrollInput: {
+            code: string;
+            /** @description The name of the machine, for the list of devices. */
+            name: string;
+            agent_version?: string;
+        };
+        PosEnrolledDevice: {
+            /** Format: int64 */
+            device_id: number;
+            name: string;
+            /** @description `kpd_` and 32 random bytes. Shown once; the server keeps its SHA-256. */
+            token: string;
+            poll_seconds: number;
+            /** Format: int64 */
+            property_id: number;
+        };
+        PosDevicePrinter: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            kind: string;
+            /** @description `IP:9100`, `USB:<name of the Windows printer>` or `DEV:/dev/usb/lp0`. */
+            connection_info: string;
+            paper_width_mm: number;
+            opens_drawer: boolean;
+        };
+        PosDeviceConfig: {
+            /** Format: int64 */
+            device_id: number;
+            name: string;
+            /** Format: int64 */
+            property_id: number;
+            poll_seconds: number;
+            /** Format: date-time */
+            server_time: string;
+            printers: components["schemas"]["PosDevicePrinter"][];
+        };
+        PosClaimedJob: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            printer_id: number;
+            /** @enum {string} */
+            kind: "RECEIPT" | "TICKET" | "DRAWER" | "REPORT";
+            copy_no: number;
+            attempt: number;
+            max_attempts: number;
+            /**
+             * Format: byte
+             * @description The ESC/POS bytes, base64. At most 64 KB.
+             */
+            payload: string;
+            connection_info: string;
+            /** Format: date-time */
+            lease_until: string;
+        };
+        PosJobResult: {
+            /** @enum {string} */
+            status: "PRINTED" | "FAILED";
+            /** @description CONNECT_FAILED, WRITE_FAILED, UNSUPPORTED_CONNECTION, BAD_PAYLOAD or one the agent chooses (at most 40 characters). */
+            error_code?: string;
+            /** @enum {string} */
+            printer_status?: "ONLINE" | "OFFLINE" | "PAPER_OUT" | "COVER_OPEN";
+            attempt: number;
+        };
+        PosResultAnswer: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "QUEUED" | "CLAIMED" | "PRINTED" | "FAILED" | "CANCELLED";
+            attempts: number;
+            final: boolean;
+        };
+        PosHeartbeat: {
+            printers: {
+                /** Format: int64 */
+                id: number;
+                /** @enum {string} */
+                status: "ONLINE" | "OFFLINE" | "PAPER_OUT" | "COVER_OPEN";
+            }[];
+            queue_depth?: number | null;
+            agent_version?: string;
+        };
+        PosFailedJob: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            printer_id: number;
+            printer_name: string;
+            kind: string;
+            source_type: string;
+            /** Format: int64 */
+            source_id: number;
+            /** Format: int64 */
+            bill_id?: number;
+            bill_number?: string;
+            copy_no: number;
+            attempts: number;
+            error_code: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PosReprintInput: {
+            reason: string;
+            /**
+             * Format: int64
+             * @description Another printer for the copy.
+             */
+            printer_id?: number | null;
+        };
+        PosPrintBillInput: {
+            /** @description Required for a paid bill. */
+            reason?: string;
+        };
+        PosJobCreated: {
+            /** Format: uuid */
+            id: string;
+            copy_no: number;
+            created: boolean;
+        };
+        PosDrawerOpened: {
+            /** Format: int64 */
+            id: number;
+            /** Format: uuid */
+            job_id?: string;
+        };
+        PosDrawerOpen: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            opened_at: string;
+            business_date: components["schemas"]["Date"];
+            reason: string;
+            drawer: string;
+            /** Format: int64 */
+            shift_id: number | null;
+            opened_by: string;
+        };
         PosPrintJob: {
             /** Format: uuid */
             id: string;
@@ -16153,6 +16645,11 @@ export interface components {
             /** Format: date-time */
             printed_at: string | null;
             error_code?: string;
+            copy_no?: number;
+            max_attempts?: number;
+            is_reprint?: boolean;
+            /** @description The agent that printed it, or the one that serves the printer. */
+            device_name?: string;
             bill_number?: string;
             table_code?: string;
             station?: string;
@@ -16536,6 +17033,8 @@ export interface components {
         PosOutletReport: {
             /** Format: int64 */
             outlet_id: number;
+            /** @description The times the drawer was opened without a sale in the range: who, why, on which shift. */
+            drawer_opens: components["schemas"]["PosDrawerOpen"][];
             outlet_name: string;
             from: components["schemas"]["Date"];
             to: components["schemas"]["Date"];
@@ -29158,6 +29657,333 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    listPosDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosDeviceList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createPosEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Made. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosEnrollment"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    revokePosDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosDevice"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    rotatePosDeviceToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Replaced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosDeviceToken"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listPosFailedPrintJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PosFailedJob"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reprintPosJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosReprintInput"];
+            };
+        };
+        responses: {
+            /** @description Queued. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosJobCreated"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    printPosBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PosPrintBillInput"];
+            };
+        };
+        responses: {
+            /** @description Queued. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosJobCreated"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    enrollPosDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosDeviceEnrollInput"];
+            };
+        };
+        responses: {
+            /** @description Enrolled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosEnrolledDevice"];
+                };
+            };
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    getPosDeviceConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosDeviceConfig"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    claimNextPosJob: {
+        parameters: {
+            query?: {
+                wait?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A job. `payload` is the ESC/POS bytes, base64; the agent writes them as they are. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosClaimedJob"];
+                };
+            };
+            /** @description Nothing to print. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    reportPosJobResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosJobResult"];
+            };
+        };
+        responses: {
+            /** @description The state of the job. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosResultAnswer"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    sendPosHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description The configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosDeviceConfig"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     getPosFloor: {
         parameters: {
             query?: never;
@@ -29368,11 +30194,13 @@ export interface operations {
         };
         responses: {
             /** @description Done. */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PosDrawerOpened"];
+                };
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

@@ -16,7 +16,9 @@ const report = {
   products: [{ product_id: 1, name: 'Nasi goreng', category: 'Makanan', quantity: '3', base: '150000', discount: '0', net: '150000', service: '15000', tax: '16500', total: '181500' }],
   methods: [{ method: 'CASH', payments: 1, amount: '100000' }, { method: 'CITY_LEDGER', payments: 1, amount: '60000' }],
   voids: [{ business_date: '2026-10-15', bill_number: 'R-0001', what: 'Steak', amount: '181500', reason: 'wrong order', by: 'Ketut', approved_by: 'Wayan' }],
-  discounts: [], comps: [], cashiers: [], waiters: [], room_charges: { count: 1, amount: '58730', returned: 0 }, open_bills: { count: 1, balance: '90000' },
+  discounts: [], comps: [], cashiers: [], waiters: [],
+  drawer_opens: [{ id: 1, opened_at: '2026-10-15T06:30:00Z', business_date: '2026-10-15', reason: 'change for a guest', drawer: 'D1', shift_id: 4, opened_by: 'Ayu' }],
+  room_charges: { count: 1, amount: '58730', returned: 0 }, open_bills: { count: 1, balance: '90000' },
 }
 
 const mounted: VueWrapper[] = []
@@ -54,6 +56,16 @@ describe('the report of an outlet', () => {
     expect(w.get('[data-testid=open-balance]').text()).toBe('90,000')
     const q = GET.mock.calls.find((c) => String(c[0]).endsWith('/report'))![1].params.query
     expect(q).toEqual({ from: '2026-10-15', to: '2026-10-15' })
+  })
+
+  it('lists the times the drawer was opened without a sale, with who and why', async () => {
+    const w = setup()
+    await flushPromises()
+    expect(w.get('[data-testid=drawer-count]').text()).toBe('(1)')
+    const row = w.get('[data-testid=drawer-open-1]').text()
+    expect(row).toContain('Ayu')
+    expect(row).toContain('change for a guest')
+    expect(row).toContain('drawer D1')
   })
 
   it('lists a charge to a room, a company and a complimentary as rows of the table like cash', async () => {

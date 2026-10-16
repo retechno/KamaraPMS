@@ -199,6 +199,8 @@ func New(d Deps) *App {
 	mux.Handle("GET /healthz", health.Live())
 	mux.Handle("GET /readyz", health.Ready(d.DB, d.ReadyChecks...))
 	iamHTTP.RegisterPublic(mux) // login, refresh, logout: no access token required
+	// The print agents: a token of a device, not of a user. The routes are POS for the module gate and the read-only state (docs/architecture/34-pos.md 10.3).
+	mux.Handle("/api/v1/device/", pos.NewDeviceHandler(posSvc, posGate{subscriptionSvc}, d.Clock.Now).Handler())
 	// The subscription gate runs after authentication: the module of the route and the read-only state (docs/architecture/26-subscriptions.md).
 	mux.Handle("/api/", iamHTTP.Middleware(auth.RequireAuthenticated(subscriptionSvc.Gate(api))))
 
@@ -209,6 +211,23 @@ func New(d Deps) *App {
 		httpx.Recover,
 		httpx.RateLimit(d.RateLimitPerMinute, d.Clock.Now),
 	)}
+}
+
+// posGate is the subscription gate of the device routes: the POS module must be in the plan, and a read-only subscription refuses what changes something.
+type posGate struct{ subs *subscription.Service }
+
+func (g posGate) CheckPOS(ctx context.Context, tenantID int64, write bool) error {
+	acc, err := g.subs.AccessOf(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if !acc.Has(subscription.POS) {
+		return apperr.Forbidden("MODULE_NOT_IN_PLAN", "the pos module is not part of the subscription plan").WithContext("module", string(subscription.POS))
+	}
+	if write && acc.State == subscription.AccessReadOnly {
+		return apperr.Forbidden("SUBSCRIPTION_READ_ONLY", "the subscription has ended: the data can be read but not changed").WithContext("access", string(acc.State))
+	}
+	return nil
 }
 
 // outletClose is what the night audit asks of the point of sale: the findings of the open bills and the end of the locks of a day.
@@ -229,6 +248,10 @@ func (o outletClose) NightAuditOutlets(ctx context.Context, tenantID, propertyID
 }
 
 func (o outletClose) ExpireOutletLocks(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
-	_, err := o.folios.ExpireOutletLocks(ctx, p, propertyID, bd)
+	if _, err := o.folios.ExpireOutletLocks(ctx, p, propertyID, bd); err != nil {
+		return err
+	}
+	// the close of the day also removes the old documents of the print jobs of the property (a property with no agent never claims one)
+	_, err := o.pos.PurgePrintPayloadsOf(ctx, propertyID)
 	return err
 }

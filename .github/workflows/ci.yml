@@ -19,6 +19,12 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
+      # The print agent is one program for two systems: it must build for both (it has no cgo; the Windows spooler is called through x/sys/windows).
+      - name: Print agent builds for Windows and Linux
+        run: |
+          GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/pos-agent
+          GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/pos-agent
+          GOOS=windows GOARCH=amd64 go vet ./cmd/pos-agent ./internal/posagent
       - name: sqlc generated code is up to date with the queries
         run: scripts/sqlc.sh diff
       - name: Lint

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/audit"
@@ -44,6 +45,8 @@ type Service struct {
 	hub      *Hub
 	purgeMu  sync.Mutex
 	purgedAt time.Time
+	// the last purge of the payloads of print jobs (jobs.go)
+	payloadsPurgedAt time.Time
 }
 
 // NewService wires the service.
@@ -161,6 +164,8 @@ func toOutlet(r posdb.ListOutletsRow) Outlet {
 		RoundingUnit: int(r.RoundingUnit), AllowRoomCharge: r.AllowRoomCharge, AllowCompanyCharge: r.AllowCompanyCharge, AllowComp: r.AllowComp,
 		CompTreatment: r.CompTreatment, MaxDiscountPctNoApproval: r.MaxDiscountPctNoApproval, BlockNightAuditWithOpenBills: r.BlockNightAuditWithOpenBills,
 		IsActive: r.IsActive, SortOrder: int(r.SortOrder), Version: r.Version,
+		ReceiptTitle: r.ReceiptTitle, ReceiptHotel: r.ReceiptHotel, ReceiptAddress: r.ReceiptAddress, ReceiptTaxID: r.ReceiptTaxID, ReceiptFooter: r.ReceiptFooter,
+		ReceiptCopies: int(r.ReceiptCopies),
 	}
 }
 
@@ -244,6 +249,17 @@ func validateOutlet(in OutletInput, create bool) []apperr.FieldError {
 			f = append(f, fieldErr("drawer", "INVALID_VALUE", "1 to 20 characters, or empty for no cash"))
 		}
 	}
+	for field, v := range map[string]*string{"receipt_title": in.ReceiptTitle, "receipt_hotel": in.ReceiptHotel, "receipt_address": in.ReceiptAddress, "receipt_tax_id": in.ReceiptTaxID} {
+		if v != nil && len([]rune(*v)) > 300 {
+			f = append(f, fieldErr(field, "INVALID_VALUE", "at most 300 characters"))
+		}
+	}
+	if in.ReceiptFooter != nil && len([]rune(*in.ReceiptFooter)) > 300 {
+		f = append(f, fieldErr("receipt_footer", "INVALID_VALUE", "at most 300 characters"))
+	}
+	if in.ReceiptCopies != nil && (*in.ReceiptCopies < 0 || *in.ReceiptCopies > 5) {
+		f = append(f, fieldErr("receipt_copies", "INVALID_VALUE", "0 to 5"))
+	}
 	return append(f, checkSort(in.SortOrder)...)
 }
 
@@ -283,6 +299,8 @@ func outletAudit(o Outlet) map[string]any {
 		"drawer": o.Drawer, "receipt_printer_id": o.ReceiptPrinterID, "uses_tables": o.UsesTables, "rounding_unit": o.RoundingUnit, "allow_room_charge": o.AllowRoomCharge,
 		"allow_company_charge": o.AllowCompanyCharge, "allow_comp": o.AllowComp, "comp_treatment": o.CompTreatment, "max_discount_pct_no_approval": o.MaxDiscountPctNoApproval.String(),
 		"block_night_audit_with_open_bills": o.BlockNightAuditWithOpenBills, "is_active": o.IsActive,
+		"receipt_title": o.ReceiptTitle, "receipt_hotel": o.ReceiptHotel, "receipt_address": o.ReceiptAddress, "receipt_tax_id": o.ReceiptTaxID,
+		"receipt_footer": o.ReceiptFooter, "receipt_copies": o.ReceiptCopies,
 	}
 }
 
@@ -307,6 +325,8 @@ func (s *Service) CreateOutlet(ctx context.Context, propertyID int64, in OutletI
 			GuestCountRequired: in.GuestCountRequired, RoundingUnit: int16(in.RoundingUnit), AllowRoomCharge: in.AllowRoomCharge, AllowCompanyCharge: in.AllowCompanyCharge, //nolint:gosec // G115: validated
 			AllowComp: in.AllowComp, CompTreatment: in.CompTreatment, MaxDiscountPctNoApproval: in.MaxDiscountPctNoApproval,
 			BlockNightAuditWithOpenBills: in.BlockNightAuditWithOpenBills, IsActive: active(in.IsActive), SortOrder: int32(in.SortOrder), ActorID: p.ActorID(), //nolint:gosec // G115: validated
+			ReceiptTitle: trimPtr(in.ReceiptTitle), ReceiptHotel: trimPtr(in.ReceiptHotel), ReceiptAddress: trimPtr(in.ReceiptAddress), ReceiptTaxID: trimPtr(in.ReceiptTaxID),
+			ReceiptFooter: trimPtr(in.ReceiptFooter), ReceiptCopies: copies16(in.ReceiptCopies),
 		})
 		if err != nil {
 			return err
@@ -319,6 +339,14 @@ func (s *Service) CreateOutlet(ctx context.Context, propertyID int64, in OutletI
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "pos.outlet_created", "pos_outlet", id, out.Code, nil, outletAudit(out)))
 	})
 	return out, err
+}
+
+// copies16 is the optional number of copies as the column takes it.
+func copies16(n *int) pgtype.Int2 {
+	if n == nil {
+		return pgtype.Int2{}
+	}
+	return pgtype.Int2{Int16: int16(*n), Valid: true} //nolint:gosec // G115: validated 0 to 5
 }
 
 func trimPtr(s *string) *string {
@@ -368,6 +396,8 @@ func (s *Service) UpdateOutlet(ctx context.Context, propertyID, id int64, in Out
 			GuestCountRequired: in.GuestCountRequired, RoundingUnit: int16(in.RoundingUnit), AllowRoomCharge: in.AllowRoomCharge, AllowCompanyCharge: in.AllowCompanyCharge, //nolint:gosec // G115: validated
 			AllowComp: in.AllowComp, CompTreatment: in.CompTreatment, MaxDiscountPctNoApproval: in.MaxDiscountPctNoApproval,
 			BlockNightAuditWithOpenBills: in.BlockNightAuditWithOpenBills, IsActive: active(in.IsActive), SortOrder: int32(in.SortOrder), ActorID: p.ActorID(), //nolint:gosec // G115: validated
+			ReceiptTitle: trimPtr(in.ReceiptTitle), ReceiptHotel: trimPtr(in.ReceiptHotel), ReceiptAddress: trimPtr(in.ReceiptAddress), ReceiptTaxID: trimPtr(in.ReceiptTaxID),
+			ReceiptFooter: trimPtr(in.ReceiptFooter), ReceiptCopies: copies16(in.ReceiptCopies),
 		}); err != nil {
 			return orNotFound(err, apperr.Conflict("VERSION_CONFLICT", "the outlet was changed by someone else"))
 		}
@@ -400,8 +430,11 @@ func (s *Service) ListPrinters(ctx context.Context, propertyID int64) ([]Printer
 		return nil, err
 	}
 	out := make([]Printer, len(rows))
+	now := s.clock.Now()
 	for i, r := range rows {
-		out[i] = Printer{ID: r.ID, Name: r.Name, Kind: r.Kind, ConnectionInfo: r.ConnectionInfo, PaperWidthMM: int(r.PaperWidthMm), Codepage: r.Codepage, OpensDrawer: r.OpensDrawer, IsActive: r.IsActive}
+		out[i] = Printer{ID: r.ID, Name: r.Name, Kind: r.Kind, ConnectionInfo: r.ConnectionInfo, PaperWidthMM: int(r.PaperWidthMm), Codepage: r.Codepage, OpensDrawer: r.OpensDrawer, IsActive: r.IsActive,
+			DeviceID: r.DeviceID, DeviceName: r.DeviceName, LastStatus: r.LastStatus, StatusReportedAt: r.StatusReportedAt}
+		out[i].State = printerState(r.DeviceID != nil, r.DeviceStatus == "REVOKED", r.LastStatus, r.StatusReportedAt, now)
 	}
 	return out, nil
 }
@@ -435,12 +468,16 @@ func (s *Service) CreatePrinter(ctx context.Context, propertyID int64, in Printe
 	}
 	var out Printer
 	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
+		if err := s.checkDevice(ctx, p, propertyID, in.DeviceID); err != nil {
+			return err
+		}
 		id, err := s.q(ctx).InsertPrinter(ctx, posdb.InsertPrinterParams{TenantID: p.TenantID, PropertyID: propertyID, Name: in.Name, Kind: in.Kind, ConnectionInfo: in.ConnectionInfo,
-			PaperWidthMm: int16(in.PaperWidthMM), Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
+			PaperWidthMm: int16(in.PaperWidthMM), Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive), DeviceID: in.DeviceID, ActorID: p.ActorID()}) //nolint:gosec // G115: validated
 		if err != nil {
 			return err
 		}
-		out = Printer{ID: id, Name: in.Name, Kind: in.Kind, ConnectionInfo: in.ConnectionInfo, PaperWidthMM: in.PaperWidthMM, Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive)}
+		out = Printer{ID: id, Name: in.Name, Kind: in.Kind, ConnectionInfo: in.ConnectionInfo, PaperWidthMM: in.PaperWidthMM, Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive),
+			DeviceID: in.DeviceID, State: PrinterState(in.DeviceID != nil, nil, nil, s.clock.Now())}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "pos.printer_created", "pos_printer", id, in.Name, nil, out))
 	})
 	return out, err
@@ -458,15 +495,19 @@ func (s *Service) UpdatePrinter(ctx context.Context, propertyID, id int64, in Pr
 	}
 	var out Printer
 	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
+		if err := s.checkDevice(ctx, p, propertyID, in.DeviceID); err != nil {
+			return err
+		}
 		n, err := s.q(ctx).UpdatePrinter(ctx, posdb.UpdatePrinterParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, Kind: in.Kind, ConnectionInfo: in.ConnectionInfo,
-			PaperWidthMm: int16(in.PaperWidthMM), Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
+			PaperWidthMm: int16(in.PaperWidthMM), Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive), DeviceID: in.DeviceID, ActorID: p.ActorID()}) //nolint:gosec // G115: validated
 		if err != nil {
 			return err
 		}
 		if n == 0 {
 			return notFound("PRINTER_NOT_FOUND", "printer")
 		}
-		out = Printer{ID: id, Name: in.Name, Kind: in.Kind, ConnectionInfo: in.ConnectionInfo, PaperWidthMM: in.PaperWidthMM, Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive)}
+		out = Printer{ID: id, Name: in.Name, Kind: in.Kind, ConnectionInfo: in.ConnectionInfo, PaperWidthMM: in.PaperWidthMM, Codepage: in.Codepage, OpensDrawer: in.OpensDrawer, IsActive: active(in.IsActive),
+			DeviceID: in.DeviceID}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "pos.printer_updated", "pos_printer", id, in.Name, nil, out))
 	})
 	return out, err
@@ -483,7 +524,8 @@ func (s *Service) ListStations(ctx context.Context, propertyID int64) ([]Station
 	}
 	out := make([]Station, len(rows))
 	for i, r := range rows {
-		out[i] = Station{ID: r.ID, Code: r.Code, Name: r.Name, PrinterID: r.PrinterID, PrinterName: r.PrinterName, KDSEnabled: r.KdsEnabled, LateAfterMinutes: int(r.LateAfterMinutes), IsActive: r.IsActive}
+		out[i] = Station{ID: r.ID, Code: r.Code, Name: r.Name, PrinterID: r.PrinterID, PrinterName: r.PrinterName, KDSEnabled: r.KdsEnabled, LateAfterMinutes: int(r.LateAfterMinutes), IsActive: r.IsActive,
+			TicketCopies: int(r.TicketCopies)}
 	}
 	return out, nil
 }
@@ -496,6 +538,9 @@ func validateStation(in StationInput, create bool) []apperr.FieldError {
 	f = append(f, checkName("name", in.Name)...)
 	if in.LateAfterMinutes < 1 || in.LateAfterMinutes > 240 {
 		f = append(f, fieldErr("late_after_minutes", "INVALID_VALUE", "1 to 240"))
+	}
+	if in.TicketCopies != nil && (*in.TicketCopies < 1 || *in.TicketCopies > 5) {
+		f = append(f, fieldErr("ticket_copies", "INVALID_VALUE", "1 to 5"))
 	}
 	return f
 }
@@ -513,11 +558,14 @@ func (s *Service) CreateStation(ctx context.Context, propertyID int64, in Statio
 	var out Station
 	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
 		id, err := s.q(ctx).InsertStation(ctx, posdb.InsertStationParams{TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, PrinterID: in.PrinterID,
-			KdsEnabled: in.KDSEnabled, LateAfterMinutes: int16(in.LateAfterMinutes), IsActive: active(in.IsActive), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
+			KdsEnabled: in.KDSEnabled, LateAfterMinutes: int16(in.LateAfterMinutes), IsActive: active(in.IsActive), TicketCopies: copies16(in.TicketCopies), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
 		if err != nil {
 			return err
 		}
-		out = Station{ID: id, Code: in.Code, Name: in.Name, PrinterID: in.PrinterID, KDSEnabled: in.KDSEnabled, LateAfterMinutes: in.LateAfterMinutes, IsActive: active(in.IsActive)}
+		out = Station{ID: id, Code: in.Code, Name: in.Name, PrinterID: in.PrinterID, KDSEnabled: in.KDSEnabled, LateAfterMinutes: in.LateAfterMinutes, IsActive: active(in.IsActive), TicketCopies: 1}
+		if in.TicketCopies != nil {
+			out.TicketCopies = *in.TicketCopies
+		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "pos.station_created", "pos_station", id, in.Code, nil, out))
 	})
 	return out, err
@@ -536,7 +584,7 @@ func (s *Service) UpdateStation(ctx context.Context, propertyID, id int64, in St
 	var out Station
 	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
 		n, err := s.q(ctx).UpdateStation(ctx, posdb.UpdateStationParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, PrinterID: in.PrinterID,
-			KdsEnabled: in.KDSEnabled, LateAfterMinutes: int16(in.LateAfterMinutes), IsActive: active(in.IsActive), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
+			KdsEnabled: in.KDSEnabled, LateAfterMinutes: int16(in.LateAfterMinutes), IsActive: active(in.IsActive), TicketCopies: copies16(in.TicketCopies), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
 		if err != nil {
 			return err
 		}
@@ -549,7 +597,8 @@ func (s *Service) UpdateStation(ctx context.Context, propertyID, id int64, in St
 		}
 		for _, r := range rows {
 			if r.ID == id {
-				out = Station{ID: r.ID, Code: r.Code, Name: r.Name, PrinterID: r.PrinterID, PrinterName: r.PrinterName, KDSEnabled: r.KdsEnabled, LateAfterMinutes: int(r.LateAfterMinutes), IsActive: r.IsActive}
+				out = Station{ID: r.ID, Code: r.Code, Name: r.Name, PrinterID: r.PrinterID, PrinterName: r.PrinterName, KDSEnabled: r.KdsEnabled, LateAfterMinutes: int(r.LateAfterMinutes), IsActive: r.IsActive,
+					TicketCopies: int(r.TicketCopies)}
 			}
 		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "pos.station_updated", "pos_station", id, out.Code, nil, out))

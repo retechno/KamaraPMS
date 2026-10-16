@@ -9060,6 +9060,250 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/devices:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosDevices
+      summary: "The print agents of the property and the open enrolment codes (pos.manage or pos.cashier)"
+      description: "A device is online when it was seen in the last 90 seconds. The token is never returned: it is shown once, when the agent enrols or the token is replaced."
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosDeviceList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/devices/enrollments:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: createPosEnrollment
+      summary: "Make a one-time enrolment code for an agent (pos.manage)"
+      description: "The code (for example `K7QM-4TXD`) lives 15 minutes, works once and is shown once; only its hash is kept. The agent sends it to `POST /api/v1/device/enroll`."
+      tags: [pos]
+      responses:
+        "201":
+          description: Made.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosEnrollment" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/devices/{id}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: revokePosDevice
+      summary: "Revoke the token of an agent (pos.manage)"
+      description: "The agent is answered 401 `DEVICE_REVOKED` and stops. Its printers stay assigned to it and their jobs wait for another agent. 409 `DEVICE_REVOKED` when it already is."
+      tags: [pos]
+      responses:
+        "200":
+          description: Revoked.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosDevice" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/devices/{id}/rotate-token:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: rotatePosDeviceToken
+      summary: "Replace the token of an agent (pos.manage)"
+      description: "The old token stops at once; the new one is returned once and goes into the agent's configuration file."
+      tags: [pos]
+      responses:
+        "200":
+          description: Replaced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosDeviceToken" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/outlets/{id}/failed-print-jobs:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listPosFailedPrintJobs
+      summary: "The jobs of an outlet that failed for good and were not printed again (pos.cashier or pos.manage)"
+      description: "The last two days, newest first. The cashier reprints them with `POST /pos/print-jobs/{id}/reprint`."
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/PosFailedJob" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/print-jobs/{id}/reprint:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: reprintPosJob
+      summary: "Print a job again (pos.cashier)"
+      description: "A new job that points to the original and prints the same document with `COPY n` on top. The reason is required and audited; the original is never changed. 409 `PRINT_DOCUMENT_PURGED` after seven days, 409 `PRINT_JOB_NOT_REPRINTABLE` for a drawer pulse."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosReprintInput" }
+      responses:
+        "201":
+          description: Queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosJobCreated" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/bills/{id}/print:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: printPosBill
+      summary: "Print the paper of a bill at the receipt printer of its outlet (pos.cashier)"
+      description: "An open bill prints the pre-bill marked `BUKAN STRUK`. A paid bill prints its receipt again as a copy (`COPY n`) and needs a reason, which is audited. 409 `OUTLET_NO_RECEIPT_PRINTER` when the outlet has none: the browser prints it then."
+      tags: [pos]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosPrintBillInput" }
+      responses:
+        "201":
+          description: Queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosJobCreated" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/device/enroll:
+    post:
+      operationId: enrollPosDevice
+      summary: "An agent enrols with a one-time code (no token)"
+      description: "Answers the token of the device once. A wrong, used or expired code is one answer, 422 `ENROLLMENT_CODE_INVALID`. Limited by address."
+      tags: [pos-device]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosDeviceEnrollInput" }
+      responses:
+        "201":
+          description: Enrolled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosEnrolledDevice" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/device/config:
+    get:
+      operationId: getPosDeviceConfig
+      summary: "The printers this device serves (device token)"
+      description: "Authenticated by the token of a device (`kpd_...`); a token of a user is 401 here, and a token of a device is 401 on every other route. The POS module must be in the plan."
+      tags: [pos-device]
+      security: [{ deviceToken: [] }]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosDeviceConfig" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/device/jobs/next:
+    get:
+      operationId: claimNextPosJob
+      summary: "Long poll for the next job of the printers of this device (device token)"
+      description: "Holds up to `wait` seconds (default 25, at most 30). The oldest queued job of a printer is claimed with a lease of 60 seconds and its attempt counted; jobs of one printer come in order, so a later job waits for the one before it. A lease that runs out returns the job to the queue. 204 when there is nothing. A read-only subscription refuses the claim like any write (403 `SUBSCRIPTION_READ_ONLY`)."
+      tags: [pos-device]
+      security: [{ deviceToken: [] }]
+      parameters:
+        - { name: wait, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 30 } }
+      responses:
+        "200":
+          description: A job. `payload` is the ESC/POS bytes, base64; the agent writes them as they are.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosClaimedJob" }
+        "204":
+          description: Nothing to print.
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/device/jobs/{id}/result:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: reportPosJobResult
+      summary: "How an attempt ended (device token)"
+      description: "Idempotent by job and attempt: the same report again answers the state the job has and changes nothing. FAILED with attempts left goes back to the queue after 10 seconds, then 60; at the last attempt it is FAILED for good, an event tells the cashier and an audit entry is written. A report for an attempt whose lease was lost is 409 `JOB_LEASE_LOST`."
+      tags: [pos-device]
+      security: [{ deviceToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosJobResult" }
+      responses:
+        "200":
+          description: The state of the job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosResultAnswer" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/device/heartbeat:
+    post:
+      operationId: sendPosHeartbeat
+      summary: "The beat of an agent every 30 seconds (device token)"
+      description: "Records that the agent is alive and the status of its printers; answers the printers the device serves now. The setup and cashier screens show a printer that has not reported in 90 seconds as offline."
+      tags: [pos-device]
+      security: [{ deviceToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosHeartbeat" }
+      responses:
+        "200":
+          description: The configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosDeviceConfig" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/pos/outlets/{id}/floor:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -9192,7 +9436,7 @@ paths:
     post:
       operationId: openPosDrawer
       summary: "Open the drawer without a sale (pos.cashier)"
-      description: "Moves no money; the audit keeps who and why. 409 `OUTLET_NO_CASH` when the outlet has no drawer."
+      description: "Moves no money. A reason is required, the person, the shift and the business date are recorded, an audit entry is written and the count shows on the report of the outlet. No approval of a supervisor. When the receipt printer of the outlet opens a drawer a DRAWER job pulses it; without one the open is still recorded. 409 `OUTLET_NO_CASH` when the outlet has no drawer, 409 `NO_OPEN_SHIFT` when the property asks for a shift and the cashier has none for this drawer."
       tags: [pos]
       requestBody:
         required: true
@@ -9200,8 +9444,11 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/PosReasonInput" }
       responses:
-        "204":
+        "200":
           description: Done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosDrawerOpened" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
@@ -9729,6 +9976,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Access token from /api/v1/auth/login or /api/v1/auth/refresh (15 minutes).
+    deviceToken:
+      type: http
+      scheme: bearer
+      description: "The token of a print agent (`kpd_` and 32 random bytes), from `POST /api/v1/device/enroll`. It is accepted on /api/v1/device/ only, and a token of a user is not accepted there."
   parameters:
     Lang:
       name: lang
@@ -13167,7 +13418,7 @@ components:
         amount: { type: string }
     CashierShiftReport:
       type: object
-      required: [kind, shift, cash_payments, other_tenders]
+      required: [kind, shift, cash_payments, other_tenders, drawer_opens]
       properties:
         kind: { type: string, enum: [Z, X], description: "Z for a closed shift (final), X for an open one (the figures so far)." }
         shift: { $ref: "#/components/schemas/CashierShift" }
@@ -13176,6 +13427,17 @@ components:
         handed_over_to_name: { type: string }
         cash_payments: { type: array, items: { $ref: "#/components/schemas/CashierReportPayment" } }
         other_tenders: { type: array, items: { $ref: "#/components/schemas/CashierTender" } }
+        drawer_opens:
+          type: array
+          description: "The times the drawer was opened without a sale during the shift (point of sale): who, when, why."
+          items:
+            type: object
+            required: [id, opened_at, reason, opened_by]
+            properties:
+              id: { type: integer, format: int64 }
+              opened_at: { type: string, format: date-time }
+              reason: { type: string }
+              opened_by: { type: string }
     CashierShift:
       type: object
       required: [id, number, user_id, user_name, drawer, status, opened_at, business_date_opened, opening_float, closed_at, business_date_closed, expected_cash, counted_cash, over_short, journal_id, approved_by, handed_over_to]
@@ -16849,6 +17111,12 @@ components:
       required: [code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id, uses_tables, guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval, block_night_audit_with_open_bills]
       properties:
         code: { type: string, description: 1 to 6 letters; the start of the bill numbers. Never changes. }
+        receipt_title: { type: [string, "null"], maxLength: 100, description: "The outlet name on the head of the paper; empty takes the name of the outlet." }
+        receipt_hotel: { type: [string, "null"], maxLength: 300, description: "The hotel name on the head of the paper; empty takes the property." }
+        receipt_address: { type: [string, "null"], maxLength: 300, description: "Empty takes the address of the property." }
+        receipt_tax_id: { type: [string, "null"], maxLength: 300, description: "The NPWP; empty takes the one of the property." }
+        receipt_footer: { type: [string, "null"], maxLength: 300, description: "Free text at the foot of a receipt, for example thanks or the Wi-Fi. Empty prints `Terima kasih`." }
+        receipt_copies: { type: [integer, "null"], minimum: 0, maximum: 5, description: "Copies printed when a bill is paid (0 prints nothing: the browser prints). Absent keeps the value; 1 for a new outlet." }
         name: { type: string }
         outlet_type: { type: string, enum: [RESTAURANT, BAR, CAFE, ROOM_SERVICE, SPA, LAUNDRY, BUSINESS_CENTER, MINIBAR, OTHER] }
         order_mode: { type: string, enum: [PRINT, KDS, DIRECT] }
@@ -16875,6 +17143,12 @@ components:
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
+        receipt_title: { type: [string, "null"] }
+        receipt_hotel: { type: [string, "null"] }
+        receipt_address: { type: [string, "null"] }
+        receipt_tax_id: { type: [string, "null"] }
+        receipt_footer: { type: [string, "null"] }
+        receipt_copies: { type: integer, minimum: 0, maximum: 5 }
         name: { type: string }
         outlet_type: { type: string }
         order_mode: { type: string, enum: [PRINT, KDS, DIRECT] }
@@ -16910,6 +17184,7 @@ components:
         codepage: { type: string }
         opens_drawer: { type: boolean }
         is_active: { type: [boolean, "null"] }
+        device_id: { type: [integer, "null"], format: int64, description: "The agent that serves the printer (from `GET /pos/devices`)." }
     PosPrinter:
       type: object
       required: [id, name, kind, connection_info, paper_width_mm, codepage, opens_drawer, is_active]
@@ -16922,6 +17197,11 @@ components:
         codepage: { type: string }
         opens_drawer: { type: boolean }
         is_active: { type: boolean }
+        device_id: { type: [integer, "null"], format: int64, description: "The agent that serves it." }
+        device_name: { type: [string, "null"] }
+        last_status: { type: [string, "null"], enum: [ONLINE, OFFLINE, PAPER_OUT, COVER_OPEN] }
+        status_reported_at: { type: [string, "null"], format: date-time }
+        state: { type: string, enum: [NO_DEVICE, UNKNOWN, OFFLINE, ONLINE, PAPER_OUT, COVER_OPEN], description: "Derived when read: OFFLINE when the agent has been silent for more than 90 seconds." }
     PosStationInput:
       type: object
       required: [code, name, kds_enabled, late_after_minutes]
@@ -16932,6 +17212,7 @@ components:
         kds_enabled: { type: boolean }
         late_after_minutes: { type: integer, minimum: 1, maximum: 240 }
         is_active: { type: [boolean, "null"] }
+        ticket_copies: { type: [integer, "null"], minimum: 1, maximum: 5, description: "Copies of a ticket printed for the station. Absent keeps the value; 1 for a new station." }
     PosStation:
       type: object
       required: [id, code, name, printer_id, kds_enabled, late_after_minutes, is_active]
@@ -16944,6 +17225,7 @@ components:
         kds_enabled: { type: boolean }
         late_after_minutes: { type: integer }
         is_active: { type: boolean }
+        ticket_copies: { type: integer, minimum: 1, maximum: 5 }
     PosRuleInput:
       type: object
       properties:
@@ -17337,6 +17619,172 @@ components:
         station_id: { type: integer, format: int64, nullable: true }
         status: { type: string, enum: [NEW, COOKING, READY, SERVED] }
         changed: { type: boolean }
+    PosDevice:
+      type: object
+      required: [id, name, kind, token_prefix, status, last_seen_at, agent_version, queue_depth, created_at, rotated_at, revoked_at, printers, online]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { type: string, enum: [AGENT] }
+        token_prefix: { type: string, description: "The first characters of the token, to recognise it. Never the token." }
+        status: { type: string, enum: [ACTIVE, REVOKED] }
+        last_seen_at: { type: [string, "null"], format: date-time }
+        agent_version: { type: [string, "null"] }
+        queue_depth: { type: integer }
+        created_at: { type: string, format: date-time }
+        rotated_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        printers: { type: integer, description: "How many printers are assigned to it." }
+        online: { type: boolean, description: "Active and seen in the last 90 seconds." }
+    PosDeviceList:
+      type: object
+      required: [data, pending_enrollments, enrollment_expires_at]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PosDevice" } }
+        pending_enrollments: { type: integer }
+        enrollment_expires_at: { type: [string, "null"], format: date-time }
+    PosEnrollment:
+      type: object
+      required: [code, expires_at, expires_in_seconds]
+      properties:
+        code: { type: string, description: "Shown once." }
+        expires_at: { type: string, format: date-time }
+        expires_in_seconds: { type: integer }
+    PosDeviceToken:
+      type: object
+      required: [device, token]
+      properties:
+        device: { $ref: "#/components/schemas/PosDevice" }
+        token: { type: string, description: "Shown once." }
+    PosDeviceEnrollInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string, description: "The name of the machine, for the list of devices." }
+        agent_version: { type: string }
+    PosEnrolledDevice:
+      type: object
+      required: [device_id, name, token, poll_seconds, property_id]
+      properties:
+        device_id: { type: integer, format: int64 }
+        name: { type: string }
+        token: { type: string, description: "`kpd_` and 32 random bytes. Shown once; the server keeps its SHA-256." }
+        poll_seconds: { type: integer }
+        property_id: { type: integer, format: int64 }
+    PosDevicePrinter:
+      type: object
+      required: [id, name, kind, connection_info, paper_width_mm, opens_drawer]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        kind: { type: string }
+        connection_info: { type: string, description: "`IP:9100`, `USB:<name of the Windows printer>` or `DEV:/dev/usb/lp0`." }
+        paper_width_mm: { type: integer }
+        opens_drawer: { type: boolean }
+    PosDeviceConfig:
+      type: object
+      required: [device_id, name, property_id, poll_seconds, server_time, printers]
+      properties:
+        device_id: { type: integer, format: int64 }
+        name: { type: string }
+        property_id: { type: integer, format: int64 }
+        poll_seconds: { type: integer }
+        server_time: { type: string, format: date-time }
+        printers: { type: array, items: { $ref: "#/components/schemas/PosDevicePrinter" } }
+    PosClaimedJob:
+      type: object
+      required: [id, printer_id, kind, copy_no, attempt, max_attempts, payload, connection_info, lease_until]
+      properties:
+        id: { type: string, format: uuid }
+        printer_id: { type: integer, format: int64 }
+        kind: { type: string, enum: [RECEIPT, TICKET, DRAWER, REPORT] }
+        copy_no: { type: integer }
+        attempt: { type: integer }
+        max_attempts: { type: integer }
+        payload: { type: string, format: byte, description: "The ESC/POS bytes, base64. At most 64 KB." }
+        connection_info: { type: string }
+        lease_until: { type: string, format: date-time }
+    PosJobResult:
+      type: object
+      required: [status, attempt]
+      properties:
+        status: { type: string, enum: [PRINTED, FAILED] }
+        error_code: { type: string, description: "CONNECT_FAILED, WRITE_FAILED, UNSUPPORTED_CONNECTION, BAD_PAYLOAD or one the agent chooses (at most 40 characters)." }
+        printer_status: { type: string, enum: [ONLINE, OFFLINE, PAPER_OUT, COVER_OPEN] }
+        attempt: { type: integer, minimum: 1 }
+    PosResultAnswer:
+      type: object
+      required: [id, status, attempts, final]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [QUEUED, CLAIMED, PRINTED, FAILED, CANCELLED] }
+        attempts: { type: integer }
+        final: { type: boolean }
+    PosHeartbeat:
+      type: object
+      required: [printers]
+      properties:
+        printers:
+          type: array
+          items:
+            type: object
+            required: [id, status]
+            properties:
+              id: { type: integer, format: int64 }
+              status: { type: string, enum: [ONLINE, OFFLINE, PAPER_OUT, COVER_OPEN] }
+        queue_depth: { type: [integer, "null"] }
+        agent_version: { type: string }
+    PosFailedJob:
+      type: object
+      required: [id, printer_id, printer_name, kind, source_type, source_id, copy_no, attempts, error_code, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        printer_id: { type: integer, format: int64 }
+        printer_name: { type: string }
+        kind: { type: string }
+        source_type: { type: string }
+        source_id: { type: integer, format: int64 }
+        bill_id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        copy_no: { type: integer }
+        attempts: { type: integer }
+        error_code: { type: string }
+        created_at: { type: string, format: date-time }
+    PosReprintInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, maxLength: 200 }
+        printer_id: { type: [integer, "null"], format: int64, description: "Another printer for the copy." }
+    PosPrintBillInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 200, description: "Required for a paid bill." }
+    PosJobCreated:
+      type: object
+      required: [id, copy_no, created]
+      properties:
+        id: { type: string, format: uuid }
+        copy_no: { type: integer }
+        created: { type: boolean }
+    PosDrawerOpened:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer, format: int64 }
+        job_id: { type: string, format: uuid }
+    PosDrawerOpen:
+      type: object
+      required: [id, opened_at, business_date, reason, drawer, shift_id, opened_by]
+      properties:
+        id: { type: integer, format: int64 }
+        opened_at: { type: string, format: date-time }
+        business_date: { $ref: "#/components/schemas/Date" }
+        reason: { type: string }
+        drawer: { type: string }
+        shift_id: { type: [integer, "null"], format: int64 }
+        opened_by: { type: string }
     PosPrintJob:
       type: object
       required: [id, printer_id, printer_name, kind, source_type, source_id, status, attempts, created_at, printed_at]
@@ -17352,6 +17800,10 @@ components:
         created_at: { type: string, format: date-time }
         printed_at: { type: string, format: date-time, nullable: true }
         error_code: { type: string }
+        copy_no: { type: integer }
+        max_attempts: { type: integer }
+        is_reprint: { type: boolean }
+        device_name: { type: string, description: "The agent that printed it, or the one that serves the printer." }
         bill_number: { type: string }
         table_code: { type: string }
         station: { type: string }
@@ -17721,9 +18173,10 @@ components:
         total: { type: string }
     PosOutletReport:
       type: object
-      required: [outlet_id, outlet_name, from, to, days, totals, products, methods, voids, discounts, comps, cashiers, waiters, room_charges, open_bills]
+      required: [outlet_id, outlet_name, from, to, days, totals, products, methods, voids, discounts, comps, cashiers, waiters, drawer_opens, room_charges, open_bills]
       properties:
         outlet_id: { type: integer, format: int64 }
+        drawer_opens: { type: array, items: { $ref: "#/components/schemas/PosDrawerOpen" }, description: "The times the drawer was opened without a sale in the range: who, why, on which shift." }
         outlet_name: { type: string }
         from: { $ref: "#/components/schemas/Date" }
         to: { $ref: "#/components/schemas/Date" }

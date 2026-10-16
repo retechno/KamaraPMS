@@ -71,6 +71,7 @@ scripts/lint.sh
 ```
 cmd/api, cmd/migrate        binaries (wiring only)
 cmd/pms-admin               operator CLI (create tenants and their first administrator)
+cmd/pos-agent               the print agent of a hotel (Windows service or systemd; docs/pos-agent.md)
 internal/app                composition root (router, middleware chain) + end-to-end API tests
 internal/iam                login, sessions, users, roles, grants, Authorizer (per-property permissions)
 internal/tenancy            tenants, properties, business days (BusinessDayService), document numbers

@@ -76,6 +76,16 @@ var publicRoutes = map[string]string{
 	"POST /api/v1/auth/logout":  "ends the session of the cookie",
 	"GET /healthz":              "liveness probe",
 	"GET /readyz":               "readiness probe",
+	// a print agent enrols with a one-time code: it has no token yet (limited by address, answers one error for a wrong code)
+	"POST /api/v1/device/enroll": "enrols a print agent with a one-time code of fifteen minutes",
+}
+
+// deviceRoutes take the token of a print agent and no other: a user's token, whatever the user may do, is a 401 here, and these routes never answer a user.
+var deviceRoutes = map[string]string{
+	"GET /api/v1/device/config":            "the printers of the device",
+	"GET /api/v1/device/jobs/next":         "the claim of a print job",
+	"POST /api/v1/device/jobs/{id}/result": "how an attempt ended",
+	"POST /api/v1/device/heartbeat":        "the beat of an agent",
 }
 
 // signedInRoutes need a token and nothing else: they act on the caller or list what the caller may see.
@@ -208,6 +218,12 @@ func TestEveryRouteRefusesASignedInUserWithoutThePermission(t *testing.T) {
 		}
 		res := w.request(nobody, r, bodies)
 		code, _ := res.body["code"].(string)
+		if _, ok := deviceRoutes[k]; ok {
+			if res.status != http.StatusUnauthorized || code != "DEVICE_TOKEN_INVALID" {
+				unproved = append(unproved, fmt.Sprintf("%s: a device route must answer a user's token 401 DEVICE_TOKEN_INVALID, it answers %d %s", k, res.status, code))
+			}
+			continue
+		}
 		switch _, signedIn := signedInRoutes[k]; {
 		case signedIn:
 			if res.status == http.StatusForbidden || res.status == http.StatusUnauthorized || res.status >= 500 {

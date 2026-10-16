@@ -5,7 +5,8 @@
 SELECT o.id, o.code, o.name, o.outlet_type, o.order_mode, o.department_id, d.name AS department_name, o.rule_profile_id, rp.name AS rule_profile_name,
        o.price_list_id, pl.name AS price_list_name, o.drawer, o.receipt_printer_id, pr.name AS receipt_printer_name, o.uses_tables, o.guest_count_required,
        o.rounding_unit, o.allow_room_charge, o.allow_company_charge, o.allow_comp, o.comp_treatment, o.max_discount_pct_no_approval,
-       o.block_night_audit_with_open_bills, o.is_active, o.sort_order, o.version
+       o.block_night_audit_with_open_bills, o.is_active, o.sort_order, o.version,
+       o.receipt_title, o.receipt_hotel, o.receipt_address, o.receipt_tax_id, o.receipt_footer, o.receipt_copies
 FROM pos_outlets o
 JOIN departments d ON d.property_id = o.property_id AND d.id = o.department_id
 JOIN pos_rule_profiles rp ON rp.property_id = o.property_id AND rp.id = o.rule_profile_id
@@ -19,10 +20,12 @@ ORDER BY o.sort_order, o.name, o.id;
 -- name: InsertOutlet :one
 INSERT INTO pos_outlets (tenant_id, property_id, code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id, drawer, receipt_printer_id, uses_tables,
                          guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval,
-                         block_night_audit_with_open_bills, is_active, sort_order, created_by, updated_by)
+                         block_night_audit_with_open_bills, is_active, sort_order, receipt_title, receipt_hotel, receipt_address, receipt_tax_id, receipt_footer,
+                         receipt_copies, created_by, updated_by)
 VALUES (@tenant_id, @property_id, @code, @name, @outlet_type, @order_mode, @department_id, @rule_profile_id, @price_list_id, sqlc.narg(drawer), sqlc.narg(receipt_printer_id), @uses_tables,
         @guest_count_required, @rounding_unit, @allow_room_charge, @allow_company_charge, @allow_comp, @comp_treatment, @max_discount_pct_no_approval,
-        @block_night_audit_with_open_bills, @is_active, @sort_order, sqlc.narg(actor_id), sqlc.narg(actor_id))
+        @block_night_audit_with_open_bills, @is_active, @sort_order, sqlc.narg(receipt_title), sqlc.narg(receipt_hotel), sqlc.narg(receipt_address),
+        sqlc.narg(receipt_tax_id), sqlc.narg(receipt_footer), COALESCE(sqlc.narg(receipt_copies)::smallint, 1), sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateOutlet :one
@@ -31,6 +34,8 @@ UPDATE pos_outlets SET name = @name, outlet_type = @outlet_type, order_mode = @o
        guest_count_required = @guest_count_required, rounding_unit = @rounding_unit, allow_room_charge = @allow_room_charge, allow_company_charge = @allow_company_charge,
        allow_comp = @allow_comp, comp_treatment = @comp_treatment, max_discount_pct_no_approval = @max_discount_pct_no_approval,
        block_night_audit_with_open_bills = @block_night_audit_with_open_bills, is_active = @is_active, sort_order = @sort_order,
+       receipt_title = sqlc.narg(receipt_title), receipt_hotel = sqlc.narg(receipt_hotel), receipt_address = sqlc.narg(receipt_address),
+       receipt_tax_id = sqlc.narg(receipt_tax_id), receipt_footer = sqlc.narg(receipt_footer), receipt_copies = COALESCE(sqlc.narg(receipt_copies)::smallint, receipt_copies),
        version = version + 1, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND version = @version
 RETURNING id;
@@ -40,34 +45,40 @@ SELECT charge_type, is_active FROM charge_codes WHERE tenant_id = @tenant_id AND
 
 -- ---------------------------------------------------------------- printers and stations
 -- name: ListPrinters :many
-SELECT id, name, kind, connection_info, paper_width_mm, codepage, opens_drawer, is_active
-FROM pos_printers WHERE tenant_id = @tenant_id AND property_id = @property_id
-ORDER BY name, id;
+SELECT pr.id, pr.name, pr.kind, pr.connection_info, pr.paper_width_mm, pr.codepage, pr.opens_drawer, pr.is_active,
+       pr.device_id, d.name AS device_name, COALESCE(d.status, '')::text AS device_status, pr.last_status, pr.status_reported_at
+FROM pos_printers pr LEFT JOIN pos_devices d ON d.property_id = pr.property_id AND d.id = pr.device_id
+WHERE pr.tenant_id = @tenant_id AND pr.property_id = @property_id
+ORDER BY pr.name, pr.id;
 
 -- name: InsertPrinter :one
-INSERT INTO pos_printers (tenant_id, property_id, name, kind, connection_info, paper_width_mm, codepage, opens_drawer, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @name, @kind, @connection_info, @paper_width_mm, @codepage, @opens_drawer, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO pos_printers (tenant_id, property_id, name, kind, connection_info, paper_width_mm, codepage, opens_drawer, is_active, device_id, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @name, @kind, @connection_info, @paper_width_mm, @codepage, @opens_drawer, @is_active, sqlc.narg(device_id), sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdatePrinter :execrows
 UPDATE pos_printers SET name = @name, kind = @kind, connection_info = @connection_info, paper_width_mm = @paper_width_mm, codepage = @codepage,
-       opens_drawer = @opens_drawer, is_active = @is_active, updated_by = sqlc.narg(actor_id)
+       opens_drawer = @opens_drawer, is_active = @is_active, device_id = sqlc.narg(device_id),
+       last_status = CASE WHEN device_id IS DISTINCT FROM sqlc.narg(device_id)::bigint THEN NULL ELSE last_status END,
+       status_reported_at = CASE WHEN device_id IS DISTINCT FROM sqlc.narg(device_id)::bigint THEN NULL ELSE status_reported_at END,
+       updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: ListStations :many
-SELECT s.id, s.code, s.name, s.printer_id, pr.name AS printer_name, s.kds_enabled, s.late_after_minutes, s.is_active
+SELECT s.id, s.code, s.name, s.printer_id, pr.name AS printer_name, s.kds_enabled, s.late_after_minutes, s.is_active, s.ticket_copies
 FROM pos_stations s LEFT JOIN pos_printers pr ON pr.property_id = s.property_id AND pr.id = s.printer_id
 WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id
 ORDER BY s.name, s.id;
 
 -- name: InsertStation :one
-INSERT INTO pos_stations (tenant_id, property_id, code, name, printer_id, kds_enabled, late_after_minutes, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @code, @name, sqlc.narg(printer_id), @kds_enabled, @late_after_minutes, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO pos_stations (tenant_id, property_id, code, name, printer_id, kds_enabled, late_after_minutes, is_active, ticket_copies, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, sqlc.narg(printer_id), @kds_enabled, @late_after_minutes, @is_active, COALESCE(sqlc.narg(ticket_copies)::smallint, 1),
+        sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateStation :execrows
 UPDATE pos_stations SET name = @name, printer_id = sqlc.narg(printer_id), kds_enabled = @kds_enabled, late_after_minutes = @late_after_minutes,
-       is_active = @is_active, updated_by = sqlc.narg(actor_id)
+       is_active = @is_active, ticket_copies = COALESCE(sqlc.narg(ticket_copies)::smallint, ticket_copies), updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- ---------------------------------------------------------------- rule profiles
@@ -757,20 +768,22 @@ RETURNING id, station_id, status;
 
 -- ---------------------------------------------------------------- print jobs
 -- name: InsertPrintJob :one
-INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, created_by)
-VALUES (@tenant_id, @property_id, @printer_id, @kind, @source_type, @source_id, @dedupe_key, sqlc.narg(created_by))
+INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, copy_no, document, payload, reprint_of, reprint_reason, reprint_by, created_by, created_at)
+VALUES (@tenant_id, @property_id, @printer_id, @kind, @source_type, @source_id, @dedupe_key, @copy_no, sqlc.narg(document), sqlc.narg(payload), sqlc.narg(reprint_of),
+        sqlc.narg(reprint_reason), sqlc.narg(reprint_by), sqlc.narg(created_by), @created_at::timestamptz)
 ON CONFLICT (property_id, dedupe_key) DO NOTHING
 RETURNING id;
 
 -- name: StationPrinter :one
-SELECT s.printer_id, s.kds_enabled FROM pos_stations s WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @id;
+SELECT s.printer_id, s.kds_enabled, s.ticket_copies FROM pos_stations s WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @id;
 
 -- name: ListPrintJobs :many
 SELECT j.id, j.printer_id, p.name AS printer_name, j.kind, j.source_type, j.source_id, j.status, j.attempts, j.created_at, j.printed_at,
-       COALESCE(j.error_code, '')::text AS error_code,
+       COALESCE(j.error_code, '')::text AS error_code, j.copy_no, j.max_attempts, (j.reprint_of IS NOT NULL)::boolean AS is_reprint, COALESCE(d.name, '')::text AS device_name,
        COALESCE(b.bill_number, '')::text AS bill_number, COALESCE(tb.code, '')::text AS table_code, COALESCE(s.name, '')::text AS station_name, COALESCE(t.kind, '')::text AS ticket_kind
 FROM pos_print_jobs j
 JOIN pos_printers p ON p.property_id = j.property_id AND p.id = j.printer_id
+LEFT JOIN pos_devices d ON d.property_id = j.property_id AND d.id = COALESCE(j.claimed_by, p.device_id)
 LEFT JOIN pos_tickets t ON j.source_type = 'TICKET' AND t.property_id = j.property_id AND t.id = j.source_id
 LEFT JOIN pos_stations s ON s.property_id = t.property_id AND s.id = t.station_id
 LEFT JOIN pos_bills b ON b.property_id = t.property_id AND b.id = t.bill_id
@@ -788,3 +801,191 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND status IN ('QUEU
 -- A bill touched without a change of its own (a payment on its folio): the screens re-read it.
 -- name: TouchBill :exec
 UPDATE pos_bills SET version = version + 1 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- ================================================================ PR 3b: devices, the claim of print jobs, drawer opens (docs/architecture/34-pos.md 20)
+
+-- name: InsertEnrollment :one
+INSERT INTO pos_device_enrollments (tenant_id, property_id, code_hash, expires_at, created_by, created_at)
+VALUES (@tenant_id, @property_id, @code_hash, @expires_at, sqlc.narg(created_by), @now::timestamptz)
+RETURNING id;
+
+-- The code is looked up by its hash alone: a device has no tenant yet.
+-- name: EnrollmentForUpdate :one
+SELECT id, tenant_id, property_id, expires_at, used_at FROM pos_device_enrollments WHERE code_hash = @code_hash FOR UPDATE;
+
+-- name: UseEnrollment :exec
+UPDATE pos_device_enrollments SET used_at = @now::timestamptz, device_id = @device_id WHERE id = @id;
+
+-- name: PendingEnrollments :one
+SELECT count(*)::int AS pending, COALESCE(max(expires_at), 'epoch'::timestamptz)::timestamptz AS last_expiry
+FROM pos_device_enrollments WHERE tenant_id = @tenant_id AND property_id = @property_id AND used_at IS NULL AND expires_at > @now::timestamptz;
+
+-- name: InsertDevice :one
+INSERT INTO pos_devices (tenant_id, property_id, name, token_hash, token_prefix, agent_version, enrolled_by, created_at, last_seen_at)
+VALUES (@tenant_id, @property_id, @name, @token_hash, @token_prefix, sqlc.narg(agent_version), sqlc.narg(enrolled_by), @now::timestamptz, @now::timestamptz)
+RETURNING id;
+
+-- name: ListDevices :many
+SELECT d.id, d.name, d.kind, d.token_prefix, d.status, d.last_seen_at, d.agent_version, d.queue_depth, d.created_at, d.rotated_at, d.revoked_at,
+       (SELECT count(*) FROM pos_printers p WHERE p.property_id = d.property_id AND p.device_id = d.id)::int AS printers
+FROM pos_devices d WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id
+ORDER BY (d.status = 'ACTIVE') DESC, d.name, d.id;
+
+-- name: DeviceByToken :one
+SELECT id, tenant_id, property_id, name, status FROM pos_devices WHERE token_hash = @token_hash;
+
+-- name: DeviceSeen :exec
+UPDATE pos_devices SET last_seen_at = @now::timestamptz, agent_version = COALESCE(sqlc.narg(agent_version), agent_version),
+       queue_depth = COALESCE(sqlc.narg(queue_depth)::int, queue_depth)
+WHERE id = @id;
+
+-- name: RevokeDevice :execrows
+UPDATE pos_devices SET status = 'REVOKED', revoked_at = @now::timestamptz, revoked_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: RotateDevice :execrows
+UPDATE pos_devices SET token_hash = @token_hash, token_prefix = @token_prefix, rotated_at = @now::timestamptz
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: DeviceState :one
+SELECT status, name FROM pos_devices WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: DevicePrinters :many
+SELECT id, name, kind, connection_info, paper_width_mm, codepage, opens_drawer
+FROM pos_printers WHERE property_id = @property_id AND device_id = @device_id AND is_active ORDER BY id;
+
+-- name: ReportPrinterStatus :execrows
+UPDATE pos_printers SET last_status = @status, status_reported_at = @now::timestamptz
+WHERE property_id = @property_id AND id = @id AND device_id = @device_id;
+
+-- A job whose lease ran out goes back to the queue (its attempt counted), or fails for good when it has no attempt left.
+-- name: RequeueExpiredLeases :exec
+UPDATE pos_print_jobs j
+SET status = CASE WHEN j.attempts >= j.max_attempts THEN 'FAILED' ELSE 'QUEUED' END,
+    error_code = CASE WHEN j.attempts >= j.max_attempts THEN 'LEASE_EXPIRED' ELSE j.error_code END,
+    claimed_by = NULL, lease_until = NULL
+FROM pos_printers p
+WHERE p.property_id = j.property_id AND p.id = j.printer_id AND p.device_id = @device_id
+  AND j.property_id = @property_id AND j.status = 'CLAIMED' AND j.lease_until < @now::timestamptz;
+
+-- The oldest job that is not final of each printer of the device: a printer prints in order, so a later job waits for it.
+-- name: ClaimCandidates :many
+SELECT DISTINCT ON (j.printer_id) j.id, j.printer_id, j.status, j.next_attempt_at
+FROM pos_print_jobs j
+JOIN pos_printers p ON p.property_id = j.property_id AND p.id = j.printer_id
+WHERE p.property_id = @property_id AND p.device_id = @device_id AND p.is_active
+  AND j.property_id = @property_id AND j.status IN ('QUEUED', 'CLAIMED')
+ORDER BY j.printer_id, j.seq;
+
+-- name: ClaimJob :one
+UPDATE pos_print_jobs SET status = 'CLAIMED', claimed_by = @device_id, lease_until = @lease_until, attempts = attempts + 1
+WHERE id = (SELECT c.id FROM pos_print_jobs c WHERE c.id = @id AND c.property_id = @property_id AND c.status = 'QUEUED'
+              AND (c.next_attempt_at IS NULL OR c.next_attempt_at <= @now::timestamptz) FOR UPDATE SKIP LOCKED)
+RETURNING id, tenant_id, property_id, printer_id, kind, source_type, source_id, copy_no, attempts, max_attempts, payload, document, reprint_of, payload_purged_at;
+
+-- name: SetJobPayload :exec
+UPDATE pos_print_jobs SET document = @document, payload = @payload WHERE id = @id AND property_id = @property_id AND payload IS NULL AND payload_purged_at IS NULL;
+
+-- name: JobForResult :one
+SELECT j.id, j.tenant_id, j.property_id, j.printer_id, j.kind, j.source_type, j.source_id, j.status, j.attempts, j.max_attempts, j.claimed_by, j.error_code
+FROM pos_print_jobs j WHERE j.id = @id AND j.property_id = @property_id FOR UPDATE;
+
+-- name: JobPrinted :exec
+UPDATE pos_print_jobs SET status = 'PRINTED', printed_at = @now::timestamptz, lease_until = NULL, error_code = NULL, next_attempt_at = NULL WHERE id = @id;
+
+-- name: JobRequeue :exec
+UPDATE pos_print_jobs SET status = 'QUEUED', error_code = @error_code, lease_until = NULL, next_attempt_at = @next_attempt_at WHERE id = @id;
+
+-- name: JobFailed :exec
+UPDATE pos_print_jobs SET status = 'FAILED', error_code = @error_code, lease_until = NULL, next_attempt_at = NULL WHERE id = @id;
+
+-- A job that never printed within the retention is failed first, then its payload goes (the row stays).
+-- name: ExpireOldJobs :exec
+UPDATE pos_print_jobs SET status = 'FAILED', error_code = 'EXPIRED', lease_until = NULL, next_attempt_at = NULL
+WHERE status IN ('QUEUED', 'CLAIMED') AND created_at < @cutoff::timestamptz
+  AND (sqlc.narg(property_id)::bigint IS NULL OR property_id = sqlc.narg(property_id)::bigint);
+
+-- name: PurgePayloads :execrows
+UPDATE pos_print_jobs SET payload = NULL, document = NULL, payload_purged_at = @now::timestamptz
+WHERE payload IS NOT NULL AND created_at < @cutoff::timestamptz AND status IN ('PRINTED', 'FAILED', 'CANCELLED')
+  AND (sqlc.narg(property_id)::bigint IS NULL OR property_id = sqlc.narg(property_id)::bigint);
+
+-- name: PrinterForJob :one
+SELECT id, kind, paper_width_mm, codepage, opens_drawer, connection_info, device_id, is_active
+FROM pos_printers WHERE property_id = @property_id AND id = @id;
+
+-- The head of the paper when an outlet leaves a field empty: the property.
+-- name: PropertyPaper :one
+SELECT name, COALESCE(address, '')::text AS address, COALESCE(city, '')::text AS city, COALESCE(tax_id, '')::text AS tax_id, timezone, currency_decimals
+FROM properties WHERE tenant_id = @tenant_id AND id = @id;
+
+-- A ticket with what the paper says (the same facts as the board).
+-- name: TicketForPrint :one
+SELECT t.id, t.kind, t.status, t.created_at, t.station_id, r.round_no,
+       b.id AS bill_id, COALESCE(b.bill_number, '')::text AS bill_number, b.order_type, o.id AS outlet_id, o.name AS outlet_name,
+       COALESCE(tb.code, '')::text AS table_code, COALESCE(b.customer_name, '')::text AS customer_name,
+       COALESCE(u.full_name, '')::text AS waiter_name, COALESCE(s.name, '')::text AS station_name,
+       COALESCE((SELECT r2.room_number FROM stay_rooms sr JOIN rooms r2 ON r2.property_id = sr.property_id AND r2.id = sr.room_id
+                  WHERE sr.property_id = b.property_id AND sr.stay_id = b.target_stay_id ORDER BY sr.id DESC LIMIT 1), '')::text AS room_number
+FROM pos_tickets t
+JOIN pos_bills b   ON b.property_id = t.property_id AND b.id = t.bill_id
+JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
+JOIN pos_rounds r  ON r.property_id = t.property_id AND r.id = t.round_id
+LEFT JOIN pos_stations s ON s.property_id = t.property_id AND s.id = t.station_id
+LEFT JOIN pos_tables tb ON tb.property_id = b.property_id AND tb.id = b.table_id
+LEFT JOIN users u  ON u.id = b.waiter_id
+WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id AND t.id = @id;
+
+-- The failed jobs of an outlet that the cashier sees: what did not print, newest first (a job that was printed again is not listed).
+-- name: FailedJobsOfOutlet :many
+SELECT j.id, j.printer_id, p.name AS printer_name, j.kind, j.source_type, j.source_id, j.copy_no, j.attempts, COALESCE(j.error_code, '')::text AS error_code, j.created_at,
+       COALESCE(COALESCE(b.bill_number, tb.bill_number), '')::text AS bill_number, COALESCE(b.id, tb.id, 0)::bigint AS bill_id
+FROM pos_print_jobs j
+JOIN pos_printers p ON p.property_id = j.property_id AND p.id = j.printer_id
+LEFT JOIN pos_bills b ON j.source_type = 'BILL' AND b.property_id = j.property_id AND b.id = j.source_id
+LEFT JOIN pos_tickets t ON j.source_type = 'TICKET' AND t.property_id = j.property_id AND t.id = j.source_id
+LEFT JOIN pos_bills tb ON tb.property_id = t.property_id AND tb.id = t.bill_id
+WHERE j.tenant_id = @tenant_id AND j.property_id = @property_id AND j.status = 'FAILED' AND j.created_at >= @since::timestamptz
+  AND (COALESCE(b.outlet_id, tb.outlet_id) = @outlet_id OR (j.source_type = 'OUTLET' AND j.source_id = @outlet_id))
+  AND NOT EXISTS (SELECT 1 FROM pos_print_jobs r WHERE r.reprint_of = j.id)
+ORDER BY j.created_at DESC, j.id
+LIMIT 50;
+
+-- name: JobToReprint :one
+SELECT j.id, j.printer_id, j.kind, j.source_type, j.source_id, j.copy_no, j.status, j.document, j.payload_purged_at
+FROM pos_print_jobs j WHERE j.tenant_id = @tenant_id AND j.property_id = @property_id AND j.id = @id;
+
+-- name: MaxCopyOfSource :one
+SELECT COALESCE(max(copy_no), 0)::int AS max_copy FROM pos_print_jobs
+WHERE property_id = @property_id AND source_type = @source_type AND source_id = @source_id AND kind = @kind;
+
+-- The number of times a receipt (or a pre-bill) of a bill was printed as an original: the next one is a new round of the dedupe key.
+-- name: ReceiptRound :one
+SELECT count(*)::int AS n FROM pos_print_jobs
+WHERE property_id = @property_id AND source_type = 'BILL' AND source_id = @bill_id AND kind = @kind AND reprint_of IS NULL AND dedupe_key LIKE @key_prefix::text || '%' AND copy_no = 1;
+
+-- name: InsertDrawerOpen :one
+INSERT INTO pos_drawer_opens (tenant_id, property_id, outlet_id, drawer, shift_id, business_date, reason, opened_by, opened_at, job_id)
+VALUES (@tenant_id, @property_id, @outlet_id, @drawer, sqlc.narg(shift_id), @business_date, @reason, @opened_by, @opened_at, sqlc.narg(job_id))
+RETURNING id;
+
+-- name: DrawerOpensOfOutlet :many
+SELECT d.id, d.opened_at, d.business_date, d.reason, d.drawer, d.shift_id, u.full_name AS opened_by_name
+FROM pos_drawer_opens d JOIN users u ON u.id = d.opened_by
+WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id AND d.outlet_id = @outlet_id
+  AND d.business_date >= @from_date AND d.business_date <= @to_date
+ORDER BY d.opened_at DESC, d.id;
+
+-- name: GuestOfStay :one
+SELECT btrim(COALESCE(g.first_name, '') || ' ' || g.last_name)::text AS guest_name
+FROM stays s JOIN guests g ON g.tenant_id = s.tenant_id AND g.id = s.guest_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @stay_id;
+
+-- name: UserName :one
+SELECT full_name FROM users WHERE id = @id;
+
+-- The receipt that was printed first for a bill (the original that a copy points to), when one was printed through the queue.
+-- name: OriginalReceiptJob :one
+SELECT id FROM pos_print_jobs
+WHERE property_id = @property_id AND source_type = 'BILL' AND source_id = @bill_id AND kind = 'RECEIPT' AND reprint_of IS NULL AND copy_no = 1 AND dedupe_key LIKE 'RECEIPT:%'
+ORDER BY seq DESC LIMIT 1;

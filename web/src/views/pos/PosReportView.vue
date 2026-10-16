@@ -13,7 +13,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { usePosOutlet } from '@/composables/usePosOutlet'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
 
 /**
  * The report of an outlet for a range of business dates (docs/architecture/34-pos.md 13.2): sales, service and tax; payments by method; voids, discounts and complimentary with who gave and who approved;
@@ -143,6 +143,18 @@ function csv(): void {
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section class="mb-4 rounded-xl border border-border bg-card p-3" data-testid="report-drawer">
+        <h2 class="m-0 mb-1 text-base font-semibold">{{ t('posReport.drawerTitle') }} <span class="text-sm font-normal text-muted-foreground" data-testid="drawer-count">({{ report.drawer_opens?.length ?? 0 }})</span></h2>
+        <p class="m-0 mb-2 text-xs text-muted-foreground">{{ t('posReport.drawerHint') }}</p>
+        <EmptyState v-if="!report.drawer_opens || report.drawer_opens.length === 0" :title="t('posReport.empty_drawer')" :description="t('posReport.emptyHint_drawer')" data-testid="empty-drawer" />
+        <ul v-else class="m-0 list-none p-0 text-sm">
+          <li v-for="d in report.drawer_opens" :key="d.id" class="border-t border-border py-1.5 first:border-t-0" :data-testid="`drawer-open-${d.id}`">
+            <strong>{{ d.opened_by }}</strong> · {{ d.reason }}
+            <span class="block text-xs text-muted-foreground">{{ formatDateTime(d.opened_at) }} · {{ t('posReport.drawerOf', { drawer: d.drawer }) }}</span>
+          </li>
+        </ul>
       </section>
 
       <section class="grid gap-4 lg:grid-cols-3">
