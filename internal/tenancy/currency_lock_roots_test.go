@@ -14,10 +14,10 @@ import (
 // The behaviour tests insert one row of each table (with what the table cannot exist without) and require the refusal. The tables that are only possible with a journal
 // (a supplier bill, a tax opening credit ...) are also locked by the journal they reference; for those the definition test is what proves the table itself is on the list.
 
-// the tables the function reads, as migration 00058 defines them.
+// the tables the function reads, as migration 00058 defines them, and inv_movements, which migration 00084 adds (the stock ledger holds money in the currency).
 var financialRoots = []string{
 	"bank_statements", "budgets", "cashier_shifts", "city_ledger_adjustments", "city_ledger_invoices", "city_ledger_receipts", "folio_items", "gl_journals",
-	"payments", "supplier_bills", "supplier_credit_notes", "supplier_payments", "tax_opening_credits", "tax_payments", "tax_returns",
+	"inv_movements", "payments", "supplier_bills", "supplier_credit_notes", "supplier_payments", "tax_opening_credits", "tax_payments", "tax_returns",
 }
 
 func TestTheDefinitionOfFinancialDataNamesExactlyTheseTables(t *testing.T) {
@@ -154,6 +154,15 @@ func TestEveryRootTableOfFinancialDataLocksTheCurrency(t *testing.T) {
 		{"tax_opening_credits", func(t *testing.T, tx sqler, tn, p int64) {
 			j, _, _ := journalIn(t, tx, tn, p, "J1")
 			mustExec(t, tx, `INSERT INTO tax_opening_credits (tenant_id, property_id, tax_id, as_of, amount, journal_id) VALUES ($1, $2, $3, '2026-09-01', 50, $4)`, tn, p, tax(t, tx, tn, p), j)
+		}},
+		{"inv_movements", func(t *testing.T, tx sqler, tn, p int64) {
+			acc := mustID(t, tx, `INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES ($1, $2, '1310', 'Food inventory', 'ASSET', 'DEBIT', 'INVENTORIES') RETURNING id`, tn, p)
+			cat := mustID(t, tx, `INSERT INTO inv_categories (tenant_id, property_id, code, name, kind, inventory_account_id) VALUES ($1, $2, 'FOOD', 'Food', 'FOOD', $3) RETURNING id`, tn, p, acc)
+			unit := mustID(t, tx, `INSERT INTO inv_units (tenant_id, property_id, code, name) VALUES ($1, $2, 'kg', 'Kilogram') RETURNING id`, tn, p)
+			item := mustID(t, tx, `INSERT INTO inv_items (tenant_id, property_id, code, name, category_id, stock_unit_id) VALUES ($1, $2, 'RICE', 'Rice', $3, $4) RETURNING id`, tn, p, cat, unit)
+			wh := mustID(t, tx, `INSERT INTO inv_warehouses (tenant_id, property_id, code, name, kind) VALUES ($1, $2, 'MAIN', 'Main', 'MAIN') RETURNING id`, tn, p)
+			mustExec(t, tx, `INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, business_date, source_type, source_id, item_class, cost_class)
+				VALUES ($1, $2, $3, $4, 'OPENING', 10, 100, '2026-09-30', 'TEST', 1, 'FOOD', 'FOOD')`, tn, p, wh, item)
 		}},
 		{"budgets", func(t *testing.T, tx sqler, tn, p int64) {
 			mustExec(t, tx, `INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES ($1, $2, '2026-01-01', 1, 'Budget 2026')`, tn, p)

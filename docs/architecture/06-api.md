@@ -944,3 +944,24 @@ other route. They are classified POS for the module gate (403 `MODULE_NOT_IN_PLA
 heartbeat are refused like any write (403 `SUBSCRIPTION_READ_ONLY`). The outlet carries `receipt_title`, `receipt_hotel`, `receipt_address`,
 `receipt_tax_id`, `receipt_footer`, `receipt_copies`; a station `ticket_copies`; a printer `device_id`, `last_status` and the derived `state`; the
 report of an outlet and the report of a shift `drawer_opens`.
+
+## 25. Inventory: masters, opening stock, stock and stock card (`35-inventory.md`, PR 1)
+
+All routes are of the module `INVENTORY` of the plan (403 `MODULE_NOT_IN_PLAN`). `{P}` is `/api/v1/properties/{propertyId}`. Quantities are strings with up to six decimals, amounts strings at the decimals of the currency. Reading needs `inventory.view`, `inventory.manage` or `inventory.opening`; changing needs `inventory.manage`, the opening stock `inventory.opening`; the permissions are granted to no role (the tenant administrator holds them).
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET`, `PUT {P}/inventory/settings` | read; `inventory.manage` | `PUT` needs the `version` (409 `VERSION_CONFLICT`); the costing method is accepted only before the first stock movement (409 `COSTING_METHOD_LOCKED`); a property that never saved them answers the defaults with `exists: false` |
+| `GET {P}/inventory/setup-check` | read | `{ok, costing_method, costing_locked_on, warehouses, categories, items, issues[]}`; an issue is `{severity ERROR|WARNING, code, message, ref?}` (`NO_CATEGORY`, `NO_WAREHOUSE`, `NO_ITEM`, `ACCOUNT_MAP_INCOMPLETE`, `INVENTORY_BALANCE_DRIFT`, `INVENTORY_GL_MISMATCH`, `INVENTORY_NEGATIVE_STOCK`) |
+| `GET {P}/inventory/accounts` | read | the accounts a category may use as its inventory account |
+| `GET`, `POST {P}/inventory/units`; `PATCH …/units/{id}` | read; `inventory.manage` | `{code, name, is_active?}`; the code is 1 to 10 characters and never changes; 409 `CODE_TAKEN`, `UNIT_IN_USE` |
+| `GET`, `POST {P}/inventory/categories`; `PATCH …/categories/{id}` | read; `inventory.manage` | the accounts are checked (422 `WRONG_ACCOUNT_TYPE`, `NOT_POSTABLE`); `PATCH` needs the `version`; 409 `CATEGORY_HAS_STOCK` for a change of the inventory account or the kind of a category whose items have moved |
+| `GET {P}/inventory/items?q=&category=&warehouse=&active=&below_min=&limit=&offset=` | read | `{items[] (with the stock of each warehouse), total, total_value, by_category, costing_method, costing_locked, warehouses[]}` |
+| `POST {P}/inventory/items`; `GET`, `PATCH …/items/{id}` | read; `inventory.manage` | create takes `units` (the other units; the stock unit is made 1/1); `PATCH` needs the `version`; 409 `CODE_TAKEN`, `BARCODE_TAKEN`, `ITEM_HAS_STOCK` (stock unit or category of an item that has moved) |
+| `PUT {P}/inventory/items/{id}/units` | `inventory.manage` | `{units: [{unit_id, stock_num, stock_den, is_purchase, is_recipe, is_default_purchase, is_default_recipe}]}` replaces the units; the stock unit is always 1/1; one default of each kind at most |
+| `GET`, `POST {P}/inventory/warehouses`; `PATCH …/warehouses/{id}` | read; `inventory.manage` | `kind` MAIN, OUTLET (names `outlet_id`) or DEPARTMENT; `cost_class` FOOD, BEVERAGE or OTHER; 409 `OUTLET_HAS_WAREHOUSE`, `WAREHOUSE_HAS_STOCK` |
+| `GET`, `PUT {P}/inventory/warehouses/{id}/levels` | read; `inventory.manage` | `{levels: [{item_id, min_qty, max_qty?, reorder_qty?}]}` replaces the minimum levels |
+| `GET`, `POST {P}/inventory/openings`; `GET …/openings/{id}` | read; `inventory.opening` | `{client_uuid, warehouse_id, note?, lines: [{item_id, unit_id, qty, unit_cost}]}`, up to 500 lines, all or nothing; repeating the `client_uuid` returns the first opening; 409 `INVENTORY_GL_NOT_EMPTY`, `OPENING_ACCOUNT_MISSING`; 422 `OPENING_EXISTS` on `lines[i].item_id` |
+| `GET {P}/inventory/stock-card?warehouse=&item=&from=&to=` | read | the movements of the period with the running balance, the layers left (FIFO) and the open shortfalls; at most 1000 lines (`truncated`) |
+
+The night audit answers `blockers.stock` and `warnings.stock` (the same shape as `outlet_bills`): `INVENTORY_BALANCE_DRIFT` and `INVENTORY_GL_MISMATCH` stop the close, `INVENTORY_NEGATIVE_STOCK` does not. `GET {P}/accounting/reconciliation` gains a control `INVENTORY_<code>` for each inventory account that has a balance or a stock value. From the first stock movement, a manual journal or a bill line on an inventory account or on goods received not invoiced answers 422 `CONTROL_ACCOUNT`.

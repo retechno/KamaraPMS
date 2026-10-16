@@ -8721,6 +8721,325 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/inventory/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The settings of the inventory: the costing method and whether it is locked (inventory.view) */
+        get: operations["getInventorySettings"];
+        /** Change the settings (inventory.manage); the costing method only before the first stock movement */
+        put: operations["putInventorySettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/setup-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** What is left to set up and whether the books agree with the stock (inventory.view) */
+        get: operations["inventorySetupCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The accounts that can be the inventory account of a category (inventory.view) */
+        get: operations["listInventoryAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The units of measure (inventory.view) */
+        get: operations["listInventoryUnits"];
+        put?: never;
+        /** Add a unit (inventory.manage) */
+        post: operations["createInventoryUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/units/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a unit or switch it off (inventory.manage) */
+        patch: operations["updateInventoryUnit"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The categories with their accounts (inventory.view) */
+        get: operations["listInventoryCategories"];
+        put?: never;
+        /** Add a category (inventory.manage) */
+        post: operations["createInventoryCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a category (inventory.manage); its inventory account and class are fixed once an item of it has moved */
+        patch: operations["updateInventoryCategory"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Items with the stock of each per warehouse, a search, and the counts of the screen (inventory.view) */
+        get: operations["listInventoryItems"];
+        put?: never;
+        /** Add an item (inventory.manage); the stock unit becomes its unit 1/1 */
+        post: operations["createInventoryItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** An item with its units and its stock per warehouse (inventory.view) */
+        get: operations["getInventoryItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change an item (inventory.manage); an item with stock keeps its stock unit and category */
+        patch: operations["updateInventoryItem"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/items/{id}/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the units of an item (inventory.manage); the stock unit is always 1/1 */
+        put: operations["setInventoryItemUnits"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/warehouses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The warehouses with the value of their stock (inventory.view) */
+        get: operations["listInventoryWarehouses"];
+        put?: never;
+        /** Add a warehouse (inventory.manage) */
+        post: operations["createInventoryWarehouse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/warehouses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a warehouse (inventory.manage); one that holds stock stays on */
+        patch: operations["updateInventoryWarehouse"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/warehouses/{id}/levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The minimum levels of a warehouse (inventory.view) */
+        get: operations["getInventoryLevels"];
+        /** Replace the minimum levels of a warehouse (inventory.manage) */
+        put: operations["setInventoryLevels"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/openings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The opening stock documents, newest first (inventory.view) */
+        get: operations["listInventoryOpenings"];
+        put?: never;
+        /** Post the opening stock of a warehouse (inventory.opening); repeating the client_uuid returns the first answer */
+        post: operations["postInventoryOpening"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/openings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** An opening with its lines (inventory.view) */
+        get: operations["getInventoryOpening"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/stock-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The stock card of an item in a warehouse: the movements of a period with the running balance, the FIFO layers and the open shortfalls (inventory.view) */
+        get: operations["getInventoryStockCard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -12028,6 +12347,8 @@ export interface components {
             open_shifts: components["schemas"]["OpenCashierShiftSummary"][];
             /** @description Open bills of an outlet that asks for every bill to be closed before the day closes (with items sold). */
             outlet_bills?: components["schemas"]["NightAuditOutletIssue"][];
+            /** @description Findings of the inventory that stop the close - a balance that disagrees with the ledger, a stock value that disagrees with the general ledger (docs/architecture/35-inventory.md 5.7). */
+            stock?: components["schemas"]["NightAuditOutletIssue"][];
             unresolved_arrivals: components["schemas"]["UnresolvedArrival"][];
             unresolved_departures: components["schemas"]["UnresolvedDeparture"][];
             charge_errors: components["schemas"]["RoomChargeItem"][];
@@ -12741,7 +13062,7 @@ export interface components {
         };
         NightAuditOutletIssue: {
             /** @enum {string} */
-            code: "POS_OPEN_BILLS" | "POS_DRAFT_LINES";
+            code: "POS_OPEN_BILLS" | "POS_DRAFT_LINES" | "INVENTORY_BALANCE_DRIFT" | "INVENTORY_GL_MISMATCH" | "INVENTORY_NEGATIVE_STOCK";
             message: string;
             /** @description The code of the outlet. */
             ref?: string;
@@ -12749,6 +13070,8 @@ export interface components {
         NightAuditWarnings: {
             /** @description Open bills of the outlets with items sold (the sale is revenue of the day, the money is not counted yet) or with lines that were never sent. */
             outlet_bills?: components["schemas"]["NightAuditOutletIssue"][];
+            /** @description Findings of the inventory that do not stop the close (stock sold below zero). */
+            stock?: components["schemas"]["NightAuditOutletIssue"][];
             stale_drafts: {
                 /** Format: int64 */
                 reservation_room_id: number;
@@ -17168,6 +17491,380 @@ export interface components {
             data: components["schemas"]["OutletChargeRow"][];
             accepted: number;
             rejected: number;
+        };
+        InventorySettings: {
+            /** @description False for a property that has never saved the settings: the values are the defaults. */
+            exists: boolean;
+            /** @enum {string} */
+            costing_method: "AVERAGE" | "FIFO";
+            /** @description The business date of the first stock movement; from then the method cannot change (409 COSTING_METHOD_LOCKED). */
+            costing_locked_on: components["schemas"]["Date"] | null;
+            price_tolerance_pct: string;
+            qty_tolerance_pct: string;
+            over_receipt_pct: string;
+            po_requires_pr: boolean;
+            direct_receipt_limit: string | null;
+            count_blocks_night_audit: boolean;
+            count_blind: boolean;
+            version: number;
+        };
+        InventorySettingsInput: {
+            /** @enum {string} */
+            costing_method: "AVERAGE" | "FIFO";
+            price_tolerance_pct: string;
+            qty_tolerance_pct: string;
+            over_receipt_pct: string;
+            po_requires_pr: boolean;
+            direct_receipt_limit?: string | null;
+            count_blocks_night_audit: boolean;
+            count_blind: boolean;
+            version: number;
+        };
+        InventorySetupReport: {
+            /** @description No finding of severity ERROR. */
+            ok: boolean;
+            costing_method: string;
+            costing_locked_on: components["schemas"]["Date"] | null;
+            warehouses: number;
+            categories: number;
+            items: number;
+            issues: {
+                /** @enum {string} */
+                severity: "ERROR" | "WARNING";
+                code: string;
+                message: string;
+                ref?: string;
+            }[];
+        };
+        InventoryAccount: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+        };
+        InventoryUnit: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            is_active: boolean;
+            in_use: boolean;
+        };
+        InventoryUnitInput: {
+            /** @description 1 to 10 characters; fixed once the unit is made. */
+            code?: string;
+            name: string;
+            is_active?: boolean;
+        };
+        InventoryCategory: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            kind: "FOOD" | "BEVERAGE" | "SUPPLIES" | "OTHER";
+            /** Format: int64 */
+            inventory_account_id: number;
+            inventory_account_code?: string;
+            inventory_account_name?: string;
+            /** Format: int64 */
+            cogs_account_id: number | null;
+            cogs_account_code?: string | null;
+            /** Format: int64 */
+            issue_account_id: number | null;
+            issue_account_code?: string | null;
+            /** Format: int64 */
+            waste_account_id: number | null;
+            waste_account_code?: string | null;
+            /** Format: int64 */
+            variance_account_id: number | null;
+            variance_account_code?: string | null;
+            is_active: boolean;
+            sort_order: number;
+            item_count: number;
+            version: number;
+        };
+        InventoryCategoryInput: {
+            /** @description 1 to 20 characters A-Z, 0-9, . _ -; fixed once the category is made. */
+            code?: string;
+            name: string;
+            /** @enum {string} */
+            kind: "FOOD" | "BEVERAGE" | "SUPPLIES" | "OTHER";
+            /**
+             * Format: int64
+             * @description An active asset account of the group inventories.
+             */
+            inventory_account_id: number;
+            /**
+             * Format: int64
+             * @description An active expense account.
+             */
+            cogs_account_id?: number | null;
+            /** Format: int64 */
+            issue_account_id?: number | null;
+            /** Format: int64 */
+            waste_account_id?: number | null;
+            /** Format: int64 */
+            variance_account_id?: number | null;
+            is_active?: boolean;
+            sort_order?: number;
+            /** @description Required on a change. */
+            version?: number;
+        };
+        InventoryItemUnit: {
+            /** Format: int64 */
+            unit_id: number;
+            unit_code?: string;
+            /** @description 1 of this unit is stock_num / stock_den stock units. */
+            stock_num: number;
+            stock_den: number;
+            is_purchase: boolean;
+            is_recipe: boolean;
+            is_default_purchase: boolean;
+            is_default_recipe: boolean;
+        };
+        InventoryWarehouseStock: {
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_code: string;
+            warehouse_name?: string;
+            qty: string;
+            value: string;
+            /** @description Value / quantity; none when the shelf is empty or below zero. */
+            average_cost: string | null;
+            min_qty: string;
+        };
+        InventoryItem: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            category_kind: string;
+            /** Format: int64 */
+            stock_unit_id: number;
+            stock_unit_code: string;
+            reference_cost: string | null;
+            /** Format: int64 */
+            default_supplier_id?: number | null;
+            barcode?: string | null;
+            note?: string | null;
+            is_active: boolean;
+            version: number;
+            qty_on_hand: string;
+            value_on_hand: string;
+            below_min: boolean;
+            below_zero: boolean;
+            /** @description The item has a movement: its stock unit and its category are fixed. */
+            has_stock: boolean;
+            units: components["schemas"]["InventoryItemUnit"][];
+            stock: components["schemas"]["InventoryWarehouseStock"][];
+        };
+        InventoryItemInput: {
+            /** @description 1 to 30 characters A-Z, 0-9, . _ -; fixed once the item is made. */
+            code?: string;
+            name: string;
+            /** Format: int64 */
+            category_id: number;
+            /** Format: int64 */
+            stock_unit_id: number;
+            /** @description Used only when nothing better exists to cost stock sold below zero. */
+            reference_cost?: string | null;
+            /** Format: int64 */
+            default_supplier_id?: number | null;
+            barcode?: string | null;
+            note?: string | null;
+            is_active?: boolean;
+            /** @description On create: the other units of the item. */
+            units?: components["schemas"]["InventoryItemUnit"][];
+            /** @description Required on a change. */
+            version?: number;
+        };
+        InventoryItemUnitsInput: {
+            units: components["schemas"]["InventoryItemUnit"][];
+        };
+        InventoryWarehouseBrief: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+        };
+        InventoryItemPage: {
+            items: components["schemas"]["InventoryItem"][];
+            total: number;
+            /** @description The value of all the stock of the property. */
+            total_value: string;
+            /** @description Item count by category id. */
+            by_category: {
+                [key: string]: number;
+            };
+            costing_method: string;
+            costing_locked: boolean;
+            /** @description The active warehouses: the columns of the list. */
+            warehouses: components["schemas"]["InventoryWarehouseBrief"][];
+        };
+        InventoryWarehouse: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            kind: "MAIN" | "OUTLET" | "DEPARTMENT";
+            /** Format: int64 */
+            outlet_id: number | null;
+            outlet_code?: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            department_code?: string | null;
+            /** @enum {string} */
+            cost_class: "FOOD" | "BEVERAGE" | "OTHER";
+            is_active: boolean;
+            /** @description A stock count is running in the warehouse. */
+            frozen: boolean;
+            stock_value: string;
+            item_count: number;
+            version: number;
+        };
+        InventoryWarehouseInput: {
+            /** @description 1 to 20 characters A-Z, 0-9, . _ -; fixed once the warehouse is made. */
+            code?: string;
+            name: string;
+            /** @enum {string} */
+            kind: "MAIN" | "OUTLET" | "DEPARTMENT";
+            /**
+             * Format: int64
+             * @description Required for a warehouse of kind OUTLET, none for the others; one active warehouse per outlet.
+             */
+            outlet_id?: number | null;
+            /** Format: int64 */
+            department_id?: number | null;
+            /** @enum {string} */
+            cost_class: "FOOD" | "BEVERAGE" | "OTHER";
+            is_active?: boolean;
+            /** @description Required on a change. */
+            version?: number;
+        };
+        InventoryLevel: {
+            /** Format: int64 */
+            item_id: number;
+            item_code?: string;
+            item_name?: string;
+            min_qty: string;
+            max_qty?: string | null;
+            reorder_qty?: string | null;
+        };
+        InventoryLevelsInput: {
+            levels: components["schemas"]["InventoryLevel"][];
+        };
+        InventoryOpeningLineInput: {
+            /** Format: int64 */
+            item_id: number;
+            /**
+             * Format: int64
+             * @description A unit of the item.
+             */
+            unit_id: number;
+            /** @description In that unit. */
+            qty: string;
+            /** @description The cost of one such unit, at the decimals of the currency. */
+            unit_cost: string;
+        };
+        InventoryOpeningInput: {
+            /**
+             * Format: uuid
+             * @description Made by the client; repeating it returns the first opening.
+             */
+            client_uuid: string;
+            /** Format: int64 */
+            warehouse_id: number;
+            note?: string | null;
+            lines: components["schemas"]["InventoryOpeningLineInput"][];
+        };
+        InventoryOpeningLine: {
+            line_no: number;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            /** @description The stock unit of the item; qty and unit_cost are in stock units. */
+            unit_code: string;
+            qty: string;
+            unit_cost: string;
+            value: string;
+        };
+        InventoryOpening: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_code: string;
+            warehouse_name: string;
+            business_date: components["schemas"]["Date"];
+            total_value: string;
+            line_count: number;
+            note: string | null;
+            /** Format: date-time */
+            created_at: string;
+            lines?: components["schemas"]["InventoryOpeningLine"][];
+        };
+        InventoryCardLine: {
+            /** Format: int64 */
+            movement_id: number;
+            business_date: components["schemas"]["Date"];
+            source_date?: components["schemas"]["Date"] | null;
+            /** @enum {string} */
+            kind: "OPENING" | "RECEIPT" | "RECEIPT_REVERSAL" | "SUPPLIER_RETURN" | "TRANSFER_OUT" | "TRANSFER_IN" | "ISSUE" | "WASTE" | "STAFF_MEAL" | "ENTERTAINMENT" | "COUNT_GAIN" | "COUNT_LOSS" | "POS_SALE" | "POS_SALE_RETURN" | "COGS_TO_WASTE" | "COST_ADJUST" | "NEG_SETTLE";
+            source_type: string;
+            document_number?: string;
+            qty: string;
+            value: string;
+            unit_cost: string;
+            cost_estimated: boolean;
+            balance_qty: string;
+            balance_value: string;
+            average_cost: string;
+            /** Format: int64 */
+            reverses_id?: number | null;
+        };
+        InventoryLayer: {
+            /** Format: int64 */
+            id: number;
+            received_on: components["schemas"]["Date"];
+            qty_in: string;
+            qty_remaining: string;
+            unit_cost: string;
+            value_remaining: string;
+        };
+        InventoryShortfall: {
+            /** Format: int64 */
+            id: number;
+            qty_open: string;
+            est_unit_cost: string;
+            est_value_open: string;
+            business_date: components["schemas"]["Date"];
+            source_type: string;
+        };
+        InventoryStockCard: {
+            item: components["schemas"]["InventoryItem"];
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse: string;
+            costing_method: string;
+            from: components["schemas"]["Date"] | null;
+            to: components["schemas"]["Date"] | null;
+            opening_qty: string;
+            opening_value: string;
+            lines: components["schemas"]["InventoryCardLine"][];
+            closing_qty: string;
+            closing_value: string;
+            layers: components["schemas"]["InventoryLayer"][];
+            shortfalls: components["schemas"]["InventoryShortfall"][];
+            /** @description More than 1000 movements: narrow the period. */
+            truncated: boolean;
         };
     };
     responses: {
@@ -30917,6 +31614,698 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutletChargeList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventorySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. A property that never used the module has the defaults and exists false. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventorySettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    putInventorySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventorySettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventorySettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    inventorySetupCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventorySetupReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listInventoryAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryAccount"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listInventoryUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The units. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryUnit"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createInventoryUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryUnitInput"];
+            };
+        };
+        responses: {
+            /** @description The unit. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryUnit"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateInventoryUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryUnitInput"];
+            };
+        };
+        responses: {
+            /** @description The unit. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryUnit"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The categories. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryCategory"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createInventoryCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryCategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The category. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCategory"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateInventoryCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryCategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The category. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCategory"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryItems: {
+        parameters: {
+            query?: {
+                /** @description Code, name or barcode */
+                q?: string;
+                /** @description Category id */
+                category?: number;
+                /** @description Show the stock of this warehouse only */
+                warehouse?: number;
+                active?: boolean;
+                /** @description Only items below a minimum level */
+                below_min?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItemPage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createInventoryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryItemInput"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateInventoryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryItemInput"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setInventoryItemUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryItemUnitsInput"];
+            };
+        };
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryWarehouses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The warehouses. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryWarehouse"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createInventoryWarehouse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryWarehouseInput"];
+            };
+        };
+        responses: {
+            /** @description The warehouse. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryWarehouse"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateInventoryWarehouse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryWarehouseInput"];
+            };
+        };
+        responses: {
+            /** @description The warehouse. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryWarehouse"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryLevels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The levels. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryLevel"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setInventoryLevels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryLevelsInput"];
+            };
+        };
+        responses: {
+            /** @description The levels. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryLevel"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryOpenings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The openings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryOpening"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    postInventoryOpening: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryOpeningInput"];
+            };
+        };
+        responses: {
+            /** @description The opening. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryOpening"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryOpening: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The opening. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryOpening"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getInventoryStockCard: {
+        parameters: {
+            query?: {
+                /** @description Warehouse id (required) */
+                warehouse?: number;
+                /** @description Item id (required) */
+                item?: number;
+                /** @description Start of the period; the card starts from the opening balance of that day */
+                from?: components["schemas"]["Date"];
+                /** @description End of the period */
+                to?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The card. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryStockCard"];
                 };
             };
             403: components["responses"]["Problem"];

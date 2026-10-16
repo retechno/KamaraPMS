@@ -9969,6 +9969,446 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
 
+  /api/v1/properties/{propertyId}/inventory/settings:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getInventorySettings
+      summary: "The settings of the inventory: the costing method and whether it is locked (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The settings. A property that never used the module has the defaults and exists false.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventorySettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putInventorySettings
+      summary: "Change the settings (inventory.manage); the costing method only before the first stock movement"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventorySettingsInput" }
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventorySettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/setup-check:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: inventorySetupCheck
+      summary: "What is left to set up and whether the books agree with the stock (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventorySetupReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/accounts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryAccounts
+      summary: "The accounts that can be the inventory account of a category (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The accounts.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryAccount" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/units:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryUnits
+      summary: "The units of measure (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The units.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryUnit" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createInventoryUnit
+      summary: "Add a unit (inventory.manage)"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryUnitInput" }
+      responses:
+        "201":
+          description: The unit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryUnit" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/units/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateInventoryUnit
+      summary: "Rename a unit or switch it off (inventory.manage)"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryUnitInput" }
+      responses:
+        "200":
+          description: The unit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryUnit" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/categories:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryCategories
+      summary: "The categories with their accounts (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryCategory" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createInventoryCategory
+      summary: "Add a category (inventory.manage)"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryCategoryInput" }
+      responses:
+        "201":
+          description: The category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCategory" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateInventoryCategory
+      summary: "Change a category (inventory.manage); its inventory account and class are fixed once an item of it has moved"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryCategoryInput" }
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCategory" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/items:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryItems
+      summary: "Items with the stock of each per warehouse, a search, and the counts of the screen (inventory.view)"
+      tags: [inventory]
+      parameters:
+        - { name: q, in: query, description: "Code, name or barcode", schema: { type: string } }
+        - { name: category, in: query, description: "Category id", schema: { type: integer } }
+        - { name: warehouse, in: query, description: "Show the stock of this warehouse only", schema: { type: integer } }
+        - { name: active, in: query, description: "", schema: { type: boolean } }
+        - { name: below_min, in: query, description: "Only items below a minimum level", schema: { type: boolean } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+        - { name: offset, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: A page of items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItemPage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createInventoryItem
+      summary: "Add an item (inventory.manage); the stock unit becomes its unit 1/1"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryItemInput" }
+      responses:
+        "201":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/items/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInventoryItem
+      summary: "An item with its units and its stock per warehouse (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateInventoryItem
+      summary: "Change an item (inventory.manage); an item with stock keeps its stock unit and category"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryItemInput" }
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/items/{id}/units:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: setInventoryItemUnits
+      summary: "Replace the units of an item (inventory.manage); the stock unit is always 1/1"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryItemUnitsInput" }
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/warehouses:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryWarehouses
+      summary: "The warehouses with the value of their stock (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The warehouses.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryWarehouse" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createInventoryWarehouse
+      summary: "Add a warehouse (inventory.manage)"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryWarehouseInput" }
+      responses:
+        "201":
+          description: The warehouse.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryWarehouse" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/warehouses/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateInventoryWarehouse
+      summary: "Change a warehouse (inventory.manage); one that holds stock stays on"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryWarehouseInput" }
+      responses:
+        "200":
+          description: The warehouse.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryWarehouse" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/warehouses/{id}/levels:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInventoryLevels
+      summary: "The minimum levels of a warehouse (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The levels.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryLevel" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setInventoryLevels
+      summary: "Replace the minimum levels of a warehouse (inventory.manage)"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryLevelsInput" }
+      responses:
+        "200":
+          description: The levels.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryLevel" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/openings:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryOpenings
+      summary: "The opening stock documents, newest first (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The openings.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryOpening" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: postInventoryOpening
+      summary: "Post the opening stock of a warehouse (inventory.opening); repeating the client_uuid returns the first answer"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryOpeningInput" }
+      responses:
+        "201":
+          description: The opening.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryOpening" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/openings/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInventoryOpening
+      summary: "An opening with its lines (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The opening.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryOpening" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/stock-card:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getInventoryStockCard
+      summary: "The stock card of an item in a warehouse: the movements of a period with the running balance, the FIFO layers and the open shortfalls (inventory.view)"
+      tags: [inventory]
+      parameters:
+        - { name: warehouse, in: query, description: "Warehouse id (required)", schema: { type: integer } }
+        - { name: item, in: query, description: "Item id (required)", schema: { type: integer } }
+        - { name: from, in: query, description: "Start of the period; the card starts from the opening balance of that day", schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, description: "End of the period", schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: The card.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryStockCard" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -13312,6 +13752,10 @@ components:
           type: array
           description: Open bills of an outlet that asks for every bill to be closed before the day closes (with items sold).
           items: { $ref: "#/components/schemas/NightAuditOutletIssue" }
+        stock:
+          type: array
+          description: Findings of the inventory that stop the close - a balance that disagrees with the ledger, a stock value that disagrees with the general ledger (docs/architecture/35-inventory.md 5.7).
+          items: { $ref: "#/components/schemas/NightAuditOutletIssue" }
         unresolved_arrivals:
           type: array
           items: { $ref: "#/components/schemas/UnresolvedArrival" }
@@ -13979,7 +14423,7 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: { type: string, enum: [POS_OPEN_BILLS, POS_DRAFT_LINES] }
+        code: { type: string, enum: [POS_OPEN_BILLS, POS_DRAFT_LINES, INVENTORY_BALANCE_DRIFT, INVENTORY_GL_MISMATCH, INVENTORY_NEGATIVE_STOCK] }
         message: { type: string }
         ref: { type: string, description: The code of the outlet. }
     NightAuditWarnings:
@@ -13989,6 +14433,10 @@ components:
         outlet_bills:
           type: array
           description: Open bills of the outlets with items sold (the sale is revenue of the day, the money is not counted yet) or with lines that were never sent.
+          items: { $ref: "#/components/schemas/NightAuditOutletIssue" }
+        stock:
+          type: array
+          description: Findings of the inventory that do not stop the close (stock sold below zero).
           items: { $ref: "#/components/schemas/NightAuditOutletIssue" }
         stale_drafts:
           type: array
@@ -18294,3 +18742,343 @@ components:
         data: { type: array, items: { $ref: "#/components/schemas/OutletChargeRow" } }
         accepted: { type: integer }
         rejected: { type: integer }
+    InventorySettings:
+      type: object
+      required: [exists, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version]
+      properties:
+        exists: { type: boolean, description: "False for a property that has never saved the settings: the values are the defaults." }
+        costing_method: { type: string, enum: [AVERAGE, FIFO] }
+        costing_locked_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: "The business date of the first stock movement; from then the method cannot change (409 COSTING_METHOD_LOCKED)." }
+        price_tolerance_pct: { type: string }
+        qty_tolerance_pct: { type: string }
+        over_receipt_pct: { type: string }
+        po_requires_pr: { type: boolean }
+        direct_receipt_limit: { type: [string, "null"] }
+        count_blocks_night_audit: { type: boolean }
+        count_blind: { type: boolean }
+        version: { type: integer }
+    InventorySettingsInput:
+      type: object
+      required: [costing_method, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, count_blocks_night_audit, count_blind, version]
+      properties:
+        costing_method: { type: string, enum: [AVERAGE, FIFO] }
+        price_tolerance_pct: { type: string }
+        qty_tolerance_pct: { type: string }
+        over_receipt_pct: { type: string }
+        po_requires_pr: { type: boolean }
+        direct_receipt_limit: { type: [string, "null"] }
+        count_blocks_night_audit: { type: boolean }
+        count_blind: { type: boolean }
+        version: { type: integer }
+    InventorySetupReport:
+      type: object
+      required: [ok, costing_method, costing_locked_on, warehouses, categories, items, issues]
+      properties:
+        ok: { type: boolean, description: "No finding of severity ERROR." }
+        costing_method: { type: string }
+        costing_locked_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        warehouses: { type: integer }
+        categories: { type: integer }
+        items: { type: integer }
+        issues:
+          type: array
+          items:
+            type: object
+            required: [severity, code, message]
+            properties:
+              severity: { type: string, enum: [ERROR, WARNING] }
+              code: { type: string }
+              message: { type: string }
+              ref: { type: string }
+    InventoryAccount:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+    InventoryUnit:
+      type: object
+      required: [id, code, name, is_active, in_use]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+        in_use: { type: boolean }
+    InventoryUnitInput:
+      type: object
+      required: [name]
+      properties:
+        code: { type: string, description: "1 to 10 characters; fixed once the unit is made." }
+        name: { type: string }
+        is_active: { type: boolean }
+    InventoryCategory:
+      type: object
+      required: [id, code, name, kind, inventory_account_id, cogs_account_id, issue_account_id, waste_account_id, variance_account_id, is_active, sort_order, item_count, version]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [FOOD, BEVERAGE, SUPPLIES, OTHER] }
+        inventory_account_id: { type: integer, format: int64 }
+        inventory_account_code: { type: string }
+        inventory_account_name: { type: string }
+        cogs_account_id: { type: [integer, "null"], format: int64 }
+        cogs_account_code: { type: [string, "null"] }
+        issue_account_id: { type: [integer, "null"], format: int64 }
+        issue_account_code: { type: [string, "null"] }
+        waste_account_id: { type: [integer, "null"], format: int64 }
+        waste_account_code: { type: [string, "null"] }
+        variance_account_id: { type: [integer, "null"], format: int64 }
+        variance_account_code: { type: [string, "null"] }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        item_count: { type: integer }
+        version: { type: integer }
+    InventoryCategoryInput:
+      type: object
+      required: [name, kind, inventory_account_id]
+      properties:
+        code: { type: string, description: "1 to 20 characters A-Z, 0-9, . _ -; fixed once the category is made." }
+        name: { type: string }
+        kind: { type: string, enum: [FOOD, BEVERAGE, SUPPLIES, OTHER] }
+        inventory_account_id: { type: integer, format: int64, description: "An active asset account of the group inventories." }
+        cogs_account_id: { type: [integer, "null"], format: int64, description: "An active expense account." }
+        issue_account_id: { type: [integer, "null"], format: int64 }
+        waste_account_id: { type: [integer, "null"], format: int64 }
+        variance_account_id: { type: [integer, "null"], format: int64 }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        version: { type: integer, description: "Required on a change." }
+    InventoryItemUnit:
+      type: object
+      required: [unit_id, stock_num, stock_den, is_purchase, is_recipe, is_default_purchase, is_default_recipe]
+      properties:
+        unit_id: { type: integer, format: int64 }
+        unit_code: { type: string }
+        stock_num: { type: integer, description: "1 of this unit is stock_num / stock_den stock units." }
+        stock_den: { type: integer }
+        is_purchase: { type: boolean }
+        is_recipe: { type: boolean }
+        is_default_purchase: { type: boolean }
+        is_default_recipe: { type: boolean }
+    InventoryWarehouseStock:
+      type: object
+      required: [warehouse_id, warehouse_code, qty, value, average_cost, min_qty]
+      properties:
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_code: { type: string }
+        warehouse_name: { type: string }
+        qty: { type: string }
+        value: { type: string }
+        average_cost: { type: [string, "null"], description: "Value / quantity; none when the shelf is empty or below zero." }
+        min_qty: { type: string }
+    InventoryItem:
+      type: object
+      required: [id, code, name, category_id, category_code, category_name, category_kind, stock_unit_id, stock_unit_code, reference_cost, is_active, version, qty_on_hand, value_on_hand, below_min, below_zero, has_stock, units, stock]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        category_kind: { type: string }
+        stock_unit_id: { type: integer, format: int64 }
+        stock_unit_code: { type: string }
+        reference_cost: { type: [string, "null"] }
+        default_supplier_id: { type: [integer, "null"], format: int64 }
+        barcode: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        is_active: { type: boolean }
+        version: { type: integer }
+        qty_on_hand: { type: string }
+        value_on_hand: { type: string }
+        below_min: { type: boolean }
+        below_zero: { type: boolean }
+        has_stock: { type: boolean, description: "The item has a movement: its stock unit and its category are fixed." }
+        units: { type: array, items: { $ref: "#/components/schemas/InventoryItemUnit" } }
+        stock: { type: array, items: { $ref: "#/components/schemas/InventoryWarehouseStock" } }
+    InventoryItemInput:
+      type: object
+      required: [name, category_id, stock_unit_id]
+      properties:
+        code: { type: string, description: "1 to 30 characters A-Z, 0-9, . _ -; fixed once the item is made." }
+        name: { type: string }
+        category_id: { type: integer, format: int64 }
+        stock_unit_id: { type: integer, format: int64 }
+        reference_cost: { type: [string, "null"], description: "Used only when nothing better exists to cost stock sold below zero." }
+        default_supplier_id: { type: [integer, "null"], format: int64 }
+        barcode: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        is_active: { type: boolean }
+        units: { type: array, items: { $ref: "#/components/schemas/InventoryItemUnit" }, description: "On create: the other units of the item." }
+        version: { type: integer, description: "Required on a change." }
+    InventoryItemUnitsInput:
+      type: object
+      required: [units]
+      properties:
+        units: { type: array, items: { $ref: "#/components/schemas/InventoryItemUnit" } }
+    InventoryWarehouseBrief:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+    InventoryItemPage:
+      type: object
+      required: [items, total, total_value, by_category, costing_method, costing_locked, warehouses]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InventoryItem" } }
+        total: { type: integer }
+        total_value: { type: string, description: "The value of all the stock of the property." }
+        by_category: { type: object, additionalProperties: { type: integer }, description: "Item count by category id." }
+        costing_method: { type: string }
+        costing_locked: { type: boolean }
+        warehouses: { type: array, items: { $ref: "#/components/schemas/InventoryWarehouseBrief" }, description: "The active warehouses: the columns of the list." }
+    InventoryWarehouse:
+      type: object
+      required: [id, code, name, kind, outlet_id, department_id, cost_class, is_active, frozen, stock_value, item_count, version]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [MAIN, OUTLET, DEPARTMENT] }
+        outlet_id: { type: [integer, "null"], format: int64 }
+        outlet_code: { type: [string, "null"] }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: [string, "null"] }
+        cost_class: { type: string, enum: [FOOD, BEVERAGE, OTHER] }
+        is_active: { type: boolean }
+        frozen: { type: boolean, description: "A stock count is running in the warehouse." }
+        stock_value: { type: string }
+        item_count: { type: integer }
+        version: { type: integer }
+    InventoryWarehouseInput:
+      type: object
+      required: [name, kind, cost_class]
+      properties:
+        code: { type: string, description: "1 to 20 characters A-Z, 0-9, . _ -; fixed once the warehouse is made." }
+        name: { type: string }
+        kind: { type: string, enum: [MAIN, OUTLET, DEPARTMENT] }
+        outlet_id: { type: [integer, "null"], format: int64, description: "Required for a warehouse of kind OUTLET, none for the others; one active warehouse per outlet." }
+        department_id: { type: [integer, "null"], format: int64 }
+        cost_class: { type: string, enum: [FOOD, BEVERAGE, OTHER] }
+        is_active: { type: boolean }
+        version: { type: integer, description: "Required on a change." }
+    InventoryLevel:
+      type: object
+      required: [item_id, min_qty]
+      properties:
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        min_qty: { type: string }
+        max_qty: { type: [string, "null"] }
+        reorder_qty: { type: [string, "null"] }
+    InventoryLevelsInput:
+      type: object
+      required: [levels]
+      properties:
+        levels: { type: array, items: { $ref: "#/components/schemas/InventoryLevel" } }
+    InventoryOpeningLineInput:
+      type: object
+      required: [item_id, unit_id, qty, unit_cost]
+      properties:
+        item_id: { type: integer, format: int64 }
+        unit_id: { type: integer, format: int64, description: "A unit of the item." }
+        qty: { type: string, description: "In that unit." }
+        unit_cost: { type: string, description: "The cost of one such unit, at the decimals of the currency." }
+    InventoryOpeningInput:
+      type: object
+      required: [client_uuid, warehouse_id, lines]
+      properties:
+        client_uuid: { type: string, format: uuid, description: "Made by the client; repeating it returns the first opening." }
+        warehouse_id: { type: integer, format: int64 }
+        note: { type: [string, "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryOpeningLineInput" }, maxItems: 500 }
+    InventoryOpeningLine:
+      type: object
+      required: [line_no, item_id, item_code, item_name, unit_code, qty, unit_cost, value]
+      properties:
+        line_no: { type: integer }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string, description: "The stock unit of the item; qty and unit_cost are in stock units." }
+        qty: { type: string }
+        unit_cost: { type: string }
+        value: { type: string }
+    InventoryOpening:
+      type: object
+      required: [id, number, warehouse_id, warehouse_code, warehouse_name, business_date, total_value, line_count, note, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_code: { type: string }
+        warehouse_name: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        total_value: { type: string }
+        line_count: { type: integer }
+        note: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryOpeningLine" } }
+    InventoryCardLine:
+      type: object
+      required: [movement_id, business_date, kind, source_type, qty, value, unit_cost, cost_estimated, balance_qty, balance_value, average_cost]
+      properties:
+        movement_id: { type: integer, format: int64 }
+        business_date: { $ref: "#/components/schemas/Date" }
+        source_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        kind: { type: string, enum: [OPENING, RECEIPT, RECEIPT_REVERSAL, SUPPLIER_RETURN, TRANSFER_OUT, TRANSFER_IN, ISSUE, WASTE, STAFF_MEAL, ENTERTAINMENT, COUNT_GAIN, COUNT_LOSS, POS_SALE, POS_SALE_RETURN, COGS_TO_WASTE, COST_ADJUST, NEG_SETTLE] }
+        source_type: { type: string }
+        document_number: { type: string }
+        qty: { type: string }
+        value: { type: string }
+        unit_cost: { type: string }
+        cost_estimated: { type: boolean }
+        balance_qty: { type: string }
+        balance_value: { type: string }
+        average_cost: { type: string }
+        reverses_id: { type: [integer, "null"], format: int64 }
+    InventoryLayer:
+      type: object
+      required: [id, received_on, qty_in, qty_remaining, unit_cost, value_remaining]
+      properties:
+        id: { type: integer, format: int64 }
+        received_on: { $ref: "#/components/schemas/Date" }
+        qty_in: { type: string }
+        qty_remaining: { type: string }
+        unit_cost: { type: string }
+        value_remaining: { type: string }
+    InventoryShortfall:
+      type: object
+      required: [id, qty_open, est_unit_cost, est_value_open, business_date, source_type]
+      properties:
+        id: { type: integer, format: int64 }
+        qty_open: { type: string }
+        est_unit_cost: { type: string }
+        est_value_open: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        source_type: { type: string }
+    InventoryStockCard:
+      type: object
+      required: [item, warehouse_id, warehouse, costing_method, from, to, opening_qty, opening_value, lines, closing_qty, closing_value, layers, shortfalls, truncated]
+      properties:
+        item: { $ref: "#/components/schemas/InventoryItem" }
+        warehouse_id: { type: integer, format: int64 }
+        warehouse: { type: string }
+        costing_method: { type: string }
+        from: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        to: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        opening_qty: { type: string }
+        opening_value: { type: string }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryCardLine" } }
+        closing_qty: { type: string }
+        closing_value: { type: string }
+        layers: { type: array, items: { $ref: "#/components/schemas/InventoryLayer" } }
+        shortfalls: { type: array, items: { $ref: "#/components/schemas/InventoryShortfall" } }
+        truncated: { type: boolean, description: "More than 1000 movements: narrow the period." }

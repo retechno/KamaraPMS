@@ -198,6 +198,9 @@ func methodKey(method string) string {
 var sourceLabels = map[string]string{
 	"CHARGE_CODE": "Charges", "TAX": "Tax", "SERVICE_CHARGE": "Service charge", "PAYMENT": "Payments",
 	"RECEIPT": "City ledger receipts", "DEPOSIT_RELEASE": "Deposit released at checkout, folio", "DEPOSIT_APPLIED": "Deposit applied to charges, folio",
+	// the stock ledger (35-inventory.md 6.2)
+	"INV_OPENING": "Opening stock", "INV_RECEIPT": "Goods received", "INV_RETURN": "Return to supplier", "INV_COST_ADJUST": "Cost adjustment of stock", "INV_SALE_COST": "Cost of sales",
+	"INV_WASTE": "Stock waste", "INV_ISSUE": "Stock issued", "INV_STAFF_MEAL": "Staff meal", "INV_ENTERTAINMENT": "Entertainment", "INV_COUNT": "Stock count",
 }
 
 type target struct {
@@ -350,9 +353,15 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 			return false, err
 		}
 	}
+	var stockLines []StockDayLine // the second source of the day: the stock ledger (docs/architecture/35-inventory.md 6.2)
+	if s.stock != nil {
+		if stockLines, err = s.stock.StockDayLines(ctx, p.TenantID, propertyID, bd); err != nil {
+			return false, err
+		}
+	}
 	now := s.clock.Now()
 	post := accountingdb.InsertDayPostParams{TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: bd, PostedAt: now, ActorID: p.ActorID()}
-	if len(rows) == 0 {
+	if len(rows) == 0 && len(stockLines) == 0 {
 		return false, q.InsertDayPost(ctx, post)
 	}
 	res, err := s.newResolver(ctx, p.TenantID, propertyID)
@@ -386,6 +395,31 @@ func (s *Service) postDay(ctx context.Context, p auth.Principal, propertyID int6
 		sums[k] = sums[k].Add(r.Amount)
 		if r.Detail != "" {
 			details[k] = r.Detail
+		}
+	}
+	for _, l := range stockLines {
+		a, ok := res.byID[l.AccountID]
+		if !ok {
+			return false, apperr.Internal(fmt.Errorf("the stock of %s names account %d, which is not in the chart", bd, l.AccountID))
+		}
+		names[a.ID] = target{a.ID, a.Code, a.Name}
+		var named *int64
+		if l.DepartmentID != 0 {
+			d := l.DepartmentID
+			named = &d
+		}
+		dept, err := lineDepartment(a, named, true, "department_id", "stock "+strings.ToLower(l.SourceRef))
+		if err != nil {
+			return false, err
+		}
+		var deptID int64
+		if dept != nil {
+			deptID = *dept
+		}
+		k := lineKey{a.ID, l.SourceType, l.SourceRef, deptID}
+		sums[k] = sums[k].Add(l.Amount)
+		if l.Detail != "" {
+			details[k] = l.Detail
 		}
 	}
 	keys := make([]lineKey, 0, len(sums))
@@ -618,6 +652,13 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 			if e, ok := res.byKey[k]; ok {
 				control[e.AccountID] = k
 			}
+		}
+		stockControl, err := s.stockControlAccounts(ctx, p.TenantID, propertyID)
+		if err != nil {
+			return err
+		}
+		for id := range stockControl {
+			control[id] = "INVENTORY"
 		}
 		var lineErrs []apperr.FieldError
 		for i, l := range in.Lines {

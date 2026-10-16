@@ -487,6 +487,25 @@ func (s *Service) Reconciliation(ctx context.Context, propertyID int64, asOf *ci
 		mk("CITY_LEDGER", "City ledger", "Guest balances transferred to companies, less receipts taken, credit notes and write-offs", SideDebit, src.CityTransferred.Sub(src.CityReceived).Sub(src.CityAdjusted)),
 		mk(KeyAccountsPayable, "Accounts payable", "Supplier bills entered, less supplier payments made", SideCredit, src.BillsEntered.Sub(src.PaymentsMade)),
 	}
+	if s.stock != nil { // the stock value by inventory account, from the stock ledger and not from the journals (35-inventory.md 6.3)
+		inv, err := s.stock.StockValueByAccount(ctx, p.TenantID, propertyID, at)
+		if err != nil {
+			return Reconciliation{}, err
+		}
+		accs, err := q.ListAccounts(ctx, accountingdb.ListAccountsParams{TenantID: p.TenantID, PropertyID: propertyID, RowLimit: maxAccounts + 1})
+		if err != nil {
+			return Reconciliation{}, err
+		}
+		for _, a := range accs { // the accounts come ordered by code
+			src, held := inv[a.ID]
+			if !held || (src.IsZero() && bal[a.ID].IsZero()) {
+				continue
+			}
+			l := bal[a.ID]
+			out.Controls = append(out.Controls, Control{Key: "INVENTORY_" + a.Code, Title: "Inventory " + a.Name, Account: a.Code + " " + a.Name, Ledger: l, Source: src, Difference: l.Sub(src),
+				Basis: "The stock ledger, valued by the category of the items, up to the date"})
+		}
+	}
 	out.Reconciled = out.PendingDays == 0
 	for _, c := range out.Controls {
 		if !c.Difference.IsZero() {

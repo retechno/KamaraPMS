@@ -1910,7 +1910,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('tax_returns',             'ROOT',   'tax'),
     ('tax_payments',            'ROOT',   'tax'),
     ('tax_opening_credits',     'ROOT',   'tax'),
-    ('budgets',                 'ROOT',   'budgets');
+    ('budgets',                 'ROOT',   'budgets'),
+    ('inv_movements',           'ROOT',   'the stock ledger');
 -- A child row cannot exist without a root row above: it never needs its own test.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('folio_item_components', 'CHILD', 'of folio_items'), ('stay_charge_postings', 'CHILD', 'of folio_items'),
@@ -1927,7 +1928,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('tax_invoices', 'CHILD', 'of folio_items or city_ledger_invoices'), ('tax_invoice_lines', 'CHILD', 'of tax_invoices'),
     ('tax_invoice_exports', 'CHILD', 'of tax_invoices'), ('tax_invoice_export_items', 'CHILD', 'of tax_invoices'),
     ('budget_lines', 'CHILD', 'of budgets'), ('budget_statistics', 'CHILD', 'of budgets'),
-    ('folio_transfers', 'CHILD', 'of folio_items'), ('pos_room_charges', 'CHILD', 'of folio_items');
+    ('folio_transfers', 'CHILD', 'of folio_items'), ('pos_room_charges', 'CHILD', 'of folio_items'),
+    ('inv_openings', 'CHILD', 'of inv_movements'), ('inv_opening_lines', 'CHILD', 'of inv_movements'), ('inv_balances', 'CHILD', 'of inv_movements'),
+    ('inv_layers', 'CHILD', 'of inv_movements'), ('inv_layer_uses', 'CHILD', 'of inv_movements'), ('inv_shortfalls', 'CHILD', 'of inv_movements');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -1939,7 +1942,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('reservation_rooms', 'PLAN', 'bookings'), ('reservations', 'PLAN', 'bookings'), ('stays', 'PLAN', 'stays'), ('stay_rooms', 'PLAN', 'stays'),
     ('pos_options', 'CONFIG', 'add-on and variant price differences'), ('pos_price_list_items', 'CONFIG', 'prices of an outlet'), ('folio_outlet_locks', 'CONFIG', 'the limit of outlet charges of a folio'),
     ('pos_room_charge_attempts', 'PLAN', 'a request of an outlet to charge a room, kept as a trail; the money is in the ledger'),
-    ('pos_bill_lines', 'PLAN', 'the line of an order with its price snapshot; the money is the ledger row it posts when it is sent');
+    ('pos_bill_lines', 'PLAN', 'the line of an order with its price snapshot; the money is the ledger row it posts when it is sent'),
+    ('inv_items', 'CONFIG', 'the reference cost of an item'), ('inv_levels', 'CONFIG', 'minimum and maximum quantities'), ('inventory_settings', 'CONFIG', 'tolerances and the receipt limit');
 DO $$
 DECLARE v_missing text;
 BEGIN
@@ -2388,6 +2392,162 @@ BEGIN
     INSERT INTO pms_test.results VALUES ('the ICU collation orders names as an alphabet does, and the indexes of the ordered lists exist', 'accepted');
     RAISE NOTICE 'PASS  the ICU collation orders names as an alphabet does, and the indexes of the ordered lists exist';
 END $$;
+
+------------------------------------------------------------------------------------------
+-- Inventory, PR 1 (migration 00084, docs/architecture/35-inventory.md): masters, ledger, balances, layers, shortfalls, opening stock
+------------------------------------------------------------------------------------------
+-- The rows a movement points to: the accounts, a unit, a category, an item, a warehouse and the settings of BALI (inside the subtransaction of the test: it is rolled back).
+CREATE FUNCTION pms_test.inv_base() RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+    VALUES (tn('ABC'), pr('BALI'), '1310', 'Food inventory', 'ASSET', 'DEBIT', 'INVENTORIES'),
+           (tn('ABC'), pr('BALI'), '5210', 'Cost of food sales', 'EXPENSE', 'DEBIT', 'EXP_FB'),
+           (tn('ABC'), pr('BALI'), '3900', 'Opening balance equity', 'EQUITY', 'CREDIT', 'EQUITY');
+    INSERT INTO inventory_settings (tenant_id, property_id) VALUES (tn('ABC'), pr('BALI'));
+    INSERT INTO inv_units (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'kg', 'Kilogram'), (tn('ABC'), pr('BALI'), 'g', 'Gram');
+    INSERT INTO inv_categories (tenant_id, property_id, code, name, kind, inventory_account_id, cogs_account_id)
+    VALUES (tn('ABC'), pr('BALI'), 'FOOD', 'Food', 'FOOD', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1310'), (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '5210'));
+    INSERT INTO inv_items (tenant_id, property_id, code, name, category_id, stock_unit_id)
+    VALUES (tn('ABC'), pr('BALI'), 'RICE', 'Rice', (SELECT id FROM inv_categories WHERE property_id = pr('BALI') AND code = 'FOOD'), (SELECT id FROM inv_units WHERE property_id = pr('BALI') AND code = 'kg'));
+    INSERT INTO inv_warehouses (tenant_id, property_id, code, name, kind) VALUES (tn('ABC'), pr('BALI'), 'MAIN', 'Main store', 'MAIN');
+END $$;
+-- A movement of the item RICE in the warehouse MAIN on the open day of BALI.
+CREATE FUNCTION pms_test.inv_move(p_kind text, p_qty numeric, p_value numeric, p_line int DEFAULT 1) RETURNS bigint LANGUAGE sql AS $$
+    INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, unit_cost, business_date, source_type, source_id, source_line, item_class, cost_class)
+    SELECT tn('ABC'), pr('BALI'), w.id, i.id, p_kind, p_qty, p_value, CASE WHEN p_qty = 0 THEN 0 ELSE abs(p_value / p_qty) END,
+           (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'TEST', 1, p_line, 'FOOD', 'FOOD'
+      FROM inv_warehouses w, inv_items i WHERE w.property_id = pr('BALI') AND w.code = 'MAIN' AND i.property_id = pr('BALI') AND i.code = 'RICE'
+    RETURNING id
+$$;
+
+SELECT expect_ok('the masters of the module are accepted', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$);
+SELECT expect_error('the costing method is AVERAGE or FIFO', '23514', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inventory_settings SET costing_method = 'LIFO'$q$);
+SELECT expect_ok('the costing method can change before the first movement', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inventory_settings SET costing_method = 'FIFO'$q$, $q$UPDATE inventory_settings SET costing_method = 'AVERAGE'$q$);
+SELECT expect_ok('the first movement stamps the date the method is locked from, and a later movement keeps it',
+    $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$,
+    $q$DO $d$ BEGIN IF (SELECT costing_locked_on FROM inventory_settings WHERE property_id = pr('BALI')) IS DISTINCT FROM (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN') THEN RAISE EXCEPTION 'not stamped'; END IF; END $d$;$q$,
+    $q$SELECT pms_test.inv_move('ISSUE', -1, -10000, 2)$q$);
+SELECT expect_error('the costing method is locked by the first movement', '23001', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$,
+    $q$UPDATE inventory_settings SET costing_method = 'FIFO'$q$);
+SELECT expect_error('the date of the lock cannot be cleared', '23001', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$,
+    $q$UPDATE inventory_settings SET costing_locked_on = NULL$q$);
+SELECT expect_ok('the other settings change after the lock', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$,
+    $q$UPDATE inventory_settings SET price_tolerance_pct = 2.5, count_blind = false$q$);
+SELECT expect_error('the tolerances are percentages', '23514', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inventory_settings SET price_tolerance_pct = 101$q$);
+SELECT expect_error('the inventory account of a category is an asset of the group INVENTORIES', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_categories (tenant_id, property_id, code, name, kind, inventory_account_id) VALUES (tn('ABC'), pr('BALI'), 'BAD', 'Bad', 'FOOD', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '5210'))$q$);
+SELECT expect_error('the inventory account of a category is of the group INVENTORIES (an asset of another group is refused)', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('ABC'), pr('BALI'), '1111', 'Cash 2', 'ASSET', 'DEBIT', 'CASH')$q$,
+    $q$INSERT INTO inv_categories (tenant_id, property_id, code, name, kind, inventory_account_id) VALUES (tn('ABC'), pr('BALI'), 'BAD', 'Bad', 'FOOD', (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1111'))$q$);
+SELECT expect_error('the cost accounts of a category are expenses', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_categories (tenant_id, property_id, code, name, kind, inventory_account_id, waste_account_id) VALUES (tn('ABC'), pr('BALI'), 'BAD', 'Bad', 'FOOD',
+         (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1310'), (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '3900'))$q$);
+SELECT expect_error('the kind of a category is one of four', '23514', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inv_categories SET kind = 'MEAT'$q$);
+SELECT expect_error('the account of a category is one of the property (the trigger looks in the property)', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('XYZ'), pr('SG'), '1310', 'Food SG', 'ASSET', 'DEBIT', 'INVENTORIES')$q$,
+    $q$UPDATE inv_categories SET inventory_account_id = (SELECT id FROM gl_accounts WHERE property_id = pr('SG') AND code = '1310')$q$);
+SELECT expect_error('a unit code is unique in the property', '23505', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_units (tenant_id, property_id, code, name) VALUES (tn('ABC'), pr('BALI'), 'kg', 'Again')$q$);
+SELECT expect_error('an item code is unique in the property', '23505', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_items (tenant_id, property_id, code, name, category_id, stock_unit_id) SELECT tenant_id, property_id, code, 'Again', category_id, stock_unit_id FROM inv_items$q$);
+SELECT expect_error('the category of an item is one of the property', '23503', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_items (tenant_id, property_id, code, name, category_id, stock_unit_id) SELECT tenant_id, property_id, 'X', 'X', 99999, stock_unit_id FROM inv_items$q$);
+SELECT expect_error('a barcode is unique in the property', '23505', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inv_items SET barcode = '123'$q$,
+    $q$INSERT INTO inv_items (tenant_id, property_id, code, name, category_id, stock_unit_id, barcode) SELECT tenant_id, property_id, 'R2', 'R2', category_id, stock_unit_id, '123' FROM inv_items$q$);
+SELECT expect_ok('a unit conversion is a positive fraction', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_item_units (tenant_id, property_id, item_id, unit_id, stock_num, stock_den, is_recipe) SELECT i.tenant_id, i.property_id, i.id, u.id, 1, 1000, true FROM inv_items i, inv_units u WHERE u.code = 'g' AND u.property_id = i.property_id$q$);
+SELECT expect_error('a unit conversion has a positive numerator', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_item_units (tenant_id, property_id, item_id, unit_id, stock_num, stock_den) SELECT i.tenant_id, i.property_id, i.id, u.id, 0, 1 FROM inv_items i, inv_units u WHERE u.code = 'g' AND u.property_id = i.property_id$q$);
+SELECT expect_error('a unit conversion has a positive denominator', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_item_units (tenant_id, property_id, item_id, unit_id, stock_num, stock_den) SELECT i.tenant_id, i.property_id, i.id, u.id, 1, 0 FROM inv_items i, inv_units u WHERE u.code = 'g' AND u.property_id = i.property_id$q$);
+SELECT expect_error('an item has one default purchase unit', '23505', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_item_units (tenant_id, property_id, item_id, unit_id, stock_num, stock_den, is_purchase, is_default_purchase) SELECT i.tenant_id, i.property_id, i.id, u.id, 1, 1, true, true FROM inv_items i, inv_units u WHERE u.property_id = i.property_id$q$);
+SELECT expect_error('the kind of a warehouse is MAIN, OUTLET or DEPARTMENT', '23514', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inv_warehouses SET kind = 'CELLAR'$q$);
+SELECT expect_error('a warehouse of an outlet names the outlet', '23514', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inv_warehouses SET kind = 'OUTLET'$q$);
+SELECT expect_error('the cost class of a warehouse is FOOD, BEVERAGE or OTHER', '23514', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inv_warehouses SET cost_class = 'WINE'$q$);
+SELECT expect_error('at most one active warehouse per outlet', '23505', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO inv_warehouses (tenant_id, property_id, code, name, kind, outlet_id) SELECT tenant_id, property_id, 'O1', 'O1', 'OUTLET', id FROM pos_outlets WHERE code = 'T'$q$,
+    $q$INSERT INTO inv_warehouses (tenant_id, property_id, code, name, kind, outlet_id) SELECT tenant_id, property_id, 'O2', 'O2', 'OUTLET', id FROM pos_outlets WHERE code = 'T'$q$);
+SELECT expect_ok('an inactive warehouse of an outlet makes room for another', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO inv_warehouses (tenant_id, property_id, code, name, kind, outlet_id, is_active) SELECT tenant_id, property_id, 'O1', 'O1', 'OUTLET', id, false FROM pos_outlets WHERE code = 'T'$q$,
+    $q$INSERT INTO inv_warehouses (tenant_id, property_id, code, name, kind, outlet_id) SELECT tenant_id, property_id, 'O2', 'O2', 'OUTLET', id FROM pos_outlets WHERE code = 'T'$q$);
+SELECT expect_error('the maximum level is not below the minimum', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_levels (tenant_id, property_id, warehouse_id, item_id, min_qty, max_qty) SELECT w.tenant_id, w.property_id, w.id, i.id, 10, 5 FROM inv_warehouses w, inv_items i$q$);
+
+-- the ledger
+SELECT expect_error('the ledger is append-only: an update is refused', '23001', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$, $q$UPDATE inv_movements SET value_delta = 1$q$);
+SELECT expect_error('the ledger is append-only: a delete is refused', '23001', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$, $q$DELETE FROM inv_movements$q$);
+SELECT expect_error('the ledger cannot be truncated', '23001', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$, $q$TRUNCATE inv_movements CASCADE$q$);
+SELECT expect_error('inv_movements: a movement cannot be dated a closed business day, whoever inserts it', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$,
+    $q$SELECT pms_test.insert_on_closed_day('inv_movements', 'business_date')$q$);
+SELECT expect_error('the kind of a movement is one of the list', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('GIFT', 10, 100000)$q$);
+SELECT expect_error('an entry that adds goods does not take value out', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('RECEIPT', 10, -1)$q$);
+SELECT expect_error('an entry that takes goods out does not add value', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('ISSUE', -10, 1)$q$);
+SELECT expect_error('a movement of zero quantity is only a cost adjustment, a settlement or a waste of cost', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('ISSUE', 0, 5)$q$);
+SELECT expect_ok('a cost adjustment moves value without quantity, in either direction', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('COST_ADJUST', 0, 5)$q$, $q$SELECT pms_test.inv_move('COST_ADJUST', 0, -5, 2)$q$);
+SELECT expect_error('a document line is posted once', '23505', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$);
+SELECT expect_error('a movement is reversed once', '23505', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('RECEIPT', 10, 100)$q$,
+    $q$INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, business_date, source_type, source_id, source_line, item_class, cost_class, reverses_id)
+       SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, 'RECEIPT_REVERSAL', -10, -100, m.business_date, 'TEST', 2, 1, 'FOOD', 'FOOD', m.id FROM inv_movements m$q$,
+    $q$INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, business_date, source_type, source_id, source_line, item_class, cost_class, reverses_id)
+       SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, 'RECEIPT_REVERSAL', -10, -100, m.business_date, 'TEST', 3, 1, 'FOOD', 'FOOD', m.id FROM inv_movements m WHERE kind = 'RECEIPT'$q$);
+SELECT expect_error('a movement has both accounts or neither', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, business_date, source_type, source_id, item_class, cost_class, gl_debit_account_id, gl_amount)
+       SELECT tn('ABC'), pr('BALI'), w.id, i.id, 'ISSUE', -1, -10, (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'TEST', 1, 'FOOD', 'FOOD',
+              (SELECT id FROM gl_accounts WHERE code = '5210' AND property_id = pr('BALI')), 10 FROM inv_warehouses w, inv_items i$q$);
+SELECT expect_error('the accounts of a movement are accounts of the property', '23503', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES (tn('XYZ'), pr('SG'), '5210', 'Cost SG', 'EXPENSE', 'DEBIT', 'EXP_FB')$q$,
+    $q$INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, business_date, source_type, source_id, item_class, cost_class, gl_debit_account_id, gl_credit_account_id, gl_amount)
+       SELECT tn('ABC'), pr('BALI'), w.id, i.id, 'ISSUE', -1, -10, (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'TEST', 1, 'FOOD', 'FOOD',
+              (SELECT id FROM gl_accounts WHERE code = '5210' AND property_id = pr('SG')), (SELECT id FROM gl_accounts WHERE code = '1310' AND property_id = pr('BALI')), 10 FROM inv_warehouses w, inv_items i$q$);
+SELECT expect_error('the class of a movement is FOOD, BEVERAGE or OTHER', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, business_date, source_type, source_id, item_class, cost_class)
+       SELECT tn('ABC'), pr('BALI'), w.id, i.id, 'OPENING', 1, 1, (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'TEST', 1, 'FOOD', 'WINE' FROM inv_warehouses w, inv_items i$q$);
+SELECT expect_error('an inventory movement locks the currency', '23001', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$, $q$UPDATE properties SET currency_decimals = 2 WHERE code = 'BALI'$q$);
+
+-- balances, layers, shortfalls
+SELECT expect_error('a balance has no value on an empty shelf', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_balances (tenant_id, property_id, warehouse_id, item_id, qty, value) SELECT w.tenant_id, w.property_id, w.id, i.id, 0, 5 FROM inv_warehouses w, inv_items i$q$);
+SELECT expect_error('a balance has the same sign for quantity and value', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_balances (tenant_id, property_id, warehouse_id, item_id, qty, value) SELECT w.tenant_id, w.property_id, w.id, i.id, 5, -5 FROM inv_warehouses w, inv_items i$q$);
+SELECT expect_ok('a balance can go below zero (stock sold before the goods came in)', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_balances (tenant_id, property_id, warehouse_id, item_id, qty, value) SELECT w.tenant_id, w.property_id, w.id, i.id, -5, -5000 FROM inv_warehouses w, inv_items i$q$);
+SELECT expect_error('a balance is unique per warehouse and item', '23505', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_balances (tenant_id, property_id, warehouse_id, item_id, qty, value) SELECT w.tenant_id, w.property_id, w.id, i.id, 5, 5 FROM inv_warehouses w, inv_items i$q$,
+    $q$INSERT INTO inv_balances (tenant_id, property_id, warehouse_id, item_id, qty, value) SELECT w.tenant_id, w.property_id, w.id, i.id, 6, 6 FROM inv_warehouses w, inv_items i$q$);
+SELECT expect_error('a layer never has more left than it came in with', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('RECEIPT', 10, 100)$q$,
+    $q$INSERT INTO inv_layers (tenant_id, property_id, warehouse_id, item_id, movement_id, received_on, qty_in, qty_remaining, value_remaining) SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, m.id, m.business_date, 10, 11, 110 FROM inv_movements m$q$);
+SELECT expect_error('a layer with nothing left has no value left', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('RECEIPT', 10, 100)$q$,
+    $q$INSERT INTO inv_layers (tenant_id, property_id, warehouse_id, item_id, movement_id, received_on, qty_in, qty_remaining, value_remaining) SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, m.id, m.business_date, 10, 0, 5 FROM inv_movements m$q$);
+SELECT expect_error('the uses of layers are append-only', '23001', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('RECEIPT', 10, 100)$q$,
+    $q$INSERT INTO inv_layers (tenant_id, property_id, warehouse_id, item_id, movement_id, received_on, qty_in, qty_remaining, value_remaining) SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, m.id, m.business_date, 10, 10, 100 FROM inv_movements m$q$,
+    $q$INSERT INTO inv_layer_uses (tenant_id, property_id, movement_id, layer_id, qty, value) SELECT l.tenant_id, l.property_id, l.movement_id, l.id, 1, 10 FROM inv_layers l$q$,
+    $q$DELETE FROM inv_layer_uses$q$);
+SELECT expect_error('a shortfall is open exactly while quantity is open', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('POS_SALE', -5, -50)$q$,
+    $q$INSERT INTO inv_shortfalls (tenant_id, property_id, warehouse_id, item_id, movement_id, qty_open, qty_original, est_unit_cost, est_value_open, source_type, cost_class, business_date, status)
+       SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, m.id, 0, 5, 10, 0, 'POS_SALE', 'FOOD', m.business_date, 'OPEN' FROM inv_movements m$q$);
+SELECT expect_error('a shortfall belongs to one movement', '23505', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('POS_SALE', -5, -50)$q$,
+    $q$INSERT INTO inv_shortfalls (tenant_id, property_id, warehouse_id, item_id, movement_id, qty_open, qty_original, est_unit_cost, est_value_open, source_type, cost_class, business_date) SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, m.id, 5, 5, 10, 50, 'POS_SALE', 'FOOD', m.business_date FROM inv_movements m$q$,
+    $q$INSERT INTO inv_shortfalls (tenant_id, property_id, warehouse_id, item_id, movement_id, qty_open, qty_original, est_unit_cost, est_value_open, source_type, cost_class, business_date) SELECT m.tenant_id, m.property_id, m.warehouse_id, m.item_id, m.id, 5, 5, 10, 50, 'POS_SALE', 'FOOD', m.business_date FROM inv_movements m$q$);
+
+-- opening stock
+SELECT expect_error('one opening per item and warehouse', '23505', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_move('OPENING', 10, 100000)$q$,
+    $q$INSERT INTO inv_openings (tenant_id, property_id, opening_number, client_uuid, warehouse_id, business_date, total_value) SELECT m.tenant_id, m.property_id, 'OPN-1', gen_random_uuid(), m.warehouse_id, m.business_date, 100000 FROM inv_movements m$q$,
+    $q$INSERT INTO inv_opening_lines (tenant_id, property_id, opening_id, line_no, warehouse_id, item_id, qty_stock, unit_cost, value, movement_id) SELECT m.tenant_id, m.property_id, o.id, 1, m.warehouse_id, m.item_id, 10, 10000, 100000, m.id FROM inv_movements m, inv_openings o$q$,
+    $q$INSERT INTO inv_opening_lines (tenant_id, property_id, opening_id, line_no, warehouse_id, item_id, qty_stock, unit_cost, value, movement_id) SELECT m.tenant_id, m.property_id, o.id, 2, m.warehouse_id, m.item_id, 10, 10000, 100000, m.id FROM inv_movements m, inv_openings o$q$);
+SELECT expect_error('an opening number is unique in the property', '23505', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_openings (tenant_id, property_id, opening_number, client_uuid, warehouse_id, business_date, total_value) SELECT w.tenant_id, w.property_id, 'OPN-1', gen_random_uuid(), w.id, '2026-10-01', 0 FROM inv_warehouses w$q$,
+    $q$INSERT INTO inv_openings (tenant_id, property_id, opening_number, client_uuid, warehouse_id, business_date, total_value) SELECT w.tenant_id, w.property_id, 'OPN-1', gen_random_uuid(), w.id, '2026-10-01', 0 FROM inv_warehouses w$q$);
+
+-- the system accounts and the standard chart
+SELECT expect_ok('the eight inventory keys are accepted in the account map', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) SELECT a.tenant_id, a.property_id, k, a.id FROM gl_accounts a, unnest(ARRAY['INV_GRNI','INV_PPV','INV_WASTE','INV_COUNT_VARIANCE','INV_COGS_FOOD','INV_COGS_BEVERAGE','INV_STAFF_MEAL','INV_ENTERTAINMENT']) k WHERE a.code = '5210' AND a.property_id = pr('BALI')$q$);
+SELECT expect_error('an unknown key is refused in the account map', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id) SELECT a.tenant_id, a.property_id, 'INV_OTHER', a.id FROM gl_accounts a WHERE a.code = '5210' AND a.property_id = pr('BALI')$q$);
+SELECT expect_ok('the standard chart has the four inventory accounts, in both languages',
+    $q$DO $d$ BEGIN
+        IF (SELECT count(*) FROM usali_chart() WHERE code IN ('2130', '5290', '5295', '5299')) <> 4 THEN RAISE EXCEPTION 'missing accounts'; END IF;
+        IF (SELECT count(*) FROM usali_chart_names('id') WHERE code IN ('2130', '5290', '5295', '5299')) <> 4 THEN RAISE EXCEPTION 'missing names'; END IF;
+    END $d$;$q$);
 
 ------------------------------------------------------------------------------------------
 -- The language of the seeded data: the names of the chart of accounts, departments and charge codes exist in en and id, for exactly the same codes

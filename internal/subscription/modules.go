@@ -34,6 +34,9 @@ var moduleRules = []struct {
 	{"outlet-charges", POS},
 	{"folios/{id}/outlet-lock", POS},
 
+	// Inventory: stock, warehouses and the opening stock (docs/architecture/35-inventory.md). The recipe routes of the POS belong to the POS and ask the entitlement of INVENTORY themselves.
+	{"inventory", Inventory},
+
 	// Front office, billing, setup, end of day and reports: CORE.
 	{"housekeeping", Core},
 	{"rooms", Core},

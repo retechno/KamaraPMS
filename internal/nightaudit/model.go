@@ -45,9 +45,11 @@ type Blockers struct {
 	AccountingReadiness []accounting.ReadinessBlocker `json:"accounting_readiness"`
 	// OutletBills are the bills of the outlets that are still open with items sold, for an outlet that asks for every bill to be closed before the day closes (34-pos.md 13.1).
 	OutletBills []OutletIssue `json:"outlet_bills"`
+	// Stock are the findings of the inventory that stop the close: a balance that disagrees with the ledger, a stock value that disagrees with the general ledger (35-inventory.md 5.7).
+	Stock []OutletIssue `json:"stock"`
 }
 
-// OutletIssue is a finding about the bills of the outlets.
+// OutletIssue is a finding about the bills of the outlets (and, for the stock, about the inventory).
 type OutletIssue struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -56,7 +58,7 @@ type OutletIssue struct {
 
 // Any reports whether something blocks the run.
 func (b Blockers) Any() bool {
-	return len(b.UnresolvedArrivals)+len(b.UnresolvedDepartures)+len(b.ChargeErrors)+len(b.InvalidCharges)+len(b.OpenShifts)+len(b.AccountingReadiness)+len(b.OutletBills) > 0
+	return len(b.UnresolvedArrivals)+len(b.UnresolvedDepartures)+len(b.ChargeErrors)+len(b.InvalidCharges)+len(b.OpenShifts)+len(b.AccountingReadiness)+len(b.OutletBills)+len(b.Stock) > 0
 }
 
 // MissingCharges are READY nights before the business date (the run posts them).
@@ -124,6 +126,8 @@ type Warnings struct {
 	BlocksEnding  []EndingBlock  `json:"blocks_ending"`
 	// OutletBills are open bills of the outlets with items sold, or with lines that were never sent: the sale is revenue of the day and the money is not counted yet.
 	OutletBills []OutletIssue `json:"outlet_bills"`
+	// Stock are the findings of the inventory that do not stop the close (stock sold below zero).
+	Stock []OutletIssue `json:"stock"`
 }
 
 // Preview is the full pre-check (nothing is written).

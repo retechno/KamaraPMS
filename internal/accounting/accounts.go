@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting/accountingdb"
 	"kamarapms/internal/audit"
@@ -42,11 +43,47 @@ type Service struct {
 	days  *tenancy.Service
 	iam   *iam.Service
 	depts *departments.Service
+	stock StockSource
 }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, iamSvc *iam.Service) *Service {
 	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, iam: iamSvc}
+}
+
+// StockDayLine is one line the stock ledger adds to the journal of a business date (35-inventory.md 6.2): the account, the department of the cost, what it comes from and the signed
+// amount (debit +, credit -). The lines of the stock balance by themselves.
+type StockDayLine struct {
+	AccountID    int64
+	DepartmentID int64 // 0: none
+	SourceType   string
+	SourceRef    string
+	Detail       string
+	Amount       decimal.Decimal
+}
+
+// StockSource is what the inventory gives the accounting (internal/inventory through an adapter in internal/app): the lines of the day close, the stock value by account for the
+// reconciliation, and the accounts that only the inventory path may post to.
+type StockSource interface {
+	StockDayLines(ctx context.Context, tenantID, propertyID int64, bd civil.Date) ([]StockDayLine, error)
+	StockValueByAccount(ctx context.Context, tenantID, propertyID int64, asOf civil.Date) (map[int64]decimal.Decimal, error)
+	ControlAccountIDs(ctx context.Context, tenantID, propertyID int64) ([]int64, error)
+}
+
+// SetStockSource wires the inventory; without it the journal reads the folio ledger only.
+func (s *Service) SetStockSource(src StockSource) { s.stock = src }
+
+// stockControlAccounts are the accounts of the stock that a manual journal or a bill line may not post to (6.4).
+func (s *Service) stockControlAccounts(ctx context.Context, tenantID, propertyID int64) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	if s.stock == nil {
+		return out, nil
+	}
+	ids, err := s.stock.ControlAccountIDs(ctx, tenantID, propertyID)
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, err
 }
 
 // SetDepartments gives the service the departments, to check the department of a journal line.

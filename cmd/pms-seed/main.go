@@ -4,6 +4,7 @@
 //	pms-seed rooms -tenant DEMO -property BALI [-floors 10] [-per-floor 10] [-dry-run]
 //	pms-seed rates -tenant DEMO -property BALI [-days 90] [-plan RO] [-dry-run]
 //	pms-seed pos   -tenant DEMO -property BALI [-dry-run]
+//	pms-seed inventory -tenant DEMO -property BALI [-dry-run]
 //
 // rooms: creates the room types Standard, Superior, Deluxe and Suite when the property lacks them and rooms numbered
 // floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states and a bed type each
@@ -15,6 +16,9 @@
 //
 // pos: the demo of the POS (docs/architecture/34-pos.md): the tax and service profiles, the price lists, four outlets, their stations and
 // printers, food and drinks for the restaurant and room service, and laundry services in a price list of the laundry alone, and floor plans.
+//
+// inventory: the demo of the inventory (docs/architecture/35-inventory.md): the units, four categories with their accounts, four warehouses (those of the restaurant and the bar tied to
+// the outlets of `pms-seed pos`), about forty items in Indonesian with their conversions, and the opening stock of each warehouse.
 //
 // All are safe to run again (rooms that exist are left alone; rates are written again with the same prices). They
 // refuse to run against a production configuration. They read PMS_DATABASE_URL from the environment or ./.env.
@@ -54,7 +58,8 @@ func main() {
 const usage = `usage:
   pms-seed rooms -tenant CODE -property CODE [-floors N] [-per-floor N] [-dry-run]
   pms-seed rates -tenant CODE -property CODE [-days N] [-plan CODE] [-dry-run]
-  pms-seed pos   -tenant CODE -property CODE [-dry-run]`
+  pms-seed pos   -tenant CODE -property CODE [-dry-run]
+  pms-seed inventory -tenant CODE -property CODE [-dry-run]`
 
 // A room type the seed creates when the property has no type with that code, and the price of its nights.
 type typeSpec struct {
@@ -92,7 +97,7 @@ type env struct {
 }
 
 func run(args []string) error {
-	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates" && args[0] != "pos") {
+	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates" && args[0] != "pos" && args[0] != "inventory") {
 		return fmt.Errorf("%s", usage)
 	}
 	cmd := args[0]
@@ -124,6 +129,9 @@ func run(args []string) error {
 	defer closePool()
 	if cmd == "pos" {
 		return seedPos(e, *dryRun)
+	}
+	if cmd == "inventory" {
+		return seedInventory(e, *dryRun)
 	}
 	if cmd == "rooms" {
 		return seedRooms(e, strings.ToUpper(*propertyCode), *floors, *perFloor, *dryRun)
