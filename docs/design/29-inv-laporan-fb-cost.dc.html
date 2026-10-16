@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Laporan food dan beverage cost</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:10px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.tile{background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.tl{font-size:12px;color:#626b77}
+.tv{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #eef0f2}
+.bar{height:8px;border-radius:0 4px 4px 0}
+.sub{font-size:11px;color:#626b77}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="20-inv-penerimaan.dc.html" class="nav">Pembelian</a>
+    <a href="21-inv-draf-tagihan.dc.html" class="nav">Draf tagihan</a>
+    <a href="23-inv-transfer.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="#" class="nav">Pemakaian &amp; waste</a>
+    <a href="#" class="nav">Opname</a>
+    <a href="#" class="nav" style="background:#e3f2ee;font-weight:600">Laporan</a>
+    <div style="padding:8px 10px 0 18px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:#4a5361">
+      <span style="color:#1c2128;font-weight:600">F&amp;B cost</span><span>Kartu stok</span><span>Nilai persediaan</span><span>Stok di bawah minimum</span><span>Stok minus</span><span>Diterima belum ditagih</span>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <h1 style="margin:0;font-size:24px;flex:1">Food &amp; beverage cost</h1>
+      <button class="chip">Agustus</button>
+      <button class="chip" style="background:#1f6f5c;color:#fff;border-color:#1f6f5c">September 2026</button>
+      <button class="chip">Pilih periode</button>
+      <button class="btn">Unduh CSV</button>
+    </div>
+    <div class="sub" style="font-size:12px">Teori = biaya resep dari penjualan POS. Aktual = stok awal + masuk − stok akhir opname 30 Sep − pemakaian non-penjualan.</div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+      <div class="tile"><span class="tl">Pendapatan F&amp;B</span><span class="tv">275.800.000</span><span class="sub">3 outlet</span></div>
+      <div class="tile"><span class="tl">Cost teori</span><span class="tv">26,8%</span><span class="sub">73.908.000</span></div>
+      <div class="tile"><span class="tl">Cost aktual</span><span class="tv">29,7%</span><span class="sub">81.896.000</span></div>
+      <div class="tile" style="border-color:#f3c9a4;background:#fffaf5"><span class="tl">Selisih aktual − teori</span><span class="tv" style="color:#9a3412">7.988.000</span><span class="sub">2,9 poin · waste, porsi, atau resep belum lengkap</span></div>
+    </div>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <section style="flex:1;min-width:0;background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:16px;padding:12px 16px;border-bottom:1px solid #e3e6ea">
+          <strong style="font-size:15px;flex:1">Per outlet</strong>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4a5361"><span style="width:12px;height:8px;border-radius:2px;background:#8fc9b8"></span>Teori</span>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4a5361"><span style="width:12px;height:8px;border-radius:2px;background:#1f6f5c"></span>Aktual</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th class="th">Outlet</th><th class="th thr">Pendapatan</th><th class="th thr">Teori</th><th class="th thr">Aktual</th><th class="th" style="width:200px">Cost %</th><th class="th thr">Selisih</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="td"><div style="font-weight:600">Restoran Teratai</div><div class="sub">makanan · Dapur Teratai</div></td>
+              <td class="td num">182.400.000</td><td class="td num">28,0%</td><td class="td num" style="font-weight:600">31,0%</td>
+              <td class="td"><div style="display:flex;flex-direction:column;gap:2px;border-left:1px solid #c9ced5"><div class="bar" style="width:56%;background:#8fc9b8"></div><div class="bar" style="width:62%;background:#1f6f5c"></div></div></td>
+              <td class="td num">5.472.000</td>
+            </tr>
+            <tr>
+              <td class="td"><div style="font-weight:600">Bar Kolam</div><div class="sub">minuman · Bar</div></td>
+              <td class="td num">64.800.000</td><td class="td num">22,0%</td><td class="td num" style="font-weight:600">25,0%</td>
+              <td class="td"><div style="display:flex;flex-direction:column;gap:2px;border-left:1px solid #c9ced5"><div class="bar" style="width:44%;background:#8fc9b8"></div><div class="bar" style="width:50%;background:#1f6f5c"></div></div></td>
+              <td class="td num">1.944.000</td>
+            </tr>
+            <tr>
+              <td class="td"><div style="font-weight:600">Room service</div><div class="sub">makanan · Dapur Teratai</div></td>
+              <td class="td num">28.600.000</td><td class="td num">30,0%</td><td class="td num" style="font-weight:600">32,0%</td>
+              <td class="td"><div style="display:flex;flex-direction:column;gap:2px;border-left:1px solid #c9ced5"><div class="bar" style="width:60%;background:#8fc9b8"></div><div class="bar" style="width:64%;background:#1f6f5c"></div></div></td>
+              <td class="td num">572.000</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:12px 16px;font-size:12px;color:#626b77">Skala batang 0–50%. Dapur yang melayani dua outlet dibagi menurut biaya resep tiap outlet.</div>
+      </section>
+
+      <aside style="width:380px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px">
+          <h2 style="margin:0 0 6px;font-size:15px">Aktual Restoran Teratai</h2>
+          <div class="kv"><span>Stok awal 1 Sep</span><span>42.300.000</span></div>
+          <div class="kv"><span>+ Masuk (terima &amp; transfer)</span><span>61.200.000</span></div>
+          <div class="kv"><span>− Stok akhir (opname 30 Sep)</span><span>44.856.000</span></div>
+          <div class="kv"><span>− Pemakaian &amp; waste</span><span>2.100.000</span></div>
+          <div class="kv" style="font-weight:700;border-bottom:0"><span>= Cost aktual</span><span>56.544.000</span></div>
+        </section>
+        <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px">
+          <h2 style="margin:0 0 6px;font-size:15px">Cocok dengan buku besar</h2>
+          <div class="kv"><span>1310 Persediaan makanan</span><span style="color:#185a4a">cocok</span></div>
+          <div class="kv"><span>1320 Persediaan minuman</span><span style="color:#185a4a">cocok</span></div>
+          <div class="kv" style="border-bottom:0"><span>2130 Diterima belum ditagih</span><span>4.212.000</span></div>
+          <div class="sub">GR-0041 menunggu faktur supplier</div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

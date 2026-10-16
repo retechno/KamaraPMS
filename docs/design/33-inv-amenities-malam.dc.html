@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Amenities otomatis satu malam</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:8px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0}
+.tile{flex:1;background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+.tl{font-size:12px;color:#626b77}
+.tv{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <a href="24-inv-pemakaian-daftar.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start;min-height:24px">← Pemakaian &amp; waste</a>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1">
+        <div style="font-size:12px;color:#626b77">Dibuat otomatis oleh tutup hari 3 Sep 2026, 23.58</div>
+        <h1 style="margin:2px 0 0;font-size:24px">AMN-0903 · Amenities kamar terisi</h1>
+      </div>
+      <span class="pill" style="background:#e3f2ee;color:#185a4a">Diposting</span>
+    </div>
+
+    <div style="display:flex;gap:12px">
+      <div class="tile"><span class="tl">Kamar terisi</span><span class="tv">78</span><span class="tl">termasuk 2 komplimen, 1 house use</span></div>
+      <div class="tile"><span class="tl">Tamu</span><span class="tv">142</span><span class="tl">dewasa + anak</span></div>
+      <div class="tile"><span class="tl">Biaya amenities</span><span class="tv">1.895.640</span><span class="tl">24.303 per kamar terisi</span></div>
+      <div class="tile" style="border-color:#f3c9a4;background:#fffaf5"><span class="tl">Stok kurang</span><span class="tv" style="color:#9a3412">1 barang</span><span class="tl">sabun batang: minus 36 pcs</span></div>
+    </div>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <section class="card" style="flex:1;min-width:0;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th class="th">Barang</th><th class="th">Aturan</th><th class="th thr">Jumlah</th><th class="th thr">Stok sebelum</th><th class="th thr">Harga pokok</th><th class="th thr">Biaya</th></tr></thead>
+          <tbody>
+            <tr style="background:#fffaf5"><td class="td" style="font-weight:600">Sabun batang 25 g</td><td class="td">1 × 78 kamar</td><td class="td num">78</td><td class="td num" style="color:#9a3412">42</td><td class="td num">2.960</td><td class="td num">230.880</td></tr>
+            <tr><td class="td" style="font-weight:600">Sampo amenities 30 ml</td><td class="td">1 × 78 kamar</td><td class="td num">78</td><td class="td num">310</td><td class="td num">3.250</td><td class="td num">253.500</td></tr>
+            <tr><td class="td" style="font-weight:600">Sikat gigi</td><td class="td">1 × 142 tamu</td><td class="td num">142</td><td class="td num">620</td><td class="td num">2.100</td><td class="td num">298.200</td></tr>
+            <tr><td class="td" style="font-weight:600">Pasta gigi 10 g</td><td class="td">1 × 142 tamu</td><td class="td num">142</td><td class="td num">580</td><td class="td num">1.800</td><td class="td num">255.600</td></tr>
+            <tr><td class="td" style="font-weight:600">Air mineral 600 ml</td><td class="td">2 × 78 kamar</td><td class="td num">156</td><td class="td num">960</td><td class="td num">2.500</td><td class="td num">390.000</td></tr>
+            <tr><td class="td" style="font-weight:600">Teh celup hitam</td><td class="td">2 × 78 kamar</td><td class="td num">156</td><td class="td num">1.200</td><td class="td num">835</td><td class="td num">130.260</td></tr>
+            <tr><td class="td" style="font-weight:600">Kopi sachet</td><td class="td">2 × 78 kamar</td><td class="td num">156</td><td class="td num">880</td><td class="td num">1.500</td><td class="td num">234.000</td></tr>
+            <tr><td class="td" style="font-weight:600">Sandal hotel</td><td class="td">Suite · 1 × 12 tamu</td><td class="td num">12</td><td class="td num">96</td><td class="td num">6.500</td><td class="td num">78.000</td></tr>
+            <tr><td class="td" style="font-weight:600">Body lotion 30 ml</td><td class="td">Suite · 1 × 6 kamar</td><td class="td num">6</td><td class="td num">54</td><td class="td num">4.200</td><td class="td num">25.200</td></tr>
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:space-between;padding:12px 16px;font-size:13px"><span style="color:#9a3412">Sabun: 36 pcs dicatat sebagai stok minus dengan harga terakhir; tertutup saat barang masuk.</span><span>Total <strong style="font-size:16px;margin-left:8px">1.895.640</strong></span></div>
+      </section>
+
+      <aside style="width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="padding:16px 18px">
+          <h2 style="margin:0 0 6px;font-size:15px">Per tipe kamar</h2>
+          <div class="kv" style="border-bottom:1px solid #eef0f2"><span>Standard</span><span>40 kamar · 68 tamu</span></div>
+          <div class="kv" style="border-bottom:1px solid #eef0f2"><span>Deluxe</span><span>28 kamar · 52 tamu</span></div>
+          <div class="kv" style="border-bottom:1px solid #eef0f2"><span>Suite</span><span>6 kamar · 12 tamu</span></div>
+          <div class="kv"><span>Family</span><span>4 kamar · 10 tamu</span></div>
+          <a href="#" style="font-size:13px">Lihat daftar kamar</a>
+        </section>
+        <section class="card" style="padding:16px 18px">
+          <h2 style="margin:0 0 6px;font-size:15px">Jurnal tutup hari</h2>
+          <div class="kv"><span>D 5150 Perlengkapan tamu · Rooms</span><span>1.895.640</span></div>
+          <div class="kv"><span>K 1330 Persediaan perlengkapan</span><span>1.895.640</span></div>
+        </section>
+        <div style="flex:1"></div>
+        <button class="btn">Buat dokumen pembalik</button>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

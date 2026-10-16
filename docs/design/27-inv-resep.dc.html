@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Resep dan biaya bahan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:10px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:9px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.tab{height:40px;padding:0 4px;border:0;border-bottom:2px solid transparent;background:none;font:inherit;font-size:14px;color:#4a5361}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.qin{width:72px;height:34px;box-sizing:border-box;border:1px solid #c9ced5;border-radius:8px;padding:0 8px;font:inherit;font-size:13px;text-align:right}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0}
+.sub{font-size:11px;color:#626b77}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden}
+.ch{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e3e6ea}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">POS</div>
+    <a href="#" class="nav">Outlet</a>
+    <a href="#" class="nav" style="background:#e3f2ee;font-weight:600">Produk &amp; menu</a>
+    <a href="#" class="nav">Denah meja</a>
+    <a href="#" class="nav">Stasiun &amp; printer</a>
+    <a href="#" class="nav">Laporan outlet</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1">
+        <div style="font-size:12px;color:#626b77">NGK · Makanan utama</div>
+        <h1 style="margin:2px 0 0;font-size:24px">Nasi Goreng Kampung</h1>
+      </div>
+      <label for="ol" style="font-size:13px;color:#626b77">Biaya di gudang</label>
+      <select id="ol" style="height:40px;border:1px solid #e3e6ea;border-radius:8px;padding:0 10px;font:inherit;font-size:13px;background:#fff"><option>Dapur Teratai (Restoran Teratai)</option></select>
+    </div>
+    <nav style="display:flex;gap:20px;border-bottom:1px solid #e3e6ea">
+      <button class="tab">Umum</button><button class="tab">Harga per outlet</button><button class="tab">Varian &amp; tambahan</button>
+      <button class="tab" style="border-bottom-color:#1f6f5c;color:#1c2128;font-weight:600">Resep &amp; biaya bahan</button>
+    </nav>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card">
+          <div class="ch"><strong style="font-size:15px">Resep dasar · 1 porsi</strong><button class="btn" style="height:34px;font-size:13px">Tambah bahan</button></div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Bahan</th><th class="th thr">Jumlah</th><th class="th">Satuan</th><th class="th thr">Harga pokok</th><th class="th thr">Biaya</th></tr></thead>
+            <tbody>
+              <tr><td class="td">Beras pandan wangi</td><td class="td num"><input class="qin" aria-label="Jumlah beras" value="0,2"></td><td class="td">kg</td><td class="td num">17.360 / kg</td><td class="td num">3.472</td></tr>
+              <tr><td class="td">Daging ayam fillet</td><td class="td num"><input class="qin" aria-label="Jumlah ayam" value="60"></td><td class="td">g</td><td class="td num">72.900 / kg</td><td class="td num">4.374</td></tr>
+              <tr><td class="td">Telur ayam</td><td class="td num"><input class="qin" aria-label="Jumlah telur" value="1"></td><td class="td">butir</td><td class="td num">2.500</td><td class="td num">2.500</td></tr>
+              <tr><td class="td">Bawang merah</td><td class="td num"><input class="qin" aria-label="Jumlah bawang" value="20"></td><td class="td">g</td><td class="td num">45.000 / kg</td><td class="td num">900</td></tr>
+              <tr><td class="td">Minyak goreng</td><td class="td num"><input class="qin" aria-label="Jumlah minyak" value="30"></td><td class="td">ml</td><td class="td num">22.650 / L</td><td class="td num">680</td></tr>
+              <tr><td class="td">Kerupuk udang</td><td class="td num"><input class="qin" aria-label="Jumlah kerupuk" value="1"></td><td class="td">pcs</td><td class="td num">600</td><td class="td num">600</td></tr>
+              <tr><td class="td">Kecap manis</td><td class="td num"><input class="qin" aria-label="Jumlah kecap" value="15"></td><td class="td">ml</td><td class="td num">30.000 / L</td><td class="td num">450</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="card">
+          <div class="ch"><strong style="font-size:15px">Varian &amp; tambahan</strong><span class="sub">Varian mengganti bahan yang sama; tambahan menambah</span></div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Pilihan</th><th class="th">Bahan</th><th class="th thr">Jumlah</th><th class="th thr">Tambahan biaya</th><th class="th thr">Tambahan harga</th></tr></thead>
+            <tbody>
+              <tr><td class="td"><span class="pill">Varian</span> Jumbo</td><td class="td">Beras pandan wangi (ganti 0,2 kg)</td><td class="td num">0,3 kg</td><td class="td num">+1.736</td><td class="td num">+20.000</td></tr>
+              <tr><td class="td"><span class="pill">Tambahan</span> Telur ceplok</td><td class="td">Telur ayam · Minyak goreng</td><td class="td num">1 butir · 10 ml</td><td class="td num">+2.727</td><td class="td num">+8.000</td></tr>
+              <tr><td class="td"><span class="pill">Varian</span> Level pedas</td><td class="td" style="color:#626b77">tanpa bahan stok</td><td class="td num">—</td><td class="td num">0</td><td class="td num">0</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <aside style="width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="padding:16px 18px">
+          <div class="sub">Biaya bahan per porsi</div>
+          <div style="font-size:30px;font-weight:700;margin:2px 0 10px">12.976</div>
+          <div class="kv"><span>Harga jual (neto)</span><span>85.000</span></div>
+          <div class="kv"><span>Margin kotor</span><span>72.024</span></div>
+          <div class="kv"><span>Food cost</span><span style="font-weight:700;color:#185a4a">15,3%</span></div>
+          <div style="height:8px;border-radius:4px;background:#eef0f2;margin-top:8px;overflow:hidden"><div style="width:15.3%;height:100%;background:#1f6f5c"></div></div>
+          <div class="sub" style="margin-top:6px">Target outlet 30%</div>
+        </section>
+        <section class="card" style="padding:14px 18px;font-size:13px;color:#4a5361;display:flex;flex-direction:column;gap:6px">
+          <span>Stok dipotong dari gudang Dapur Teratai saat pesanan dikirim ke dapur.</span>
+          <span>Harga pokok memakai rata-rata gudang itu; barang tanpa stok memakai harga acuan.</span>
+          <span>Perubahan resep berlaku untuk pesanan berikutnya, tidak mengubah penjualan yang sudah lewat.</span>
+        </section>
+        <div style="flex:1"></div>
+        <div style="display:flex;gap:8px"><button class="btn" style="flex:1;height:44px">Batal</button><button class="btnp" style="flex:1">Simpan resep</button></div>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

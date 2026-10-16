@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Daftar permintaan dan transfer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:10px 14px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:12px 14px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.wait{background:#fff1e6;color:#9a3412}
+.ok{background:#e3f2ee;color:#185a4a}
+.chip{height:34px;padding:0 14px;border:1px solid #e3e6ea;border-radius:17px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.tab{height:42px;padding:0 4px;border:0;border-bottom:2px solid transparent;background:none;font:inherit;font-size:14px;color:#4a5361}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:40px;padding:0 16px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.lk{font-weight:600;text-decoration:none}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="21-inv-draf-tagihan.dc.html" class="nav">Draf tagihan</a>
+    <a href="#" class="nav" style="background:#e3f2ee;font-weight:600">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="#" class="nav">Opname</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h1 style="margin:0;font-size:24px;flex:1">Permintaan &amp; transfer</h1>
+      <button class="btn">Transfer bebas</button>
+      <button class="btnp">Permintaan baru</button>
+    </div>
+    <nav style="display:flex;gap:24px;border-bottom:1px solid #e3e6ea">
+      <button class="tab" style="border-bottom-color:#1f6f5c;color:#1c2128;font-weight:600">Permintaan · 4</button>
+      <button class="tab">Transfer · 21</button>
+    </nav>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <label for="q" style="position:absolute;left:-9999px">Cari</label>
+      <input id="q" placeholder="Cari nomor atau barang" style="width:280px;height:36px;border:1px solid #e3e6ea;border-radius:8px;padding:0 12px;font:inherit;font-size:13px;background:#fff">
+      <button class="chip on">Siap dikirim · 1</button>
+      <button class="chip">Perlu saya setujui · 2</button>
+      <button class="chip">Sebagian · 1</button>
+      <button class="chip">Selesai</button>
+      <button class="chip">Ditolak</button>
+      <div style="flex:1"></div>
+      <button class="chip">Dari gudang: Gudang utama</button>
+    </div>
+
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Nomor</th><th class="th">Gudang peminta</th><th class="th">Dari</th><th class="th">Pemohon</th><th class="th thr">Barang</th><th class="th">Dibutuhkan</th><th class="th">Persetujuan</th><th class="th">Dijawab dengan</th><th class="th">Status</th></tr></thead>
+        <tbody>
+          <tr style="background:#f3faf8"><td class="td"><a href="23-inv-transfer.dc.html" class="lk">SR-0018</a></td><td class="td">Bar</td><td class="td">Gudang utama</td><td class="td">Wayan</td><td class="td num">4</td><td class="td">3 Sep 17.00</td><td class="td">2/2 selesai</td><td class="td">—</td><td class="td"><span class="pill wait">Siap dikirim</span></td></tr>
+          <tr><td class="td"><a href="#" class="lk">SR-0017</a></td><td class="td">Dapur Teratai</td><td class="td">Gudang utama</td><td class="td">Made</td><td class="td num">9</td><td class="td">4 Sep pagi</td><td class="td">1/2 · Persetujuan akhir</td><td class="td">—</td><td class="td"><span class="pill">Menunggu</span></td></tr>
+          <tr><td class="td"><a href="#" class="lk">SR-0019</a></td><td class="td">Housekeeping</td><td class="td">Gudang utama</td><td class="td">Sari</td><td class="td num">5</td><td class="td">4 Sep</td><td class="td">0/2 · Kepala dept</td><td class="td">—</td><td class="td"><span class="pill">Menunggu</span></td></tr>
+          <tr><td class="td"><a href="#" class="lk">SR-0016</a></td><td class="td">Housekeeping</td><td class="td">Gudang utama</td><td class="td">Sari</td><td class="td num">7</td><td class="td">2 Sep</td><td class="td">2/2 selesai</td><td class="td">TRF-0020</td><td class="td"><span class="pill">Sebagian · sisa 2</span></td></tr>
+          <tr><td class="td"><a href="#" class="lk">SR-0015</a></td><td class="td">Bar</td><td class="td">Gudang utama</td><td class="td">Wayan</td><td class="td num">3</td><td class="td">2 Sep</td><td class="td">2/2 selesai</td><td class="td">TRF-0021</td><td class="td"><span class="pill ok">Selesai</span></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:12px 16px;font-size:13px;color:#626b77">Tab Transfer: nomor, dari, ke, nilai, tanggal, dan permintaan yang dijawab. Transfer langsung memindahkan barang saat disimpan.</div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
