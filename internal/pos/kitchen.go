@@ -329,6 +329,7 @@ func (s *Service) ListPrintJobs(ctx context.Context, propertyID int64, printerID
 	if limit < 1 || limit > 200 {
 		limit = 50
 	}
+	s.maybePurgePayloads(ctx) // a property with no agent is purged by whoever looks at its queue
 	var st *string
 	if status != "" {
 		st = &status

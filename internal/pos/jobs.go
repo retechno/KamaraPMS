@@ -275,8 +275,8 @@ func (s *Service) ReportResult(ctx context.Context, dev DeviceIdentity, jobID st
 	return out, err
 }
 
-// maybePurgePayloads removes the documents and the bytes past their retention, at most once an hour by process, from the first claim after.
-// The agents poll all day, so this runs without a scheduler of its own (docs/architecture/34-pos.md 20).
+// maybePurgePayloads removes the documents and the bytes past their retention, at most once an hour by process. It is called by the claim of an agent, by the
+// list of the queue and by the list of failed jobs, so a property with no agent is purged too; the close of the day purges its property without the throttle.
 func (s *Service) maybePurgePayloads(ctx context.Context) {
 	now := s.clock.Now()
 	s.purgeMu.Lock()
@@ -290,19 +290,28 @@ func (s *Service) maybePurgePayloads(ctx context.Context) {
 	}
 }
 
-// PurgePrintPayloads fails the jobs that never printed within the retention and removes the document and the bytes of the jobs older than it. The
-// rows stay: what was printed, for whom, when and how it ended.
+// PurgePrintPayloads fails the jobs that never printed within the retention and removes the document and the bytes of the jobs older than it, in every
+// property. The rows stay: what was printed, for whom, when and how it ended.
 func (s *Service) PurgePrintPayloads(ctx context.Context) (int64, error) {
+	return s.purgePayloads(ctx, nil)
+}
+
+// PurgePrintPayloadsOf is the same for one property: the close of its business day.
+func (s *Service) PurgePrintPayloadsOf(ctx context.Context, propertyID int64) (int64, error) {
+	return s.purgePayloads(ctx, &propertyID)
+}
+
+func (s *Service) purgePayloads(ctx context.Context, propertyID *int64) (int64, error) {
 	var n int64
 	err := s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		q := s.q(ctx)
 		now := s.clock.Now()
 		cutoff := now.Add(-PayloadRetention)
-		if err := q.ExpireOldJobs(ctx, cutoff); err != nil {
+		if err := q.ExpireOldJobs(ctx, posdb.ExpireOldJobsParams{Cutoff: cutoff, PropertyID: propertyID}); err != nil {
 			return err
 		}
 		var err error
-		n, err = q.PurgePayloads(ctx, posdb.PurgePayloadsParams{Now: now, Cutoff: cutoff})
+		n, err = q.PurgePayloads(ctx, posdb.PurgePayloadsParams{Now: now, Cutoff: cutoff, PropertyID: propertyID})
 		return err
 	})
 	return n, err

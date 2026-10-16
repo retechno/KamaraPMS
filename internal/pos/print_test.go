@@ -128,6 +128,16 @@ func TestAnEnrolmentCodeWorksOnceAndATokenIsOnlyAHash(t *testing.T) {
 	}
 	_, err = p.svc.AuthenticateDevice(context.Background(), rot.Token)
 	wantCode(t, err, "DEVICE_REVOKED")
+	// the printers of a revoked device are offline at once, even if they reported a moment ago
+	_, err = p.Pool.Exec(context.Background(), `UPDATE pos_printers SET last_status = 'ONLINE', status_reported_at = $2 WHERE property_id = $1 AND device_id IS NOT NULL`, p.propID, p.Clock.Now())
+	must(t, err)
+	pl, err := p.svc.ListPrinters(p.admin, p.propID)
+	must(t, err)
+	for _, pr := range pl {
+		if pr.DeviceID != nil && pr.State != "OFFLINE" {
+			t.Fatalf("a printer of a revoked device is %s", pr.State)
+		}
+	}
 	_, err = p.svc.RevokeDevice(p.admin, p.propID, p.dev.ID)
 	wantCode(t, err, "DEVICE_REVOKED")
 	_, err = p.svc.RotateDeviceToken(p.admin, p.propID, p.dev.ID)
@@ -585,5 +595,28 @@ func TestThePermissionsOfPrinting(t *testing.T) {
 		if err := fn(p.waiterC); err == nil {
 			t.Fatalf("%s: a waiter is refused", name)
 		}
+	}
+}
+
+func TestLookingAtTheQueueOrTheFailedJobsPurgesToo(t *testing.T) {
+	p := newPrintFx(t)
+	p.sent(t) // nobody claims it: there is no agent at work
+	p.Clock.Advance(8 * 24 * time.Hour)
+	if _, err := p.svc.FailedJobs(p.cashier, p.propID, p.resto.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p.Count(t, `SELECT count(*) FROM pos_print_jobs WHERE payload IS NOT NULL`) != 0 {
+		t.Fatal("the list of failed jobs removes the old payloads")
+	}
+	if p.Count(t, `SELECT count(*) FROM pos_print_jobs WHERE status = 'FAILED' AND error_code = 'EXPIRED'`) != 1 {
+		t.Fatal("a job that never printed in seven days is expired")
+	}
+	// the throttle is per hour: a job made later is not purged by the next look within the hour, and is by the one after it
+	p.sent(t)
+	p.Clock.Advance(8 * 24 * time.Hour)
+	_, err := p.svc.ListPrintJobs(p.admin, p.propID, nil, "", 10)
+	must(t, err)
+	if p.Count(t, `SELECT count(*) FROM pos_print_jobs WHERE payload IS NOT NULL`) != 0 {
+		t.Fatal("the list of the queue removes them too")
 	}
 }

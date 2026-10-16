@@ -120,6 +120,7 @@ const state = (d: PosDevice): 'online' | 'offline' | 'revoked' | 'never' => (d.s
 </script>
 
 <template>
+  <div>
   <section class="rounded-xl border border-border bg-card p-4" data-testid="devices">
     <header class="mb-1 flex flex-wrap items-center justify-between gap-2">
       <h2 class="m-0 text-base font-semibold">{{ t('posDevices.title') }}</h2>
@@ -166,7 +167,7 @@ const state = (d: PosDevice): 'online' | 'offline' | 'revoked' | 'never' => (d.s
         </div>
         <div>
           <div class="mb-1 text-xs font-medium text-muted-foreground">{{ t('posDevices.command') }}</div>
-          <pre class="m-0 overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-xs" data-testid="enrollment-command">{{ command }}</pre>
+          <pre class="m-0 whitespace-pre-wrap break-all rounded-lg border border-border bg-muted/40 p-3 text-xs" data-testid="enrollment-command">{{ command }}</pre>
           <p class="m-0 mt-1 text-xs text-muted-foreground">{{ t('posDevices.commandHint') }}</p>
         </div>
         <div class="flex justify-end gap-2">
@@ -188,4 +189,5 @@ const state = (d: PosDevice): 'online' | 'offline' | 'revoked' | 'never' => (d.s
       </div>
     </DialogContent>
   </Dialog>
+  </div>
 </template>

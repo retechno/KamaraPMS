@@ -977,7 +977,9 @@ waited out with a growing pause. Its tests (`internal/posagent`) use `httptest` 
 The web: **Setup > Stations and printers** has the **Devices** section (the code with its countdown and the command to copy, the list with state, last
 seen and version, Revoke and Replace token, the token shown once), the printers show their state and a choice of device, the stations their copies, the
 print queue the device, the attempts, the error and when it was printed; **Setup > Outlets** has the paper (head, foot, copies); the **cashier floor and
-bill** show the printer chip ("Printer offline: Struk", "Kertas habis", "Printer siap"), the jobs that failed with **Reprint**, **Print** to the printer
+bill** show a printer chip for each printer that has a problem, with its own cause ("Printer offline: X" when the agent is silent for more than 90 s, the device
+is offline or revoked or the printer says so; "Kertas habis: X"; "Tutup printer terbuka: X"; "Printer belum terhubung ke agen: X" for a printer with no device),
+or one "Printer siap", the jobs that failed with **Reprint**, **Print** to the printer
 (and **Print from the browser** beside it), **Reprint the receipt** (reason) and **Open drawer** (reason); the **outlet report** lists the drawer opens.
 `utils/posReceipt.ts` (the browser) is kept as the second way.
 
@@ -985,8 +987,10 @@ bill** show the printer chip ("Printer offline: Struk", "Kertas habis", "Printer
 
 1. **`document jsonb` beside `payload`.** The design stored the bytes only. The document is kept as well so that a reprint renders again with the mark
    `COPY n` and nothing else changes; both are removed after seven days.
-2. **The purge has no scheduler of its own.** The claim path (the agents poll all day) removes the payloads past seven days at most once an hour
-   by process (`PurgePrintPayloads`); a job that never printed in that time is failed `EXPIRED` first. The metadata stays.
+2. **The purge has no scheduler of its own and does not depend on an agent.** It runs (a) when an agent claims, (b) when the queue of print jobs or the list of
+   failed jobs is read, each at most once an hour by process (`maybePurgePayloads`), and (c) at the **close of the day** of the property, without the throttle,
+   for that property (`outletClose.ExpireOutletLocks` calls `PurgePrintPayloadsOf`). So a property with no agent is purged too: a job that never printed in
+   seven days is failed `EXPIRED`, and the document and the bytes of every job older than that are removed; the metadata stays.
 3. **`seq` orders a printer**, and a printer is served one job at a time: a job waits for the one before it, including a job that waits for its backoff.
 4. **A ticket queued by 3a without bytes** is rendered at its first claim from the ticket (so a queue that was waiting when 3b came prints).
 5. **Config route.** `GET /api/v1/device/config` (and the answer of the heartbeat) tell the agent its printers and their `connection_info`; the job

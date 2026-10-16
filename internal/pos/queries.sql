@@ -46,7 +46,7 @@ SELECT charge_type, is_active FROM charge_codes WHERE tenant_id = @tenant_id AND
 -- ---------------------------------------------------------------- printers and stations
 -- name: ListPrinters :many
 SELECT pr.id, pr.name, pr.kind, pr.connection_info, pr.paper_width_mm, pr.codepage, pr.opens_drawer, pr.is_active,
-       pr.device_id, d.name AS device_name, pr.last_status, pr.status_reported_at
+       pr.device_id, d.name AS device_name, COALESCE(d.status, '')::text AS device_status, pr.last_status, pr.status_reported_at
 FROM pos_printers pr LEFT JOIN pos_devices d ON d.property_id = pr.property_id AND d.id = pr.device_id
 WHERE pr.tenant_id = @tenant_id AND pr.property_id = @property_id
 ORDER BY pr.name, pr.id;
@@ -902,11 +902,13 @@ UPDATE pos_print_jobs SET status = 'FAILED', error_code = @error_code, lease_unt
 -- A job that never printed within the retention is failed first, then its payload goes (the row stays).
 -- name: ExpireOldJobs :exec
 UPDATE pos_print_jobs SET status = 'FAILED', error_code = 'EXPIRED', lease_until = NULL, next_attempt_at = NULL
-WHERE status IN ('QUEUED', 'CLAIMED') AND created_at < @cutoff::timestamptz;
+WHERE status IN ('QUEUED', 'CLAIMED') AND created_at < @cutoff::timestamptz
+  AND (sqlc.narg(property_id)::bigint IS NULL OR property_id = sqlc.narg(property_id)::bigint);
 
 -- name: PurgePayloads :execrows
 UPDATE pos_print_jobs SET payload = NULL, document = NULL, payload_purged_at = @now::timestamptz
-WHERE payload IS NOT NULL AND created_at < @cutoff::timestamptz AND status IN ('PRINTED', 'FAILED', 'CANCELLED');
+WHERE payload IS NOT NULL AND created_at < @cutoff::timestamptz AND status IN ('PRINTED', 'FAILED', 'CANCELLED')
+  AND (sqlc.narg(property_id)::bigint IS NULL OR property_id = sqlc.narg(property_id)::bigint);
 
 -- name: PrinterForJob :one
 SELECT id, kind, paper_width_mm, codepage, opens_drawer, connection_info, device_id, is_active

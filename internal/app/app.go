@@ -248,6 +248,10 @@ func (o outletClose) NightAuditOutlets(ctx context.Context, tenantID, propertyID
 }
 
 func (o outletClose) ExpireOutletLocks(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
-	_, err := o.folios.ExpireOutletLocks(ctx, p, propertyID, bd)
+	if _, err := o.folios.ExpireOutletLocks(ctx, p, propertyID, bd); err != nil {
+		return err
+	}
+	// the close of the day also removes the old documents of the print jobs of the property (a property with no agent never claims one)
+	_, err := o.pos.PurgePrintPayloadsOf(ctx, propertyID)
 	return err
 }

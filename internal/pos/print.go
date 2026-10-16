@@ -370,6 +370,7 @@ func (s *Service) FailedJobs(ctx context.Context, propertyID, outletID int64) ([
 	if _, err := s.outletOf(ctx, p.TenantID, propertyID, outletID); err != nil {
 		return nil, err
 	}
+	s.maybePurgePayloads(ctx)
 	rows, err := s.q(ctx).FailedJobsOfOutlet(ctx, posdb.FailedJobsOfOutletParams{TenantID: p.TenantID, PropertyID: propertyID, OutletID: outletID, Since: s.clock.Now().Add(-48 * time.Hour)})
 	if err != nil {
 		return nil, err

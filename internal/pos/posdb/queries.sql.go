@@ -745,11 +745,17 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 const expireOldJobs = `-- name: ExpireOldJobs :exec
 UPDATE pos_print_jobs SET status = 'FAILED', error_code = 'EXPIRED', lease_until = NULL, next_attempt_at = NULL
 WHERE status IN ('QUEUED', 'CLAIMED') AND created_at < $1::timestamptz
+  AND ($2::bigint IS NULL OR property_id = $2::bigint)
 `
 
+type ExpireOldJobsParams struct {
+	Cutoff     time.Time
+	PropertyID *int64
+}
+
 // A job that never printed within the retention is failed first, then its payload goes (the row stays).
-func (q *Queries) ExpireOldJobs(ctx context.Context, cutoff time.Time) error {
-	_, err := q.db.Exec(ctx, expireOldJobs, cutoff)
+func (q *Queries) ExpireOldJobs(ctx context.Context, arg ExpireOldJobsParams) error {
+	_, err := q.db.Exec(ctx, expireOldJobs, arg.Cutoff, arg.PropertyID)
 	return err
 }
 
@@ -3280,7 +3286,7 @@ func (q *Queries) ListPrintJobs(ctx context.Context, arg ListPrintJobsParams) ([
 
 const listPrinters = `-- name: ListPrinters :many
 SELECT pr.id, pr.name, pr.kind, pr.connection_info, pr.paper_width_mm, pr.codepage, pr.opens_drawer, pr.is_active,
-       pr.device_id, d.name AS device_name, pr.last_status, pr.status_reported_at
+       pr.device_id, d.name AS device_name, COALESCE(d.status, '')::text AS device_status, pr.last_status, pr.status_reported_at
 FROM pos_printers pr LEFT JOIN pos_devices d ON d.property_id = pr.property_id AND d.id = pr.device_id
 WHERE pr.tenant_id = $1 AND pr.property_id = $2
 ORDER BY pr.name, pr.id
@@ -3302,6 +3308,7 @@ type ListPrintersRow struct {
 	IsActive         bool
 	DeviceID         *int64
 	DeviceName       *string
+	DeviceStatus     string
 	LastStatus       *string
 	StatusReportedAt *time.Time
 }
@@ -3327,6 +3334,7 @@ func (q *Queries) ListPrinters(ctx context.Context, arg ListPrintersParams) ([]L
 			&i.IsActive,
 			&i.DeviceID,
 			&i.DeviceName,
+			&i.DeviceStatus,
 			&i.LastStatus,
 			&i.StatusReportedAt,
 		); err != nil {
@@ -4227,15 +4235,17 @@ func (q *Queries) PurgeEvents(ctx context.Context, before time.Time) (int64, err
 const purgePayloads = `-- name: PurgePayloads :execrows
 UPDATE pos_print_jobs SET payload = NULL, document = NULL, payload_purged_at = $1::timestamptz
 WHERE payload IS NOT NULL AND created_at < $2::timestamptz AND status IN ('PRINTED', 'FAILED', 'CANCELLED')
+  AND ($3::bigint IS NULL OR property_id = $3::bigint)
 `
 
 type PurgePayloadsParams struct {
-	Now    time.Time
-	Cutoff time.Time
+	Now        time.Time
+	Cutoff     time.Time
+	PropertyID *int64
 }
 
 func (q *Queries) PurgePayloads(ctx context.Context, arg PurgePayloadsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, purgePayloads, arg.Now, arg.Cutoff)
+	result, err := q.db.Exec(ctx, purgePayloads, arg.Now, arg.Cutoff, arg.PropertyID)
 	if err != nil {
 		return 0, err
 	}

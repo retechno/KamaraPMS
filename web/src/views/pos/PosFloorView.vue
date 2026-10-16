@@ -19,6 +19,7 @@ import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney } from '@/utils/format'
+import { formatDuration } from '@/utils/duration'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { Store } from 'lucide-vue-next'
 
@@ -194,7 +195,7 @@ async function releaseHold(holdId: number, seated: boolean): Promise<void> {
   }
 }
 
-const minutesText = (m: number): string => t('posFloor.minutes', { n: m })
+const minutesText = (m: number): string => formatDuration(m)
 </script>
 
 <template>
@@ -210,7 +211,7 @@ const minutesText = (m: number): string => t('posFloor.minutes', { n: m })
   </PageHeader>
   <ErrorNotice v-if="error ?? outletsError" :error="(error ?? outletsError)!" inline />
   <PosPrintStatus
-    v-if="pid !== null && outlet" class="mb-3" :property-id="pid" :outlet-id="outlet.id" :receipt-printer-id="outlet.receipt_printer_id ?? null" :order-mode="outlet.order_mode"
+    v-if="pid !== null && outlet" class="mb-3" :property-id="pid" :outlet-id="outlet.id" :receipt-printer-id="outlet.receipt_printer_id ?? null" :order-mode="outlet.order_mode ?? ''"
     :can-reprint="canCashier"
   />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
@@ -237,19 +238,21 @@ const minutesText = (m: number): string => t('posFloor.minutes', { n: m })
         >{{ m.label }}</div>
         <button
           v-for="tb in area.tables" :key="tb.id" type="button"
-          class="absolute flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 overflow-hidden border-2 p-1 text-center text-xs leading-tight shadow-sm"
-          :class="[STATUS_CLASS[tb.status], tb.shape === 'ROUND' ? 'rounded-full' : 'rounded-lg']"
+          class="absolute flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 overflow-hidden border-2 text-center text-xs leading-tight shadow-sm"
+          :class="[STATUS_CLASS[tb.status], tb.shape === 'ROUND' ? 'rounded-full px-2.5 py-1' : 'rounded-lg p-1']"
           :style="{ left: `${(tb.x / area.grid_w) * 100}%`, top: `${(tb.y / area.grid_h) * 100}%`, width: `${(tb.w / area.grid_w) * 100}%`, height: `${(tb.h / area.grid_h) * 100}%` }"
           :data-testid="`table-${tb.code}`" :data-status="tb.status" @click="tap(tb)"
         >
-          <strong class="text-sm">{{ tb.code }}</strong>
+          <strong class="block w-full truncate text-sm">{{ tb.code }}</strong>
           <template v-if="tb.bills.length > 0">
-            <span class="tabular-nums">{{ tableTotal(tb) }}</span>
-            <span class="text-[11px] text-muted-foreground">{{ tableGuests(tb) > 0 ? t('posFloor.guests', { n: tableGuests(tb) }) + ' · ' : '' }}{{ minutesText(tableMinutes(tb)) }}</span>
-            <span v-if="tb.status === 'AWAITING_PAYMENT'" class="font-medium">{{ t('posFloor.status_AWAITING_PAYMENT') }}</span>
-            <span v-if="tb.bills.length > 1" class="text-[11px]">{{ t('posFloor.bills', { n: tb.bills.length }) }}</span>
+            <span class="block w-full truncate tabular-nums">{{ tableTotal(tb) }}</span>
+            <!-- how long (and the guests on a table wide enough to hold both): the second line, left out on a small table, cut when it does not fit -->
+            <span v-if="tb.w >= 3 && tb.h >= 3" class="block w-full truncate text-[11px] text-muted-foreground" data-testid="table-since">{{ tb.w >= 5 && tableGuests(tb) > 0 ? t('posFloor.guests', { n: tableGuests(tb) }) + ' · ' : '' }}{{ minutesText(tableMinutes(tb)) }}</span>
+            <!-- one line of state: several bills are "2 bill", a bill that was asked for says so -->
+            <span v-if="tb.bills.length > 1" class="block w-full truncate text-[11px] font-medium" data-testid="table-state">{{ t('posFloor.bills', { n: tb.bills.length }) }}</span>
+            <span v-else-if="tb.status === 'AWAITING_PAYMENT'" class="block w-full truncate text-[11px] font-medium" data-testid="table-state">{{ t('posFloor.status_AWAITING_PAYMENT') }}</span>
           </template>
-          <template v-else-if="tb.holds.length > 0"><span class="text-[11px]">{{ tb.holds[0]!.from_time }} · {{ tb.holds[0]!.name }}</span></template>
+          <template v-else-if="tb.holds.length > 0"><span class="block w-full truncate text-[11px]">{{ tb.holds[0]!.from_time }} · {{ tb.holds[0]!.name }}</span></template>
           <span v-else class="text-[11px] text-muted-foreground">{{ t('posFloor.seats', { n: tb.capacity }) }}</span>
         </button>
       </div>

@@ -175,3 +175,44 @@ func TestThePrintAgentRoutesAPI(t *testing.T) {
 }
 
 func itoa64(n int64) string { return decimal.NewFromInt(n).String() }
+
+// A property with no agent never claims a job, so the close of its day is what removes the old documents (docs/architecture/34-pos.md 20.7).
+func TestTheCloseOfTheDayPurgesPrintJobsOfAPropertyWithoutAnAgent(t *testing.T) {
+	e := newAPI(t)
+	abc := e.login("ABC")
+	pid := idOf(abc.do(http.MethodPost, "/api/v1/properties", validProperty()))
+	base := "/api/v1/properties/" + pid
+	pr := abc.do(http.MethodPost, base+"/pos/printers", map[string]any{"name": "Kitchen", "kind": "KITCHEN", "paper_width_mm": 80, "codepage": "CP437"})
+	if pr.status != 201 {
+		t.Fatalf("printer: %d %v", pr.status, pr.body)
+	}
+	pool := dbtest.Pool(t)
+	ctx := context.Background()
+	// one job of 12 days ago that never printed and one printed 10 days ago; one of today that must stay as it is
+	for i, row := range []struct{ key, status, age string }{{"T:1:1", "QUEUED", "12 days"}, {"T:2:1", "PRINTED", "10 days"}, {"T:3:1", "QUEUED", "1 hour"}} {
+		printed := "NULL"
+		if row.status == "PRINTED" {
+			printed = "now()"
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, status, attempts, printed_at, payload, document, created_at)
+			SELECT p.tenant_id, p.property_id, p.id, 'TICKET', 'TICKET', $2, $3, $4, 0, `+printed+`, '\x1b40'::bytea, '{}'::jsonb, '2026-09-30 13:00:00+00'::timestamptz - $5::interval
+			FROM pos_printers p WHERE p.id = $1`, int64(pr.body["id"].(float64)), int64(i+1), row.key, row.status, row.age); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if r := abc.do(http.MethodPost, base+"/night-audit/run", map[string]any{"business_date": "2026-09-30"}); r.status != 200 {
+		t.Fatalf("night audit: %d %v", r.status, r.body)
+	}
+	var expired, kept, bytes int
+	must := func(err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(pool.QueryRow(ctx, `SELECT count(*) FROM pos_print_jobs WHERE dedupe_key = 'T:1:1' AND status = 'FAILED' AND error_code = 'EXPIRED' AND payload IS NULL AND document IS NULL AND payload_purged_at IS NOT NULL`).Scan(&expired))
+	must(pool.QueryRow(ctx, `SELECT count(*) FROM pos_print_jobs WHERE dedupe_key = 'T:2:1' AND status = 'PRINTED' AND payload IS NULL AND payload_purged_at IS NOT NULL`).Scan(&bytes))
+	must(pool.QueryRow(ctx, `SELECT count(*) FROM pos_print_jobs WHERE dedupe_key = 'T:3:1' AND status = 'QUEUED' AND payload IS NOT NULL`).Scan(&kept))
+	if expired != 1 || bytes != 1 || kept != 1 {
+		t.Fatalf("after the close of the day: expired %d, printed and purged %d, recent kept %d", expired, bytes, kept)
+	}
+}

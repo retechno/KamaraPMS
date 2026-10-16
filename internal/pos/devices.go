@@ -113,9 +113,16 @@ type DeviceConfig struct {
 // PrinterState says what a printer is now, from what its agent reported and when: NO_DEVICE (no agent is assigned), UNKNOWN (never reported),
 // OFFLINE (silent for more than OfflineAfter, or reported so) or the status it reported.
 func PrinterState(hasDevice bool, last *string, at *time.Time, now time.Time) string {
+	return printerState(hasDevice, false, last, at, now)
+}
+
+// printerState is PrinterState with the state of the device: a revoked device serves nothing, so its printers are offline whatever they last said.
+func printerState(hasDevice, revoked bool, last *string, at *time.Time, now time.Time) string {
 	switch {
 	case !hasDevice:
 		return "NO_DEVICE"
+	case revoked:
+		return "OFFLINE"
 	case last == nil || at == nil:
 		return "UNKNOWN"
 	case now.Sub(*at) > OfflineAfter:

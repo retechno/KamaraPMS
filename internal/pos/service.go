@@ -434,7 +434,7 @@ func (s *Service) ListPrinters(ctx context.Context, propertyID int64) ([]Printer
 	for i, r := range rows {
 		out[i] = Printer{ID: r.ID, Name: r.Name, Kind: r.Kind, ConnectionInfo: r.ConnectionInfo, PaperWidthMM: int(r.PaperWidthMm), Codepage: r.Codepage, OpensDrawer: r.OpensDrawer, IsActive: r.IsActive,
 			DeviceID: r.DeviceID, DeviceName: r.DeviceName, LastStatus: r.LastStatus, StatusReportedAt: r.StatusReportedAt}
-		out[i].State = PrinterState(r.DeviceID != nil, r.LastStatus, r.StatusReportedAt, now)
+		out[i].State = printerState(r.DeviceID != nil, r.DeviceStatus == "REVOKED", r.LastStatus, r.StatusReportedAt, now)
 	}
 	return out, nil
 }

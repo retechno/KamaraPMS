@@ -57,20 +57,20 @@ const mine = computed<PosPrinter[]>(() => {
   if (props.orderMode === 'PRINT') for (const s of stations.value) if (s.printer_id && s.is_active) ids.add(s.printer_id)
   return printers.value.filter((p) => ids.has(p.id) && p.is_active)
 })
+// One chip for each printer that has a problem, with its own cause; one "ready" chip when every printer is fine.
 const BAD = ['OFFLINE', 'PAPER_OUT', 'COVER_OPEN']
-const trouble = computed(() => mine.value.filter((p) => BAD.includes(p.state ?? '')))
-const level = computed<'ok' | 'bad' | 'unknown' | 'none'>(() => {
-  if (mine.value.length === 0) return 'none'
-  if (trouble.value.length > 0) return 'bad'
-  return mine.value.every((p) => p.state === 'ONLINE') ? 'ok' : 'unknown'
-})
-const label = computed(() => {
-  if (level.value === 'bad') {
-    const worst = trouble.value.find((p) => p.state !== 'OFFLINE') ?? trouble.value[0]
-    return t(`posPrintStatus.bad_${worst?.state ?? 'OFFLINE'}`, { name: trouble.value.map((p) => p.name).join(', ') })
+interface Chip { key: string; level: 'ok' | 'bad' | 'unknown'; label: string }
+const chips = computed<Chip[]>(() => {
+  if (mine.value.length === 0) return []
+  const out: Chip[] = []
+  for (const p of mine.value) {
+    const st = p.state ?? 'NO_DEVICE'
+    if (BAD.includes(st)) out.push({ key: `p${p.id}`, level: 'bad', label: t(`posPrintStatus.bad_${st}`, { name: p.name }) })
+    else if (st !== 'ONLINE') out.push({ key: `p${p.id}`, level: 'unknown', label: t('posPrintStatus.unknown', { name: p.name }) })
   }
-  return t(`posPrintStatus.${level.value}`)
+  return out.length > 0 ? out : [{ key: 'ok', level: 'ok', label: t('posPrintStatus.ok') }]
 })
+const anyBad = computed(() => chips.value.some((c) => c.level === 'bad'))
 
 // ---- reprint
 const target = ref<PosFailedJob | null>(null)
@@ -103,16 +103,19 @@ const why = (code: string): string => (te(`posPrintQueue.error_${code}`) ? t(`po
 </script>
 
 <template>
-  <div v-if="level !== 'none' || failed.length > 0" class="flex flex-col gap-2" data-testid="print-status">
-    <div
-      v-if="level !== 'none'" class="inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1 text-sm"
-      :class="level === 'bad' ? 'border-destructive bg-destructive/10 text-destructive' : level === 'ok' ? 'border-border bg-card' : 'border-border bg-muted text-muted-foreground'"
-      :data-level="level" data-testid="printer-chip" role="status"
-    >
-      <span class="size-2 rounded-full" :class="level === 'bad' ? 'bg-destructive' : level === 'ok' ? 'bg-primary' : 'bg-muted-foreground'" aria-hidden="true" />
-      {{ label }}
+  <div>
+  <div v-if="chips.length > 0 || failed.length > 0" class="flex flex-col gap-2" data-testid="print-status">
+    <div class="flex flex-wrap gap-2">
+      <div
+        v-for="c in chips" :key="c.key" class="inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1 text-sm"
+        :class="c.level === 'bad' ? 'border-destructive bg-destructive/10 text-destructive' : c.level === 'ok' ? 'border-border bg-card' : 'border-border bg-muted text-muted-foreground'"
+        :data-level="c.level" data-testid="printer-chip" role="status"
+      >
+        <span class="size-2 rounded-full" :class="c.level === 'bad' ? 'bg-destructive' : c.level === 'ok' ? 'bg-primary' : 'bg-muted-foreground'" aria-hidden="true" />
+        {{ c.label }}
+      </div>
     </div>
-    <p v-if="level === 'bad'" class="m-0 text-xs text-muted-foreground" data-testid="printer-chip-hint">{{ t('posPrintStatus.browserHint') }}</p>
+    <p v-if="anyBad" class="m-0 text-xs text-muted-foreground" data-testid="printer-chip-hint">{{ t('posPrintStatus.browserHint') }}</p>
 
     <section v-if="failed.length > 0" class="rounded-lg border border-destructive bg-destructive/5 p-3" data-testid="failed-jobs">
       <h3 class="m-0 text-sm font-semibold text-destructive">{{ t('posPrintStatus.failedTitle', { n: failed.length }) }}</h3>
@@ -144,4 +147,5 @@ const why = (code: string): string => (te(`posPrintQueue.error_${code}`) ? t(`po
       </form>
     </DialogContent>
   </Dialog>
+  </div>
 </template>

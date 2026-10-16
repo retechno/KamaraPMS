@@ -14,6 +14,7 @@ import { debounce, usePosEvents } from '@/composables/usePosEvents'
 import { usePosOutlet } from '@/composables/usePosOutlet'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
+import { formatDuration } from '@/utils/duration'
 import { formatMoney } from '@/utils/format'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { Store } from 'lucide-vue-next'
@@ -138,8 +139,9 @@ function seat(): void {
           :class="STATUS_CLASS[tb.status] ?? STATUS_CLASS.FREE" :data-testid="`table-${tb.code}`" :data-status="tb.status" @click="tap(tb)"
         >
           <span class="text-lg font-bold">{{ tb.code }}</span>
-          <span class="text-xs text-muted-foreground">{{ t(`posFloor.status_${tb.status}`) }}</span>
-          <span v-if="tb.bills.length > 0" class="text-sm font-semibold tabular-nums">{{ tableTotal(tb) }}</span>
+          <span class="w-full truncate text-xs text-muted-foreground" data-testid="table-state">{{ tb.bills.length > 1 ? t('posFloor.bills', { n: tb.bills.length }) : t(`posFloor.status_${tb.status}`) }}</span>
+          <span v-if="tb.bills.length > 0" class="w-full truncate text-sm font-semibold tabular-nums">{{ tableTotal(tb) }}</span>
+          <span v-if="tb.bills.length > 0" class="w-full truncate text-xs text-muted-foreground" data-testid="table-since">{{ formatDuration(Math.max(0, ...tb.bills.map((b) => b.minutes))) }}</span>
           <span v-else class="text-xs text-muted-foreground">{{ t('posWaiter.seats', { n: tb.capacity }) }}</span>
         </button>
       </div>

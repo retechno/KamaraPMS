@@ -125,14 +125,18 @@ describe('the printer status of the cashier', () => {
     expect(w.get('[data-testid=printer-chip-hint]').text()).toContain('browser')
     const p = status([printer(1, 'Struk', 'PAPER_OUT'), printer(2, 'Dapur', 'OFFLINE', { kind: 'KITCHEN' })])
     await flushPromises()
-    expect(p.get('[data-testid=printer-chip]').text()).toBe('Kertas habis: Struk, Dapur')
+    // one chip for each printer, each with its own cause
+    expect(p.findAll('[data-testid=printer-chip]').map((c) => c.text())).toEqual(['Kertas habis: Struk', 'Printer offline: Dapur'])
+    const c = status([printer(1, 'Struk', 'COVER_OPEN'), printer(2, 'Dapur', 'ONLINE', { kind: 'KITCHEN' })])
+    await flushPromises()
+    expect(c.findAll('[data-testid=printer-chip]').map((x) => x.text())).toEqual(['Tutup printer terbuka: Struk'])
   })
 
   it('is not worried about printers of other outlets, and a printer with no agent is not "offline"', async () => {
     const w = status([printer(1, 'Struk', 'NO_DEVICE', { device_id: null }), printer(9, 'Bar', 'OFFLINE')], [], { orderMode: 'DIRECT' })
     await flushPromises()
     expect(w.get('[data-testid=printer-chip]').attributes('data-level')).toBe('unknown')
-    expect(w.get('[data-testid=printer-chip]').text()).toBe('Printer belum terhubung ke agen')
+    expect(w.get('[data-testid=printer-chip]').text()).toBe('Printer belum terhubung ke agen: Struk')
   })
 
   it('shows nothing for an outlet that prints from the browser only', async () => {

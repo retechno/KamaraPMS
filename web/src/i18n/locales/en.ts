@@ -6124,9 +6124,14 @@ export const en = {
     viewBill: 'View the bill',
     notOpen: 'This bill is no longer open: it cannot be changed here.',
   },
+  duration: {
+    minutes: '{n} min',
+    hoursMinutes: '{h} h {m} m',
+    daysHours: '{d} d {h} h',
+  },
   posPrintStatus: {
     ok: 'Printer ready',
-    unknown: 'Printer not connected to an agent',
+    unknown: 'Printer not connected to an agent: {name}',
     bad_OFFLINE: 'Printer offline: {name}',
     bad_PAPER_OUT: 'Out of paper: {name}',
     bad_COVER_OPEN: 'Printer cover open: {name}',

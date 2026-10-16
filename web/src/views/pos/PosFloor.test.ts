@@ -60,10 +60,27 @@ describe('the cashier floor plan', () => {
     expect(t5.attributes('data-status')).toBe('AWAITING_PAYMENT')
     expect(t5.text()).toContain('453,750')
     expect(t5.text()).toContain('34 min')
-    expect(t5.text()).toContain('2 guests')
+    expect(t5.text()).not.toContain('guests') // a table of 3 grid units holds the number and the time; the guests are in the list beside it
     expect(w.get('[data-testid=table-T6]').attributes('data-status')).toBe('FREE')
     expect(w.get('[data-testid=table-T7]').attributes('data-status')).toBe('HELD')
     expect(w.get('[data-testid=table-T7]').text()).toContain('19:00')
+  })
+
+  it('writes a long time as hours and minutes, days and hours, and keeps a small table to a total and one line of state', async () => {
+    const long = bill({ id: 20, minutes: 557, table_id: 11, bill_requested_at: '2026-10-15T05:30:00Z' })
+    const second = bill({ id: 21, minutes: 1650, table_id: 11 })
+    const small = { ...table(12, 'T6', 'OCCUPIED', [bill({ id: 22, table_id: 12, table_code: 'T6', minutes: 90, total: '120000' })]), w: 2, h: 2, shape: 'ROUND' }
+    const data = floor({ open_bills: [long], areas: [{ id: 5, name: 'Indoor', grid_w: 40, grid_h: 24, layout_version: 1, marks: [], tables: [table(11, 'T5', 'AWAITING_PAYMENT', [long, second]), small] }] })
+    const { w } = setup(['pos.order', 'pos.cashier', 'pos.report'], data)
+    await flushPromises()
+    const t5 = w.get('[data-testid=table-T5]')
+    expect(t5.get('[data-testid=table-since]').text()).toBe('1 d 3 h') // the longest of its bills; the guests are beside it only on a table wide enough
+    expect(t5.get('[data-testid=table-state]').text()).toBe('2 bills') // not "Bill requested · 2 bills" on a card that cannot hold it
+    const t6 = w.get('[data-testid=table-T6]')
+    expect(t6.find('[data-testid=table-since]').exists()).toBe(false) // a table of 2 x 2 has its number, its total and one line
+    expect(t6.text()).toContain('120,000')
+    // the list beside the plan says it in full for each bill
+    expect(w.get('[data-testid=open-bills]').text()).toContain('9 h 17 m')
   })
 
   it('shows the business date like the rest of the application', async () => {
