@@ -1,6 +1,6 @@
 # 35. Inventory and recipes: items, warehouses, purchasing, costing, stock counts and the deduction of POS sales
 
-Status: **design, waiting for the owner's approval (2026-10-16).** Asked by the owner on 2026-10-16 as stage 4 of `34-pos.md` section 14. The owner's decisions are in the request (numbered I1 to I12, referred to here as **I1 to I12**) and are **not re-opened**. Where one of them touches a rule of the platform or of an earlier document, section 1 says so, with the reason and what this design does about it. Nothing here is built; there is no code and no migration in this change. Words in `code font` are tables, columns, permissions or error codes; every new name is a proposal until approved. Open questions are in section 15 (D1 to D22), each with a recommendation.
+Status: **design, waiting for the owner's approval (2026-10-16); D1 to D22 of section 15 decided on 2026-10-16: as recommended; D23 (added after the review of PR #40) is open.** Asked by the owner on 2026-10-16 as stage 4 of `34-pos.md` section 14. The owner's decisions are in the request (numbered I1 to I12, referred to here as **I1 to I12**) and are **not re-opened**. Where one of them touches a rule of the platform or of an earlier document, section 1 says so, with the reason and what this design does about it. Nothing here is built; there is no code and no migration in this change. Words in `code font` are tables, columns, permissions or error codes; every new name is a proposal until approved. Decisions are in section 15 (D1 to D22 decided as recommended, D23 open).
 
 Read with: `02-database-schema.md`, `03-financial-engines.md` (one posting path per ledger), `05-transactions-locking.md` (lock order), `11-cashier-budget-cashflow-card.md` (shifts: a market purchase paid in cash), `12-departments.md` (department of a line, the rule of an account), `14-supplier-credit-notes.md`, `26-subscriptions.md` (module gate), `31-deposit-release.md` (a setting that locks at the first transaction, the day-close journal), `32-distinct-approver.md` (kinds of approval), `33-setup-read-permissions.md`, `34-pos.md` (recipes: 3.2, 7, 14) and `internal/payables`.
 
@@ -192,8 +192,10 @@ inv_issue_lines        (issue_id, line_no, item_id, qty_stock, value, expense_ac
 inv_counts             (id, cnt_number, client_uuid UK, warehouse_id, scope CHECK IN (ALL, CATEGORY, LIST), category_id NULL,
                         status CHECK IN (OPEN, SUBMITTED, APPROVED, CANCELLED), started_at, started_by, business_date_started,
                         submitted_by, decided_by, decided_at, total_variance_value, version)
-inv_count_lines        (count_id, item_id, book_qty (snapshot at the freeze), counted_qty NULL, variance_qty, variance_value (at approval),
-                        counted_by, counted_at, note)
+inv_count_lines        (count_id, item_id, book_qty (snapshot at the freeze), counted_qty NULL,
+                        counted_at timestamptz NULL,      -- set by the SERVER (injected clock) whenever counted_qty is entered or changed; CHECK ((counted_qty IS NULL) = (counted_at IS NULL))
+                        expected_qty, held_before_qty, variance_qty, variance_value,   -- all four computed at approval (4.7), NULL before
+                        counted_by, note)
 ```
 
 ### 3.5 PR 4 (migration 00087): the POS side
@@ -259,7 +261,15 @@ A return names the **receipt line** it returns. It is valued at the **cost that 
 
 ### 4.7 Count differences
 
-A count line has `book_qty` (taken at the freeze) and `counted_qty`. `variance = counted - book`. A **loss** is an OUT of `|variance|` valued by the method (average, or oldest layers); a **gain** is an IN valued at the last unit cost (4.4); neither may leave the balance negative (a counted quantity is never negative). The pair of accounts is the category's count-variance account against its inventory account. A shortfall of the item is closed (4.4 item 4).
+A count line has `book_qty` (taken at the freeze), `counted_qty` and `counted_at` (the server's instant when the quantity was entered or last changed). Sales that happen while the warehouse is frozen are held (5.5), and a sale made **before** `counted_at` has already taken its goods off the shelf the counter looked at. So at approval:
+
+- `held_before_qty` = the signed sum, in stock units, of the components for this item and warehouse of queue rows `HELD` with `created_at < counted_at` (a `SALE` row counts negative, a `VOID_RETURN` positive, a `VOID_WASTE` nothing);
+- `expected = book_qty + held_before_qty`;
+- **`variance = counted - expected`**.
+
+The held rows before `counted_at` are applied **first**, as ordinary `POS_SALE` / `POS_SALE_RETURN` movements, so the balance is `expected` when the count adjusts it; the held rows from `counted_at` on are applied **after** the count. Nothing is deducted twice (worked in 8.6). The comparison is by item: a queue row whose components touch several items is applied component by component, each on its side of its own item's `counted_at` (the component carries an `applied` flag in the snapshot; the row is `APPLIED` when all are). An item that was not counted has no `counted_at`: its held rows are applied after the count, and it is not adjusted. Under **FIFO** a held sale applied first consumes the oldest layers, then a loss consumes the oldest remaining and a gain makes a layer at the last unit cost, exactly as in 4.3. With **negative stock**: if applying the held sales takes the balance below zero, the shortfall (4.4) is created at the estimate, and the count (which sets the quantity to what was found) closes it without a settlement (4.4 item 4); `expected` may then be negative and the gain is `counted - expected`, valued at the last unit cost, so the net effect on inventory is the counted quantity at cost and the sale stays in cost of sales at its estimate.
+
+ A **loss** is an OUT of `|variance|` valued by the method (average, or oldest layers); a **gain** is an IN valued at the last unit cost (4.4); neither may leave the balance negative (a counted quantity is never negative; `expected` is read after the held sales were applied). The edge of `counted_at` is as exact as the clock of the server: a sale whose queue row was inserted at the same instant counts as after. The pair of accounts is the category's count-variance account against its inventory account. A shortfall of the item is closed (4.4 item 4).
 
 ### 4.8 The two methods side by side
 
@@ -280,7 +290,7 @@ A count line has `book_qty` (taken at the freeze) and `counted_qty`. `variance =
 
 ### 5.1 The order of locks
 
-The global order of `05-transactions-locking.md` gets one change: **`LevelStock = 45`** (shared with the booking groups, which never meet stock in a transaction; a test lists the lock sequences of the use cases and fails if one takes a group and stock rows together). Inside the level, in this order:
+The global order of `05-transactions-locking.md` gets one change: **`LevelStock = 45`** (shared with the booking groups, which never meet stock in a transaction; the structural test below holds it). Inside the level, in this order:
 
 1. the document rows of the use case (request, order, receipt, bill draft, return, requisition, transfer, issue, count), ascending id;
 2. the **warehouse** row (`FOR SHARE` for every mutation, so a mutation sees a freeze; `FOR UPDATE` to start or end a count);
@@ -293,6 +303,8 @@ The global order of `05-transactions-locking.md` gets one change: **`LevelStock 
 (POS never takes stock locks inside its own transaction: it only inserts a queue row, 5.6. The night audit takes the day `FOR UPDATE`, the stays and folios of the room charges, then stock to drain the queue, then the accounting settings for the journal: ascending.)
 
 so `ConfirmBill` locks the draft, the receipt lines and the balances, then calls `payables.PostBill`, which takes the settings, the supplier and the number as it does today.
+
+**The test that holds the shared level.** `internal/inventory/lockorder_test.go` (real PostgreSQL, run with the package's tests and by CI) has two parts. (a) *Static*: with `go/parser` it reads every package and fails if a use case that locks `db.Groups` can reach, in its call tree, a lock on one of the stock tables (`StockDocuments`, `Warehouses`, `StockBalances`), or the other way round; the use cases are the exported methods of the services of `groups`, `reservations`, `frontdesk` and `inventory`. (b) *Dynamic*: `dbtest` gets a recorder of the lock levels and tables a transaction takes (`dbtest.LockTrace`, active only in tests); every use case of section 5.2 and every group use case runs once under it, and the test fails if one trace holds both a group row and a stock row, and on any descent in level (the same check `db.EnterLockLevel` makes at run time). A new use case that mixes them fails CI and has to move to its own level (the renumbering of D12) before it merges.
 
 **The ledger writer** (`internal/inventory/ledger.go`) is the only code that inserts `inv_movements` and changes `inv_balances`, `inv_layers`, `inv_layer_uses` and `inv_shortfalls`; the structural guard `stockpath_guard_test.go` reads the source with `go/parser` and fails any other writer, as `salepath_guard_test.go` does for the sale paths. It exposes `In`, `Out`, `Reverse`, `Adjust` and `Settle`, takes the method from the settings, and refuses to run outside a transaction that holds the balance rows (it checks `db` state).
 
@@ -372,10 +384,10 @@ Journal of the clearing: variance positive: Dr inventory (the category account) 
 ### 5.5 The count and the freeze (I9)
 
 1. **Start** (`inventory.count`): the count row and the warehouse are locked `FOR UPDATE` (so in-flight mutations finish first); `inv_warehouses.count_id` is set; `book_qty` is copied for every item in scope (a warehouse, a category or a list). From now on every mutation of that warehouse except the POS queue refuses with `WAREHOUSE_FROZEN` (409). Only one count per warehouse at a time (a partial unique index on `count_id`).
-2. **Enter**: counters type `counted_qty` in the stock or a counting unit, on a phone or the desk; the sheet is blind by default (`count_blind`). Items not counted are not changed.
-3. **Submit** locks the sheet; **approve** (`inventory.approve`, decision of the approver, kind `INV_COUNT`, amount `abs(total variance value)`, `Subject` = the person who submitted) posts the variances (4.7), ends the freeze and writes the audit. **Cancel** ends the freeze and posts nothing.
-4. **What happens to POS sales during the count.** A sale is never blocked (I7). Its queue row is applied to a frozen warehouse only after the freeze ends: the worker marks it `HELD` and skips it. When the count is approved or cancelled the held rows are applied in order, dated the business day when they are applied; `source_date` keeps the day of the sale. The count therefore compares the physical stock with the book stock **at the freeze**, and the sales of the meantime come off afterwards; the count is accurate when the counting is done between services, which the screen says ("count when the outlet is quiet"). Worked in 8.6.
-5. **A count that runs over the day close.** By default it is a **blocker** of the night audit (`count_blocks_night_audit`, D6): the close would otherwise have to leave the held rows for tomorrow and date their cost a day late. A property that chooses the warning accepts that: the held rows are applied on the first business day after the freeze ends, and the report shows the sale date.
+2. **Enter**: counters type `counted_qty` in the stock or a counting unit, on a phone or the desk; the sheet is blind by default (`count_blind`). Each time a quantity is entered or changed the **server** stamps `counted_at` on that line (never the client's clock). Items not counted are not changed.
+3. **Submit** locks the sheet; **approve** (`inventory.approve`, decision of the approver, kind `INV_COUNT`, amount `abs(total variance value)`, `Subject` = the person who submitted) in one transaction (count row -> warehouse `FOR UPDATE` -> balances) first applies, per item, the held sales created before that item's `counted_at`, then posts the variances (4.7) against `expected`, ends the freeze, applies the rest of the held rows and writes the audit. **Cancel** ends the freeze and posts nothing.
+4. **What happens to POS sales during the count.** A sale is never blocked (I7). Its queue row is applied to a frozen warehouse only after the freeze ends: the worker marks it `HELD` and skips it. Held rows are applied in order, dated the business day when they are applied; `source_date` keeps the day of the sale. **Which side of the count a sale is on** is decided per item by the instant the item was counted (4.7): a sale before `counted_at` is already missing from the shelf, so it is applied before the adjustment and lowers what the count expects; a sale after it is applied after the adjustment. The sale is therefore deducted once, whatever the order in which things happen. On a **cancel** all held rows are simply applied. A sale made *while the counter is walking to the shelf* is the only residual error (the counter may have seen the goods before the plate left); it is as small as the time between looking and typing, and the screen suggests counting when the outlet is quiet. Worked in 8.6.
+5. **A count that runs over the day close.** By default it is a **blocker** of the night audit (`count_blocks_night_audit`, D6): the close would otherwise have to leave the held rows for tomorrow and date their cost a day late. A property that chooses the warning accepts that: the held rows are applied on the first business day after the freeze ends (their `created_at` still decides their side of each `counted_at`), and the report shows the sale date.
 
 ### 5.6 The deduction of a POS sale (I6)
 
@@ -577,7 +589,13 @@ Requisition REQ-000008: RESTO asks MAIN for 10 kg of BERAS; TRF-000015 answers i
 
 ### 8.6 A count with a freeze, while the bar sells
 
-BAR, SIRUP, book (end of 8.2, average): **28.2 botol / 1,395,900**. 21:00 the count starts: warehouse frozen, `book_qty` 28.2. During the count 10 glasses are sent: the queue row is `HELD`. 21:20 the counter finds **27.5 botol**; variance **-0.7** botol x 49,500 = **-34,650**. 21:30 the manager approves (kind `INV_COUNT`, amount 34,650; the rule `DISTINCT_ABOVE 20,000` makes it need someone other than the counter): `COUNT_LOSS`, balance **27.5 / 1,361,250**; the freeze ends; the held row is applied: 1.0 botol x 49,500 = 49,500, balance **26.5 / 1,311,750**. Journal: Dr 5295 34,650 / Cr 1320 34,650 (`INV_COUNT`); Dr 5220 / Bar 49,500 / Cr 1320 49,500.
+BAR, SIRUP, average, book at the end of 8.2: **28.2 botol / 1,395,900** (49,500 each). 21:00 the count starts: warehouse frozen, `book_qty` = 28.2.
+
+**A sale before the item is counted.** 21:05 ten glasses are sent (1.0 botol): the queue row is `HELD`, created 21:05. 21:20 the counter looks at the shelf and enters **27.5 botol**; the server stamps `counted_at` 21:20. The shelf already lacks the 1.0 botol sold at 21:05, so `held_before_qty` = -1.0, `expected` = 28.2 - 1.0 = 27.2 and **variance = 27.5 - 27.2 = +0.3 botol**. 21:30 the manager approves (kind `INV_COUNT`, amount 0.3 x 49,500 = 14,850; the rule `DISTINCT_ABOVE 10,000` makes it need someone other than the counter). In one transaction: first the held sale is applied, `POS_SALE` 1.0 botol x 49,500 = 49,500 (balance 27.2 / 1,346,400); then `COUNT_GAIN` +0.3 at the last unit cost, **14,850** (balance **27.5 / 1,361,250**); the freeze ends. The book ends where the shelf is: **27.5**, not 26.5. Journal: Dr 5220 / Bar 49,500 / Cr 1320 49,500; Dr 1320 14,850 / Cr 5295 14,850 (`INV_COUNT`).
+
+**The same sale after the item is counted.** Had the glasses been sent at 21:25, after `counted_at` 21:20, `held_before_qty` is 0, `expected` = 28.2, **variance = 27.5 - 28.2 = -0.7** x 49,500 = **-34,650** (`COUNT_LOSS`, Dr 5295 34,650 / Cr 1320 34,650), balance 27.5 / 1,361,250; then the held sale is applied after: 49,500, balance **26.5 / 1,311,750**, which is the shelf after the glasses were made. Both orders give the right book; a rule that applied every held sale after the count would be right only for the second.
+
+**FIFO** (BAR layers 18.2 botol @ 48,000 and 10 @ 50,000 after 8.2, value 1,373,600): the sale before the count takes 1.0 from the oldest layer (48,000), then the gain makes a layer of 0.3 at the last unit cost (50,000, value 15,000). **Below zero:** had BAR held only 0.5 botol when the sale arrived, applying it first would take the balance to -0.5 (a shortfall at the estimate); the count (found 0.0) has `expected` -0.5, variance +0.5, closes the shortfall without a settlement and leaves 0.0.
 
 ### 8.7 Return to supplier
 
@@ -703,7 +721,7 @@ All have CSV; the tables with a period also take the outlet or department.
 
 **PR 3 (movements, requisition, count)**
 - Transfer with value carried (both methods), in opposite directions at once (no deadlock), the source refusal; requisition filled by two transfers; issue to a department with the department rule (`DEPARTMENT_REQUIRED` at the issue, never at the close); waste with reasons; reversals the same day.
-- **Count and freeze**: start freezes (`WAREHOUSE_FROZEN` for every manual mutation, the queue held), a mutation in flight finishes before the freeze, two counts of one warehouse refused, blind sheet, gain and loss valuation for both methods, a count closes shortfalls, approval under the rules (`INV_COUNT`), cancel releases the freeze and applies the held rows, held rows applied in order, the open-count blocker and the warning setting of the night audit.
+- **Count and freeze**: start freezes (`WAREHOUSE_FROZEN` for every manual mutation, the queue held), a mutation in flight finishes before the freeze, **a sale before and a sale after an item is counted (a race with a barrier: the sale and the entry of the count at the same time; the side of `counted_at` decides, the sale is deducted exactly once, and the book equals the counted quantity minus only the sales after `counted_at`)**, `counted_at` set by the server and moved when the quantity is changed, a queue row with components on two items split by their own `counted_at`, the held sale that takes the balance below zero before the count (shortfall closed by the count), both methods, two counts of one warehouse refused, blind sheet, gain and loss valuation for both methods, a count closes shortfalls, approval under the rules (`INV_COUNT`), cancel releases the freeze and applies the held rows, held rows applied in order, the open-count blocker and the warning setting of the night audit.
 - Web: the count sheet at 390 px, the requisition and transfer screens.
 
 **PR 4 (POS recipes)**
@@ -730,7 +748,7 @@ Migration numbers are the next free: **00084 to 00088**; if another PR takes one
 | **4. Recipes and the POS deduction** | 00087 | `pos_outlets.warehouse_id`, the foreign keys of `pos_recipe_lines`, the recipe editor and the recipe cost, the queue and the worker, the hook in the POS paths, voids, the night-audit drain, the gap report, the POS master tab |
 | **5. Reports and snapshots** | 00088 | `inv_balance_days` written at the close, the stock card, valuation, F&B cost %, low stock and the other reports, dashboard, CSV |
 
-## 15. Decisions (open: the owner decides; recommendation first)
+## 15. Decisions (D1 to D22 decided 2026-10-16: as recommended; D23 open)
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -756,6 +774,7 @@ Migration numbers are the next free: **00084 to 00088**; if another PR takes one
 | D20 | Which users may touch which warehouse? | **Not now** (any holder of the permission, any warehouse); an assignment table can come later without changing the ledger. |
 | D21 | The count-day cutoff for F&B cost %: use only approved counts, or also estimate? | **Approved counts**, with "estimated from the book stock" when a period has none. |
 | D22 | Returns to supplier at the receipt line's cost. | **Yes** (4.6); the small difference to the moving average stays in the balance. |
+| D23 | **Count without a freeze** at all: every item gets its book quantity *as of its `counted_at`* from the ledger (`sum(qty_delta)` up to that instant), manual movements and POS sales go on, and the variance is `counted - book at counted_at`. | **Keep the freeze (OPEN, the owner decides).** Without it a transfer or a receipt between two lines of the sheet moves goods the counter may see twice or not at all, every movement needs an exact instant, and the balance at an instant is a query over the ledger, not a row. It is possible (the ledger is append-only and every movement has `created_at`), it removes `WAREHOUSE_FROZEN` and the held rows, and it suits a small bar that never stops; the cost is that only POS sales are safe, not manual movements. A middle way is to freeze only manual movements, which is what this design does. |
 
 ## 16. Not in this design (I11: deferred; the design does not close the way)
 
