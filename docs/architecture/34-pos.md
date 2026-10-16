@@ -684,7 +684,7 @@ Migration numbers are the next free: **00080, 00081, 00082**; if another PR take
 | **2. Orders and payment** | 00081 | `pos_bills`, lines, rounds, tickets (rows only), `pos_room_charges` and its attempts, folio source `POS`, `COMP`, transfer scopes, the view change, the approval kinds, open / add / send / void / discount / pay / split / merge / reopen, charge to room and to company, the cashier screen with the floor plan, shifts by drawer, receipts as an HTML/PDF document (no agent yet), reports, night audit checks, the folio list tabs |
 | **3. Waiter, KDS, printing** | 00082 | the waiter layout (390 px), KDS and ticket statuses, `pos_events` and the stream, `pos_devices`, enrolments, print jobs, ESC/POS rendering, the device routes, a **simulated agent** for tests, drawer jobs, reprint |
 | 3b. Print agent | 00083 | the devices and their enrolment, the claim and the result of a job, the ESC/POS documents (receipt, pre-bill, sheet of a charge to a room, kitchen ticket, drawer), the paper of an outlet and the copies, the drawer without a sale, the reprint, the printer status, and `cmd/pos-agent` for Windows and Linux (D16): section 20 |
-| **4. Inventory and recipes** | own document | stock, recipe use, movement on a sale, costing; adds the foreign key of `pos_recipe_lines` |
+| **4. Inventory and recipes** | own document: [35-inventory.md](35-inventory.md) (design, migrations 00084 to 00088) | stock, recipe use, movement on a sale, costing; adds the foreign key of `pos_recipe_lines` |
 
 ### Tests (real PostgreSQL; races with two goroutines and a barrier: exactly one success and a defined error for the other, as `05` 4)
 
