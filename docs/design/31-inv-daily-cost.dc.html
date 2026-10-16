@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<title>Daily cost F&amp;B</title>
+<title>Daily cost</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -14,16 +14,17 @@
 body{margin:0}
 a{color:#1f6f5c}a:hover{color:#185a4a}
 .nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
-.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:8px 9px;border-bottom:1px solid #e3e6ea;white-space:nowrap;vertical-align:bottom}
 .thr{text-align:right}
-.td{padding:7px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.td{padding:7px 9px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
 .btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
 .tile{flex:1;background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
 .tl{font-size:12px;color:#626b77}
 .tv{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-.hi{color:#9a3412;font-weight:600}
+.tot td{font-weight:700;background:#f6f7f9}
 .lk{text-decoration:none}
 </style>
 </helmet>
@@ -42,68 +43,44 @@ a{color:#1f6f5c}a:hover{color:#185a4a}
   </aside>
 
   <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
-    <div style="display:flex;align-items:center;gap:8px">
-      <h1 style="margin:0;font-size:24px;flex:1">Daily cost F&amp;B</h1>
-      <button class="chip">Semua outlet</button>
-      <button class="chip" style="background:#1f6f5c;color:#fff;border-color:#1f6f5c">1–10 Sep 2026</button>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <h1 style="margin:0;font-size:24px;flex:1">Daily cost</h1>
+      <button class="chip on">Semua biaya</button>
+      <button class="chip">F&amp;B saja</button>
+      <button class="chip">Per departemen</button>
+      <button class="chip">1–10 Sep 2026</button>
       <button class="btn">Unduh CSV</button>
     </div>
-    <div style="font-size:12px;color:#626b77">Biaya harian = biaya resep dari penjualan POS hari itu + waste, dari tutup hari. Makan karyawan, entertainment, selisih opname dan selisih harga beli tidak masuk. Bulan berjalan (MTD) dihitung kumulatif.</div>
+    <div style="font-size:12px;color:#626b77">Semua biaya barang yang keluar dari stok per hari bisnis, dari tutup hari: HPP penjualan, waste, makan karyawan, entertainment, amenities kamar, pemakaian departemen, serta selisih opname dan selisih harga beli pada hari terjadinya.</div>
 
     <div style="display:flex;gap:12px">
-      <div class="tile"><span class="tl">Food cost hari ini (10 Sep)</span><span class="tv">28,1%</span><span class="tl">2.051.000 dari 7.300.000</span></div>
-      <div class="tile"><span class="tl">Food cost MTD</span><span class="tv">28,5%</span><span class="tl">target 30% · 1,5 poin di bawah</span></div>
-      <div class="tile"><span class="tl">Beverage cost hari ini</span><span class="tv">21,9%</span><span class="tl">482.000 dari 2.200.000</span></div>
-      <div class="tile"><span class="tl">Beverage cost MTD</span><span class="tv">22,2%</span><span class="tl">target 25% · 2,8 poin di bawah</span></div>
+      <div class="tile"><span class="tl">Total biaya 1–10 Sep</span><span class="tv">47.485.440</span><span class="tl">rata-rata 4.748.544 per hari</span></div>
+      <div class="tile"><span class="tl">F&amp;B cost (HPP penjualan) MTD</span><span class="tv">27,1%</span><span class="tl">25.878.000 dari 95.620.000</span></div>
+      <div class="tile"><span class="tl">Amenities per kamar terisi</span><span class="tv">24.338</span><span class="tl">18.326.440 · 753 kamar-malam</span></div>
+      <div class="tile"><span class="tl">Di luar HPP penjualan</span><span class="tv">21.607.440</span><span class="tl">waste, karyawan, HK, engineering, ATK</span></div>
     </div>
 
-    <div style="display:flex;gap:14px;flex:1;min-height:0">
-      <section style="flex:1;min-width:0;background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr><th class="th">Tanggal</th><th class="th thr">Pendapatan food</th><th class="th thr">Cost food</th><th class="th thr">%</th><th class="th thr">Pendapatan bev</th><th class="th thr">Cost bev</th><th class="th thr">%</th><th class="th thr">MTD food</th><th class="th thr">MTD bev</th></tr></thead>
-          <tbody>
-            <tr><td class="td">Sel 1</td><td class="td num">6.850.000</td><td class="td num">1.939.000</td><td class="td num">28,3%</td><td class="td num">1.950.000</td><td class="td num">431.000</td><td class="td num">22,1%</td><td class="td num">28,3%</td><td class="td num">22,1%</td></tr>
-            <tr><td class="td">Rab 2</td><td class="td num">7.120.000</td><td class="td num">1.986.000</td><td class="td num">27,9%</td><td class="td num">2.100.000</td><td class="td num">458.000</td><td class="td num">21,8%</td><td class="td num">28,1%</td><td class="td num">22,0%</td></tr>
-            <tr><td class="td">Kam 3</td><td class="td num">6.400.000</td><td class="td num">1.926.000</td><td class="td num hi">30,1%</td><td class="td num">1.800.000</td><td class="td num">425.000</td><td class="td num">23,6%</td><td class="td num">28,7%</td><td class="td num">22,5%</td></tr>
-            <tr><td class="td">Jum 4</td><td class="td num">6.950.000</td><td class="td num">2.002.000</td><td class="td num">28,8%</td><td class="td num">2.050.000</td><td class="td num">459.000</td><td class="td num">22,4%</td><td class="td num">28,7%</td><td class="td num">22,4%</td></tr>
-            <tr><td class="td">Sab 5</td><td class="td num">8.900.000</td><td class="td num">2.456.000</td><td class="td num">27,6%</td><td class="td num">3.100.000</td><td class="td num">666.000</td><td class="td num">21,5%</td><td class="td num">28,5%</td><td class="td num">22,2%</td></tr>
-            <tr><td class="td">Min 6</td><td class="td num">9.400.000</td><td class="td num">2.557.000</td><td class="td num">27,2%</td><td class="td num">3.350.000</td><td class="td num">710.000</td><td class="td num">21,2%</td><td class="td num">28,2%</td><td class="td num">21,9%</td></tr>
-            <tr><td class="td">Sen 7</td><td class="td num">7.050.000</td><td class="td num">2.059.000</td><td class="td num">29,2%</td><td class="td num">2.000.000</td><td class="td num">458.000</td><td class="td num">22,9%</td><td class="td num">28,3%</td><td class="td num">22,1%</td></tr>
-            <tr><td class="td">Sel 8</td><td class="td num">6.600.000</td><td class="td num">2.013.000</td><td class="td num hi">30,5%</td><td class="td num">1.850.000</td><td class="td num">446.000</td><td class="td num">24,1%</td><td class="td num">28,6%</td><td class="td num">22,3%</td></tr>
-            <tr><td class="td">Rab 9</td><td class="td num">6.750.000</td><td class="td num">1.930.000</td><td class="td num">28,6%</td><td class="td num">1.900.000</td><td class="td num">424.000</td><td class="td num">22,3%</td><td class="td num">28,6%</td><td class="td num">22,3%</td></tr>
-            <tr><td class="td">Kam 10</td><td class="td num">7.300.000</td><td class="td num">2.051.000</td><td class="td num">28,1%</td><td class="td num">2.200.000</td><td class="td num">482.000</td><td class="td num">21,9%</td><td class="td num">28,5%</td><td class="td num">22,2%</td></tr>
-            <tr style="background:#f6f7f9"><td class="td" style="font-weight:700">Total</td><td class="td num" style="font-weight:700">73.320.000</td><td class="td num" style="font-weight:700">20.919.000</td><td class="td num" style="font-weight:700">28,5%</td><td class="td num" style="font-weight:700">22.300.000</td><td class="td num" style="font-weight:700">4.959.000</td><td class="td num" style="font-weight:700">22,2%</td><td class="td"></td><td class="td"></td></tr>
-          </tbody>
-        </table>
-        <div style="padding:8px 12px;font-size:12px;color:#626b77">Hari di atas target ditandai. Klik tanggal untuk rincian per outlet dan per menu.</div>
-      </section>
-
-      <aside style="width:380px;flex-shrink:0;background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px">
-        <h2 style="margin:0;font-size:15px">Cost % harian</h2>
-        <div style="display:flex;gap:14px;font-size:12px;color:#4a5361">
-          <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:#1f6f5c"></span>Food</span>
-          <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:2px;background:#b45309"></span>Beverage</span>
-          <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;border-top:1px dashed #8a929c"></span>Target</span>
-        </div>
-        <svg width="344" height="220" viewBox="0 0 660 220" role="img" aria-label="Grafik cost persen harian 1 sampai 10 September: food antara 27,2 dan 30,5 persen, beverage antara 21,2 dan 24,1 persen">
-          <line x1="40" y1="180" x2="620" y2="180" stroke="#c9ced5" stroke-width="1"></line>
-          <line x1="40" y1="46.7" x2="620" y2="46.7" stroke="#8a929c" stroke-width="1" stroke-dasharray="4 4"></line>
-          <line x1="40" y1="113.3" x2="620" y2="113.3" stroke="#8a929c" stroke-width="1" stroke-dasharray="4 4"></line>
-          <text x="34" y="50" text-anchor="end" font-size="14" fill="#626b77">30%</text>
-          <text x="34" y="117" text-anchor="end" font-size="14" fill="#626b77">25%</text>
-          <text x="34" y="184" text-anchor="end" font-size="14" fill="#626b77">20%</text>
-          <polyline fill="none" stroke="#1f6f5c" stroke-width="3" stroke-linejoin="round" points="40,69.3 104.4,74.7 168.9,45.3 233.3,62.7 297.8,78.7 362.2,84 426.7,57.3 491.1,40 555.6,65.3 620,72"></polyline>
-          <polyline fill="none" stroke="#b45309" stroke-width="3" stroke-linejoin="round" points="40,152 104.4,156 168.9,132 233.3,148 297.8,160 362.2,164 426.7,141.3 491.1,125.3 555.6,149.3 620,154.7"></polyline>
-          <circle cx="168.9" cy="45.3" r="5" fill="#1f6f5c" stroke="#fff" stroke-width="2"></circle>
-          <circle cx="491.1" cy="40" r="5" fill="#1f6f5c" stroke="#fff" stroke-width="2"></circle>
-          <text x="491" y="28" text-anchor="middle" font-size="14" fill="#1c2128">30,5%</text>
-          <text x="40" y="206" text-anchor="middle" font-size="14" fill="#626b77">1</text>
-          <text x="362" y="206" text-anchor="middle" font-size="14" fill="#626b77">6</text>
-          <text x="620" y="206" text-anchor="middle" font-size="14" fill="#626b77">10</text>
-        </svg>
-        <div style="font-size:13px;color:#4a5361;border-top:1px solid #eef0f2;padding-top:10px">8 Sep food cost 30,5%: waste susu dan selisih porsi nasi goreng (lihat rincian).</div>
-      </aside>
-    </div>
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th class="th">Tanggal</th><th class="th thr">HPP F&amp;B</th><th class="th thr">F&amp;B %</th><th class="th thr">Waste</th><th class="th thr">Karyawan &amp;<br>entertainment</th><th class="th thr">Amenities<br>kamar</th><th class="th thr">Kamar<br>terisi</th><th class="th thr">Engineering<br>&amp; ATK</th><th class="th thr">Selisih opname<br>&amp; harga</th><th class="th thr">Total biaya</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="td">Sel 1</td><td class="td num">2.370.000</td><td class="td num">26,9%</td><td class="td num">18.000</td><td class="td num">102.000</td><td class="td num">1.712.400</td><td class="td num">70</td><td class="td num">186.000</td><td class="td num">0</td><td class="td num">4.388.400</td></tr>
+          <tr><td class="td">Rab 2</td><td class="td num">2.444.000</td><td class="td num">26,5%</td><td class="td num">22.000</td><td class="td num">183.000</td><td class="td num">1.754.800</td><td class="td num">72</td><td class="td num">412.000</td><td class="td num">0</td><td class="td num">4.815.800</td></tr>
+          <tr><td class="td">Kam 3</td><td class="td num">2.351.000</td><td class="td num">28,7%</td><td class="td num">15.000</td><td class="td num">104.000</td><td class="td num">1.689.300</td><td class="td num">69</td><td class="td num">72.000</td><td class="td num">0</td><td class="td num">4.231.300</td></tr>
+          <tr><td class="td">Jum 4</td><td class="td num">2.461.000</td><td class="td num">27,3%</td><td class="td num">20.000</td><td class="td num">141.000</td><td class="td num">1.801.200</td><td class="td num">74</td><td class="td num">186.000</td><td class="td num">0</td><td class="td num">4.609.200</td></tr>
+          <tr><td class="td">Sab 5</td><td class="td num">3.122.000</td><td class="td num">26,0%</td><td class="td num">31.000</td><td class="td num">219.000</td><td class="td num">2.104.600</td><td class="td num">87</td><td class="td num">0</td><td class="td num">0</td><td class="td num">5.476.600</td></tr>
+          <tr><td class="td">Min 6</td><td class="td num">3.267.000</td><td class="td num">25,6%</td><td class="td num">26.000</td><td class="td num">97.000</td><td class="td num">2.186.700</td><td class="td num">90</td><td class="td num">0</td><td class="td num">0</td><td class="td num">5.576.700</td></tr>
+          <tr><td class="td">Sen 7</td><td class="td num">2.517.000</td><td class="td num">27,8%</td><td class="td num">19.000</td><td class="td num">103.000</td><td class="td num">1.733.900</td><td class="td num">71</td><td class="td num">662.000</td><td class="td num">0</td><td class="td num">5.034.900</td></tr>
+          <tr><td class="td">Sel 8</td><td class="td num">2.459.000</td><td class="td num" style="color:#9a3412;font-weight:600">29,1%</td><td class="td num">54.000</td><td class="td num">165.000</td><td class="td num">1.702.800</td><td class="td num">70</td><td class="td num">0</td><td class="td num">0</td><td class="td num">4.380.800</td></tr>
+          <tr><td class="td">Rab 9</td><td class="td num">2.354.000</td><td class="td num">27,2%</td><td class="td num">17.000</td><td class="td num">100.000</td><td class="td num">1.745.100</td><td class="td num">72</td><td class="td num">95.000</td><td class="td num">0</td><td class="td num">4.311.100</td></tr>
+          <tr><td class="td">Kam 10</td><td class="td num">2.533.000</td><td class="td num">26,7%</td><td class="td num">21.000</td><td class="td num">147.000</td><td class="td num">1.895.640</td><td class="td num">78</td><td class="td num">64.000</td><td class="td num">0</td><td class="td num">4.660.640</td></tr>
+          <tr class="tot"><td class="td">Total</td><td class="td num">25.878.000</td><td class="td num">27,1%</td><td class="td num">243.000</td><td class="td num">1.361.000</td><td class="td num">18.326.440</td><td class="td num">753</td><td class="td num">1.677.000</td><td class="td num">0</td><td class="td num">47.485.440</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:10px 14px;font-size:12px;color:#626b77">F&amp;B % = HPP F&amp;B ÷ pendapatan F&amp;B hari itu (target 30%; di atas target ditandai). Selisih opname dan selisih harga muncul di hari opname disetujui atau tagihan dikonfirmasi. Klik tanggal untuk rincian per departemen dan per barang. Tampilan "Per departemen" memecah total menjadi kolom F&amp;B, Rooms/HK, Engineering, Kantor.</div>
+    </section>
   </main>
 </div>
 </x-dc>

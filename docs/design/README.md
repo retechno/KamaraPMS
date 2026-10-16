@@ -50,7 +50,7 @@ Pola layar: halaman daftar selebar layar (tabel, chip filter, tombol "Baru") lal
 | `28-inv-harga-pokok.dc.html` | Proses harga pokok: rata-rata bergerak vs FIFO dengan data yang sama, metode terkunci, stok minus dan koreksinya, jurnal | 1 |
 | `29-inv-laporan-fb-cost.dc.html` | F&B cost per outlet: teori (resep) vs aktual (opname), cocok dengan buku besar | 5 |
 | `30-inv-fb-reconciliation.dc.html` | F&B cost reconciliation: stok awal + pembelian ± transfer biaya food/beverage − stok akhir − makan karyawan & entertainment | 5 |
-| `31-inv-daily-cost.dc.html` | Daily cost F&B: per hari dan MTD, food dan beverage, grafik cost % dengan garis target | 5 |
+| `31-inv-daily-cost.dc.html` | Daily cost semua biaya: per hari, HPP F&B dan F&B %, waste, makan karyawan & entertainment, amenities per kamar terisi, engineering & ATK, selisih opname & harga, total; tampilan F&B saja dan per departemen | 5 |
 | `32-inv-amenities-paket.dc.html` | Pengaturan amenities otomatis: paket bawaan per kamar / per tamu, tambahan per tipe kamar | 3 |
 | `33-inv-amenities-malam.dc.html` | Dokumen amenities otomatis satu malam (dibuat tutup hari): kamar terisi, tamu, biaya, stok kurang jadi minus | 3 |
 | `34-inv-alur-persetujuan.dc.html` | Alur persetujuan: PR 3 tingkat (kepala dept, cost control, akhir di atas batas), SR 2 tingkat | 2 |
