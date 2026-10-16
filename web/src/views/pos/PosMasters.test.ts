@@ -39,7 +39,10 @@ function setup(component: unknown, permissions = ['pos.manage']) {
     if (path.endsWith('/pos/price-lists')) return { data: { data: [list] } }
     if (path.endsWith('/pos/printers')) return { data: { data: [printer] } }
     if (path.endsWith('/pos/stations')) return { data: { data: [{ id: 2, code: 'KITCHEN', name: 'Main kitchen', printer_id: null, printer_name: null, kds_enabled: false, late_after_minutes: 15, is_active: true }] } }
-    if (path.endsWith('/pos/setup-check')) return { data: { data: [{ code: 'PRODUCT_STATION_NO_OUTPUT', severity: 'ERROR', outlet: 'RESTO', product: 'NASGOR', station: 'KITCHEN' }] } }
+    if (path.endsWith('/pos/setup-check')) return { data: { data: [
+      ...['TEA', 'JUICE', 'COFFEE', 'COLA', 'WATER', 'BEER', 'WINE'].map((product) => ({ code: 'PRODUCT_STATION_NO_OUTPUT', severity: 'ERROR', outlet: 'RESTO', product, station: 'BAR', order_mode: 'PRINT', reason: 'NO_PRINTER', other_output: 'KDS' })),
+      { code: 'OUTLET_NO_DRAWER', severity: 'WARNING', outlet: 'RS' },
+    ] } }
     if (path.endsWith('/pos/categories')) return { data: { data: [{ id: 1, code: 'MAINS', name: 'Main dishes', parent_id: null, sort_order: 1, is_active: true, product_count: 7 }] } }
     if (path.endsWith('/taxes')) return { data: { data: [{ id: 2, code: 'PB1', name: 'PB1', rate: '10', is_active: true }] } }
     if (path.endsWith('/service-charges')) return { data: { data: [{ id: 1, code: 'SVC', name: 'Service', rate: '10', is_active: true }] } }
@@ -129,7 +132,13 @@ describe('the stations and printers', () => {
     setup(PosStationsView)
     await flushPromises()
     expect(body('[data-testid=station-KITCHEN]').text()).toContain('Main kitchen')
-    expect(body('[data-testid=setup-check]').text()).toContain('no printer or kitchen display')
+    const check = body('[data-testid=setup-check]')
+    expect(check.findAll('li')).toHaveLength(2) // 7 products of one outlet and station are one line, the drawer is another
+    const text = check.text()
+    expect(text).toContain('RESTO · station BAR: 7 products will not reach the kitchen (TEA, JUICE, COFFEE, COLA, WATER +2 more)')
+    expect(text).toContain('only serves outlets that send to a screen')
+    expect(check.find('[data-level=blocking]').exists()).toBe(true)
+    expect(check.find('[data-level=advice]').text()).toContain('Advice')
     expect(body('[data-testid=printer-9]').text()).toContain('192.168.1.50:9100')
     await body('[data-testid=station-new]').trigger('click')
     await type('input[name=code]', 'bar')

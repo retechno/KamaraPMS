@@ -1,5 +1,6 @@
 import { config, type VueWrapper } from '@vue/test-utils'
-import { afterEach } from 'vitest'
+import { afterEach, vi } from 'vitest'
+import { ref } from 'vue'
 import { toast } from '@/composables/useToast'
 import { i18n } from '@/i18n'
 import { id } from '@/i18n/locales/id'
@@ -34,3 +35,10 @@ afterEach(() => {
 
 // The toasts are one list for the whole application: a test must not see the one of the test before.
 afterEach(() => toast.clear())
+
+// No page of a test opens a real stream: the realtime of the POS is a connection to the server, and a page that wants to see an event mocks the module itself
+// (the tests of the composable use vi.importActual).
+vi.mock('@/composables/usePosEvents', async (orig) => ({
+  ...(await orig<typeof import('@/composables/usePosEvents')>()),
+  usePosEvents: () => ({ state: ref('live'), stop: () => undefined }),
+}))

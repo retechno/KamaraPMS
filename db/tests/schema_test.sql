@@ -2195,6 +2195,77 @@ SELECT expect_ok('the table of a party is held for a name', $q$SELECT pms_test.p
     $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, capacity, shape, x, y, w, h) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_areas WHERE name = 'Indoor'), 'A1', 2, 'SQUARE', 0, 0, 1, 1)$q$,
     $q$INSERT INTO pos_table_holds (tenant_id, property_id, table_id, business_date, from_time, name) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_tables WHERE code = 'A1'), '2026-10-01', '19:00', 'Santoso')$q$);
 
+-- A bill, a round and one ticket (of a station when asked) in the given status, with no time of its own: the ticket checks are for the caller to provoke.
+CREATE FUNCTION pms_test.pos_ticket(p_status text, p_station boolean) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_bill bigint; v_round bigint; v_station bigint;
+BEGIN
+    INSERT INTO pos_bills (tenant_id, property_id, outlet_id, client_uuid, order_type, comp_treatment, business_date_opened)
+    VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'c0a80101-0000-4000-8000-0000000000e1', 'TAKEAWAY', 'PAYMENT_COMP', '2026-10-01') RETURNING id INTO v_bill;
+    INSERT INTO pos_rounds (tenant_id, property_id, bill_id, round_no, client_uuid) VALUES (tn('ABC'), pr('BALI'), v_bill, 1, 'c0a80101-0000-4000-8000-0000000000e2') RETURNING id INTO v_round;
+    IF p_station THEN
+        INSERT INTO pos_stations (tenant_id, property_id, code, name, kds_enabled) VALUES (tn('ABC'), pr('BALI'), 'EVK', 'Kitchen', true) RETURNING id INTO v_station;
+    END IF;
+    INSERT INTO pos_tickets (tenant_id, property_id, round_id, bill_id, station_id, kind, status) VALUES (tn('ABC'), pr('BALI'), v_round, v_bill, v_station, 'NEW', p_status);
+END $$;
+
+------------------------------------------------------------------------------------------
+-- POS realtime, the kitchen display and the queue of print jobs (migration 00082, docs/architecture/34-pos.md)
+------------------------------------------------------------------------------------------
+SELECT expect_error('an event names a type that exists', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_events (tenant_id, property_id, channel, type, entity_id) VALUES (tn('ABC'), pr('BALI'), 'outlet:1', 'bill.exploded', 1)$q$);
+SELECT expect_error('an event names a channel of a known shape', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_events (tenant_id, property_id, channel, type, entity_id) VALUES (tn('ABC'), pr('BALI'), 'outlet:abc', 'bill.updated', 1)$q$);
+SELECT expect_error('an event belongs to a property of its tenant', '23503', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_events (tenant_id, property_id, channel, type, entity_id) VALUES (tn('XYZ'), pr('BALI'), 'frontdesk', 'folio_lock.changed', 1)$q$);
+SELECT expect_ok('an event carries the transaction that wrote it', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_events (tenant_id, property_id, channel, type, entity_id) VALUES (tn('ABC'), pr('BALI'), 'printers', 'print_job.updated', 1)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT txid FROM pos_events ORDER BY id DESC LIMIT 1) = pg_current_xact_id()::text::bigint THEN 1 ELSE 0 END)$q$);
+
+-- the triggers: a change of a table hold is an event of the outlet, written once in the transaction however often it changes
+SELECT expect_ok('a change of a hold is one event of the outlet, written by the transaction that made it', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_areas (tenant_id, property_id, outlet_id, name, sort_order, grid_w, grid_h) VALUES (tn('ABC'), pr('BALI'), pms_test.pos_outlet(), 'EvIndoor', 0, 40, 24)$q$,
+    $q$INSERT INTO pos_tables (tenant_id, property_id, area_id, code, capacity, shape, x, y, w, h) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_areas WHERE name = 'EvIndoor'), 'E1', 2, 'SQUARE', 0, 0, 1, 1)$q$,
+    $q$INSERT INTO pos_table_holds (tenant_id, property_id, table_id, business_date, from_time, name) VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_tables WHERE code = 'E1'), '2026-10-01', '19:00', 'Santoso')$q$,
+    $q$UPDATE pos_table_holds SET note = 'window' WHERE name = 'Santoso'$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM pos_events WHERE type = 'table.updated' AND channel = 'outlet:' || pms_test.pos_outlet()
+                              AND entity_id = (SELECT id FROM pos_tables WHERE code = 'E1')) = 1 THEN 1 ELSE 0 END)$q$);
+
+-- the status of a ticket and its times agree
+SELECT expect_error('a ticket that is served has the time it was served', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$SELECT pms_test.pos_ticket('SERVED', false)$q$);
+SELECT expect_error('a ticket that is cooking has the time it was started', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$SELECT pms_test.pos_ticket('COOKING', false)$q$);
+SELECT expect_ok('a ticket goes through its statuses with their times', $q$SELECT pms_test.pos_base()$q$,
+    $q$SELECT pms_test.pos_ticket('NEW', false)$q$,
+    $q$UPDATE pos_tickets SET status = 'COOKING', started_at = now() WHERE bill_id = (SELECT id FROM pos_bills WHERE client_uuid = 'c0a80101-0000-4000-8000-0000000000e1')$q$,
+    $q$UPDATE pos_tickets SET status = 'READY', ready_at = now() WHERE bill_id = (SELECT id FROM pos_bills WHERE client_uuid = 'c0a80101-0000-4000-8000-0000000000e1')$q$,
+    $q$UPDATE pos_tickets SET status = 'SERVED', served_at = now() WHERE bill_id = (SELECT id FROM pos_bills WHERE client_uuid = 'c0a80101-0000-4000-8000-0000000000e1')$q$);
+SELECT expect_ok('a ticket is an event of its station and of its outlet', $q$SELECT pms_test.pos_base()$q$,
+    $q$SELECT pms_test.pos_ticket('NEW', true)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM pos_events WHERE type = 'ticket.created' AND channel LIKE 'station:%') = 1
+                         AND (SELECT count(*) FROM pos_events WHERE type = 'ticket.updated' AND channel LIKE 'outlet:%') = 1
+                         AND (SELECT count(*) FROM pos_events WHERE type = 'bill.updated' AND channel LIKE 'outlet:%') >= 1 THEN 1 ELSE 0 END)$q$);
+
+-- print jobs: one for a document
+SELECT expect_ok('a print job is queued for a printer', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_printers (tenant_id, property_id, name, kind) VALUES (tn('ABC'), pr('BALI'), 'Kitchen', 'KITCHEN')$q$,
+    $q$INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_printers WHERE name = 'Kitchen'), 'TICKET', 'TICKET', 1, 'TICKET:1:1')$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT status FROM pos_print_jobs WHERE dedupe_key = 'TICKET:1:1') = 'QUEUED' THEN 1 ELSE 0 END)$q$);
+SELECT expect_error('a document is queued once for a printer', '23505', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_printers (tenant_id, property_id, name, kind) VALUES (tn('ABC'), pr('BALI'), 'Kitchen', 'KITCHEN')$q$,
+    $q$INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_printers WHERE name = 'Kitchen'), 'TICKET', 'TICKET', 1, 'TICKET:1:1')$q$,
+    $q$INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_printers WHERE name = 'Kitchen'), 'TICKET', 'TICKET', 1, 'TICKET:1:1')$q$);
+SELECT expect_error('a print job has a status that exists', '23514', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_printers (tenant_id, property_id, name, kind) VALUES (tn('ABC'), pr('BALI'), 'Kitchen', 'KITCHEN')$q$,
+    $q$INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key, status)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM pos_printers WHERE name = 'Kitchen'), 'TICKET', 'TICKET', 1, 'TICKET:2:1', 'LOST')$q$);
+SELECT expect_error('a print job is for a printer of its property', '23503', $q$SELECT pms_test.pos_base()$q$,
+    $q$INSERT INTO pos_print_jobs (tenant_id, property_id, printer_id, kind, source_type, source_id, dedupe_key)
+       VALUES (tn('ABC'), pr('BALI'), 999999, 'TICKET', 'TICKET', 1, 'TICKET:3:1')$q$);
+
 ------------------------------------------------------------------------------------------
 -- Ordered lists: the database must have the ICU collation (the order of the guest names depends on it) and the indexes of the orders a screen opens with
 ------------------------------------------------------------------------------------------

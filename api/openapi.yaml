@@ -8962,6 +8962,104 @@ paths:
               schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PosSetupIssue" } } } }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/events:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: streamPosEvents
+      summary: "The stream of what changed on the POS screens (Server-Sent Events)"
+      description: |
+        A `text/event-stream` read with `fetch` (the `Authorization` header is the one of every route). `channels` is a comma list of `outlet:{id}` (pos.order, pos.cashier or pos.manage: tables,
+        bills, sold-out products), `station:{id}` (pos.kds or pos.manage: tickets), `frontdesk` (folio.outlet_charge_open or folio.read: locks and outlet charges) and `printers` (pos.manage or
+        pos.cashier: print jobs); at most 8. An event is `id: {n}`, `event: {type}` and `data: {id, channel, type, entity_id, at}`: **ids only**, never amounts or names; the screen reads the data with
+        its own permission. Types: `table.updated`, `bill.updated`, `bill.closed`, `ticket.created`, `ticket.updated`, `product.sold_out`, `print_job.updated`, `folio_lock.changed`, `outlet_charge.attempted`.
+        The events come from an outbox written in the transaction of the change, so none is sent for a change that rolled back. The client sends the last id it saw as `Last-Event-ID` and receives
+        what came after, once; an id the outbox no longer holds (48 hours) answers 410 `EVENTS_GONE` and the client reloads. A stream without `Last-Event-ID` begins at the present. A comment
+        `: heartbeat` comes every 20 seconds; the stream ends by itself after 10 minutes (`event: reconnect`) so that the client reconnects with a fresh token. At most 6 streams for a user: 429
+        `TOO_MANY_STREAMS`.
+      tags: [pos]
+      parameters:
+        - name: channels
+          in: query
+          required: true
+          schema: { type: string }
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: The stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "410": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/stations/{id}/board:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosStationBoard
+      summary: "The kitchen display of a station (pos.kds or pos.manage)"
+      description: "The open tickets (NEW, COOKING, READY) oldest first with their lines, the tickets served in the last hour as `history`, the outlets the station serves, the average time to ready of the last hour and how many tickets are late (more than the `late_after_minutes` of the station since they were made). A line voided after the send stays on the ticket with `is_void`. A cancellation (VOID) ticket is not a card; it is a print job."
+      tags: [pos]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosStationBoard" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/tickets/{id}/status:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: setPosTicketStatus
+      summary: "Move a ticket on: start, ready, served"
+      description: "`START` (NEW to COOKING) and `READY` (NEW or COOKING to READY) need pos.kds; `SERVE` (READY to SERVED) is also for pos.order and pos.cashier. One conditional change: two screens that press the same button at once make one change, and both receive the same status (`changed` is true for one of them). 409 `TICKET_STATUS_INVALID` for a status the ticket has passed or has not reached. Audited."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosTicketAction" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosTicketMoved" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/print-jobs:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listPosPrintJobs
+      summary: "The queue of print jobs (pos.manage or pos.cashier)"
+      description: "Newest first, with how many jobs wait for each printer. Stage 3a queues the tickets of the outlets in PRINT mode whose station has a printer; the agent that prints them is stage 3b, so a job stays QUEUED."
+      tags: [pos]
+      parameters:
+        - { name: printer_id, in: query, required: false, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [QUEUED, CLAIMED, PRINTED, FAILED, CANCELLED] } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosPrintQueue" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/pos/outlets/{id}/floor:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -17076,6 +17174,9 @@ components:
         outlet: { type: string }
         product: { type: string }
         station: { type: string }
+        order_mode: { type: string, enum: [PRINT, KDS], description: "The order mode of the outlet that makes the station insufficient." }
+        reason: { type: string, enum: [NO_STATION, STATION_INACTIVE, NO_PRINTER, NO_KDS] }
+        other_output: { type: string, enum: [KDS, PRINTER], description: "What the station has instead of what the outlet needs." }
     PosImportRowError:
       type: object
       required: [row, field, code]
@@ -17170,6 +17271,97 @@ components:
         layout_version: { type: integer }
         tables: { type: array, items: { $ref: "#/components/schemas/PosFloorTable" } }
         marks: { type: array, items: { $ref: "#/components/schemas/PosMark" } }
+    PosTicketLine:
+      type: object
+      required: [id, quantity, name, is_void]
+      properties:
+        id: { type: integer, format: int64 }
+        quantity: { type: string }
+        name: { type: string }
+        options: { type: string }
+        note: { type: string }
+        is_void: { type: boolean }
+    PosKitchenTicket:
+      type: object
+      required: [id, kind, status, round_no, is_addition, bill_id, bill_number, outlet_id, outlet_name, order_type, created_at, started_at, ready_at, served_at, wait_seconds, is_late, lines]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [NEW, CHANGE, VOID] }
+        status: { type: string, enum: [NEW, COOKING, READY, SERVED, CANCELLED] }
+        round_no: { type: integer }
+        is_addition: { type: boolean, description: "A later round of the same bill (tambahan)." }
+        bill_id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        outlet_id: { type: integer, format: int64 }
+        outlet_name: { type: string }
+        order_type: { type: string }
+        table_code: { type: string }
+        room_number: { type: string }
+        customer_name: { type: string }
+        waiter: { type: string }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        ready_at: { type: string, format: date-time, nullable: true }
+        served_at: { type: string, format: date-time, nullable: true }
+        wait_seconds: { type: integer, description: "Since it was made (new, cooking), since it was ready (ready) or since it was served." }
+        is_late: { type: boolean }
+        lines: { type: array, items: { $ref: "#/components/schemas/PosTicketLine" } }
+    PosStationOutlet:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+    PosStationBoard:
+      type: object
+      required: [station, outlets, now, average_wait_seconds, late_count, tickets, history]
+      properties:
+        station: { $ref: "#/components/schemas/PosStation" }
+        outlets: { type: array, items: { $ref: "#/components/schemas/PosStationOutlet" } }
+        now: { type: string, format: date-time }
+        average_wait_seconds: { type: integer }
+        late_count: { type: integer }
+        tickets: { type: array, items: { $ref: "#/components/schemas/PosKitchenTicket" } }
+        history: { type: array, items: { $ref: "#/components/schemas/PosKitchenTicket" } }
+    PosTicketAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [START, READY, SERVE] }
+    PosTicketMoved:
+      type: object
+      required: [id, station_id, status, changed]
+      properties:
+        id: { type: integer, format: int64 }
+        station_id: { type: integer, format: int64, nullable: true }
+        status: { type: string, enum: [NEW, COOKING, READY, SERVED] }
+        changed: { type: boolean }
+    PosPrintJob:
+      type: object
+      required: [id, printer_id, printer_name, kind, source_type, source_id, status, attempts, created_at, printed_at]
+      properties:
+        id: { type: string, format: uuid }
+        printer_id: { type: integer, format: int64 }
+        printer_name: { type: string }
+        kind: { type: string, enum: [RECEIPT, TICKET, DRAWER, REPORT] }
+        source_type: { type: string }
+        source_id: { type: integer, format: int64 }
+        status: { type: string, enum: [QUEUED, CLAIMED, PRINTED, FAILED, CANCELLED] }
+        attempts: { type: integer }
+        created_at: { type: string, format: date-time }
+        printed_at: { type: string, format: date-time, nullable: true }
+        error_code: { type: string }
+        bill_number: { type: string }
+        table_code: { type: string }
+        station: { type: string }
+        ticket_kind: { type: string }
+    PosPrintQueue:
+      type: object
+      required: [jobs, queued]
+      properties:
+        jobs: { type: array, items: { $ref: "#/components/schemas/PosPrintJob" } }
+        queued: { type: object, description: "Jobs that wait, by printer id.", additionalProperties: { type: integer } }
     PosFloorState:
       type: object
       required: [business_date, outlet, areas, open_bills, holds, now]

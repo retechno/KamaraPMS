@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
@@ -38,11 +40,15 @@ type Service struct {
 	ledger  *folios.Service
 	iam     *iam.Service
 	billing *billingconfig.Service
+	// the wake-up of the event streams (events.go)
+	hub      *Hub
+	purgeMu  sync.Mutex
+	purgedAt time.Time
 }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, depts DepartmentChecker) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, depts: depts}
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, depts: depts, hub: newHub()}
 }
 
 func (s *Service) q(ctx context.Context) *posdb.Queries { return posdb.New(s.txm.DB(ctx)) }

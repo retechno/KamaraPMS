@@ -7736,6 +7736,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/pos/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The stream of what changed on the POS screens (Server-Sent Events)
+         * @description A `text/event-stream` read with `fetch` (the `Authorization` header is the one of every route). `channels` is a comma list of `outlet:{id}` (pos.order, pos.cashier or pos.manage: tables,
+         *     bills, sold-out products), `station:{id}` (pos.kds or pos.manage: tickets), `frontdesk` (folio.outlet_charge_open or folio.read: locks and outlet charges) and `printers` (pos.manage or
+         *     pos.cashier: print jobs); at most 8. An event is `id: {n}`, `event: {type}` and `data: {id, channel, type, entity_id, at}`: **ids only**, never amounts or names; the screen reads the data with
+         *     its own permission. Types: `table.updated`, `bill.updated`, `bill.closed`, `ticket.created`, `ticket.updated`, `product.sold_out`, `print_job.updated`, `folio_lock.changed`, `outlet_charge.attempted`.
+         *     The events come from an outbox written in the transaction of the change, so none is sent for a change that rolled back. The client sends the last id it saw as `Last-Event-ID` and receives
+         *     what came after, once; an id the outbox no longer holds (48 hours) answers 410 `EVENTS_GONE` and the client reloads. A stream without `Last-Event-ID` begins at the present. A comment
+         *     `: heartbeat` comes every 20 seconds; the stream ends by itself after 10 minutes (`event: reconnect`) so that the client reconnects with a fresh token. At most 6 streams for a user: 429
+         *     `TOO_MANY_STREAMS`.
+         */
+        get: operations["streamPosEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/stations/{id}/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The kitchen display of a station (pos.kds or pos.manage)
+         * @description The open tickets (NEW, COOKING, READY) oldest first with their lines, the tickets served in the last hour as `history`, the outlets the station serves, the average time to ready of the last hour and how many tickets are late (more than the `late_after_minutes` of the station since they were made). A line voided after the send stays on the ticket with `is_void`. A cancellation (VOID) ticket is not a card; it is a print job.
+         */
+        get: operations["getPosStationBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/tickets/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a ticket on: start, ready, served
+         * @description `START` (NEW to COOKING) and `READY` (NEW or COOKING to READY) need pos.kds; `SERVE` (READY to SERVED) is also for pos.order and pos.cashier. One conditional change: two screens that press the same button at once make one change, and both receive the same status (`changed` is true for one of them). 409 `TICKET_STATUS_INVALID` for a status the ticket has passed or has not reached. Audited.
+         */
+        post: operations["setPosTicketStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/pos/print-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The queue of print jobs (pos.manage or pos.cashier)
+         * @description Newest first, with how many jobs wait for each printer. Stage 3a queues the tickets of the outlets in PRINT mode whose station has a printer; the agent that prints them is stage 3b, so a job stays QUEUED.
+         */
+        get: operations["listPosPrintJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/pos/outlets/{id}/floor": {
         parameters: {
             query?: never;
@@ -15861,6 +15958,18 @@ export interface components {
             outlet?: string;
             product?: string;
             station?: string;
+            /**
+             * @description The order mode of the outlet that makes the station insufficient.
+             * @enum {string}
+             */
+            order_mode?: "PRINT" | "KDS";
+            /** @enum {string} */
+            reason?: "NO_STATION" | "STATION_INACTIVE" | "NO_PRINTER" | "NO_KDS";
+            /**
+             * @description What the station has instead of what the outlet needs.
+             * @enum {string}
+             */
+            other_output?: "KDS" | "PRINTER";
         };
         PosImportRowError: {
             row: number;
@@ -15952,6 +16061,109 @@ export interface components {
             layout_version: number;
             tables: components["schemas"]["PosFloorTable"][];
             marks: components["schemas"]["PosMark"][];
+        };
+        PosTicketLine: {
+            /** Format: int64 */
+            id: number;
+            quantity: string;
+            name: string;
+            options?: string;
+            note?: string;
+            is_void: boolean;
+        };
+        PosKitchenTicket: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "NEW" | "CHANGE" | "VOID";
+            /** @enum {string} */
+            status: "NEW" | "COOKING" | "READY" | "SERVED" | "CANCELLED";
+            round_no: number;
+            /** @description A later round of the same bill (tambahan). */
+            is_addition: boolean;
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            /** Format: int64 */
+            outlet_id: number;
+            outlet_name: string;
+            order_type: string;
+            table_code?: string;
+            room_number?: string;
+            customer_name?: string;
+            waiter?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            ready_at: string | null;
+            /** Format: date-time */
+            served_at: string | null;
+            /** @description Since it was made (new, cooking), since it was ready (ready) or since it was served. */
+            wait_seconds: number;
+            is_late: boolean;
+            lines: components["schemas"]["PosTicketLine"][];
+        };
+        PosStationOutlet: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+        };
+        PosStationBoard: {
+            station: components["schemas"]["PosStation"];
+            outlets: components["schemas"]["PosStationOutlet"][];
+            /** Format: date-time */
+            now: string;
+            average_wait_seconds: number;
+            late_count: number;
+            tickets: components["schemas"]["PosKitchenTicket"][];
+            history: components["schemas"]["PosKitchenTicket"][];
+        };
+        PosTicketAction: {
+            /** @enum {string} */
+            action: "START" | "READY" | "SERVE";
+        };
+        PosTicketMoved: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            station_id: number | null;
+            /** @enum {string} */
+            status: "NEW" | "COOKING" | "READY" | "SERVED";
+            changed: boolean;
+        };
+        PosPrintJob: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            printer_id: number;
+            printer_name: string;
+            /** @enum {string} */
+            kind: "RECEIPT" | "TICKET" | "DRAWER" | "REPORT";
+            source_type: string;
+            /** Format: int64 */
+            source_id: number;
+            /** @enum {string} */
+            status: "QUEUED" | "CLAIMED" | "PRINTED" | "FAILED" | "CANCELLED";
+            attempts: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            printed_at: string | null;
+            error_code?: string;
+            bill_number?: string;
+            table_code?: string;
+            station?: string;
+            ticket_kind?: string;
+        };
+        PosPrintQueue: {
+            jobs: components["schemas"]["PosPrintJob"][];
+            /** @description Jobs that wait, by printer id. */
+            queued: {
+                [key: string]: number;
+            };
         };
         PosFloorState: {
             business_date: components["schemas"]["Date"];
@@ -28828,6 +29040,122 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    streamPosEvents: {
+        parameters: {
+            query: {
+                channels: string;
+            };
+            header?: {
+                "Last-Event-ID"?: string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            410: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    getPosStationBoard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosStationBoard"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setPosTicketStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosTicketAction"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosTicketMoved"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listPosPrintJobs: {
+        parameters: {
+            query?: {
+                printer_id?: number;
+                status?: "QUEUED" | "CLAIMED" | "PRINTED" | "FAILED" | "CANCELLED";
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosPrintQueue"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     getPosFloor: {

@@ -21,6 +21,7 @@ import { usePropertyStore } from '@/stores/property'
 import { formatMoney } from '@/utils/format'
 import { printReceipt } from '@/utils/posReceipt'
 import { newIdempotencyKey } from '@/utils/reservations'
+import { debounce, usePosEvents } from '@/composables/usePosEvents'
 
 /**
  * The order and the bill of an outlet (docs/architecture/34-pos.md 11, mockups 11 and 16): the menu of the outlet on one side, the lines of the bill on the other, in the order they were made, with
@@ -80,6 +81,18 @@ async function loadCatalog(outletId: number): Promise<void> {
 }
 
 watch([pid, billId], () => void loadBill(), { immediate: true })
+// The bill follows the stream of its outlet: another waiter's line, the kitchen's status of a ticket, a payment at the cashier show here by themselves.
+const refreshBill = debounce(() => void loadBill(true), 150)
+usePosEvents({
+  propertyId: () => pid.value,
+  channels: () => (bill.value ? [`outlet:${bill.value.outlet_id}`] : []),
+  onEvent: (e) => {
+    if ((e.type === 'bill.updated' || e.type === 'bill.closed') && e.entity_id === billId.value) refreshBill()
+    else if (e.type === 'ticket.updated' || e.type === 'ticket.created') refreshBill()
+    else if (e.type === 'product.sold_out' && bill.value) void loadCatalog(bill.value.outlet_id)
+  },
+  onReload: () => void loadBill(true),
+})
 watch(() => bill.value?.outlet_id, (id) => { if (id && !catalog.value) void loadCatalog(id) })
 
 const products = computed(() => {
@@ -422,7 +435,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
           class="relative flex min-h-20 flex-col items-start justify-between gap-1 rounded-lg border border-border bg-card p-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           :data-testid="`product-${p.id}`" @click="tapProduct(p)"
         >
-          <strong class="leading-tight">{{ p.name }}</strong>
+          <strong class="line-clamp-2 pr-7 leading-tight">{{ p.name }}</strong>
           <span class="tabular-nums text-muted-foreground">{{ formatMoney(p.price ?? '') }}</span>
           <span v-if="soldOut(p.id)" class="text-xs font-medium text-destructive">{{ t('posBill.soldOut') }}</span>
           <span v-else-if="alreadyOrdered(p.id) > 0" class="absolute right-1 top-1 rounded-full bg-primary px-1.5 text-xs text-primary-foreground" :data-testid="`ordered-${p.id}`">{{ alreadyOrdered(p.id) }}</span>

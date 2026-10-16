@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { PosPrinter, PosSetupIssue, PosStation } from '@/api/types'
+import type { PosPrinter, PosPrintQueue, PosSetupIssue, PosStation } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -11,8 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { debounce, usePosEvents } from '@/composables/usePosEvents'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
+import { formatDateTime } from '@/utils/format'
 
 /**
  * The places of production (kitchen, bar, pastry) and the printers (docs/architecture/34-pos.md 3.2). A station has a printer, a screen of the kitchen display, or both; a printer is a record the
@@ -26,6 +28,25 @@ const issues = ref<PosSetupIssue[]>([])
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const notice = ref('')
+
+const queue = ref<PosPrintQueue | null>(null)
+async function loadQueue(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/pos/print-jobs', { params: { path: { propertyId }, query: { limit: 30 } } })
+    queue.value = data && Array.isArray(data.jobs) ? data : null
+  } catch {
+    queue.value = null // the queue is for who prints; the setup works without it
+  }
+}
+const refreshQueue = debounce(() => void loadQueue(), 200)
+usePosEvents({
+  propertyId: () => pid.value,
+  channels: () => (pid.value === null ? [] : ['printers']),
+  onEvent: () => refreshQueue(),
+  onReload: () => void loadQueue(),
+})
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -42,6 +63,7 @@ async function load(): Promise<void> {
     stations.value = s.data?.data ?? []
     printers.value = p.data?.data ?? []
     issues.value = c.data?.data ?? []
+    void loadQueue()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -113,7 +135,35 @@ async function savePrinter(): Promise<void> {
   }
 }
 
-const issueText = (i: PosSetupIssue): string => t(`pos.check.${i.code}`, { outlet: i.outlet ?? '', product: i.product ?? '', station: i.station ?? '' })
+// What the check found, one line per outlet + station + reason (not one per product): up to 5 products are named, then "+N more". A problem that stops an order reaching the kitchen is
+// blocking (red, "Blocking"); the rest is advice (grey, "Advice"): the label says it, the colour is only a hint.
+interface IssueLine { key: string; blocking: boolean; text: string; code: string }
+const MAX_NAMED = 5
+const issueLines = computed<IssueLine[]>(() => {
+  const lines: IssueLine[] = []
+  const groups = new Map<string, { head: PosSetupIssue; products: string[] }>()
+  for (const i of issues.value) {
+    if (!i.code.startsWith('PRODUCT_')) {
+      lines.push({ key: `${i.code}|${i.outlet ?? ''}`, blocking: i.severity === 'ERROR', code: i.code, text: t(`pos.check.${i.code}`, { outlet: i.outlet ?? '' }) })
+      continue
+    }
+    const key = `${i.outlet ?? ''}|${i.station ?? ''}|${i.reason ?? i.code}`
+    const g = groups.get(key) ?? { head: i, products: [] }
+    if (i.product) g.products.push(i.product)
+    groups.set(key, g)
+  }
+  for (const [key, g] of groups) {
+    const names = g.products.slice(0, MAX_NAMED).join(', ')
+    const more = g.products.length > MAX_NAMED ? t('pos.check.more', { n: g.products.length - MAX_NAMED }) : ''
+    const reason = g.head.reason ?? 'NO_STATION'
+    const other = g.head.other_output ? `_${g.head.other_output}` : ''
+    lines.push({
+      key, blocking: g.head.severity === 'ERROR', code: g.head.code,
+      text: t(`pos.check.group_${reason}${other}`, { outlet: g.head.outlet ?? '', station: g.head.station ?? '', n: g.products.length, products: names + more }),
+    })
+  }
+  return lines.sort((a, b) => Number(b.blocking) - Number(a.blocking))
+})
 watch(pid, load, { immediate: true })
 </script>
 
@@ -128,7 +178,10 @@ watch(pid, load, { immediate: true })
     <section v-if="issues.length" class="mb-4 rounded-xl border border-border bg-card p-4" data-testid="setup-check">
       <h2 class="m-0 mb-2 text-sm font-semibold">{{ t('pos.check.title') }}</h2>
       <ul class="m-0 list-none space-y-1 p-0 text-sm">
-        <li v-for="(i, n) in issues" :key="n" :class="i.severity === 'ERROR' ? 'text-destructive' : 'text-muted-foreground'" :data-code="i.code">{{ issueText(i) }}</li>
+        <li v-for="l in issueLines" :key="l.key" class="flex items-start gap-2" :class="l.blocking ? 'text-destructive' : 'text-muted-foreground'" :data-code="l.code" :data-level="l.blocking ? 'blocking' : 'advice'">
+          <span class="mt-0.5 shrink-0 rounded border border-current px-1.5 text-[11px] font-semibold uppercase leading-5" data-testid="issue-level">{{ t(l.blocking ? 'pos.check.levelBlocking' : 'pos.check.levelAdvice') }}</span>
+          <span class="min-w-0">{{ l.text }}</span>
+        </li>
       </ul>
     </section>
 
@@ -170,6 +223,34 @@ watch(pid, load, { immediate: true })
         </ul>
       </section>
     </div>
+
+    <section class="mt-4 rounded-xl border border-border bg-card p-4" data-testid="print-queue">
+      <header class="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 class="m-0 text-base font-semibold">{{ t('posPrintQueue.title') }}</h2>
+        <span v-if="queue && Object.values(queue.queued).some((n) => n > 0)" class="text-xs text-muted-foreground" data-testid="queue-depth">
+          {{ t('posPrintQueue.queued', { n: Object.values(queue.queued).reduce((a, b) => a + b, 0) }) }}
+        </span>
+      </header>
+      <p class="m-0 mb-3 text-xs text-muted-foreground">{{ t('posPrintQueue.intro') }}</p>
+      <div v-if="!queue || queue.jobs.length === 0" class="rounded-lg border border-dashed border-border p-6 text-center" data-testid="queue-empty">
+        <p class="m-0 text-sm font-medium">{{ t('posPrintQueue.empty') }}</p>
+        <p class="m-0 mt-1 text-xs text-muted-foreground">{{ t('posPrintQueue.emptyHint') }}</p>
+      </div>
+      <table v-else class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-muted-foreground"><th>{{ t('posPrintQueue.what') }}</th><th>{{ t('posPrintQueue.printer') }}</th><th>{{ t('posPrintQueue.at') }}</th><th>{{ t('posPrintQueue.state') }}</th></tr></thead>
+        <tbody>
+          <tr v-for="j in queue.jobs" :key="j.id" class="border-t border-border" :data-testid="`job-${j.id}`" :data-status="j.status">
+            <td>
+              {{ j.ticket_kind ? t(`posPrintQueue.ticket_${j.ticket_kind}`) : t('posPrintQueue.ticket') }}
+              <span class="text-xs text-muted-foreground">{{ [j.station, j.bill_number, j.table_code].filter(Boolean).join(' · ') }}</span>
+            </td>
+            <td>{{ j.printer_name }}</td>
+            <td class="tabular-nums">{{ formatDateTime(j.created_at) }}</td>
+            <td><Badge :variant="j.status === 'FAILED' ? 'destructive' : 'outline'">{{ t(`posPrintQueue.status_${j.status}`) }}</Badge></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
   </template>
 
   <Dialog :open="sDialog" @update:open="(v) => (sDialog = v)">

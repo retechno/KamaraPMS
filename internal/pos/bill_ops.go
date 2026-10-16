@@ -145,6 +145,16 @@ func (s *Service) sendDrafts(ctx context.Context, p auth.Principal, propertyID i
 			return 0, err
 		}
 	}
+	for st, tid := range tickets {
+		var sp *int64
+		if st != 0 {
+			id := st
+			sp = &id
+		}
+		if err := s.queueTicketJob(ctx, p, propertyID, o, tid, sp, "TICKET"); err != nil {
+			return 0, err
+		}
+	}
 	return len(drafts), nil
 }
 
@@ -271,6 +281,9 @@ func (s *Service) VoidLine(ctx context.Context, propertyID, billID, lineID int64
 				return err
 			}
 			if err := q.InsertTicketLine(ctx, posdb.InsertTicketLineParams{TenantID: p.TenantID, PropertyID: propertyID, TicketID: tid, BillLineID: lineID, Quantity: l.Quantity, Name: l.ProductName, Note: &reason, IsVoid: true}); err != nil {
+				return err
+			}
+			if err := s.queueTicketJob(ctx, p, propertyID, o, tid, l.StationID, "TICKET"); err != nil {
 				return err
 			}
 		}

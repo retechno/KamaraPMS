@@ -8,6 +8,8 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlog"
@@ -138,6 +140,9 @@ func New(d Deps) *App {
 	nightAuditSvc.SetShiftChecker(shiftsSvc) // and an open shift stops the night audit
 	posSvc := pos.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	posSvc.SetBilling(foliosSvc, iamSvc, billingSvc) // the bills post through the one folio service, with the approvals of iam
+	if pool, ok := d.DB.(*pgxpool.Pool); ok {
+		posSvc.SetEventPool(pool) // the streams of events wake on NOTIFY (they also read on a timer)
+	}
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc})
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)

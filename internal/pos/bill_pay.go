@@ -309,6 +309,9 @@ func (s *Service) PayBill(ctx context.Context, propertyID, billID int64, key str
 			}
 			change = tendered.Sub(cash)
 		}
+		if err := s.q(ctx).TouchBill(ctx, posdb.TouchBillParams{TenantID: p.TenantID, PropertyID: propertyID, ID: billID}); err != nil { // the screens of the outlet re-read the balance
+			return err
+		}
 		closed, err := s.closeIfSettled(ctx, p, propertyID, bd, b)
 		if err != nil {
 			return err

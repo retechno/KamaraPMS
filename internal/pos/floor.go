@@ -296,7 +296,23 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) ([]SetupIssu
 		if r.StationID == nil {
 			code = "PRODUCT_NO_STATION"
 		}
-		is := SetupIssue{Code: code, Severity: "ERROR", Outlet: r.OutletCode, Product: r.ProductCode}
+		is := SetupIssue{Code: code, Severity: "ERROR", Outlet: r.OutletCode, Product: r.ProductCode, OrderMode: r.OrderMode}
+		switch {
+		case r.StationID == nil:
+			is.Reason = "NO_STATION"
+		case !r.StationActive:
+			is.Reason = "STATION_INACTIVE"
+		case r.OrderMode == "PRINT":
+			is.Reason = "NO_PRINTER"
+			if r.StationHasKds {
+				is.OtherOutput = "KDS"
+			}
+		default:
+			is.Reason = "NO_KDS"
+			if r.StationHasPrinter {
+				is.OtherOutput = "PRINTER"
+			}
+		}
 		if r.StationCode != nil {
 			is.Station = *r.StationCode
 		}
