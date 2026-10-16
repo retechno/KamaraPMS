@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Permintaan pembelian</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:10px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:10px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.req{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-bottom:1px solid #eef0f2;text-decoration:none;color:#1c2128;font-size:13px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0}
+.sub{font-size:11px;color:#626b77}
+.lbl{display:block;font-size:12px;color:#626b77;margin-bottom:6px}
+.step{display:flex;gap:10px;font-size:13px}
+.dot{width:10px;height:10px;border-radius:5px;margin-top:4px;flex-shrink:0}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Pembelian</a>
+    <a href="21-inv-draf-tagihan.dc.html" class="nav">Draf tagihan</a>
+    <a href="23-inv-transfer.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="#" class="nav">Pemakaian &amp; waste</a>
+    <a href="#" class="nav">Opname</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;gap:16px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+      <a href="18-inv-pembelian-daftar.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start;min-height:24px">← Pembelian</a>
+      <div>
+        <div style="font-size:12px;color:#626b77">PR-0033 · diajukan Made (Sous chef), 3 Sep 10.15</div>
+        <h2 style="margin:2px 0 0;font-size:22px">Bahan dapur untuk 4–6 Sep</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;font-size:13px">
+        <div style="background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:10px 14px"><div class="sub">Departemen</div><div style="font-weight:600">F&amp;B · Dapur Teratai</div></div>
+        <div style="background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:10px 14px"><div class="sub">Dikirim ke</div><div style="font-weight:600">Gudang utama</div></div>
+        <div style="background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:10px 14px"><div class="sub">Dibutuhkan</div><div style="font-weight:600">4 Sep 2026, pagi</div></div>
+      </div>
+      <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th class="th">Barang</th><th class="th thr">Jumlah</th><th class="th">Satuan beli</th><th class="th thr">Stok sekarang</th><th class="th thr">Perkiraan harga</th><th class="th thr">Perkiraan total</th><th class="th">Supplier usulan</th></tr></thead>
+          <tbody>
+            <tr><td class="td" style="font-weight:600">Daging ayam fillet</td><td class="td num">20</td><td class="td">kg</td><td class="td num" style="color:#9a3412">10,1 kg</td><td class="td num">72.900</td><td class="td num">1.458.000</td><td class="td">UD Segar Jaya</td></tr>
+            <tr><td class="td" style="font-weight:600">Telur ayam</td><td class="td num">300</td><td class="td">butir</td><td class="td num">84 butir</td><td class="td num">2.500</td><td class="td num">750.000</td><td class="td">UD Segar Jaya</td></tr>
+            <tr><td class="td" style="font-weight:600">Bawang merah</td><td class="td num">25</td><td class="td">kg</td><td class="td num">6,2 kg</td><td class="td num">45.000</td><td class="td num">1.125.000</td><td class="td">UD Segar Jaya</td></tr>
+            <tr><td class="td" style="font-weight:600">Beras pandan wangi</td><td class="td num">5</td><td class="td">karung 25 kg</td><td class="td num">138,4 kg</td><td class="td num">435.000</td><td class="td num">2.175.000</td><td class="td">CV Sumber Rasa</td></tr>
+            <tr><td class="td" style="font-weight:600">Minyak goreng 2 L</td><td class="td num">4</td><td class="td">dus (6 btl)</td><td class="td num">50,5 L</td><td class="td num">201.000</td><td class="td num">804.000</td><td class="td">CV Sumber Rasa</td></tr>
+            <tr><td class="td" style="font-weight:600">Kecap manis 600 ml</td><td class="td num">2</td><td class="td">dus (12 btl)</td><td class="td num">9 btl</td><td class="td num">69.000</td><td class="td num">138.000</td><td class="td">CV Sumber Rasa</td></tr>
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:space-between;padding:12px 16px;font-size:13px"><span class="sub" style="font-size:12px">Perkiraan harga = harga terakhir dari supplier itu, boleh diubah pengaju</span><span>Perkiraan total <strong style="font-size:16px;margin-left:8px">6.450.000</strong></span></div>
+      </section>
+      <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:14px 16px">
+        <div style="font-weight:600;font-size:14px;margin-bottom:6px">Setelah disetujui, jadi 2 PO (satu per supplier)</div>
+        <div class="kv"><span>UD Segar Jaya · ayam, telur, bawang</span><span>3.333.000</span></div>
+        <div class="kv"><span>CV Sumber Rasa · beras, minyak, kecap</span><span>3.117.000</span></div>
+      </section>
+    </div>
+
+    <aside style="width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+      <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+        <h3 style="margin:0;font-size:15px">Persetujuan · 3 tingkat</h3>
+        <div class="step"><span class="dot" style="background:#1f6f5c"></span><div><div>Diajukan</div><div class="sub">Made · 3 Sep 10.15</div></div></div>
+        <div class="step"><span class="dot" style="background:#1f6f5c"></span><div><div>1 · Kepala departemen <span style="color:#185a4a;font-weight:600">disetujui</span></div><div class="sub">Ketut (Executive Chef) · 3 Sep 10.40</div></div></div>
+        <div class="step"><span class="dot" style="background:#c2410c"></span><div><div style="font-weight:600">2 · Cost control <span style="color:#9a3412">menunggu</span></div><div class="sub">Pemegang izin cost control: Dewi, Agus</div></div></div>
+        <div class="step"><span class="dot" style="background:#c9ced5"></span><div><div style="color:#626b77">3 · Persetujuan akhir</div><div class="sub">Financial Controller / GM · wajib karena di atas 5.000.000</div></div></div>
+        <div class="step"><span class="dot" style="background:#c9ced5"></span><div><div style="color:#626b77">Dibuat PO</div></div></div>
+      </section>
+      <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+        <h3 style="margin:0;font-size:15px">Keputusan Anda · tingkat 2</h3>
+        <div class="sub" style="font-size:12px">Masuk sebagai Dewi (Cost Control). Anda boleh mengubah jumlah atau harga perkiraan sebelum menyetujui; perubahan dicatat.</div>
+        <div><label class="lbl" for="cat">Catatan (wajib bila menolak)</label><textarea id="cat" style="width:100%;box-sizing:border-box;height:72px;border:1px solid #e3e6ea;border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;resize:none"></textarea></div>
+        <div style="display:flex;gap:8px"><button class="btn" style="flex:1;color:#b42318">Tolak</button><button class="btnp" style="flex:1.4">Setujui</button></div>
+      </section>
+      <div style="flex:1"></div>
+      <span class="sub" style="font-size:12px">Ditolak di tingkat mana pun: PR kembali ke pengaju dengan catatannya. Satu orang tidak bisa menyetujui dua tingkat pada PR yang sama.</span>
+    </aside>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

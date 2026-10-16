@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Proses harga pokok</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:9px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0}
+.sub{font-size:11px;color:#626b77}
+.stp{flex:1;background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.n{display:inline-flex;width:20px;height:20px;border-radius:10px;background:#1f6f5c;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #e3e6ea;border-radius:10px;font-size:13px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="20-inv-penerimaan.dc.html" class="nav">Pembelian</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:16px 8px 8px;letter-spacing:.06em">PENGATURAN</div>
+    <a href="#" class="nav">Gudang</a>
+    <a href="#" class="nav">Kategori &amp; akun</a>
+    <a href="#" class="nav" style="background:#e3f2ee;font-weight:600">Harga pokok</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <h1 style="margin:0;font-size:24px">Harga pokok</h1>
+
+    <div style="display:flex;gap:8px">
+      <div class="stp"><span><span class="n">1</span> <strong style="font-size:13px">Barang masuk</strong></span><span class="sub">Penerimaan memakai harga PO; transfer membawa harga gudang asal</span></div>
+      <div class="stp"><span><span class="n">2</span> <strong style="font-size:13px">Tagihan beda harga</strong></span><span class="sub">Selisih menaikkan/menurunkan nilai stok yang masih ada; sisanya ke selisih harga beli</span></div>
+      <div class="stp"><span><span class="n">3</span> <strong style="font-size:13px">Barang keluar</strong></span><span class="sub">Penjualan, pemakaian, waste: rata-rata gudang atau lapisan tertua (FIFO)</span></div>
+      <div class="stp"><span><span class="n">4</span> <strong style="font-size:13px">Tutup hari</strong></span><span class="sub">Semua mutasi hari itu dijurnal: HPP, beban, dan persediaan</span></div>
+    </div>
+
+    <div style="display:flex;gap:14px;flex:1;min-height:0">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #e3e6ea">
+            <strong style="font-size:15px;flex:1">Kartu stok · Sirup gula aren · Bar</strong>
+            <span class="pill" style="background:#e3f2ee;color:#185a4a">Rata-rata bergerak</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Tanggal</th><th class="th">Mutasi</th><th class="th thr">Qty</th><th class="th thr">Nilai mutasi</th><th class="th thr">Saldo qty</th><th class="th thr">Saldo nilai</th><th class="th thr">Rata-rata</th></tr></thead>
+            <tbody>
+              <tr><td class="td">1 Sep</td><td class="td">Saldo awal</td><td class="td num">+20,0</td><td class="td num">980.000</td><td class="td num">20,0</td><td class="td num">980.000</td><td class="td num">49.000</td></tr>
+              <tr><td class="td">2 Sep</td><td class="td">Penjualan POS · 20 gelas</td><td class="td num">−2,0</td><td class="td num">−98.000</td><td class="td num">18,0</td><td class="td num">882.000</td><td class="td num">49.000</td></tr>
+              <tr style="background:#f3faf8"><td class="td">3 Sep</td><td class="td">Transfer masuk TRF-0021 @ 50.000</td><td class="td num">+12,0</td><td class="td num">600.000</td><td class="td num">30,0</td><td class="td num">1.482.000</td><td class="td num" style="font-weight:600">49.400</td></tr>
+              <tr><td class="td">3 Sep</td><td class="td">Penjualan POS · 18 gelas</td><td class="td num">−1,8</td><td class="td num">−88.920</td><td class="td num">28,2</td><td class="td num">1.393.080</td><td class="td num">49.400</td></tr>
+            </tbody>
+          </table>
+          <div style="padding:10px 14px" class="sub">Rata-rata = saldo nilai ÷ saldo qty, dihitung ulang setiap barang masuk. Barang keluar memakai rata-rata saat itu.</div>
+        </section>
+
+        <section class="card" style="overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #e3e6ea">
+            <strong style="font-size:15px;flex:1">Bila properti memakai FIFO · data yang sama</strong>
+            <span class="pill">FIFO</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Lapisan</th><th class="th thr">Masuk</th><th class="th thr">Harga</th><th class="th thr">Terpakai</th><th class="th thr">Sisa</th><th class="th thr">Nilai sisa</th></tr></thead>
+            <tbody>
+              <tr><td class="td">A · saldo awal 1 Sep</td><td class="td num">20,0</td><td class="td num">49.000</td><td class="td num">3,8</td><td class="td num">16,2</td><td class="td num">793.800</td></tr>
+              <tr><td class="td">B · TRF-0021 3 Sep</td><td class="td num">12,0</td><td class="td num">50.000</td><td class="td num">0</td><td class="td num">12,0</td><td class="td num">600.000</td></tr>
+            </tbody>
+          </table>
+          <div style="display:flex;justify-content:space-between;padding:10px 14px;font-size:13px"><span class="sub" style="font-size:12px">Penjualan 3 Sep diambil dari lapisan A: 1,8 × 49.000 = 88.200</span><span>Saldo <strong>28,2 / 1.393.800</strong></span></div>
+        </section>
+      </div>
+
+      <aside style="width:380px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+          <h2 style="margin:0;font-size:15px">Metode properti</h2>
+          <div class="opt" style="border-color:#1f6f5c;background:#f3faf8"><input type="radio" id="m1" name="m" checked disabled><label for="m1"><strong>Rata-rata bergerak</strong><br><span class="sub">Harga pokok per gudang, rata-rata nilai stok</span></label></div>
+          <div class="opt"><input type="radio" id="m2" name="m" disabled><label for="m2"><strong>FIFO</strong><br><span class="sub">Barang yang masuk lebih dulu keluar lebih dulu, per lapisan</span></label></div>
+          <div class="sub" style="font-size:12px;color:#7c2d12">Terkunci sejak mutasi stok pertama (saldo awal OPN-0001, 1 Sep 2026). Tidak bisa diubah.</div>
+        </section>
+        <section class="card" style="padding:14px 16px">
+          <h2 style="margin:0 0 4px;font-size:15px">Stok minus dan koreksinya</h2>
+          <div class="sub" style="margin-bottom:6px">Es batu kristal · Bar</div>
+          <div class="kv"><span>Terjual saat stok 0: 4,0 kg</span><span>HPP perkiraan 6.000/kg</span></div>
+          <div class="kv"><span>Saldo</span><span style="color:#b42318">−4,0 kg / −24.000</span></div>
+          <div class="kv"><span>Masuk 30 kg @ 6.500</span><span>195.000</span></div>
+          <div class="kv"><span>Koreksi HPP 4 × (6.500 − 6.000)</span><span>+2.000</span></div>
+          <div class="kv" style="font-weight:700;border-top:1px solid #e3e6ea;margin-top:4px;padding-top:8px"><span>Saldo akhir</span><span>26,0 kg / 169.000</span></div>
+          <div class="sub">Perkiraan memakai harga terakhir; kalau tidak ada, harga acuan barang.</div>
+        </section>
+        <section class="card" style="padding:14px 16px">
+          <h2 style="margin:0 0 4px;font-size:15px">Jurnal tutup hari 3 Sep · Bar</h2>
+          <div class="kv"><span>D 5220 HPP minuman · Bar</span><span>88.920</span></div>
+          <div class="kv"><span>K 1320 Persediaan minuman</span><span>88.920</span></div>
+          <div class="sub">Transfer antar gudang tidak dijurnal: akun persediaannya sama.</div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

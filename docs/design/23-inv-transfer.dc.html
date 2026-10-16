@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Permintaan dan transfer gudang</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:10px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:10px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.req{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-bottom:1px solid #eef0f2;text-decoration:none;color:#1c2128;font-size:13px}
+.qin{width:80px;height:36px;box-sizing:border-box;border:1px solid #c9ced5;border-radius:8px;padding:0 8px;font:inherit;font-size:13px;text-align:right}
+.sub{font-size:11px;color:#626b77}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="21-inv-draf-tagihan.dc.html" class="nav">Draf tagihan</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="#" class="nav">Opname</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start;min-height:24px">← Permintaan &amp; transfer</a>
+    <div style="display:flex;align-items:flex-end;gap:12px">
+      <div style="flex:1">
+        <div style="font-size:12px;color:#626b77">SR-0018 · diminta Wayan 3 Sep 14.10 · disetujui Kepala bar 14.20 dan F&amp;B Manager 14.35 (2/2)</div>
+        <h2 style="margin:2px 0 0;font-size:22px">Bar ← Gudang utama</h2>
+      </div>
+      <span class="pill">Tanggal bisnis 3 Sep 2026</span>
+    </div>
+
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th class="th">Barang</th><th class="th thr">Diminta</th><th class="th thr">Stok Bar</th><th class="th thr">Stok gudang utama</th><th class="th thr">Dikirim</th><th class="th thr">Sisa</th><th class="th thr">Nilai</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="td"><div style="font-weight:600">Sirup gula aren 650 ml</div><div class="sub">botol</div></td><td class="td num">12</td><td class="td num">28,2</td><td class="td num">36</td><td class="td num"><input class="qin" aria-label="Dikirim sirup" value="12"></td><td class="td num">0</td><td class="td num">588.000</td></tr>
+          <tr><td class="td"><div style="font-weight:600">Teh celup hitam</div><div class="sub">pcs</div></td><td class="td num">200</td><td class="td num">140</td><td class="td num">1.200</td><td class="td num"><input class="qin" aria-label="Dikirim teh" value="200"></td><td class="td num">0</td><td class="td num">167.000</td></tr>
+          <tr style="background:#fffaf5"><td class="td"><div style="font-weight:600">Es batu kristal</div><div class="sub">kg</div></td><td class="td num" style="color:#b42318">−4,0</td><td class="td num">30</td><td class="td num">0</td><td class="td num"><input class="qin" aria-label="Dikirim es batu" value="0" style="border-color:#c2410c"></td><td class="td num">30</td><td class="td num">0</td></tr>
+          <tr><td class="td"><div style="font-weight:600">Jeruk nipis</div><div class="sub">kg</div></td><td class="td num">3</td><td class="td num">0,4</td><td class="td num">5,5</td><td class="td num"><input class="qin" aria-label="Dikirim jeruk nipis" value="3"></td><td class="td num">0</td><td class="td num">96.000</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;font-size:13px">
+        <span style="color:#9a3412">Es batu: gudang utama kosong. Kirim sebagian, sisanya tetap di permintaan.</span>
+        <span>Nilai transfer <strong style="font-size:16px;margin-left:8px">851.000</strong></span>
+      </div>
+    </section>
+
+    <div style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:14px 16px;font-size:13px;color:#4a5361;display:flex;flex-direction:column;gap:4px">
+      <span>Barang langsung pindah ke Bar saat transfer disimpan. Nilainya ikut harga pokok gudang asal; tidak ada jurnal karena akunnya sama.</span>
+      <span>Gudang asal tidak boleh minus. Stok Bar yang minus (es batu) akan tertutup otomatis saat barang masuk.</span>
+    </div>
+
+    <div style="flex:1"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn">Tolak permintaan</button>
+      <button class="btn">Cetak bukti</button>
+      <button class="btnp">Kirim transfer</button>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

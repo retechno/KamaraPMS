@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Opname di ponsel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #eef0f2}
+.qin{width:76px;height:44px;box-sizing:border-box;border:1px solid #c9ced5;border-radius:10px;padding:0 10px;font:inherit;font-size:16px;font-weight:600;text-align:right;background:#fff}
+.unit{height:44px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-size:13px;padding:0 6px}
+.chip{height:36px;padding:0 12px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128;white-space:nowrap}
+.sub{font-size:12px;color:#626b77}
+</style>
+</helmet>
+<div style="width:390px;height:844px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex;flex-direction:column">
+  <header style="background:#fff;border-bottom:1px solid #e3e6ea;padding:12px 8px 12px 4px;display:flex;align-items:center;gap:4px">
+    <a href="#" aria-label="Kembali" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#1c2128"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></a>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:17px">Opname Bar</div>
+      <div class="sub">CNT-0005 · hitung buta</div>
+    </div>
+    <span style="font-size:13px;font-weight:600;color:#185a4a;padding-right:8px">12 / 38</span>
+  </header>
+
+  <div style="margin:12px 16px 0;padding:10px 12px;border-radius:10px;background:#fff7ed;border:1px solid #f3c9a4;font-size:13px;color:#7c2d12">
+    Gudang dibekukan sejak 21.00. Penjualan POS tetap jalan dan dihitung menurut jam tiap barang dihitung.
+  </div>
+
+  <div style="padding:12px 16px 8px">
+    <label for="cari" style="position:absolute;left:-9999px">Cari barang</label>
+    <input id="cari" placeholder="Cari barang atau pindai kode" style="width:100%;box-sizing:border-box;height:44px;border:1px solid #e3e6ea;border-radius:10px;padding:0 12px;font:inherit;font-size:14px;background:#fff">
+  </div>
+  <div style="display:flex;gap:6px;padding:0 16px 10px;overflow:hidden">
+    <button class="chip" style="background:#1f6f5c;color:#fff;border-color:#1f6f5c">Belum · 26</button>
+    <button class="chip">Sudah · 12</button>
+    <button class="chip">Rak minuman</button>
+  </div>
+
+  <div style="flex:1;overflow:hidden;background:#fff;border-top:1px solid #e3e6ea">
+    <div class="row" style="background:#f3faf8">
+      <div style="flex:1;min-width:0"><div style="font-weight:600">Sirup gula aren 650 ml</div><div class="sub">dihitung 21.20</div></div>
+      <input class="qin" aria-label="Jumlah sirup" value="27,5">
+      <select class="unit" aria-label="Satuan sirup"><option>botol</option><option>ml</option></select>
+    </div>
+    <div class="row">
+      <div style="flex:1;min-width:0"><div style="font-weight:600">Teh celup hitam</div><div class="sub">dihitung 21.22</div></div>
+      <input class="qin" aria-label="Jumlah teh" value="138">
+      <select class="unit" aria-label="Satuan teh"><option>pcs</option><option>box</option></select>
+    </div>
+    <div class="row">
+      <div style="flex:1;min-width:0"><div style="font-weight:600">Jeruk nipis</div><div class="sub">belum dihitung</div></div>
+      <input class="qin" aria-label="Jumlah jeruk nipis" placeholder="—">
+      <select class="unit" aria-label="Satuan jeruk nipis"><option>kg</option><option>g</option></select>
+    </div>
+    <div class="row">
+      <div style="flex:1;min-width:0"><div style="font-weight:600">Es batu kristal</div><div class="sub">belum dihitung</div></div>
+      <input class="qin" aria-label="Jumlah es batu" placeholder="—">
+      <select class="unit" aria-label="Satuan es batu"><option>kg</option></select>
+    </div>
+    <div class="row">
+      <div style="flex:1;min-width:0"><div style="font-weight:600">Susu UHT 1 L</div><div class="sub">belum dihitung</div></div>
+      <input class="qin" aria-label="Jumlah susu" placeholder="—">
+      <select class="unit" aria-label="Satuan susu"><option>kotak</option></select>
+    </div>
+    <div class="row">
+      <div style="flex:1;min-width:0"><div style="font-weight:600">Kopi bubuk Kintamani</div><div class="sub">belum dihitung</div></div>
+      <input class="qin" aria-label="Jumlah kopi" placeholder="—">
+      <select class="unit" aria-label="Satuan kopi"><option>kg</option><option>g</option></select>
+    </div>
+  </div>
+
+  <footer style="background:#fff;border-top:1px solid #e3e6ea;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+    <span class="sub">Jumlah tersimpan otomatis. Barang yang tidak dihitung tidak diubah.</span>
+    <button style="height:48px;border:0;border-radius:12px;background:#1f6f5c;color:#fff;font:inherit;font-weight:600;font-size:15px">Kirim untuk disetujui</button>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

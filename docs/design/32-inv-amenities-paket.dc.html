@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Paket amenities</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:8px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.qin{width:56px;height:34px;box-sizing:border-box;border:1px solid #c9ced5;border-radius:8px;padding:0 8px;font:inherit;font-size:13px;text-align:right}
+.sel{height:34px;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 6px}
+.lbl{display:block;font-size:12px;color:#626b77;margin-bottom:6px}
+.inp{width:100%;box-sizing:border-box;height:40px;border:1px solid #e3e6ea;border-radius:8px;padding:0 10px;font:inherit;font-size:13px;background:#fff;color:#1c2128}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden}
+.ch{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e3e6ea}
+.tabk{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0}
+.sub{font-size:11px;color:#626b77}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">PENGATURAN INVENTORY</div>
+    <a href="#" class="nav">Gudang</a>
+    <a href="#" class="nav">Kategori &amp; akun</a>
+    <a href="#" class="nav">Satuan</a>
+    <a href="28-inv-harga-pokok.dc.html" class="nav">Harga pokok</a>
+    <a href="#" class="nav" style="background:#e3f2ee;font-weight:600">Amenities otomatis</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h1 style="margin:0;font-size:24px;flex:1">Amenities otomatis</h1>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600"><input type="checkbox" checked style="width:20px;height:20px;accent-color:#1f6f5c">Aktif</label>
+    </div>
+    <div style="font-size:13px;color:#4a5361">Setiap tutup hari, sistem membuat satu dokumen pemakaian untuk semua kamar yang ditempati malam itu (termasuk komplimen dan house use). Kamar kosong, OOO, dan day-use tidak dihitung.</div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+      <div><label class="lbl" for="g">Diambil dari gudang</label><select id="g" class="inp"><option>Gudang housekeeping</option></select></div>
+      <div><label class="lbl" for="d">Dibebankan ke departemen</label><select id="d" class="inp"><option>Rooms · Housekeeping</option></select></div>
+      <div><label class="lbl" for="a">Akun beban</label><select id="a" class="inp"><option>5150 Perlengkapan tamu</option></select></div>
+    </div>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card">
+          <div class="ch"><strong style="font-size:15px;flex:1">Paket bawaan · semua tipe kamar</strong><button class="btn" style="height:34px;font-size:13px">Tambah barang</button></div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Barang</th><th class="th thr">Jumlah</th><th class="th">Dihitung per</th><th class="th thr">Harga pokok</th><th class="th thr">Biaya kamar 2 tamu</th></tr></thead>
+            <tbody>
+              <tr><td class="td">Sabun batang 25 g</td><td class="td num"><input class="qin" aria-label="Jumlah sabun" value="1"></td><td class="td"><select class="sel" aria-label="Per sabun"><option>kamar</option><option>tamu</option></select></td><td class="td num">2.960</td><td class="td num">2.960</td></tr>
+              <tr><td class="td">Sampo amenities 30 ml</td><td class="td num"><input class="qin" aria-label="Jumlah sampo" value="1"></td><td class="td"><select class="sel" aria-label="Per sampo"><option>kamar</option><option>tamu</option></select></td><td class="td num">3.250</td><td class="td num">3.250</td></tr>
+              <tr><td class="td">Sikat gigi</td><td class="td num"><input class="qin" aria-label="Jumlah sikat gigi" value="1"></td><td class="td"><select class="sel" aria-label="Per sikat gigi"><option>tamu</option><option>kamar</option></select></td><td class="td num">2.100</td><td class="td num">4.200</td></tr>
+              <tr><td class="td">Pasta gigi 10 g</td><td class="td num"><input class="qin" aria-label="Jumlah pasta gigi" value="1"></td><td class="td"><select class="sel" aria-label="Per pasta gigi"><option>tamu</option><option>kamar</option></select></td><td class="td num">1.800</td><td class="td num">3.600</td></tr>
+              <tr><td class="td">Air mineral 600 ml</td><td class="td num"><input class="qin" aria-label="Jumlah air mineral" value="2"></td><td class="td"><select class="sel" aria-label="Per air mineral"><option>kamar</option><option>tamu</option></select></td><td class="td num">2.500</td><td class="td num">5.000</td></tr>
+              <tr><td class="td">Teh celup hitam</td><td class="td num"><input class="qin" aria-label="Jumlah teh" value="2"></td><td class="td"><select class="sel" aria-label="Per teh"><option>kamar</option><option>tamu</option></select></td><td class="td num">835</td><td class="td num">1.670</td></tr>
+              <tr><td class="td">Kopi sachet</td><td class="td num"><input class="qin" aria-label="Jumlah kopi" value="2"></td><td class="td"><select class="sel" aria-label="Per kopi"><option>kamar</option><option>tamu</option></select></td><td class="td num">1.500</td><td class="td num">3.000</td></tr>
+            </tbody>
+          </table>
+          <div style="display:flex;justify-content:flex-end;padding:10px 16px;font-size:13px">Biaya per malam, kamar 2 tamu: <strong style="margin-left:8px">23.680</strong></div>
+        </section>
+      </div>
+
+      <aside style="width:380px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card">
+          <div class="ch"><strong style="font-size:15px;flex:1">Tambahan per tipe kamar</strong></div>
+          <div style="display:flex;gap:6px;padding:12px 16px 4px;flex-wrap:wrap">
+            <button class="tabk">Standard</button><button class="tabk">Deluxe</button><button class="tabk" style="background:#1f6f5c;color:#fff;border-color:#1f6f5c">Suite · 2</button><button class="tabk">Family</button>
+          </div>
+          <div style="padding:6px 16px 14px">
+            <div class="kv" style="border-bottom:1px solid #eef0f2"><span>Sandal hotel</span><span>1 per tamu · 6.500</span></div>
+            <div class="kv" style="border-bottom:1px solid #eef0f2"><span>Body lotion 30 ml</span><span>1 per kamar · 4.200</span></div>
+            <button class="btn" style="height:34px;font-size:13px;margin-top:8px">Tambah barang untuk Suite</button>
+            <div class="sub" style="margin-top:10px;font-size:12px">Suite 2 tamu per malam: 23.680 + 17.200 = <strong style="color:#1c2128">40.880</strong></div>
+          </div>
+        </section>
+        <section class="card" style="padding:14px 16px;font-size:13px;color:#4a5361;display:flex;flex-direction:column;gap:6px">
+          <span>Jumlah tamu = dewasa + anak di kamar itu malam itu.</span>
+          <span>Kalau stok gudang kurang, tutup hari tetap jalan: kekurangannya jadi stok minus dan muncul di laporan.</span>
+          <span>Perubahan paket berlaku mulai tutup hari berikutnya.</span>
+        </section>
+        <div style="flex:1"></div>
+        <button class="btnp">Simpan pengaturan</button>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

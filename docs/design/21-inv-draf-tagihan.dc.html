@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Draf tagihan dan pencocokan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:10px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:10px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.qin{width:96px;height:36px;box-sizing:border-box;border:1px solid #c9ced5;border-radius:8px;padding:0 8px;font:inherit;font-size:13px;text-align:right}
+.lbl{display:block;font-size:12px;color:#626b77;margin-bottom:6px}
+.inp{width:100%;box-sizing:border-box;height:40px;border:1px solid #e3e6ea;border-radius:8px;padding:0 12px;font:inherit;font-size:13px;background:#fff;color:#1c2128}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0}
+.sub{font-size:11px;color:#626b77}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="20-inv-penerimaan.dc.html" class="nav">Pembelian</a>
+    <a href="#" class="nav" style="background:#e3f2ee;font-weight:600">Draf tagihan</a>
+    <a href="23-inv-transfer.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="#" class="nav">Pemakaian &amp; waste</a>
+    <a href="#" class="nav">Opname</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;gap:16px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="font-size:12px;color:#626b77">Draf tagihan · dari penerimaan GR-0041 (PO-0012)</div>
+        <h1 style="margin:2px 0 0;font-size:24px">CV Sumber Rasa</h1>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+        <div><label class="lbl" for="inv">No. faktur supplier</label><input id="inv" class="inp" value="INV/SR/2026/0912"></div>
+        <div><label class="lbl" for="tgl">Tanggal tagihan</label><input id="tgl" class="inp" value="3 Sep 2026"></div>
+        <div><label class="lbl" for="jt">Jatuh tempo</label><input id="jt" class="inp" value="3 Okt 2026 (30 hari)"></div>
+      </div>
+
+      <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th class="th">Barang</th><th class="th thr">Diterima</th><th class="th thr">Harga PO</th><th class="th thr">Qty tagihan</th><th class="th thr">Harga tagihan</th><th class="th thr">Selisih</th><th class="th thr">PPN</th>
+          </tr></thead>
+          <tbody>
+            <tr style="background:#fffaf5"><td class="td"><div style="font-weight:600">Sirup gula aren</div><div class="sub">karton</div></td><td class="td num">5</td><td class="td num">588.000</td><td class="td num"><input class="qin" aria-label="Qty tagihan sirup" value="5"></td><td class="td num"><input class="qin" aria-label="Harga tagihan sirup" value="600.000" style="border-color:#c2410c"></td><td class="td num" style="color:#9a3412;font-weight:600">+60.000</td><td class="td num">330.000</td></tr>
+            <tr><td class="td"><div style="font-weight:600">Beras pandan wangi</div><div class="sub">karung 25 kg</div></td><td class="td num">2</td><td class="td num">435.000</td><td class="td num"><input class="qin" aria-label="Qty tagihan beras" value="2"></td><td class="td num"><input class="qin" aria-label="Harga tagihan beras" value="435.000"></td><td class="td num">0</td><td class="td num">0</td></tr>
+            <tr><td class="td"><div style="font-weight:600">Minyak goreng 2 L</div><div class="sub">dus</div></td><td class="td num">1</td><td class="td num">201.000</td><td class="td num"><input class="qin" aria-label="Qty tagihan minyak" value="1"></td><td class="td num"><input class="qin" aria-label="Harga tagihan minyak" value="201.000"></td><td class="td num">0</td><td class="td num">22.110</td></tr>
+            <tr><td class="td"><div style="font-weight:600">Teh celup hitam</div><div class="sub">box</div></td><td class="td num">2</td><td class="td num">100.500</td><td class="td num"><input class="qin" aria-label="Qty tagihan teh" value="2"></td><td class="td num"><input class="qin" aria-label="Harga tagihan teh" value="100.500"></td><td class="td num">0</td><td class="td num">22.110</td></tr>
+            <tr><td class="td" colspan="4"><div style="font-weight:600">Ongkos kirim</div><div class="sub">Bukan barang stok · akun beban angkut, tidak masuk nilai stok</div></td><td class="td num">50.000</td><td class="td num"></td><td class="td num">5.500</td></tr>
+          </tbody>
+        </table>
+        <div style="padding:10px 16px"><button class="btn" style="height:36px;font-size:13px">Tambah baris non-stok</button></div>
+      </section>
+
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+        <div style="background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 14px"><div class="sub">1 · PO</div><div style="font-weight:600;margin-top:2px">Harga sesuai, kecuali sirup +2%</div></div>
+        <div style="background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 14px"><div class="sub">2 · Penerimaan</div><div style="font-weight:600;margin-top:2px">Jumlah tagihan = jumlah diterima</div></div>
+        <div style="background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 14px"><div class="sub">3 · Faktur supplier</div><div style="font-weight:600;margin-top:2px">Total 4.701.720 termasuk PPN</div></div>
+      </div>
+    </div>
+
+    <aside style="width:360px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+      <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px">
+        <h2 style="margin:0 0 8px;font-size:15px">Ringkasan</h2>
+        <div class="kv"><span>Nilai penerimaan</span><span>4.212.000</span></div>
+        <div class="kv"><span>Selisih harga</span><span style="color:#9a3412">+60.000</span></div>
+        <div class="kv"><span>Baris non-stok</span><span>50.000</span></div>
+        <div class="kv"><span>PPN masukan</span><span>379.720</span></div>
+        <div class="kv" style="border-top:1px solid #e3e6ea;margin-top:6px;padding-top:10px;font-weight:700;font-size:15px"><span>Total tagihan</span><span>4.701.720</span></div>
+      </section>
+      <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:16px 18px">
+        <h2 style="margin:0 0 4px;font-size:15px">Ke mana selisih 60.000</h2>
+        <div class="sub" style="margin-bottom:6px">Sirup: 54 dari 60 botol masih di gudang</div>
+        <div class="kv"><span>Masuk nilai stok (1320)</span><span>54.000</span></div>
+        <div class="kv"><span>Selisih harga beli (5299)</span><span>6.000</span></div>
+      </section>
+      <section style="background:#fff7ed;border:1px solid #f3c9a4;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-weight:600;color:#9a3412">Perlu persetujuan: selisih di atas toleransi 1%</div>
+        <div><label class="lbl" for="apu">Penyetuju</label><input id="apu" class="inp" placeholder="Nama pengguna"></div>
+        <div><label class="lbl" for="app">Kata sandi</label><input id="app" type="password" class="inp"></div>
+      </section>
+      <div style="flex:1"></div>
+      <div style="display:flex;gap:8px"><button class="btn" style="flex:1">Simpan draf</button><button class="btnp" style="flex:1.4">Konfirmasi tagihan</button></div>
+    </aside>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

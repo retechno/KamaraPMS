@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Alur persetujuan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #e3e6ea}
+.lvl{display:grid;grid-template-columns:40px minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1.3fr);gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid #eef0f2;font-size:13px}
+.n{display:inline-flex;width:28px;height:28px;border-radius:14px;background:#1f6f5c;color:#fff;font-weight:700;align-items:center;justify-content:center;font-size:13px}
+.sel{width:100%;height:38px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 8px}
+.inp{width:100%;height:38px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.hd{display:grid;grid-template-columns:40px minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1.3fr);gap:12px;padding:8px 16px;font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e3e6ea}
+.btn{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:13px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.sub{font-size:12px;color:#626b77}
+.chk{display:flex;align-items:center;gap:10px;font-size:13px;padding:6px 0}
+.chk input{width:18px;height:18px;accent-color:#1f6f5c}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:4px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 12px">KamaraPMS</div>
+    <div style="font-size:11px;font-weight:600;color:#626b77;padding:8px;letter-spacing:.06em">PENGATURAN INVENTORY</div>
+    <a href="#" class="nav">Gudang</a>
+    <a href="#" class="nav">Kategori &amp; akun</a>
+    <a href="28-inv-harga-pokok.dc.html" class="nav">Harga pokok</a>
+    <a href="32-inv-amenities-paket.dc.html" class="nav">Amenities otomatis</a>
+    <a href="#" class="nav" style="background:#e3f2ee;font-weight:600">Alur persetujuan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;gap:16px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+      <h1 style="margin:0;font-size:24px">Alur persetujuan</h1>
+
+      <section class="card">
+        <div class="ch"><strong style="font-size:15px;flex:1">Permintaan pembelian (PR)</strong><span class="sub">3 tingkat, berurutan</span><button class="btn">Tambah tingkat</button></div>
+        <div class="hd"><span></span><span>Nama tingkat</span><span>Yang boleh menyetujui</span><span>Berlaku bila</span></div>
+        <div class="lvl"><span class="n">1</span><input class="inp" aria-label="Nama tingkat 1 PR" value="Kepala departemen"><select class="sel" aria-label="Penyetuju tingkat 1 PR"><option>Kepala departemen pengaju</option></select><select class="sel" aria-label="Syarat tingkat 1 PR"><option>Selalu</option></select></div>
+        <div class="lvl"><span class="n">2</span><input class="inp" aria-label="Nama tingkat 2 PR" value="Cost control"><select class="sel" aria-label="Penyetuju tingkat 2 PR"><option>Pemegang izin: Cost control</option></select><select class="sel" aria-label="Syarat tingkat 2 PR"><option>Selalu</option></select></div>
+        <div class="lvl"><span class="n">3</span><input class="inp" aria-label="Nama tingkat 3 PR" value="Persetujuan akhir"><select class="sel" aria-label="Penyetuju tingkat 3 PR"><option>Pemegang izin: Persetujuan akhir (FC/GM)</option></select><div style="display:flex;gap:6px;align-items:center"><select class="sel" aria-label="Syarat tingkat 3 PR" style="width:120px"><option>Total di atas</option></select><input class="inp" aria-label="Batas tingkat 3 PR" value="5.000.000"></div></div>
+        <div style="padding:10px 16px" class="sub">PR 3.880.000 berhenti di tingkat 2; PR 6.450.000 sampai tingkat 3.</div>
+      </section>
+
+      <section class="card">
+        <div class="ch"><strong style="font-size:15px;flex:1">Permintaan barang ke gudang (SR)</strong><span class="sub">2 tingkat, berurutan</span><button class="btn">Tambah tingkat</button></div>
+        <div class="hd"><span></span><span>Nama tingkat</span><span>Yang boleh menyetujui</span><span>Berlaku bila</span></div>
+        <div class="lvl"><span class="n">1</span><input class="inp" aria-label="Nama tingkat 1 SR" value="Kepala departemen"><select class="sel" aria-label="Penyetuju tingkat 1 SR"><option>Kepala departemen pengaju</option></select><select class="sel" aria-label="Syarat tingkat 1 SR"><option>Selalu</option></select></div>
+        <div class="lvl" style="border-bottom:0"><span class="n">2</span><input class="inp" aria-label="Nama tingkat 2 SR" value="Persetujuan akhir"><select class="sel" aria-label="Penyetuju tingkat 2 SR"><option>Pemegang izin: Persetujuan akhir SR</option></select><select class="sel" aria-label="Syarat tingkat 2 SR"><option>Selalu</option></select></div>
+      </section>
+    </div>
+
+    <aside style="width:360px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+      <section class="card" style="padding:16px 18px">
+        <h2 style="margin:0 0 8px;font-size:15px">Aturan umum</h2>
+        <label class="chk"><input type="checkbox" checked>Satu orang hanya boleh menyetujui satu tingkat per dokumen</label>
+        <label class="chk"><input type="checkbox" checked>Pengaju tidak boleh menyetujui dokumennya sendiri</label>
+        <label class="chk"><input type="checkbox">Kepala departemen yang mengajukan sendiri: tingkat 1 dilewati</label>
+        <label class="chk"><input type="checkbox" checked>Penyetuju boleh mengubah jumlah sebelum menyetujui (dicatat)</label>
+      </section>
+      <section class="card" style="padding:16px 18px;font-size:13px;color:#4a5361;display:flex;flex-direction:column;gap:6px">
+        <h2 style="margin:0 0 2px;font-size:15px;color:#1c2128">Cara kerja</h2>
+        <span>Kepala departemen diambil dari pengaturan Departemen (satu kepala dan wakil per departemen).</span>
+        <span>Ditolak di tingkat mana pun: dokumen kembali ke pengaju dengan catatannya, dan bisa diajukan ulang.</span>
+        <span>Penyetuju mendapat notifikasi saat gilirannya tiba.</span>
+        <span>Perubahan alur hanya berlaku untuk dokumen yang diajukan sesudahnya.</span>
+      </section>
+      <div style="flex:1"></div>
+      <button class="btnp">Simpan alur</button>
+    </aside>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
