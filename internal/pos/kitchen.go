@@ -265,26 +265,30 @@ func contains(list []string, v string) bool {
 
 // ---------------------------------------------------------------- print jobs of tickets
 
-// queueTicketJob puts the ticket of a station that has a printer in the queue, when the outlet works in PRINT mode. The agent that prints
-// the queue is stage 3b; until then a job stays QUEUED and is shown in the setup of the stations and printers.
+// queueTicketJob renders the ticket of a station that has a printer and queues it, one job for each copy the station asks for, when the outlet works
+// in PRINT mode. The agent of the hotel claims the jobs (devices.go, jobs.go).
 func (s *Service) queueTicketJob(ctx context.Context, p auth.Principal, propertyID int64, o Outlet, ticketID int64, stationID *int64, kind string) error {
 	if o.OrderMode != "PRINT" || stationID == nil {
 		return nil
 	}
-	q := s.q(ctx)
-	st, err := q.StationPrinter(ctx, posdb.StationPrinterParams{TenantID: p.TenantID, PropertyID: propertyID, ID: *stationID})
+	st, err := s.q(ctx).StationPrinter(ctx, posdb.StationPrinterParams{TenantID: p.TenantID, PropertyID: propertyID, ID: *stationID})
 	if err != nil {
 		return err
 	}
 	if st.PrinterID == nil {
 		return nil
 	}
-	_, err = q.InsertPrintJob(ctx, posdb.InsertPrintJobParams{TenantID: p.TenantID, PropertyID: propertyID, PrinterID: *st.PrinterID, Kind: "TICKET", SourceType: "TICKET", SourceID: ticketID,
-		DedupeKey: fmt.Sprintf("TICKET:%d:1", ticketID), CreatedBy: p.ActorID()})
-	if errors.Is(err, pgx.ErrNoRows) { // the same ticket again: one job
-		return nil
+	doc, err := s.ticketDocument(ctx, p.TenantID, propertyID, ticketID)
+	if err != nil {
+		return err
 	}
-	return err
+	for c := 1; c <= int(st.TicketCopies); c++ {
+		if _, _, err := s.enqueue(ctx, p.TenantID, propertyID, jobSpec{PrinterID: *st.PrinterID, Kind: kind, SourceType: "TICKET", SourceID: ticketID,
+			DedupeKey: fmt.Sprintf("TICKET:%d:%d", ticketID, c), CopyNo: c, Doc: doc, By: p.ActorID()}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PrintJob is a job of the queue as the setup shows it.
@@ -300,6 +304,10 @@ type PrintJob struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	PrintedAt   *time.Time `json:"printed_at"`
 	ErrorCode   string     `json:"error_code,omitempty"`
+	CopyNo      int        `json:"copy_no"`
+	MaxAttempts int        `json:"max_attempts"`
+	IsReprint   bool       `json:"is_reprint"`
+	DeviceName  string     `json:"device_name,omitempty"`
 	BillNumber  string     `json:"bill_number,omitempty"`
 	TableCode   string     `json:"table_code,omitempty"`
 	Station     string     `json:"station,omitempty"`
@@ -333,7 +341,8 @@ func (s *Service) ListPrintJobs(ctx context.Context, propertyID int64, printerID
 	out := PrintQueue{Jobs: make([]PrintJob, len(rows)), Queued: map[int64]int{}}
 	for i, r := range rows {
 		out.Jobs[i] = PrintJob{ID: uuidString(r.ID), PrinterID: r.PrinterID, PrinterName: r.PrinterName, Kind: r.Kind, SourceType: r.SourceType, SourceID: r.SourceID, Status: r.Status,
-			Attempts: int(r.Attempts), CreatedAt: r.CreatedAt, PrintedAt: r.PrintedAt, ErrorCode: r.ErrorCode, BillNumber: r.BillNumber, TableCode: r.TableCode, Station: r.StationName, TicketKind: r.TicketKind}
+			Attempts: int(r.Attempts), CreatedAt: r.CreatedAt, PrintedAt: r.PrintedAt, ErrorCode: r.ErrorCode, CopyNo: int(r.CopyNo), MaxAttempts: int(r.MaxAttempts), IsReprint: r.IsReprint, DeviceName: r.DeviceName,
+			BillNumber: r.BillNumber, TableCode: r.TableCode, Station: r.StationName, TicketKind: r.TicketKind}
 	}
 	depth, err := q.PrintQueueDepth(ctx, posdb.PrintQueueDepthParams{TenantID: p.TenantID, PropertyID: propertyID})
 	if err != nil {

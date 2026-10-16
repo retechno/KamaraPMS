@@ -845,6 +845,52 @@ func (q *Queries) ShiftCash(ctx context.Context, arg ShiftCashParams) (ShiftCash
 	return i, err
 }
 
+const shiftDrawerOpens = `-- name: ShiftDrawerOpens :many
+SELECT d.id, d.opened_at, d.reason, u.full_name AS opened_by
+FROM pos_drawer_opens d JOIN users u ON u.id = d.opened_by
+WHERE d.tenant_id = $1 AND d.property_id = $2 AND d.shift_id = $3
+ORDER BY d.opened_at, d.id
+`
+
+type ShiftDrawerOpensParams struct {
+	TenantID   int64
+	PropertyID int64
+	ShiftID    *int64
+}
+
+type ShiftDrawerOpensRow struct {
+	ID       int64
+	OpenedAt time.Time
+	Reason   string
+	OpenedBy string
+}
+
+// The times the drawer of this shift was opened without a sale by the point of sale (docs/architecture/34-pos.md 20): who, when and why.
+func (q *Queries) ShiftDrawerOpens(ctx context.Context, arg ShiftDrawerOpensParams) ([]ShiftDrawerOpensRow, error) {
+	rows, err := q.db.Query(ctx, shiftDrawerOpens, arg.TenantID, arg.PropertyID, arg.ShiftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ShiftDrawerOpensRow{}
+	for rows.Next() {
+		var i ShiftDrawerOpensRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OpenedAt,
+			&i.Reason,
+			&i.OpenedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const shiftOtherTenders = `-- name: ShiftOtherTenders :many
 SELECT p.payment_method::text AS method, p.payment_type::text AS payment_type, count(*)::int AS n, sum(p.amount)::numeric AS amount
 FROM payments p

@@ -43,6 +43,7 @@ function setup(component: unknown, permissions = ['pos.manage']) {
       ...['TEA', 'JUICE', 'COFFEE', 'COLA', 'WATER', 'BEER', 'WINE'].map((product) => ({ code: 'PRODUCT_STATION_NO_OUTPUT', severity: 'ERROR', outlet: 'RESTO', product, station: 'BAR', order_mode: 'PRINT', reason: 'NO_PRINTER', other_output: 'KDS' })),
       { code: 'OUTLET_NO_DRAWER', severity: 'WARNING', outlet: 'RS' },
     ] } }
+    if (path.endsWith('/pos/devices')) return { data: { data: [{ id: 4, name: 'Kasir Lobby', kind: 'AGENT', token_prefix: 'kpd_abcd', status: 'ACTIVE', last_seen_at: '2026-10-16T05:00:00Z', agent_version: '0.1.0', queue_depth: 0, created_at: '2026-10-16T04:00:00Z', rotated_at: null, revoked_at: null, printers: 1, online: true }], pending_enrollments: 0, enrollment_expires_at: null } }
     if (path.endsWith('/pos/categories')) return { data: { data: [{ id: 1, code: 'MAINS', name: 'Main dishes', parent_id: null, sort_order: 1, is_active: true, product_count: 7 }] } }
     if (path.endsWith('/taxes')) return { data: { data: [{ id: 2, code: 'PB1', name: 'PB1', rate: '10', is_active: true }] } }
     if (path.endsWith('/service-charges')) return { data: { data: [{ id: 1, code: 'SVC', name: 'Service', rate: '10', is_active: true }] } }
@@ -114,6 +115,25 @@ describe('the outlets', () => {
     expect(opts.body).toMatchObject({ name: 'Restoran Teratai 2', version: 3, comp_treatment: 'PAYMENT_COMP' })
   })
 
+  it('keeps the head and the foot of the receipt and the copies, and sends an empty field as "from the property"', async () => {
+    setup(PosOutletsView)
+    await flushPromises()
+    await body('[data-testid=outlet-edit-RESTO]').trigger('click')
+    await flushPromises()
+    expect(body('[data-testid=receipt-paper]').text()).toContain('Receipt paper')
+    expect((document.body.querySelector('[data-testid=receipt-copies]') as HTMLSelectElement).value).toBe('1')
+    await type('input[name=receipt_footer]', 'Thank you. Wi-Fi: teratai')
+    await type('input[name=receipt_tax_id]', '01.234.567.8-901.000')
+    const copies = document.body.querySelector('[data-testid=receipt-copies]') as HTMLSelectElement
+    copies.value = '2'
+    copies.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    await body('[data-testid=outlet-save]').trigger('click')
+    await flushPromises()
+    const sent = (PUT.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body
+    expect(sent).toMatchObject({ receipt_footer: 'Thank you. Wi-Fi: teratai', receipt_tax_id: '01.234.567.8-901.000', receipt_copies: 2, receipt_hotel: null, receipt_address: null, receipt_title: null })
+  })
+
   it('shows the field errors of the server in the form', async () => {
     setup(PosOutletsView)
     await flushPromises()
@@ -146,7 +166,33 @@ describe('the stations and printers', () => {
     await body('[data-testid=station-save]').trigger('click')
     await flushPromises()
     expect(POST.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/pos/stations')
-    expect((POST.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toMatchObject({ code: 'BAR', name: 'Bar', kds_enabled: false, late_after_minutes: 15 })
+    expect((POST.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toMatchObject({ code: 'BAR', name: 'Bar', kds_enabled: false, late_after_minutes: 15, ticket_copies: 1 })
+  })
+
+  it('asks how many copies of a ticket a station prints, and assigns a printer to a device', async () => {
+    setup(PosStationsView)
+    await flushPromises()
+    await body('[data-testid=station-edit-KITCHEN]').trigger('click')
+    await flushPromises()
+    const copies = document.body.querySelector('[data-testid=ticket-copies]') as HTMLSelectElement
+    copies.value = '3'
+    copies.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    await body('[data-testid=station-save]').trigger('click')
+    await flushPromises()
+    expect((PUT.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toMatchObject({ name: 'Main kitchen', ticket_copies: 3 })
+    // the printer is served by an agent
+    PUT.mockClear()
+    await body('[data-testid=printer-9] button').trigger('click')
+    await flushPromises()
+    const device = document.body.querySelector('[data-testid=printer-device]') as HTMLSelectElement
+    expect([...device.options].map((o) => o.textContent?.trim())).toEqual(['Not assigned', 'Kasir Lobby'])
+    device.value = '4'
+    device.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    await body('[data-testid=printer-save]').trigger('click')
+    await flushPromises()
+    expect((PUT.mock.calls[0] as [string, { body: Record<string, unknown> }])[1].body).toMatchObject({ device_id: 4 })
   })
 })
 

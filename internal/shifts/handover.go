@@ -58,6 +58,16 @@ type Report struct {
 	HandedOverToName string          `json:"handed_over_to_name,omitempty"`
 	CashPayments     []ReportPayment `json:"cash_payments"`
 	OtherTenders     []Tender        `json:"other_tenders"`
+	// DrawerOpens are the times the drawer was opened without a sale during the shift, with who and why (point of sale, docs/architecture/34-pos.md 20).
+	DrawerOpens []DrawerOpen `json:"drawer_opens"`
+}
+
+// DrawerOpen is one opening of the drawer without a sale.
+type DrawerOpen struct {
+	ID       int64     `json:"id"`
+	OpenedAt time.Time `json:"opened_at"`
+	Reason   string    `json:"reason"`
+	OpenedBy string    `json:"opened_by"`
 }
 
 // Cashiers lists the users the drawer can be handed to (cashier.shift): the people of the property who can run a shift, except the caller.
@@ -120,7 +130,7 @@ func (s *Service) Report(ctx context.Context, propertyID, id int64) (Report, err
 		return Report{}, err
 	}
 	q := s.q(ctx)
-	rep := Report{Kind: "X", Shift: sh, CashPayments: []ReportPayment{}, OtherTenders: []Tender{}}
+	rep := Report{Kind: "X", Shift: sh, CashPayments: []ReportPayment{}, OtherTenders: []Tender{}, DrawerOpens: []DrawerOpen{}}
 	until := s.clock.Now()
 	if sh.Status == StatusClosed {
 		rep.Kind = "Z"
@@ -169,6 +179,13 @@ func (s *Service) Report(ctx context.Context, propertyID, id int64) (Report, err
 	}
 	for _, t := range tenders {
 		rep.OtherTenders = append(rep.OtherTenders, Tender{Method: t.Method, Kind: t.PaymentType, Count: int(t.N), Amount: fixed(t.Amount, decimals)})
+	}
+	opens, err := q.ShiftDrawerOpens(ctx, shiftsdb.ShiftDrawerOpensParams{TenantID: p.TenantID, PropertyID: propertyID, ShiftID: &id})
+	if err != nil {
+		return Report{}, err
+	}
+	for _, o := range opens {
+		rep.DrawerOpens = append(rep.DrawerOpens, DrawerOpen{ID: o.ID, OpenedAt: o.OpenedAt, Reason: o.Reason, OpenedBy: o.OpenedBy})
 	}
 	return rep, nil
 }

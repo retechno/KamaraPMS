@@ -34,6 +34,7 @@ const catalog = {
   ],
 }
 
+let outletOver: object = {}
 const mounted: VueWrapper[] = []
 const body = (sel: string) => new DOMWrapper(document.body.querySelector(sel) as Element)
 const has = (sel: string) => document.body.querySelector(sel) !== null
@@ -46,7 +47,7 @@ function setup(current = bill(), permissions = ['pos.order', 'pos.cashier', 'pos
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/pos/bills/{id}')) return { data: current }
     if (path.endsWith('/catalog')) return { data: catalog }
-    if (path.endsWith('/pos/outlets/{id}')) return { data: { id: 1, drawer: 'D1', allow_room_charge: true, allow_company_charge: false } }
+    if (path.endsWith('/pos/outlets/{id}')) return { data: { id: 1, drawer: 'D1', allow_room_charge: true, allow_company_charge: false, order_mode: 'PRINT', receipt_printer_id: null, ...outletOver } }
     return { data: null }
   })
   POST = vi.fn(async () => ({ data: current }))
@@ -62,6 +63,7 @@ function setup(current = bill(), permissions = ['pos.order', 'pos.cashier', 'pos
 }
 
 beforeEach(async () => {
+  outletOver = {}
   await setLocale('en')
 })
 afterEach(() => {
@@ -207,6 +209,61 @@ describe('the order and the bill', () => {
     expect(w.get('[data-testid=bill-closed]').text()).toContain('paid')
     expect(w.find('[data-testid=reopen]').exists()).toBe(true)
     expect(w.find('[data-testid=send]').exists()).toBe(false)
+  })
+
+  it('prints an open bill at the receipt printer of the outlet, and keeps the browser as a second way', async () => {
+    outletOver = { receipt_printer_id: 3 }
+    const w = await setup()
+    await flushPromises()
+    expect(w.find('[data-testid=print-browser]').exists()).toBe(true)
+    await w.get('[data-testid=print]').trigger('click')
+    await flushPromises()
+    const call = POST.mock.calls.find((c) => String(c[0]).endsWith('/bills/{id}/print'))!
+    expect(call[1]).toMatchObject({ params: { path: { propertyId: 7, id: 10 } }, body: {} })
+    expect(w.get('[data-testid=bill-notice]').text()).toBe('The bill was sent to the printer.')
+  })
+
+  it('asks for a reason before a receipt is printed again, and says COPY in the notice', async () => {
+    outletOver = { receipt_printer_id: 3 }
+    const w = await setup(bill({ status: 'CLOSED', totals: totals({ sold: '121000', drafts: '0', payable: '0', balance: '0', paid: '121000' }), lines: [line({ id: 2, status: 'SENT', round: 1 })] }))
+    await flushPromises()
+    expect(w.get('[data-testid=print]').text()).toBe('Reprint the receipt')
+    await w.get('[data-testid=print]').trigger('click')
+    await flushPromises()
+    expect(POST.mock.calls.some((c) => String(c[0]).endsWith('/print'))).toBe(false)
+    expect((body('[data-testid=print-submit]').element as HTMLButtonElement).disabled).toBe(true)
+    const input = document.body.querySelector('[data-testid=print-reason]') as HTMLInputElement
+    input.value = 'the guest lost it'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+    await body('[data-testid=print-submit]').trigger('click')
+    await flushPromises()
+    const call = POST.mock.calls.find((c) => String(c[0]).endsWith('/bills/{id}/print'))!
+    expect(call[1].body).toEqual({ reason: 'the guest lost it' })
+    expect(w.get('[data-testid=bill-notice]').text()).toBe('A copy of the receipt was sent to the printer.')
+  })
+
+  it('prints from the browser when the outlet has no receipt printer, or the server says so', async () => {
+    const open = vi.fn(() => null)
+    vi.stubGlobal('open', open)
+    const w = await setup() // no receipt printer
+    await flushPromises()
+    expect(w.find('[data-testid=print-browser]').exists()).toBe(false)
+    await w.get('[data-testid=print]').trigger('click')
+    await flushPromises()
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(POST.mock.calls.some((c) => String(c[0]).endsWith('/print'))).toBe(false)
+    // the outlet had a printer a moment ago and has none now: the answer of the server sends the page to the browser
+    outletOver = { receipt_printer_id: 3 }
+    const w2 = await setup()
+    await flushPromises()
+    POST = vi.fn(async () => {
+      throw new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'OUTLET_NO_RECEIPT_PRINTER', detail: 'none' })
+    })
+    await w2.get('[data-testid=print]').trigger('click')
+    await flushPromises()
+    expect(open).toHaveBeenCalledTimes(2)
+    vi.unstubAllGlobals()
   })
 
   it('says the bill is not open any more when a payment came first', async () => {

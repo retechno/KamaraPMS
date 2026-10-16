@@ -764,6 +764,13 @@ func (s *Service) RequestBill(ctx context.Context, propertyID, billID int64) (Bi
 		if err := s.q(ctx).SetBillRequested(ctx, posdb.SetBillRequestedParams{TenantID: p.TenantID, PropertyID: propertyID, ID: billID, At: s.clock.Now(), ActorID: p.ActorID()}); err != nil {
 			return err
 		}
+		o, err := s.outletOf(ctx, p.TenantID, propertyID, b.OutletID)
+		if err != nil {
+			return err
+		}
+		if err := s.queuePrebill(ctx, p, propertyID, o, billID); err != nil { // the bill on paper, "BUKAN STRUK"
+			return err
+		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &day.BusinessDate, UserID: p.ActorID(), Action: "pos.bill_requested",
 			EntityType: "pos_bill", EntityID: billID, EntityLabel: deref(b.BillNumber)})
 	})

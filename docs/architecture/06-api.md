@@ -920,3 +920,27 @@ Folios: `GET {P}/folios` takes `folio_type=OUTLET` and `outlet_id`; without a `f
 | `GET {P}/pos/print-jobs` | `pos.manage` or `pos.cashier` | `printer_id`, `status`, `limit`; `{jobs, queued}` |
 
 An event type is one of `table.updated`, `bill.updated`, `bill.closed`, `ticket.created`, `ticket.updated`, `product.sold_out`, `print_job.updated`, `folio_lock.changed`, `outlet_charge.attempted`. The `410` is the new kind `gone` of the problem answers.
+
+### 24.3 POS: the print agent, the paper and the drawer (`34-pos.md` 20, PR 3b)
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET {P}/pos/devices` | `pos.manage` or `pos.cashier` | the agents with `online` and `pending_enrollments`; never a token |
+| `POST {P}/pos/devices/enrollments` | `pos.manage` | 201 `{code, expires_at, expires_in_seconds}`; shown once, 15 minutes |
+| `POST {P}/pos/devices/{id}/revoke` | `pos.manage` | 409 `DEVICE_REVOKED` when it already is |
+| `POST {P}/pos/devices/{id}/rotate-token` | `pos.manage` | `{device, token}`; the token is shown once |
+| `GET {P}/pos/outlets/{id}/failed-print-jobs` | `pos.cashier` or `pos.manage` | the last two days, not printed again |
+| `POST {P}/pos/print-jobs/{id}/reprint` | `pos.cashier` | `{reason, printer_id?}`; 409 `PRINT_DOCUMENT_PURGED`, `PRINT_JOB_NOT_REPRINTABLE` |
+| `POST {P}/pos/bills/{id}/print` | `pos.cashier` | `{reason?}` (required for a paid bill); 409 `OUTLET_NO_RECEIPT_PRINTER` |
+| `POST {P}/pos/outlets/{id}/drawer/open` | `pos.cashier` | `{reason}`; answers `{id, job_id}`; 409 `NO_OPEN_SHIFT`, `OUTLET_NO_CASH` |
+| `POST /api/v1/device/enroll` | a code, no token | 201 `{device_id, token, poll_seconds, property_id}`; 422 `ENROLLMENT_CODE_INVALID`; 429 |
+| `GET /api/v1/device/config` | device token | the printers of the device and their `connection_info` |
+| `GET /api/v1/device/jobs/next?wait=` | device token | long poll up to 30 s; 200 `{id, printer_id, kind, copy_no, attempt, payload (base64), connection_info, lease_until}` or 204 |
+| `POST /api/v1/device/jobs/{id}/result` | device token | `{status PRINTED|FAILED, error_code, printer_status, attempt}`; idempotent; 409 `JOB_LEASE_LOST` |
+| `POST /api/v1/device/heartbeat` | device token | `{printers: [{id, status}], queue_depth, agent_version}`; answers the configuration |
+
+The device routes take **only** the token of a device (`kpd_...`): a user's token is 401 `DEVICE_TOKEN_INVALID` there and a device's token is 401 on every
+other route. They are classified POS for the module gate (403 `MODULE_NOT_IN_PLAN`), and in a read-only subscription the claim, the result and the
+heartbeat are refused like any write (403 `SUBSCRIPTION_READ_ONLY`). The outlet carries `receipt_title`, `receipt_hotel`, `receipt_address`,
+`receipt_tax_id`, `receipt_footer`, `receipt_copies`; a station `ticket_copies`; a printer `device_id`, `last_status` and the derived `state`; the
+report of an outlet and the report of a shift `drawer_opens`.

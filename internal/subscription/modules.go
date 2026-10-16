@@ -97,6 +97,10 @@ func ModuleOf(pattern string) (Module, bool) {
 	if path == "/api/v1/properties/{propertyId}" {
 		return Core, true
 	}
+	// the routes of a print agent (a token of a device, not of a user): the POS module (docs/architecture/34-pos.md 10.3 and 20)
+	if strings.HasPrefix(path, "/api/v1/device/") {
+		return POS, true
+	}
 	for _, p := range tenantCore {
 		if path == strings.TrimSuffix(p, "/") || strings.HasPrefix(path, strings.TrimSuffix(p, "/")+"/") {
 			return Core, true

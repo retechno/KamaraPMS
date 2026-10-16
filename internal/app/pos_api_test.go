@@ -112,6 +112,8 @@ func TestPOSRoutesBelongToThePOSModule(t *testing.T) {
 		"POST /api/v1/properties/{propertyId}/pos/tickets/{id}/status":      subscription.POS,
 		"GET /api/v1/properties/{propertyId}/folios/{id}/outlet-lock":       subscription.POS,
 		"POST /api/v1/properties/{propertyId}/folios/{id}/outlet-lock/lock": subscription.POS,
+		"GET /api/v1/device/jobs/next":                                      subscription.POS,
+		"POST /api/v1/properties/{propertyId}/pos/devices/enrollments":      subscription.POS,
 		"GET /api/v1/properties/{propertyId}/folios/{id}":                   subscription.Core,
 		"POST /api/v1/properties/{propertyId}/folios/{id}/transfer-items":   subscription.Core,
 	} {

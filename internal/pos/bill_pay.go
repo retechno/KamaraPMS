@@ -316,6 +316,9 @@ func (s *Service) PayBill(ctx context.Context, propertyID, billID int64, key str
 		if err != nil {
 			return err
 		}
+		if err := s.queueReceiptJobs(ctx, p, propertyID, o, billID, paidEvent{Cash: cash.IsPositive(), Tendered: tendered, Change: change, Room: roomLine != nil}); err != nil {
+			return err
+		}
 		methods := make([]string, 0, len(in.Payments))
 		for _, l := range in.Payments {
 			methods = append(methods, l.Method+":"+l.Amount.String())

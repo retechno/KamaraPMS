@@ -8,6 +8,7 @@ import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import PosPrintStatus from '@/components/pos/PosPrintStatus.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -208,6 +209,10 @@ const minutesText = (m: number): string => t('posFloor.minutes', { n: m })
     </template>
   </PageHeader>
   <ErrorNotice v-if="error ?? outletsError" :error="(error ?? outletsError)!" inline />
+  <PosPrintStatus
+    v-if="pid !== null && outlet" class="mb-3" :property-id="pid" :outlet-id="outlet.id" :receipt-printer-id="outlet.receipt_printer_id ?? null" :order-mode="outlet.order_mode"
+    :can-reprint="canCashier"
+  />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <EmptyState v-else-if="loaded && outlets.length === 0" :icon="Store" :title="t('posFloor.noOutlet')" :description="t('posFloor.noOutletHint')" data-testid="no-outlet" />
 

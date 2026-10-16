@@ -3,13 +3,14 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, PosBill, PosBillLine, PosBillSummary, PosCatalog } from '@/api/types'
+import type { Approval, PosBill, PosBillLine, PosBillSummary, PosCatalog, PosOutlet } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import PosPayDialog from '@/components/pos/PosPayDialog.vue'
+import PosPrintStatus from '@/components/pos/PosPrintStatus.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -94,6 +95,62 @@ usePosEvents({
   onReload: () => void loadBill(true),
 })
 watch(() => bill.value?.outlet_id, (id) => { if (id && !catalog.value) void loadCatalog(id) })
+
+// The outlet of the bill: whether it has a receipt printer decides whether Print goes to the printer or to the browser (which can always print).
+const outletInfo = ref<PosOutlet | null>(null)
+watch(() => bill.value?.outlet_id, async (id) => {
+  const propertyId = pid.value
+  if (!id || propertyId === null) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/pos/outlets/{id}', { params: { path: { propertyId, id } } })
+    outletInfo.value = data ?? null
+  } catch {
+    outletInfo.value = null
+  }
+}, { immediate: true })
+
+// ---- the paper: a pre-bill while the bill is open, a copy of the receipt (with a reason) after it is paid
+const printDialog = ref(false)
+const printReason = ref('')
+const printError = ref<ApiError | null>(null)
+async function printPaper(): Promise<void> {
+  const b = bill.value
+  if (!b) return
+  if (!outletInfo.value?.receipt_printer_id) {
+    printReceipt(b, t) // no receipt printer: the browser prints
+    return
+  }
+  if (b.status !== 'OPEN') {
+    printReason.value = ''
+    printError.value = null
+    printDialog.value = true
+    return
+  }
+  await sendPrint('')
+}
+async function sendPrint(reasonText: string): Promise<void> {
+  const propertyId = pid.value
+  const b = bill.value
+  if (propertyId === null || !b) return
+  busy.value = true
+  printError.value = null
+  try {
+    await api.POST('/api/v1/properties/{propertyId}/pos/bills/{id}/print', { params: { path: { propertyId, id: b.id } }, body: reasonText ? { reason: reasonText } : {} })
+    printDialog.value = false
+    notice.value = t(b.status === 'OPEN' ? 'posBill.prebillQueued' : 'posBill.copyQueued')
+  } catch (e) {
+    if (e instanceof ApiError && e.code === 'OUTLET_NO_RECEIPT_PRINTER') {
+      printDialog.value = false
+      printReceipt(b, t)
+    } else if (printDialog.value) {
+      printError.value = e instanceof ApiError ? e : null
+    } else {
+      error.value = e instanceof ApiError ? e : null
+    }
+  } finally {
+    busy.value = false
+  }
+}
 
 const products = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -415,6 +472,10 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
   </PageHeader>
   <ErrorNotice v-if="error" :error="error" inline data-testid="bill-error" />
   <p v-if="notice" class="notice" role="status" data-testid="bill-notice">{{ notice }}</p>
+  <PosPrintStatus
+    v-if="bill && pid !== null && outletInfo" class="mb-3" :property-id="pid" :outlet-id="bill.outlet_id" :receipt-printer-id="outletInfo.receipt_printer_id ?? null"
+    :order-mode="outletInfo.order_mode" :can-reprint="can('pos.cashier')"
+  />
 
   <div v-if="bill" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_26rem]">
     <!-- the menu -->
@@ -519,7 +580,8 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
         <Button type="button" :disabled="busy || drafts.length === 0" data-testid="send" @click="send">{{ t('posBill.send') }}</Button>
         <Button v-if="can('pos.cashier')" type="button" variant="default" :disabled="busy || bill.lines.length === 0" data-testid="pay" @click="openSheet({ kind: 'pay' })">{{ t('posBill.pay') }}</Button>
         <Button type="button" variant="outline" :disabled="busy || bill.lines.length === 0" data-testid="request" @click="requestBill">{{ t('posBill.request') }}</Button>
-        <Button type="button" variant="outline" :disabled="bill.lines.length === 0" data-testid="print" @click="printReceipt(bill, t)">{{ t('posBill.print') }}</Button>
+        <Button type="button" variant="outline" :disabled="busy || bill.lines.length === 0" data-testid="print" @click="printPaper">{{ t('posBill.print') }}</Button>
+        <Button v-if="outletInfo?.receipt_printer_id" type="button" variant="ghost" :disabled="bill.lines.length === 0" data-testid="print-browser" @click="printReceipt(bill, t)">{{ t('posBill.printBrowser') }}</Button>
         <Button v-if="can('pos.discount')" type="button" variant="outline" :disabled="busy || bill.lines.length === 0" data-testid="discount" @click="openSheet({ kind: 'discount' })">{{ t('posBill.discountAction') }}</Button>
         <Button v-if="can('pos.comp') && can('pos.cashier')" type="button" variant="outline" :disabled="busy || bill.lines.length === 0" data-testid="comp" @click="openSheet({ kind: 'comp' })">{{ t('posBill.comp') }}</Button>
         <Button type="button" variant="outline" :disabled="busy" data-testid="move-table" @click="openTableSheet">{{ t('posBill.moveTable') }}</Button>
@@ -528,11 +590,30 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
         <Button v-if="bill.lines.every((l) => l.status === 'DRAFT')" type="button" variant="ghost" :disabled="busy" data-testid="void-bill" @click="voidBill">{{ t('posBill.voidBill') }}</Button>
       </div>
       <div v-else class="mt-3 flex flex-wrap gap-2" data-testid="closed-actions">
-        <Button type="button" variant="outline" data-testid="print" @click="printReceipt(bill, t)">{{ t('posBill.print') }}</Button>
+        <Button type="button" variant="outline" :disabled="busy" data-testid="print" @click="printPaper">{{ outletInfo?.receipt_printer_id && can('pos.cashier') ? t('posBill.reprintReceipt') : t('posBill.print') }}</Button>
+        <Button v-if="outletInfo?.receipt_printer_id" type="button" variant="ghost" data-testid="print-browser" @click="printReceipt(bill, t)">{{ t('posBill.printBrowser') }}</Button>
         <Button v-if="bill.status === 'CLOSED' && can('pos.cashier') && can('folio.reopen')" type="button" variant="outline" data-testid="reopen" @click="openSheet({ kind: 'reopen' })">{{ t('posBill.reopen') }}</Button>
       </div>
     </aside>
   </div>
+
+  <!-- the reason of a copy of the receipt -->
+  <Dialog :open="printDialog" @update:open="(v) => (printDialog = v)">
+    <DialogContent class="max-w-md p-5" data-testid="print-dialog">
+      <DialogTitle>{{ t('posBill.reprintReceipt') }}</DialogTitle>
+      <DialogDescription class="mb-3 mt-1">{{ t('posBill.reprintHint') }}</DialogDescription>
+      <ErrorNotice v-if="printError" :error="printError" inline />
+      <form class="flex flex-col gap-3" novalidate @submit.prevent="sendPrint(printReason.trim())">
+        <FormField :label="t('posBill.reprintReason')" :error="printError?.fieldMessage('reason')">
+          <template #default="{ id }"><Input :id="id" v-model="printReason" name="reason" maxlength="200" autocomplete="off" data-testid="print-reason" /></template>
+        </FormField>
+        <div class="flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="printDialog = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="busy || !printReason.trim()" data-testid="print-submit">{{ t('posBill.reprintReceipt') }}</Button>
+        </div>
+      </form>
+    </DialogContent>
+  </Dialog>
 
   <!-- options of a product -->
   <Dialog v-if="optionsFor" :open="true" @update:open="(v) => { if (!v) optionsFor = null }">

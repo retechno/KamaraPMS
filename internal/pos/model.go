@@ -6,6 +6,7 @@ package pos
 import (
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -63,6 +64,13 @@ type Outlet struct {
 	IsActive                     bool            `json:"is_active"`
 	SortOrder                    int             `json:"sort_order"`
 	Version                      int32           `json:"version"`
+	// The paper (docs/architecture/34-pos.md 20): what an outlet leaves empty is taken from the property.
+	ReceiptTitle   *string `json:"receipt_title"`
+	ReceiptHotel   *string `json:"receipt_hotel"`
+	ReceiptAddress *string `json:"receipt_address"`
+	ReceiptTaxID   *string `json:"receipt_tax_id"`
+	ReceiptFooter  *string `json:"receipt_footer"`
+	ReceiptCopies  int     `json:"receipt_copies"`
 }
 
 // OutletInput creates or replaces an outlet (the whole form is sent). The code never changes.
@@ -88,6 +96,13 @@ type OutletInput struct {
 	IsActive                     *bool           `json:"is_active"`
 	SortOrder                    int             `json:"sort_order"`
 	Version                      int32           `json:"version"`
+	ReceiptTitle                 *string         `json:"receipt_title"`
+	ReceiptHotel                 *string         `json:"receipt_hotel"`
+	ReceiptAddress               *string         `json:"receipt_address"`
+	ReceiptTaxID                 *string         `json:"receipt_tax_id"`
+	ReceiptFooter                *string         `json:"receipt_footer"`
+	// ReceiptCopies is how many copies print when a bill is paid (0 to 5); absent keeps the value (1 for a new outlet).
+	ReceiptCopies *int `json:"receipt_copies"`
 }
 
 // Printer is a printer of the property; the agent reaches it (stage 3), the master only records it.
@@ -100,6 +115,13 @@ type Printer struct {
 	Codepage       string `json:"codepage"`
 	OpensDrawer    bool   `json:"opens_drawer"`
 	IsActive       bool   `json:"is_active"`
+	// The agent that serves it and what it last reported. State is derived when it is read: NO_DEVICE, UNKNOWN (never reported), OFFLINE (silent for
+	// more than 90 seconds, or the agent said so) or what the agent reported: ONLINE, PAPER_OUT, COVER_OPEN.
+	DeviceID         *int64     `json:"device_id"`
+	DeviceName       *string    `json:"device_name"`
+	LastStatus       *string    `json:"last_status"`
+	StatusReportedAt *time.Time `json:"status_reported_at"`
+	State            string     `json:"state"`
 }
 
 // PrinterInput creates or replaces a printer.
@@ -111,6 +133,7 @@ type PrinterInput struct {
 	Codepage       string `json:"codepage"`
 	OpensDrawer    bool   `json:"opens_drawer"`
 	IsActive       *bool  `json:"is_active"`
+	DeviceID       *int64 `json:"device_id"`
 }
 
 // Station is a place of production: a kitchen, a bar, a pastry.
@@ -123,6 +146,7 @@ type Station struct {
 	KDSEnabled       bool    `json:"kds_enabled"`
 	LateAfterMinutes int     `json:"late_after_minutes"`
 	IsActive         bool    `json:"is_active"`
+	TicketCopies     int     `json:"ticket_copies"`
 }
 
 // StationInput creates or replaces a station. The code never changes.
@@ -133,6 +157,8 @@ type StationInput struct {
 	KDSEnabled       bool   `json:"kds_enabled"`
 	LateAfterMinutes int    `json:"late_after_minutes"`
 	IsActive         *bool  `json:"is_active"`
+	// TicketCopies is how many copies of a ticket print (1 to 5); absent keeps the value (1 for a new station).
+	TicketCopies *int `json:"ticket_copies"`
 }
 
 // RuleRef is a tax or a service charge of a profile, with its rate as the configuration has it now.

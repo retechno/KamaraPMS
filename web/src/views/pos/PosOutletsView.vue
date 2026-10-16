@@ -55,12 +55,19 @@ interface Form {
   block_night_audit_with_open_bills: boolean
   is_active: boolean
   sort_order: number
+  receipt_title: string
+  receipt_hotel: string
+  receipt_address: string
+  receipt_tax_id: string
+  receipt_footer: string
+  receipt_copies: number
 }
 
 const blank = (): Form => ({
   id: null, version: 0, code: '', name: '', outlet_type: 'RESTAURANT', order_mode: 'PRINT', department_id: 0, rule_profile_id: 0, price_list_id: 0, drawer: '', receipt_printer_id: 0,
   uses_tables: true, guest_count_required: false, rounding_unit: 0, allow_room_charge: true, allow_company_charge: false, allow_comp: false, comp_treatment: 'PAYMENT_COMP',
   max_discount_pct_no_approval: '0', block_night_audit_with_open_bills: false, is_active: true, sort_order: 0,
+  receipt_title: '', receipt_hotel: '', receipt_address: '', receipt_tax_id: '', receipt_footer: '', receipt_copies: 1,
 })
 const form = reactive<Form>(blank())
 const dialog = ref(false)
@@ -112,6 +119,8 @@ function openEdit(o: PosOutlet): void {
     price_list_id: o.price_list_id, drawer: o.drawer ?? '', receipt_printer_id: o.receipt_printer_id ?? 0, uses_tables: o.uses_tables, guest_count_required: o.guest_count_required,
     rounding_unit: o.rounding_unit, allow_room_charge: o.allow_room_charge, allow_company_charge: o.allow_company_charge, allow_comp: o.allow_comp, comp_treatment: o.comp_treatment,
     max_discount_pct_no_approval: o.max_discount_pct_no_approval, block_night_audit_with_open_bills: o.block_night_audit_with_open_bills, is_active: o.is_active, sort_order: o.sort_order,
+    receipt_title: o.receipt_title ?? '', receipt_hotel: o.receipt_hotel ?? '', receipt_address: o.receipt_address ?? '', receipt_tax_id: o.receipt_tax_id ?? '',
+    receipt_footer: o.receipt_footer ?? '', receipt_copies: o.receipt_copies ?? 1,
   })
   formError.value = null
   dialog.value = true
@@ -129,6 +138,8 @@ async function save(): Promise<void> {
     allow_company_charge: form.allow_company_charge, allow_comp: form.allow_comp, comp_treatment: form.comp_treatment as 'PAYMENT_COMP' | 'DISCOUNT_100',
     max_discount_pct_no_approval: form.max_discount_pct_no_approval.trim() || '0', block_night_audit_with_open_bills: form.block_night_audit_with_open_bills, is_active: form.is_active,
     sort_order: form.sort_order, version: isNew.value ? undefined : form.version,
+    receipt_title: form.receipt_title.trim() || null, receipt_hotel: form.receipt_hotel.trim() || null, receipt_address: form.receipt_address.trim() || null,
+    receipt_tax_id: form.receipt_tax_id.trim() || null, receipt_footer: form.receipt_footer.trim() || null, receipt_copies: form.receipt_copies,
   }
   try {
     if (isNew.value) {
@@ -278,6 +289,36 @@ watch(pid, load, { immediate: true })
         <FormField :label="t('pos.outlets.maxDiscount')" :hint="t('pos.outlets.maxDiscountHint')" :error="fieldError('max_discount_pct_no_approval')">
           <template #default="{ id }"><Input :id="id" v-model="form.max_discount_pct_no_approval" name="max_discount_pct_no_approval" inputmode="decimal" class="max-w-32" /></template>
         </FormField>
+
+        <!-- the paper: the head and the foot of a receipt, and how many copies print when a bill is paid -->
+        <fieldset class="m-0 rounded-lg border border-border p-3" data-testid="receipt-paper">
+          <legend class="px-1 text-sm font-semibold">{{ t('pos.outlets.paper') }}</legend>
+          <p class="m-0 mb-3 text-xs text-muted-foreground">{{ t('pos.outlets.paperHint') }}</p>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <FormField :label="t('pos.outlets.receiptHotel')" :error="fieldError('receipt_hotel')">
+              <template #default="{ id }"><Input :id="id" v-model="form.receipt_hotel" name="receipt_hotel" maxlength="200" :placeholder="t('pos.outlets.fromProperty')" /></template>
+            </FormField>
+            <FormField :label="t('pos.outlets.receiptTitle')" :error="fieldError('receipt_title')">
+              <template #default="{ id }"><Input :id="id" v-model="form.receipt_title" name="receipt_title" maxlength="100" :placeholder="form.name || t('pos.outlets.name')" /></template>
+            </FormField>
+            <FormField :label="t('pos.outlets.receiptAddress')" :error="fieldError('receipt_address')">
+              <template #default="{ id }"><Input :id="id" v-model="form.receipt_address" name="receipt_address" maxlength="300" :placeholder="t('pos.outlets.fromProperty')" /></template>
+            </FormField>
+            <FormField :label="t('pos.outlets.receiptTaxId')" :error="fieldError('receipt_tax_id')">
+              <template #default="{ id }"><Input :id="id" v-model="form.receipt_tax_id" name="receipt_tax_id" maxlength="40" :placeholder="t('pos.outlets.fromProperty')" /></template>
+            </FormField>
+            <FormField class="sm:col-span-2" :label="t('pos.outlets.receiptFooter')" :hint="t('pos.outlets.receiptFooterHint')" :error="fieldError('receipt_footer')">
+              <template #default="{ id }"><Input :id="id" v-model="form.receipt_footer" name="receipt_footer" maxlength="300" /></template>
+            </FormField>
+            <FormField :label="t('pos.outlets.receiptCopies')" :hint="t('pos.outlets.receiptCopiesHint')" :error="fieldError('receipt_copies')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model.number="form.receipt_copies" name="receipt_copies" data-testid="receipt-copies">
+                  <option v-for="n in [0, 1, 2, 3, 4, 5]" :key="n" :value="n">{{ n === 0 ? t('pos.outlets.noCopies') : n }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+          </div>
+        </fieldset>
 
         <div class="flex justify-end gap-2">
           <Button type="button" variant="outline" @click="dialog = false">{{ t('common.cancel') }}</Button>

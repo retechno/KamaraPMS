@@ -151,3 +151,10 @@ ORDER BY 1, 2;
 -- The names of the users on a report (who closed, who approved, who gets the drawer).
 -- name: UserNames :many
 SELECT u.id, COALESCE(u.full_name, '')::text AS full_name FROM users u WHERE u.tenant_id = @tenant_id AND u.id = ANY(@ids::bigint[]);
+
+-- The times the drawer of this shift was opened without a sale by the point of sale (docs/architecture/34-pos.md 20): who, when and why.
+-- name: ShiftDrawerOpens :many
+SELECT d.id, d.opened_at, d.reason, u.full_name AS opened_by
+FROM pos_drawer_opens d JOIN users u ON u.id = d.opened_by
+WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id AND d.shift_id = @shift_id
+ORDER BY d.opened_at, d.id;
