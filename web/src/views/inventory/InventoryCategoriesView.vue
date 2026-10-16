@@ -61,9 +61,10 @@ const columns = computed<Column<InventoryCategory>[]>(() => [
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <DataTable
-    v-else :columns="columns" :rows="categories" row-key="id" :loading="!loaded" :clickable="canManage" :empty-title="t('inventory.categories.empty')" :empty-description="t('emptyState.inventoryCategories')"
+    v-else :columns="columns" :rows="categories" row-key="id" :loading="!loaded" :empty-title="t('inventory.categories.empty')" :empty-description="t('emptyState.inventoryCategories')"
     :row-to="(r) => (canManage ? `/inventory/categories/${r.id}` : undefined)" :row-test-id="(r) => `category-${r.code}`" data-testid="categories-table"
   >
+    <template #cell-code="{ row }"><RouterLink v-if="canManage" :to="`/inventory/categories/${row.id}`" class="text-primary hover:underline">{{ row.code }}</RouterLink><template v-else>{{ row.code }}</template></template>
     <template #cell-kind="{ row }">{{ t(`inventory.categoryKind.${row.kind}`) }}</template>
     <template #cell-inventory_account_code="{ row }">{{ row.inventory_account_code }} <span class="text-xs text-muted-foreground">{{ row.inventory_account_name }}</span></template>
     <template #cell-cogs_account_code="{ row }">{{ row.cogs_account_code ?? '—' }}</template>

@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { formatMoney } from '@/utils/format'
+import { formatDateShort, formatMoney } from '@/utils/format'
 import { formatQty } from '@/utils/inventory'
 
 /**
@@ -86,11 +86,14 @@ watch(items, () => {
   if (!belowMin.value && !q.value && category.value === null) belowMinCount.value = items.value.filter((i) => i.below_min).length
 })
 
+// With the panel open there is less room: the warehouses that hold nothing of the items listed are left out (the table also scrolls inside its box).
+const shownWarehouses = computed(() => (selected.value ? warehouses.value.filter((w) => items.value.some((i) => i.stock.some((s) => s.warehouse_id === w.id && s.qty !== '0'))) : warehouses.value))
+
 const columns = computed<Column<InventoryItem>[]>(() => [
   { key: 'code', label: t('inventory.items.code'), class: 'whitespace-nowrap font-medium' },
-  { key: 'name', label: t('inventory.items.item') },
+  { key: 'name', label: t('inventory.items.item'), class: 'min-w-48' },
   { key: 'stock_unit_code', label: t('inventory.items.unit') },
-  ...warehouses.value.map((w): Column<InventoryItem> => ({ key: `w_${w.id}`, label: w.name, align: 'right', hideOnMobile: true })),
+  ...shownWarehouses.value.map((w): Column<InventoryItem> => ({ key: `w_${w.id}`, label: w.name, align: 'right', hideOnMobile: true })),
   { key: 'value_on_hand', label: t('inventory.items.value'), align: 'right', format: 'money' },
   { key: 'status', label: t('inventory.items.status') },
 ])
@@ -165,10 +168,10 @@ const cardTo = computed(() => (selected.value && cardWarehouse.value ? `/invento
         :columns="columns" :rows="items" row-key="id" :loading="!loaded" clickable :empty-title="q || category !== null || belowMin ? t('inventory.items.emptyFiltered') : t('inventory.items.empty')"
         :empty-description="t('emptyState.inventoryItems')" :row-test-id="(r) => `item-${r.code}`" :row-class="(r) => (selected?.id === r.id ? 'bg-muted/60' : undefined)" data-testid="items-table" @row-click="select"
       >
-        <template v-for="w in warehouses" :key="w.id" #[`cell-w_${w.id}`]="{ row }">
+        <template v-for="w in shownWarehouses" :key="w.id" #[`cell-w_${w.id}`]="{ row }">
           <span :class="negative(row, w.id) ? 'font-medium text-destructive' : ''">{{ stockOf(row, w.id) }}</span>
         </template>
-        <template #cell-name="{ row }">{{ row.name }}</template>
+        <template #cell-name="{ row }"><span class="block max-w-72 truncate" :title="row.name">{{ row.name }}</span></template>
         <template #cell-status="{ row }">
           <Badge v-if="row.below_zero" variant="destructive">{{ t('inventory.items.badgeBelowZero') }}</Badge>
           <Badge v-else-if="row.below_min" variant="warning">{{ t('inventory.items.badgeBelowMin') }}</Badge>
@@ -222,7 +225,7 @@ const cardTo = computed(() => (selected.value && cardWarehouse.value ? `/invento
       </div>
       <ul class="m-0 list-none p-0 text-sm" data-testid="panel-card">
         <li v-for="l in lastLines" :key="l.movement_id" class="flex justify-between gap-2 border-b border-border py-1 last:border-0">
-          <span class="min-w-0 truncate"><span class="text-muted-foreground">{{ l.business_date.slice(5) }}</span> {{ t(`inventory.kind.${l.kind}`) + (l.document_number ? ' ' + l.document_number : '') }}</span>
+          <span class="min-w-0 truncate"><span class="text-muted-foreground">{{ formatDateShort(l.business_date) }}</span> {{ t(`inventory.kind.${l.kind}`) + (l.document_number ? ' ' + l.document_number : '') }}</span>
           <strong :class="l.qty.startsWith('-') ? 'text-destructive' : ''">{{ l.qty.startsWith('-') ? '' : '+' }}{{ formatQty(l.qty) }}</strong>
         </li>
         <li v-if="card && lastLines.length === 0" class="py-1 text-muted-foreground">{{ t('inventory.items.cardEmpty') }}</li>

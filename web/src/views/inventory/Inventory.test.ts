@@ -7,12 +7,15 @@ import { resetDepartments } from '@/composables/useDepartments'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import InventoryCategoriesView from './InventoryCategoriesView.vue'
 import InventoryCategoryFormView from './InventoryCategoryFormView.vue'
 import InventoryCostingView from './InventoryCostingView.vue'
 import InventoryItemFormView from './InventoryItemFormView.vue'
 import InventoryItemsView from './InventoryItemsView.vue'
 import InventoryOpeningView from './InventoryOpeningView.vue'
+import InventoryUnitsView from './InventoryUnitsView.vue'
 import InventoryWarehouseFormView from './InventoryWarehouseFormView.vue'
+import InventoryWarehousesView from './InventoryWarehousesView.vue'
 
 let GET = vi.fn()
 let POST = vi.fn()
@@ -154,6 +157,8 @@ describe('items and stock', () => {
     expect(stock).toContain('average 49,500')
     expect(stock).toContain('Minimum Gudang Bar 12')
     const cardText = body('[data-testid=panel-card]').text()
+    expect(cardText).toContain('2 Sep')
+    expect(cardText).not.toContain('09-02')
     expect(cardText).toContain('POS sale')
     expect(cardText).toContain('Opening stock OPN-000001')
     await body('[data-testid=panel-close]').trigger('click')
@@ -329,15 +334,16 @@ describe('the opening stock', () => {
     expect(body('[data-testid=line-value-0]').text()).toBe('3,000,000')
   })
 
-  it('refuses a cost with more decimals than the currency and a quantity of zero', async () => {
+  it('refuses a quantity of zero, and the cost field takes the digits and separators of the currency', async () => {
     await setup(InventoryOpeningView, undefined, '/inventory/openings/new')
     await fill()
     await type('input[name=qty_0]', '0')
     await type('input[name=cost_0]', '10')
     expect(body('[data-testid=opening-post]').attributes('disabled')).toBeDefined()
     await type('input[name=qty_0]', '1')
-    await type('input[name=cost_0]', '10.5') // IDR has no decimals
-    expect(body('[data-testid=opening-post]').attributes('disabled')).toBeDefined()
+    expect(body('[data-testid=opening-post]').attributes('disabled')).toBeUndefined()
+    await type('input[name=cost_0]', '1234567')
+    expect((body('input[name=cost_0]').element as HTMLInputElement).value).toBe('1,234,567') // grouped as typed; IDR has no decimals
   })
 
   it('shows a posted opening as a read only document', async () => {
@@ -390,5 +396,28 @@ describe('costing', () => {
     await flushPromises()
     expect(PUT.mock.calls[0]![1].body.costing_method).toBe('FIFO')
     expect(PUT.mock.calls[0]![1].body.version).toBe(1)
+  })
+})
+
+describe('the lists of the masters', () => {
+  it.each([
+    [InventoryCategoriesView, 'category-', '/inventory/categories', categories[0]!],
+    [InventoryWarehousesView, 'warehouse-', '/inventory/warehouses', warehouses[0]!],
+    [InventoryUnitsView, 'unit-', '/inventory/units', units[0]!],
+  ])('open the page of a row when it is clicked and have a link in the code for the keyboard', async (view, prefix, path, first) => {
+    await setup(view, undefined, path)
+    const row = body(`[data-testid=${prefix}${first.code}]`)
+    expect(row.find('a').exists()).toBe(true)
+    await row.find('td:nth-child(2)').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe(`${path}/${first.id}`)
+  })
+
+  it('leave the page closed to who cannot manage the masters', async () => {
+    await setup(InventoryCategoriesView, ['inventory.view'], '/inventory/categories')
+    expect(body(`[data-testid=category-${categories[0]!.code}]`).find('a').exists()).toBe(false)
+    await body(`[data-testid=category-${categories[0]!.code}]`).find('td:nth-child(2)').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/inventory/categories')
   })
 })

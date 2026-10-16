@@ -23,6 +23,14 @@ export function formatBusinessDate(date: string): string {
   return month ? `${Number(m[3])} ${month} ${m[1]}` : date
 }
 
+/** "2026-09-30" -> "30 Sep" (a dense list of the open year). Invalid input is returned unchanged. */
+export function formatBusinessDateShort(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  if (!m) return date
+  const month = MONTHS[currentLocale()][Number(m[2]) - 1]
+  return month ? `${Number(m[3])} ${month}` : date
+}
+
 /** Wall-clock parts of an RFC 3339 timestamp, in the offset it carries. */
 export function wallClock(rfc3339: string): { date: string; time: string; offset: string } | null {
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.exec(rfc3339)

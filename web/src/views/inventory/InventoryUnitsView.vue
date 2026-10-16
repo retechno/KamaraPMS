@@ -57,9 +57,10 @@ const columns = computed<Column<InventoryUnit>[]>(() => [
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <DataTable
-    v-else :columns="columns" :rows="units" row-key="id" :loading="!loaded" :clickable="canManage" :empty-title="t('inventory.units.empty')" :empty-description="t('emptyState.inventoryUnits')"
+    v-else :columns="columns" :rows="units" row-key="id" :loading="!loaded" :empty-title="t('inventory.units.empty')" :empty-description="t('emptyState.inventoryUnits')"
     :row-to="(r) => (canManage ? `/inventory/units/${r.id}` : undefined)" :row-test-id="(r) => `unit-${r.code}`" data-testid="units-table"
   >
+    <template #cell-code="{ row }"><RouterLink v-if="canManage" :to="`/inventory/units/${row.id}`" class="text-primary hover:underline">{{ row.code }}</RouterLink><template v-else>{{ row.code }}</template></template>
     <template #cell-in_use="{ row }">{{ row.in_use ? t('common.yes') : t('common.no') }}</template>
     <template #cell-is_active="{ row }"><Badge :variant="row.is_active ? 'success' : 'outline'">{{ row.is_active ? t('common.active') : t('common.inactive') }}</Badge></template>
   </DataTable>

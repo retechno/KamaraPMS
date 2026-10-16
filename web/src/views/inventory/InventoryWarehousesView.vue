@@ -62,9 +62,10 @@ const columns = computed<Column<InventoryWarehouse>[]>(() => [
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <DataTable
-    v-else :columns="columns" :rows="warehouses" row-key="id" :loading="!loaded" :clickable="canManage" :empty-title="t('inventory.warehouses.empty')" :empty-description="t('emptyState.inventoryWarehouses')"
+    v-else :columns="columns" :rows="warehouses" row-key="id" :loading="!loaded" :empty-title="t('inventory.warehouses.empty')" :empty-description="t('emptyState.inventoryWarehouses')"
     :row-to="(r) => (canManage ? `/inventory/warehouses/${r.id}` : undefined)" :row-test-id="(r) => `warehouse-${r.code}`" data-testid="warehouses-table"
   >
+    <template #cell-code="{ row }"><RouterLink v-if="canManage" :to="`/inventory/warehouses/${row.id}`" class="text-primary hover:underline">{{ row.code }}</RouterLink><template v-else>{{ row.code }}</template></template>
     <template #cell-kind="{ row }">{{ t(`inventory.warehouseKind.${row.kind}`) }}</template>
     <template #cell-outlet_code="{ row }">{{ row.outlet_code ?? '—' }}</template>
     <template #cell-department_code="{ row }">{{ row.department_code ?? '—' }}</template>

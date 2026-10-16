@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { router } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { useSubscriptionStore } from '@/stores/subscription'
 
 // A page of setup needs the permission that manages what it shows (docs/architecture/33-setup-read-permissions.md): the menu leaves it out, and an address typed or kept goes to the home page.
 vi.mock('@/api/client', () => ({ api: { GET: vi.fn().mockResolvedValue({ data: { data: [] } }), POST: vi.fn() } }))
@@ -62,5 +63,34 @@ describe('the guard of the pages of setup', () => {
     expect(await goTo('/room-status')).toBe('/room-status')
     expect(await goTo('/housekeeping/my')).toBe('/housekeeping/my')
     expect(await goTo('/housekeeping')).toBe('/housekeeping')
+  })
+})
+
+// The pages of the inventory: every list and form of the masters is reachable by who works with the module, and the plan and the permission send everyone else home.
+describe('the guard of the pages of the inventory', () => {
+  const lists = ['/inventory/items', '/inventory/openings', '/inventory/warehouses', '/inventory/categories', '/inventory/units', '/inventory/costing']
+  const forms = ['/inventory/categories/new', '/inventory/categories/4', '/inventory/warehouses/new', '/inventory/units/new', '/inventory/items/new']
+
+  function plan(modules: string[]): void {
+    useSubscriptionStore().modules = modules
+  }
+
+  it('opens the lists to who reads the module and the forms to who manages it', async () => {
+    signIn(['inventory.view'])
+    plan(['INVENTORY'])
+    for (const path of lists) expect(await goTo(path), path).toBe(path)
+    for (const path of forms) expect(await goTo(path), path).toBe('/')
+    signIn(['inventory.manage'])
+    plan(['INVENTORY'])
+    for (const path of [...lists, ...forms]) expect(await goTo(path), path).toBe(path)
+  })
+
+  it('sends a person home when the plan has no inventory or the permission is missing', async () => {
+    signIn(['inventory.manage'])
+    plan(['CORE'])
+    expect(await goTo('/inventory/categories')).toBe('/')
+    signIn(['folio.read'])
+    plan(['INVENTORY'])
+    expect(await goTo('/inventory/categories')).toBe('/')
   })
 })

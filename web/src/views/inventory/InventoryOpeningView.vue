@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { InventoryItem, InventoryOpening, InventoryWarehouse } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
+import MoneyInput from '@/components/app/MoneyInput.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -219,7 +220,7 @@ const lineError = (i: number, f: string): string | undefined => formError.value?
               <p v-if="lineError(i, 'qty')" class="m-0 mt-1 text-xs text-destructive">{{ lineError(i, 'qty') }}</p>
             </td>
             <td class="py-2 pr-2">
-              <Input v-model="l.unit_cost" :name="`cost_${i}`" inputmode="decimal" class="w-32" :aria-label="t('inventory.openings.unitCost')" :aria-invalid="!!lineError(i, 'unit_cost')" />
+              <MoneyInput v-model="l.unit_cost" :name="`cost_${i}`" :decimals="decimals" class="w-32" :aria-label="t('inventory.openings.unitCost')" :aria-invalid="!!lineError(i, 'unit_cost')" />
               <p v-if="lineError(i, 'unit_cost')" class="m-0 mt-1 text-xs text-destructive">{{ lineError(i, 'unit_cost') }}</p>
             </td>
             <td class="py-2 pr-2 text-right" :data-testid="`line-value-${i}`">{{ lineValue(l) ? formatMoney(lineValue(l)) : '' }}</td>

@@ -57,7 +57,9 @@ const columns = computed<Column<InventoryOpening>[]>(() => [
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <DataTable
-    v-else :columns="columns" :rows="openings" row-key="id" :loading="!loaded" clickable :empty-title="t('inventory.openings.empty')" :empty-description="t('emptyState.inventoryOpenings')"
+    v-else :columns="columns" :rows="openings" row-key="id" :loading="!loaded" :empty-title="t('inventory.openings.empty')" :empty-description="t('emptyState.inventoryOpenings')"
     :row-to="(r) => `/inventory/openings/${r.id}`" :row-test-id="(r) => `opening-${r.number}`" data-testid="openings-table"
-  />
+  >
+    <template #cell-number="{ row }"><RouterLink :to="`/inventory/openings/${row.id}`" class="text-primary hover:underline">{{ row.number }}</RouterLink></template>
+  </DataTable>
 </template>
