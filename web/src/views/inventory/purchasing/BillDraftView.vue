@@ -33,6 +33,7 @@ interface Row {
   item: string
   code: string
   unit: string
+  stockUnit: string
   received: string
   billable: string
   po_price: string
@@ -95,7 +96,7 @@ async function load(): Promise<void> {
     rows.value = drafts.value.flatMap((d) =>
       d.lines
         .filter((l) => Number(l.billable_qty) > 0)
-        .map((l) => ({ receipt_id: d.receipt_id, receipt_line_no: l.line_no, receipt_number: d.receipt_number, item: l.item_name, code: l.item_code, unit: l.unit_code, received: l.qty, billable: l.billable_qty,
+        .map((l) => ({ receipt_id: d.receipt_id, receipt_line_no: l.line_no, receipt_number: d.receipt_number, item: l.item_name, code: l.item_code, unit: l.unit_code, stockUnit: l.stock_unit_code, received: l.qty, billable: l.billable_qty,
           po_price: l.unit_price, qty: trimZeros(l.billable_qty), price: l.unit_price, vat: '' })),
     )
     extras.value = []
@@ -169,6 +170,12 @@ watch(
   { deep: true },
 )
 
+// "288 botol ditagih · 768 botol masih di gudang → seluruh selisih masuk nilai stok": what is billed and what is still on hand, in the unit of the stock, and where the difference goes.
+function splitSentence(l: InventoryBillPreview['lines'][number]): string {
+  const unit = rows.value.find((r) => r.receipt_id === l.receipt_id && r.receipt_line_no === l.receipt_line_no)?.stockUnit ?? ''
+  const where = Number(l.ppv_part) === 0 ? 'splitAllStock' : Number(l.inventory_part) === 0 ? 'splitAllPpv' : 'splitPartStock'
+  return t('inventory.bill.splitOnHand', { item: l.item_name, billed: formatQty(l.billed_qty_stock), on: formatQty(l.on_hand_qty_stock), unit, where: t(`inventory.bill.${where}`) })
+}
 const previewOf = (r: Row) => preview.value?.lines.find((l) => l.receipt_id === r.receipt_id && l.receipt_line_no === r.receipt_line_no)
 const needsApproval = computed(() => !!preview.value?.approval_required)
 
@@ -246,7 +253,7 @@ const billsOfMatches = computed(() => {
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
 
-  <div v-else-if="loaded && drafts.length" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+  <div v-else-if="loaded && drafts.length" class="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_22rem]">
     <section class="flex min-w-0 flex-col gap-4">
       <ErrorNotice v-if="formError" :error="formError" inline data-testid="bill-error" />
 
@@ -257,11 +264,11 @@ const billsOfMatches = computed(() => {
           <FormField :label="t('inventory.bill.dueDate')" :hint="t('inventory.bill.dueHint')"><template #default="{ id }"><Input :id="id" v-model="head.due" type="date" name="due_date" /></template></FormField>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[56rem] text-sm" data-testid="bill-lines">
+          <table class="w-full min-w-[44rem] text-sm" data-testid="bill-lines">
             <thead>
               <tr class="text-left text-xs text-muted-foreground">
                 <th class="py-1 pr-2 font-medium">{{ t('inventory.bill.item') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.bill.received') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.bill.poPrice') }}</th>
-                <th class="py-1 pr-2 font-medium">{{ t('inventory.bill.invoiceQty') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.bill.invoicePrice') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.bill.difference') }}</th>
+                <th class="py-1 pr-2 font-medium">{{ t('inventory.bill.invoiceQty') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.bill.invoicePrice') }} / {{ t('inventory.bill.difference') }}</th>
                 <th class="py-1 font-medium">{{ t('inventory.bill.vat') }}</th>
               </tr>
             </thead>
@@ -271,8 +278,10 @@ const billsOfMatches = computed(() => {
                 <td class="py-2 pr-2 text-right">{{ formatQty(r.billable) }}<div v-if="r.billable !== r.received" class="text-xs text-muted-foreground">{{ t('inventory.bill.ofReceived', { qty: formatQty(r.received) }) }}</div></td>
                 <td class="py-2 pr-2 text-right">{{ formatMoney(r.po_price) }}</td>
                 <td class="py-2 pr-2"><QuantityInput v-model="r.qty" :name="`qty_${i}`" class="w-24" :aria-label="t('inventory.bill.invoiceQty')" /></td>
-                <td class="py-2 pr-2"><MoneyInput v-model="r.price" :name="`price_${i}`" :decimals="decimals" class="w-32" :aria-label="t('inventory.bill.invoicePrice')" /></td>
-                <td class="py-2 pr-2 text-right" :data-testid="`line-diff-${i}`"><span v-if="previewOf(r)" :class="Number(previewOf(r)!.price_variance) === 0 ? 'text-muted-foreground' : 'font-medium'">{{ Number(previewOf(r)!.price_variance) > 0 ? '+' : '' }}{{ formatMoney(previewOf(r)!.price_variance) }}</span></td>
+                <td class="py-2 pr-2">
+                  <MoneyInput v-model="r.price" :name="`price_${i}`" :decimals="decimals" class="w-32" :aria-label="t('inventory.bill.invoicePrice')" />
+                  <div class="mt-0.5 text-xs" :data-testid="`line-diff-${i}`"><span v-if="previewOf(r)" :class="Number(previewOf(r)!.price_variance) === 0 ? 'text-muted-foreground' : 'font-medium'">{{ t('inventory.bill.difference') }}: {{ Number(previewOf(r)!.price_variance) > 0 ? '+' : '' }}{{ formatMoney(previewOf(r)!.price_variance) }}</span></div>
+                </td>
                 <td class="py-2"><MoneyInput v-model="r.vat" :name="`vat_${i}`" :decimals="decimals" class="w-28" :aria-label="t('inventory.bill.vat')" /></td>
               </tr>
               <tr v-for="(e, i) in extras" :key="`x${i}`" class="border-t border-border align-top" :data-testid="`extra-${i}`">
@@ -284,7 +293,6 @@ const billsOfMatches = computed(() => {
                   <NativeSelect v-model.number="e.account_id" :name="`extra_account_${i}`" :aria-label="t('inventory.bill.extraAccount')"><option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.code }} · {{ a.name }}</option></NativeSelect>
                 </td>
                 <td class="py-2 pr-2"><MoneyInput v-model="e.amount" :name="`extra_amount_${i}`" :decimals="decimals" class="w-32" :aria-label="t('inventory.bill.extraAmount')" /></td>
-                <td class="py-2 pr-2" />
                 <td class="py-2"><MoneyInput v-model="e.vat" :name="`extra_vat_${i}`" :decimals="decimals" class="w-28" :aria-label="t('inventory.bill.vat')" /> <Button type="button" variant="ghost" size="sm" @click="extras.splice(i, 1)">{{ t('common.remove') }}</Button></td>
               </tr>
             </tbody>
@@ -351,7 +359,7 @@ const billsOfMatches = computed(() => {
       <section v-if="preview && Number(preview.variance) !== 0" class="rounded-xl border border-border bg-card p-4" data-testid="bill-split">
         <h3 class="m-0 text-sm font-semibold">{{ t('inventory.bill.splitTitle', { amount: formatMoney(preview.variance) }) }}</h3>
         <ul v-for="l in preview.lines.filter((x) => Number(x.variance) !== 0)" :key="`${l.receipt_id}-${l.receipt_line_no}`" class="m-0 mt-1 list-none p-0 text-sm">
-          <li class="text-muted-foreground">{{ t('inventory.bill.splitOnHand', { item: l.item_name, on: formatQty(l.on_hand_qty_stock), billed: formatQty(l.billed_qty_stock) }) }}</li>
+          <li class="text-muted-foreground" :data-testid="`split-line-${l.receipt_line_no}`">{{ splitSentence(l) }}</li>
         </ul>
         <dl class="m-0 mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-sm">
           <dt class="text-muted-foreground">{{ t('inventory.bill.intoStock') }}</dt><dd class="m-0 text-right" data-testid="split-stock">{{ formatMoney(preview.inventory_part) }}</dd>

@@ -24,6 +24,7 @@ var methods = []string{inventory.MethodAverage, inventory.MethodFIFO}
 type pfx struct {
 	*fx
 	sup, pasar int64
+	mu         sync.Mutex
 	uuid       int
 }
 
@@ -78,6 +79,8 @@ func (f *fx) settings(t *testing.T, change func(*inventory.SettingsInput)) {
 }
 
 func (p *pfx) id() string {
+	p.mu.Lock() // the races start several goroutines that all ask for a new uuid
+	defer p.mu.Unlock()
 	p.uuid++
 	return "00000000-0000-4000-8000-" + pad12(p.uuid)
 }

@@ -11,6 +11,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import QuantityInput from '@/components/app/QuantityInput.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
@@ -65,6 +66,7 @@ const bill = reactive({ on: false, invoice: '', date: '', due: '' })
 const lines = ref<Line[]>([])
 const clientUuid = ref(crypto.randomUUID())
 const reverseReason = ref('')
+const reverseOpen = ref(false)
 const canBill = computed(() => can('inventory.bill') && can('payables.post'))
 
 async function load(): Promise<void> {
@@ -202,6 +204,8 @@ async function reverse(): Promise<void> {
   try {
     const { data } = await api.POST('/api/v1/properties/{propertyId}/inventory/receipts/{id}/reverse', { params: { path: { propertyId, id: receipt.value.id } }, body: { reason: reverseReason.value.trim() } })
     if (data) {
+      reverseOpen.value = false
+      reverseReason.value = ''
       receipt.value = data
       notice.value = t('inventory.receipt.reversed')
     }
@@ -210,6 +214,13 @@ async function reverse(): Promise<void> {
   } finally {
     busy.value = false
   }
+}
+/** A quantity of a posted line in the unit it came in, with the stock unit beside it when they differ: "12 karton (288 botol)". */
+function inBoth(l: { unit_code: string; stock_unit_code: string; qty: string; qty_stock: string }, stockQty: string): string {
+  if (!(Number(stockQty) > 0)) return '–'
+  if (l.unit_code === l.stock_unit_code || Number(l.qty_stock) <= 0) return `${formatQty(stockQty)} ${l.stock_unit_code}`
+  const own = String(Number(((Number(stockQty) * Number(l.qty)) / Number(l.qty_stock)).toFixed(6)))
+  return `${formatQty(own)} ${l.unit_code} (${formatQty(stockQty)} ${l.stock_unit_code})`
 }
 const sourceLabel = computed(() => (po.value ? t('inventory.receipt.forOrder', { number: po.value.po_number }) : ''))
 </script>
@@ -330,10 +341,10 @@ const sourceLabel = computed(() => (po.value ? t('inventory.receipt.forOrder', {
       <dt v-if="receipt.status === 'REVERSED'" class="text-muted-foreground">{{ t('inventory.receipt.reverseReason') }}</dt><dd v-if="receipt.status === 'REVERSED'" class="m-0">{{ receipt.reverse_reason }}</dd>
     </dl>
     <div class="overflow-x-auto">
-      <table class="w-full min-w-[46rem] text-sm" data-testid="receipt-lines-read">
+      <table class="w-full min-w-[40rem] text-sm" data-testid="receipt-lines-read">
         <thead>
           <tr class="text-left text-xs text-muted-foreground">
-            <th class="py-1 pr-2 font-medium">{{ t('inventory.receipt.item') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.receipt.receivedQty') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.receipt.unit') }}</th>
+            <th class="py-1 pr-2 font-medium">{{ t('inventory.receipt.item') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.receipt.receivedQty') }}</th>
             <th class="py-1 pr-2 text-right font-medium">{{ t('inventory.receipt.price') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.receipt.value') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.receipt.billed') }}</th>
             <th class="py-1 text-right font-medium">{{ t('inventory.receipt.returned') }}</th>
           </tr>
@@ -341,11 +352,11 @@ const sourceLabel = computed(() => (po.value ? t('inventory.receipt.forOrder', {
         <tbody>
           <tr v-for="l in receipt.lines" :key="l.line_no" class="border-t border-border" :data-testid="`receipt-line-${l.line_no}`">
             <td class="py-2 pr-2">{{ l.item_name }} <span class="text-xs text-muted-foreground">{{ l.item_code }}</span></td>
-            <td class="py-2 pr-2 text-right">{{ formatQty(l.qty) }}</td><td class="py-2 pr-2">{{ l.unit_code }}</td><td class="py-2 pr-2 text-right">{{ formatMoney(l.unit_price) }}</td>
-            <td class="py-2 pr-2 text-right">{{ formatMoney(l.value) }}</td><td class="py-2 pr-2 text-right">{{ formatQty(l.qty_billed_stock) }} {{ l.stock_unit_code }}</td><td class="py-2 text-right">{{ formatQty(l.qty_returned_stock) }} {{ l.stock_unit_code }}</td>
+            <td class="py-2 pr-2 text-right" data-testid="line-received">{{ inBoth(l, l.qty_stock) }}</td><td class="py-2 pr-2 text-right">{{ formatMoney(l.unit_price) }}</td>
+            <td class="py-2 pr-2 text-right">{{ formatMoney(l.value) }}</td><td class="py-2 pr-2 text-right" data-testid="line-billed">{{ inBoth(l, l.qty_billed_stock) }}</td><td class="py-2 text-right" data-testid="line-returned">{{ inBoth(l, l.qty_returned_stock) }}</td>
           </tr>
         </tbody>
-        <tfoot><tr class="border-t border-border"><td colspan="4" class="py-2 pr-2 text-right font-medium">{{ t('inventory.receipt.total') }}</td><td class="py-2 pr-2 text-right font-semibold" data-testid="receipt-total">{{ formatMoney(receipt.total_value) }}</td><td colspan="2" /></tr></tfoot>
+        <tfoot><tr class="border-t border-border"><td colspan="3" class="py-2 pr-2 text-right font-medium">{{ t('inventory.receipt.total') }}</td><td class="py-2 pr-2 text-right font-semibold" data-testid="receipt-total">{{ formatMoney(receipt.total_value) }}</td><td colspan="2" /></tr></tfoot>
       </table>
     </div>
     <section v-if="receipt.matches.length" class="rounded-xl border border-border bg-card p-4" data-testid="receipt-matches">
@@ -365,12 +376,23 @@ const sourceLabel = computed(() => (po.value ? t('inventory.receipt.forOrder', {
         </li>
       </ul>
     </section>
-    <div v-if="can('inventory.receive') && receipt.status === 'POSTED'" class="flex flex-wrap items-end justify-end gap-2">
+    <div v-if="can('inventory.receive') && receipt.status === 'POSTED'" class="flex flex-wrap items-center justify-end gap-2">
       <Button as-child variant="outline"><RouterLink :to="`/inventory/returns/new?receipt=${receipt.id}`" data-testid="receipt-return">{{ t('inventory.receipt.return') }}</RouterLink></Button>
-      <template v-if="receipt.reversible">
-        <FormField class="max-w-72" :label="t('inventory.receipt.reverseReasonLabel')"><template #default="{ id }"><Input :id="id" v-model="reverseReason" name="reason" maxlength="300" /></template></FormField>
-        <Button type="button" variant="outline" :disabled="busy || !reverseReason.trim()" data-testid="receipt-reverse" @click="reverse">{{ t('inventory.receipt.reverse') }}</Button>
-      </template>
+      <Button v-if="receipt.reversible" type="button" variant="outline" data-testid="receipt-reverse" @click="reverseOpen = true">{{ t('inventory.receipt.reverse') }}</Button>
     </div>
+
+    <!-- the reason is asked after the click, not beside the buttons -->
+    <Dialog :open="reverseOpen" @update:open="(v: boolean) => (reverseOpen = v)">
+      <DialogContent class="max-w-md p-5" data-testid="reverse-dialog">
+        <DialogTitle>{{ t('inventory.receipt.reverseTitle', { number: receipt.receipt_number }) }}</DialogTitle>
+        <DialogDescription class="mt-2">{{ t('inventory.receipt.reverseReason') }}</DialogDescription>
+        <ErrorNotice v-if="formError" :error="formError" inline class="mt-2" />
+        <FormField class="mt-3" :label="t('inventory.receipt.reverseReasonLabel')" required><template #default="{ id }"><Input :id="id" v-model="reverseReason" name="reason" maxlength="300" data-testid="reverse-reason" /></template></FormField>
+        <div class="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" data-testid="reverse-cancel" @click="reverseOpen = false">{{ t('common.cancel') }}</Button>
+          <Button type="button" variant="destructive" :disabled="busy || !reverseReason.trim()" data-testid="reverse-confirm" @click="reverse">{{ t('inventory.receipt.reverse') }}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </section>
 </template>

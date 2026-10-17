@@ -15,6 +15,8 @@ const props = defineProps<{ request: InventoryRequest }>()
 const cycles = computed(() => [...new Set(props.request.steps.map((s) => s.cycle))].sort((a, b) => b - a))
 const stepsOf = (cycle: number): InventoryApprovalStep[] => props.request.steps.filter((s) => s.cycle === cycle).sort((a, b) => a.level_no - b.level_no)
 const current = computed(() => stepsOf(props.request.cycle))
+// The levels that apply to this total: a conditional level that the total does not reach is not counted ("2 of 3 levels apply").
+const applying = computed(() => current.value.filter((s) => !(s.status === 'SKIPPED' && s.skip_reason === 'CONDITION') && !(s.status === 'WAITING' && !s.applies)).length)
 const earlier = computed(() => cycles.value.filter((c) => c !== props.request.cycle))
 const editsOf = (cycle: number): InventoryApprovalEdit[] => props.request.edits.filter((e) => e.cycle === cycle)
 const day = (iso: string | null | undefined): string => (iso ? formatDate(iso.slice(0, 10)) : '')
@@ -36,7 +38,7 @@ const tone = (s: InventoryApprovalStep): string =>
 
 <template>
   <section class="rounded-xl border border-border bg-card p-4" data-testid="approval-chain">
-    <h2 class="m-0 text-base font-semibold">{{ t('inventory.chain.title', { n: current.length }) }}</h2>
+    <h2 class="m-0 text-base font-semibold">{{ applying < current.length ? t('inventory.chain.titleApplies', { n: applying, total: current.length }) : t('inventory.chain.title', { n: current.length }) }}</h2>
     <ol class="m-0 mt-3 list-none p-0">
       <li class="flex gap-3 pb-3">
         <span class="grid size-6 shrink-0 place-items-center rounded-full bg-success/15 text-success-text"><Check class="size-3.5" aria-hidden="true" /></span>

@@ -1316,6 +1316,7 @@ What was built follows sections 3.3, 5.3 to 5.8, 6.3, 8.1, 8.3, 8.7, 8.9, 9, 10 
 9. **Mockup 21's "Simpan draf" (a draft of the invoice) is not built**: the invoice is typed and confirmed in one go, and the receipt's draft bill is what waits.
 10. **Additions**: the guard *a user who leads a department cannot be deactivated* (409 `USER_IS_DEPARTMENT_HEAD`), `GET departments/head-candidates`, `inventory.view` and `inventory.request` read the departments, and the bell reads the notices of the signed-in user whatever their permission.
 11. **Not in PR 2**: the supplier price list screen (`inv_supplier_items` is filled by the receipts and read by the forms), the print of a PO as PDF, the e-mail of a PO to the supplier.
+12. **Review fixes**: the match page puts the price difference of a line under the invoice price (no scroll at 1440 px) and writes the split of a difference in the stock unit, with where it goes; a posted receipt shows quantity, billed and returned in the unit received with the stock unit beside it ("12 karton (288 botol)"); the reason of a reversal is asked in a dialog after the click; the title of the chain card says "2 of 3 levels apply" when a conditional level is not reached.
 
 **Compared with the mockups 18 to 21 and 34**
 

@@ -176,7 +176,7 @@ const canDirect = computed(() => can('inventory.receive') && settings.value?.dir
         :aria-selected="tab === x[0]" :variant="tab === x[0] ? 'default' : 'outline'" :data-testid="`tab-${x[0]}`" @click="go(x[0])">{{ t(`inventory.purchasing.tab.${x[0]}`) }} · {{ x[1] }}</Button>
     </div>
     <div class="mb-3 flex flex-wrap items-center gap-2">
-      <input v-model="q" type="search" name="q" class="h-9 max-w-64 rounded-md border border-border bg-card px-3 text-sm" :placeholder="t('inventory.purchasing.search')" :aria-label="t('inventory.purchasing.search')" data-testid="purchasing-search" />
+      <input v-model="q" type="search" name="q" class="h-9 w-full max-w-sm rounded-md border border-border bg-card px-3 text-sm" :placeholder="t('inventory.purchasing.search')" :aria-label="t('inventory.purchasing.search')" data-testid="purchasing-search" />
       <Button v-for="c in chips" :key="c.key" type="button" size="sm" class="rounded-full" :variant="chip === c.key ? 'default' : 'outline'" :data-testid="`chip-${c.key}`" @click="chip = c.key">{{ c.label }}</Button>
     </div>
 
