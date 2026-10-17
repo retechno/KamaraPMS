@@ -6,6 +6,7 @@ import type { PosCategory, PosImportResult, PosOutlet, PosProduct, PosRuleProfil
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import MoneyInput from '@/components/app/MoneyInput.vue'
+import ProductRecipe from '@/components/pos/ProductRecipe.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -386,9 +387,10 @@ watch(pid, load, { immediate: true })
           </NativeSelect>
         </section>
 
-        <section class="rounded-xl border border-dashed border-border bg-card p-4" data-testid="product-recipe">
-          <h3 class="m-0 text-base font-semibold">{{ t('pos.products.recipe') }}</h3>
-          <p class="m-0 mt-1 text-sm text-muted-foreground">{{ t('pos.products.recipeNote') }}</p>
+        <ProductRecipe v-if="!creating && selectedId" :key="selectedId" class="xl:col-span-2" :product-id="selectedId" />
+        <section v-else class="rounded-xl border border-dashed border-border bg-card p-4" data-testid="product-recipe-later">
+          <h3 class="m-0 text-base font-semibold">{{ t('pos.recipe.title') }}</h3>
+          <p class="m-0 mt-1 text-sm text-muted-foreground">{{ t('pos.recipe.saveFirst') }}</p>
         </section>
       </div>
 

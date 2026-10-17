@@ -81,8 +81,8 @@ const shortQty = (l: InventoryAmenityRun['lines'][number]): string => String(Mat
 </script>
 
 <template>
-  <PageHeader :title="t('inventory.amenityRun.title', { date: formatDate(date) })" :description="run ? t('inventory.amenityRun.madeBy', { number: run.iss_number, when: formatDateTime(run.created_at) }) : ''">
-    <template v-if="run" #marks><Badge :variant="postedVariant(run.status)" data-testid="run-status">{{ t(`inventory.postedStatus.${run.status}`) }}</Badge></template>
+  <PageHeader :title="t('inventory.amenityRun.title', { date: formatDate(date) })" :description="run ? t('inventory.amenityRun.madeBy', { when: formatDateTime(run.created_at) }) : ''">
+    <template v-if="run" #marks><Badge variant="outline" data-testid="run-number">{{ run.iss_number }}</Badge> <Badge :variant="postedVariant(run.status)" data-testid="run-status">{{ t(`inventory.postedStatus.${run.status}`) }}</Badge></template>
     <template #actions>
       <Button as-child variant="outline"><RouterLink to="/inventory/issues" data-testid="back">{{ t('inventory.issue.back') }}</RouterLink></Button>
     </template>

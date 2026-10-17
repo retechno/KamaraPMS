@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
+import { findingText } from '@/utils/findings'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -40,9 +41,10 @@ const departures = computed(() => blockers.value?.unresolved_departures ?? [])
 const accountingBlockers = computed(() => blockers.value?.accounting_readiness ?? [])
 const outletBlockers = computed(() => blockers.value?.outlet_bills ?? [])
 const stockBlockers = computed(() => blockers.value?.stock ?? [])
+const openShifts = computed(() => blockers.value?.open_shifts ?? [])
 /** Where a stock finding is dealt with: a count in the counts, the rest in the amenities. */
 const stockLink = (code: string): string => (code === 'INVENTORY_COUNT_OPEN' ? '/inventory/counts' : code.startsWith('AMENITY') ? '/inventory/amenities' : '/inventory')
-const chargeIssues = computed(() => (blockers.value?.charge_errors.length ?? 0) + (blockers.value?.invalid_charges.length ?? 0) + accountingBlockers.value.length + outletBlockers.value.length + stockBlockers.value.length)
+const chargeIssues = computed(() => (blockers.value?.charge_errors.length ?? 0) + (blockers.value?.invalid_charges.length ?? 0) + accountingBlockers.value.length + outletBlockers.value.length + stockBlockers.value.length + openShifts.value.length)
 const allSelected = computed(() => arrivals.value.length > 0 && noShow.selected.length === arrivals.value.length)
 
 // How many steps still need someone: the clock, the arrivals, the departures and the room charges.
@@ -255,13 +257,19 @@ watch(pid, () => {
         <div v-if="outletBlockers.length" class="alert mb-0 mt-3" data-testid="outlet-bills-blockers">
           <strong>{{ t('nightAudit.outletBillsBlock', { n: outletBlockers.length }) }}</strong>
           <ul class="m-0 mt-1 pl-5">
-            <li v-for="b in outletBlockers" :key="`${b.code}-${b.ref ?? ''}`">{{ b.message }}</li>
+            <li v-for="b in outletBlockers" :key="`${b.code}-${b.ref ?? ''}`" :data-testid="`outlet-${b.code}`">{{ findingText(b, 'blocker') }}</li>
+          </ul>
+        </div>
+        <div v-if="openShifts.length" class="alert mb-0 mt-3" data-testid="open-shifts">
+          <strong>{{ t('nightAudit.openShiftsBlock', { n: openShifts.length }) }}</strong>
+          <ul class="m-0 mt-1 pl-5">
+            <li v-for="sh in openShifts" :key="sh.id" :data-testid="`open-shift-${sh.number}`">{{ t('nightAudit.openShift', { number: sh.number, drawer: sh.drawer, user: sh.user_name }) }} <RouterLink to="/cashier/shifts">{{ t('nightAudit.stockOpen') }}</RouterLink></li>
           </ul>
         </div>
         <div v-if="stockBlockers.length" class="alert mb-0 mt-3" data-testid="stock-blockers">
           <strong>{{ t('nightAudit.stockBlock', { n: stockBlockers.length }) }}</strong>
           <ul class="m-0 mt-1 pl-5">
-            <li v-for="b in stockBlockers" :key="`${b.code}-${b.ref ?? ''}`" :data-testid="`stock-${b.code}`">{{ b.message }} <RouterLink :to="stockLink(b.code)">{{ t('nightAudit.stockOpen') }}</RouterLink></li>
+            <li v-for="b in stockBlockers" :key="`${b.code}-${b.ref ?? ''}`" :data-testid="`stock-${b.code}`">{{ findingText(b, 'blocker') }} <RouterLink :to="stockLink(b.code)">{{ t('nightAudit.stockOpen') }}</RouterLink></li>
           </ul>
         </div>
         <div v-if="accountingBlockers.length" class="alert mb-0 mt-3" data-testid="accounting-readiness">
@@ -288,10 +296,10 @@ watch(pid, () => {
               {{ t('groupMaster.warnOpen', { group: m.group_code, folio: m.folio_number, balance: $money(m.balance) }) }} <RouterLink :to="`/folios/${m.folio_id}`">{{ m.folio_number }}</RouterLink>
             </li>
             <li v-for="o in preview.warnings.outlet_bills ?? []" :key="`${o.code}-${o.ref ?? ''}`" :data-testid="`outlet-bills-${o.code}`">
-              {{ o.message }} <RouterLink to="/pos/floor">{{ t('nightAudit.outletBillsOpen') }}</RouterLink>
+              {{ findingText(o, 'warning') }} <RouterLink to="/pos/floor">{{ t('nightAudit.outletBillsOpen') }}</RouterLink>
             </li>
             <li v-for="o in preview.warnings.stock ?? []" :key="`${o.code}-${o.ref ?? ''}`" :data-testid="`stock-${o.code}`">
-              {{ o.message }} <RouterLink :to="stockLink(o.code)">{{ t('nightAudit.stockOpen') }}</RouterLink>
+              {{ findingText(o, 'warning') }} <RouterLink :to="stockLink(o.code)">{{ t('nightAudit.stockOpen') }}</RouterLink>
             </li>
             <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ t('nightAudit.blockEnds', { type: b.block_type, room: b.room, date: $date(b.end_date) }) }}</li>
           </ul>

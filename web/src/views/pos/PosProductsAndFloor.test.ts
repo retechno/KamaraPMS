@@ -59,6 +59,7 @@ afterEach(() => {
 })
 
 const productsGet = (path: string) => {
+  if (path.endsWith('/pos/products/{id}/recipe')) return { data: { product_id: 10, product_code: 'NASGOR', product_name: 'Nasi Goreng Kampung', inventory_active: false, editable: false, outlet_id: null, outlet_name: null, warehouse_id: null, warehouse_name: null, sale_class: null, outlets: [], base: [], options: [], base_cost: '0', net_price: null, margin: null, food_cost_pct: null, cost_basis_label: 'REFERENCE', currency_decimals: 0 } }
   if (path.endsWith('/pos/products/{id}')) return { data: product }
   if (path.endsWith('/pos/products')) return { data: { data: [{ ...product, option_groups: undefined, prices: undefined }] } }
   if (path.endsWith('/pos/categories')) return { data: { data: [{ id: 1, code: 'MAINS', name: 'Main dishes', parent_id: null, sort_order: 1, is_active: true, product_count: 1 }] } }

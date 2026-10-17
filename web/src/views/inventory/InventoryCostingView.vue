@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { InventoryItem, InventorySettings, InventorySetupReport, InventoryStockCard, InventoryWarehouse } from '@/api/types'
+import type { InventoryItem, InventoryQueueList, InventorySettings, InventorySetupReport, InventoryStockCard, InventoryWarehouse } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -11,11 +11,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import { t } from '@/i18n'
+import { t, te } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney } from '@/utils/format'
 import { formatQty } from '@/utils/inventory'
+import { findingText } from '@/utils/findings'
 
 /**
  * Costing (docs/architecture/35-inventory.md 4, mockup 28): the four steps cost goes through, the method of the property (chosen before the first stock movement, then locked), the setup
@@ -30,6 +31,9 @@ const canManage = computed(() => auth.can('inventory.manage', pid.value))
 
 const settings = ref<InventorySettings | null>(null)
 const setup = ref<InventorySetupReport | null>(null)
+const queue = ref<InventoryQueueList | null>(null)
+const queueError = ref<ApiError | null>(null)
+const queueBusy = ref<number | null>(null)
 const warehouses = ref<InventoryWarehouse[]>([])
 const items = ref<InventoryItem[]>([])
 const card = ref<InventoryStockCard | null>(null)
@@ -40,6 +44,40 @@ const formError = ref<ApiError | null>(null)
 const notice = ref('')
 const method = ref<'AVERAGE' | 'FIFO'>('AVERAGE')
 const pick = reactive({ warehouse: 0, item: 0, from: '', to: '' })
+
+/** The POS sales that are not in the stock yet: what a count holds and what failed (35-inventory.md 5.6). */
+async function loadQueue(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/inventory/consumption-queue', { params: { path: { propertyId } } })
+    queue.value = data && data.summary ? data : null
+  } catch {
+    queue.value = null // the person may not read the stock
+  }
+}
+
+async function actOnRow(id: number, what: 'retry' | 'cancel'): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  queueBusy.value = id
+  queueError.value = null
+  try {
+    const params = { params: { path: { propertyId, id } } }
+    if (what === 'retry') await api.POST('/api/v1/properties/{propertyId}/inventory/consumption-queue/{id}/retry', params)
+    else await api.POST('/api/v1/properties/{propertyId}/inventory/consumption-queue/{id}/cancel', params)
+    notice.value = t(what === 'retry' ? 'inventory.queue.retried' : 'inventory.queue.cancelled')
+    const c = await api.GET('/api/v1/properties/{propertyId}/inventory/setup-check', { params: { path: { propertyId } } })
+    setup.value = c.data ?? null
+    await loadQueue()
+  } catch (e) {
+    queueError.value = e instanceof ApiError ? e : null
+  } finally {
+    queueBusy.value = null
+  }
+}
+
+const rowError = (code: string | null, message: string | null): string => (code && te(`errors.${code}`) ? t(`errors.${code}`) : (message ?? ''))
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -57,6 +95,7 @@ async function load(): Promise<void> {
     settings.value = s.data ?? null
     method.value = (s.data?.costing_method as 'AVERAGE' | 'FIFO' | undefined) ?? 'AVERAGE'
     setup.value = c.data ?? null
+    await loadQueue()
     warehouses.value = w.data?.data ?? []
     items.value = i.data?.items ?? []
     pick.warehouse = Number(route.query.warehouse) || pick.warehouse
@@ -156,9 +195,45 @@ const steps = ['1', '2', '3', '4'] as const
       <p v-if="setup && setup.issues.length === 0" class="m-0 text-sm text-muted-foreground" data-testid="setup-ok">{{ t('inventory.costing.setupOk') }}</p>
       <ul v-else class="m-0 flex list-none flex-col gap-1 p-0 text-sm">
         <li v-for="(i, n) in setup?.issues ?? []" :key="n" class="flex items-start gap-2" :data-testid="`issue-${i.code}`">
-          <Badge :variant="i.severity === 'ERROR' ? 'destructive' : 'warning'">{{ i.code }}</Badge><span>{{ i.message }}</span>
+          <Badge :variant="i.severity === 'ERROR' ? 'destructive' : 'warning'">{{ i.code }}</Badge><span>{{ findingText(i, i.severity === 'ERROR' ? 'blocker' : 'warning') }}</span>
         </li>
       </ul>
+    </section>
+
+    <section aria-labelledby="queue-h" data-testid="queue">
+      <h2 id="queue-h" class="m-0 mb-1 text-sm font-semibold">{{ t('inventory.queue.title') }}</h2>
+      <p class="m-0 mb-2 text-xs text-muted-foreground">{{ t('inventory.queue.intro') }}</p>
+      <div v-if="queue" class="mb-2 flex flex-wrap gap-2 text-xs" data-testid="queue-summary">
+        <Badge variant="outline">{{ t('inventory.queue.pending', { n: queue.summary.pending }) }}</Badge>
+        <Badge :variant="queue.summary.held ? 'warning' : 'outline'">{{ t('inventory.queue.held', { n: queue.summary.held }) }}</Badge>
+        <Badge :variant="queue.summary.failed ? 'destructive' : 'outline'">{{ t('inventory.queue.failed', { n: queue.summary.failed }) }}</Badge>
+      </div>
+      <ErrorNotice v-if="queueError" :error="queueError" inline />
+      <p v-if="queue && queue.rows.length === 0" class="m-0 text-sm text-muted-foreground" data-testid="queue-ok">{{ t('inventory.queue.allIn') }}</p>
+      <div v-else-if="queue" class="overflow-x-auto">
+        <table class="w-full min-w-[44rem] text-sm" data-testid="queue-table">
+          <thead>
+            <tr class="text-left text-xs text-muted-foreground">
+              <th class="py-1 pr-2 font-medium">{{ t('inventory.queue.product') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.queue.outlet') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.queue.bill') }}</th>
+              <th class="py-1 pr-2 font-medium">{{ t('inventory.queue.kind') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.queue.status') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.queue.reason') }}</th><th />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in queue.rows" :key="r.id" class="border-t border-border align-top" :data-testid="`queue-row-${r.id}`">
+              <td class="py-2 pr-2">{{ r.product_name }} <span class="text-xs text-muted-foreground">× {{ r.quantity }}</span></td>
+              <td class="py-2 pr-2">{{ r.outlet_name }}</td>
+              <td class="py-2 pr-2">{{ r.bill_number }}</td>
+              <td class="py-2 pr-2">{{ t(`inventory.queue.kinds.${r.kind}`) }}</td>
+              <td class="py-2 pr-2"><Badge :variant="r.status === 'FAILED' ? 'destructive' : 'warning'">{{ t(`inventory.queue.statuses.${r.status}`) }}</Badge></td>
+              <td class="py-2 pr-2 text-xs">{{ r.status === 'FAILED' ? rowError(r.error_code, r.error_message) : t('inventory.queue.heldWhy') }}</td>
+              <td class="py-2 text-right whitespace-nowrap">
+                <Button v-if="canManage && r.status === 'FAILED'" type="button" variant="outline" size="sm" :disabled="queueBusy === r.id" :data-testid="`queue-retry-${r.id}`" @click="actOnRow(r.id, 'retry')">{{ t('inventory.queue.retry') }}</Button>
+                <Button v-if="canManage && r.status !== 'APPLIED'" type="button" variant="ghost" size="sm" :disabled="queueBusy === r.id" :data-testid="`queue-cancel-${r.id}`" @click="actOnRow(r.id, 'cancel')">{{ t('inventory.queue.cancel') }}</Button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section aria-labelledby="card-h" data-testid="card">

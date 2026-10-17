@@ -130,7 +130,8 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
           v-bind="audit ? { to: '/night-audit' } : {}"
           :class="
             cn(
-              'inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-md border px-2.5 text-sm no-underline',
+              'inline-flex h-9 items-center whitespace-nowrap rounded-md border no-underline',
+              phone ? 'gap-1.5 px-2 text-xs' : 'gap-2 px-2.5 text-sm',
               audit?.state === 'overdue' ? 'border-status-noshow-line bg-status-noshow-bg text-status-noshow' : 'border-border bg-background text-foreground',
               audit && audit.state !== 'overdue' && 'hover:bg-accent',
             )
@@ -139,19 +140,26 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
           data-testid="business-date"
         >
           <span v-if="audit" :class="cn('size-2 shrink-0 rounded-full', audit.dot)" aria-hidden="true" />
-          <template v-if="phone">
+          <span v-if="phone" class="flex flex-col leading-tight">
             <strong>{{ businessDayShort }}</strong>
-          </template>
+            <!-- the state of the audit under the date: the title of the page keeps the room it needs -->
+            <span
+              v-if="audit"
+              :class="cn(audit.state === 'overdue' ? 'text-[10px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
+              :data-state="audit.state"
+              data-testid="night-audit-status"
+            >{{ audit.short }}</span>
+          </span>
           <template v-else>
             <span><span class="mr-1 hidden lg:inline">{{ t('shell.businessDate') }}</span><strong>{{ businessDay }}</strong></span>
             <span v-if="local && local.date !== property.clock.business_date" class="hidden text-muted-foreground xl:inline">· {{ t('shell.localTime') }} {{ formatBusinessDate(local.date) }} {{ local.time }}</span>
           </template>
           <span
-            v-if="audit"
+            v-if="audit && !phone"
             :class="cn('text-xs', audit.state === 'overdue' ? 'font-semibold' : 'sr-only xl:not-sr-only xl:text-muted-foreground')"
             :data-state="audit.state"
             data-testid="night-audit-status"
-          >{{ phone ? audit.short : audit.text }}</span>
+          >{{ audit.text }}</span>
         </component>
       </template>
       <RouterLink v-else-if="property.loaded" to="/setup/properties/new" class="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground no-underline">

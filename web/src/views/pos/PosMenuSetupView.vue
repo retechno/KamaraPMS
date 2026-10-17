@@ -57,11 +57,11 @@ async function load(): Promise<void> {
 }
 
 // ---- categories
-const cForm = reactive({ id: null as number | null, code: '', name: '', parent_id: 0, sort_order: 0, is_active: true })
+const cForm = reactive({ id: null as number | null, code: '', name: '', parent_id: 0, sort_order: 0, is_active: true, fb_class: '' })
 const cDialog = ref(false)
 const cError = ref<ApiError | null>(null)
 function editCategory(c?: PosCategory): void {
-  Object.assign(cForm, c ? { id: c.id, code: c.code, name: c.name, parent_id: c.parent_id ?? 0, sort_order: c.sort_order, is_active: c.is_active } : { id: null, code: '', name: '', parent_id: 0, sort_order: categories.value.length + 1, is_active: true })
+  Object.assign(cForm, c ? { id: c.id, code: c.code, name: c.name, parent_id: c.parent_id ?? 0, sort_order: c.sort_order, is_active: c.is_active, fb_class: c.fb_class ?? '' } : { id: null, code: '', name: '', parent_id: 0, sort_order: categories.value.length + 1, is_active: true, fb_class: '' })
   cError.value = null
   cDialog.value = true
 }
@@ -70,7 +70,7 @@ async function saveCategory(): Promise<void> {
   if (propertyId === null) return
   busy.value = true
   cError.value = null
-  const body = { code: cForm.code.trim().toUpperCase(), name: cForm.name.trim(), parent_id: cForm.parent_id || null, sort_order: cForm.sort_order, is_active: cForm.is_active }
+  const body = { code: cForm.code.trim().toUpperCase(), name: cForm.name.trim(), parent_id: cForm.parent_id || null, sort_order: cForm.sort_order, is_active: cForm.is_active, fb_class: (cForm.fb_class || null) as 'FOOD' | 'BEVERAGE' | 'OTHER' | null }
   try {
     if (cForm.id === null) await api.POST('/api/v1/properties/{propertyId}/pos/categories', { params: { path: { propertyId } }, body })
     else await api.PUT('/api/v1/properties/{propertyId}/pos/categories/{id}', { params: { path: { propertyId, id: cForm.id } }, body })
@@ -257,6 +257,14 @@ watch(pid, load, { immediate: true })
             <NativeSelect :id="id" v-model.number="cForm.parent_id" name="parent_id">
               <option :value="0">{{ t('pos.menu.noParent') }}</option>
               <option v-for="c in topLevel" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+        <FormField :label="t('pos.menu.fbClass')" :hint="t('pos.menu.fbClassHint')" :error="cError?.fieldMessage('fb_class')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model="cForm.fb_class" name="fb_class" data-testid="category-fb-class">
+              <option value="">{{ t('pos.menu.fbClassNone') }}</option>
+              <option v-for="c in ['FOOD', 'BEVERAGE', 'OTHER']" :key="c" :value="c">{{ t(`pos.recipe.saleClass.${c}`) }}</option>
             </NativeSelect>
           </template>
         </FormField>

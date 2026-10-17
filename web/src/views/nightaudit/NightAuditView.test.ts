@@ -77,8 +77,8 @@ describe('NightAuditView', () => {
   it('shows an open count as a blocker with the way to the counts, and the amenities of a frozen warehouse as a warning', async () => {
     const w = mountView({
       ...clean(), can_run: false,
-      blockers: { ...clean().blockers, stock: [{ code: 'INVENTORY_COUNT_OPEN', ref: 'CNT-000001', message: 'the count CNT-000001 of Gudang Bar is still open: it freezes the warehouse' }] },
-      warnings: { ...clean().warnings, stock: [{ code: 'AMENITY_HELD', ref: 'CNT-000001', message: 'the amenities warehouse is frozen by the count CNT-000001' }] },
+      blockers: { ...clean().blockers, stock: [{ code: 'INVENTORY_COUNT_OPEN', ref: 'CNT-000001', message: 'the count CNT-000001 of Gudang Bar is still open: it freezes the warehouse', params: { number: 'CNT-000001', warehouse: 'Gudang Bar' } }] },
+      warnings: { ...clean().warnings, stock: [{ code: 'AMENITY_HELD', ref: 'CNT-000001', message: 'the amenities warehouse is frozen by the count CNT-000001', params: { number: 'CNT-000001' } }] },
     })
     await flushPromises()
     expect(w.get('[data-testid=stock-blockers]').text()).toContain('CNT-000001')
