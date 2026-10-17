@@ -378,6 +378,11 @@ SELECT s.id, s.qty_open, s.qty_original, s.est_unit_cost, s.est_value_open, s.st
 UPDATE inv_shortfalls SET qty_open = @qty_open, est_value_open = @est_value_open, status = @status
  WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
+-- The open shortfalls of an item in a warehouse are closed by a count (4.4 item 4).
+-- name: LedgerCloseShortfallsByCount :exec
+UPDATE inv_shortfalls SET qty_open = 0, est_value_open = 0, status = 'CLOSED_BY_COUNT'
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND warehouse_id = @warehouse_id AND item_id = @item_id AND status = 'OPEN';
+
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Opening stock
 
@@ -442,13 +447,15 @@ WITH g AS (
      WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.business_date = @business_date::date AND m.gl_amount > 0
      GROUP BY m.gl_debit_account_id, m.gl_credit_account_id, m.gl_department_id, m.kind, m.source_type, m.source_id
 ), named AS (
-    SELECT g.*, COALESCE(o.opening_number, rc.receipt_number, rt.return_number, b.bill_number, cn.credit_number, g.source_type || ' ' || g.source_id)::text AS ref
+    SELECT g.*, COALESCE(o.opening_number, rc.receipt_number, rt.return_number, b.bill_number, cn.credit_number, iss.iss_number, cnt.cnt_number, g.source_type || ' ' || g.source_id)::text AS ref
       FROM g
       LEFT JOIN inv_openings o ON g.source_type = 'INV_OPENING' AND o.property_id = @property_id AND o.id = g.source_id
       LEFT JOIN inv_receipts rc ON g.source_type = 'INV_RECEIPT' AND rc.property_id = @property_id AND rc.id = g.source_id
       LEFT JOIN inv_returns rt ON g.source_type = 'INV_RETURN' AND rt.property_id = @property_id AND rt.id = g.source_id
       LEFT JOIN supplier_bills b ON g.source_type = 'INV_BILL' AND b.property_id = @property_id AND b.id = g.source_id
       LEFT JOIN supplier_credit_notes cn ON g.source_type = 'INV_CREDIT' AND cn.property_id = @property_id AND cn.id = g.source_id
+      LEFT JOIN inv_issues iss ON g.source_type = 'INV_ISSUE' AND iss.property_id = @property_id AND iss.id = g.source_id
+      LEFT JOIN inv_counts cnt ON g.source_type = 'INV_COUNT' AND cnt.property_id = @property_id AND cnt.id = g.source_id
 )
 SELECT n.debit_id::bigint AS account_id, n.department_id, n.kind::text AS kind, n.source_type::text AS source_type, n.ref AS source_ref, n.amount::numeric AS amount, true AS is_debit,
        (n.debit_id IN (SELECT c.inventory_account_id FROM inv_categories c WHERE c.property_id = @property_id))::boolean AS is_inventory

@@ -11133,6 +11133,597 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryRequisitions
+      summary: "The store requisitions (SR), newest first, with the stage of each in its chain and whether it waits for the signed-in user"
+      tags: [inventory]
+      parameters:
+        - { name: status, in: query, description: "", schema: { type: string } }
+        - { name: mine, in: query, description: "Only the requisitions the signed-in user wrote", schema: { type: boolean } }
+        - { name: q, in: query, description: "The number", schema: { type: string } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryRequisitionBrief" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createInventoryRequisition
+      summary: "Write a requisition as a draft (inventory.request); repeating the client_uuid returns the first"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryRequisitionInput" }
+      responses:
+        "201":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInventoryRequisition
+      summary: "A requisition with its lines (what the store holds, what was sent), the steps of every round of its chain, the edits, the transfers that answered it and what the signed-in user can decide"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateInventoryRequisition
+      summary: "Change a requisition while it is a draft or has been returned (the requester); the lines are replaced"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryRequisitionInput" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions/{id}/submit:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: submitInventoryRequisition
+      summary: "Submit a requisition: the chain of the SR is copied into the steps of a new round and the first level is told (inventory.request, the requester); 409 APPROVAL_CHAIN_UNSATISFIABLE"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions/{id}/recall:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: recallInventoryRequisition
+      summary: "Pull a submitted requisition back to a draft (the requester)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelInventoryRequisition
+      summary: "End a draft or a returned requisition (the requester)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: approveInventoryRequisition
+      summary: "Approve the active level of a requisition as the signed-in approver, with optional edits of the quantities; 409 APPROVAL_NOT_YOUR_TURN, APPROVAL_SAME_PERSON, 403 APPROVAL_OWN_DOCUMENT, APPROVAL_NOT_ELIGIBLE"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryApproveInput" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions/{id}/return:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: returnInventoryRequisition
+      summary: "Send a requisition back to its requester from the active level, with a note"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryReturnRequestInput" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requisitions/{id}/reject:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: rejectInventoryRequisition
+      summary: "The store says it cannot supply an approved requisition (inventory.move), with a reason; what was sent stays sent"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryReason" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRequisition" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/transfers:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryTransfers
+      summary: "The transfers between warehouses, newest first (free: only those that answer no requisition)"
+      tags: [inventory]
+      parameters:
+        - { name: status, in: query, description: "", schema: { type: string } }
+        - { name: requisition_id, in: query, description: "", schema: { type: integer } }
+        - { name: free, in: query, description: "Only transfers with no requisition", schema: { type: boolean } }
+        - { name: q, in: query, description: "The number", schema: { type: string } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryTransferBrief" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: postInventoryTransfer
+      summary: "Move goods from one warehouse to another (inventory.move): one step, the value goes with the goods, no journal; 409 SR_NOT_APPROVED, TRANSFER_EXCEEDS_SR, NEGATIVE_STOCK_NOT_ALLOWED, WAREHOUSE_FROZEN"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryTransferInput" }
+      responses:
+        "201":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryTransfer" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/transfers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInventoryTransfer
+      summary: "A transfer with its lines"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryTransfer" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/transfers/{id}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reverseInventoryTransfer
+      summary: "Undo a transfer on the day it was posted (inventory.move), with a reason; 409 MOVEMENT_NOT_REVERSIBLE, TRANSFER_NOT_REVERSIBLE"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryReason" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryTransfer" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/issues:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryIssues
+      summary: "The issues to a department, wastes, staff meals, entertainments and the amenities documents of the closes, newest first, with the cost of the period by department"
+      tags: [inventory]
+      parameters:
+        - { name: purpose, in: query, description: "", schema: { type: string } }
+        - { name: origin, in: query, description: "MANUAL or AMENITY", schema: { type: string } }
+        - { name: warehouse_id, in: query, description: "", schema: { type: integer } }
+        - { name: department_id, in: query, description: "", schema: { type: integer } }
+        - { name: from, in: query, description: "YYYY-MM-DD", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD", schema: { type: string } }
+        - { name: q, in: query, description: "The number", schema: { type: string } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryIssueList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: postInventoryIssue
+      summary: "Take goods out of a warehouse (inventory.move): to a department, as waste, as a staff meal or as entertainment; 409 NEGATIVE_STOCK_NOT_ALLOWED, WAREHOUSE_FROZEN, 422 DEPARTMENT_REQUIRED"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryIssueInput" }
+      responses:
+        "201":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryIssue" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/issues/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInventoryIssue
+      summary: "An issue with its lines"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryIssue" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/issues/{id}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reverseInventoryIssue
+      summary: "Undo an issue on the day it was posted (inventory.move): a reversing document puts the goods back at the cost they were taken"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryReason" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryIssue" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/counts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryCounts
+      summary: "The stock counts, newest first"
+      tags: [inventory]
+      parameters:
+        - { name: status, in: query, description: "", schema: { type: string } }
+        - { name: warehouse_id, in: query, description: "", schema: { type: integer } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryCountBrief" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: startInventoryCount
+      summary: "Start a count of a warehouse and freeze it for the manual movements (inventory.count); 409 COUNT_IN_PROGRESS"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryCountInput" }
+      responses:
+        "201":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/counts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getInventoryCount
+      summary: "A count with its sheet; the book quantity is hidden on a blind sheet while the count is open, and a submitted count shows the preview of the variance"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/counts/{id}/lines:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: enterInventoryCountLines
+      summary: "Record what the counters found (inventory.count); the server stamps counted_at; 409 COUNT_STATE_INVALID"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryCountLinesInput" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/counts/{id}/submit:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: submitInventoryCount
+      summary: "Lock the sheet and send it for approval (inventory.count)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/counts/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: approveInventoryCount
+      summary: "Approve a submitted count (inventory.approve, the kind INV_COUNT, a decision of the signed-in approver): the held rows before each item are applied, each item is adjusted, the freeze ends"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/counts/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelInventoryCount
+      summary: "End the freeze and post nothing (inventory.count); the held rows are applied"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCount" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/amenities/plan:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getInventoryAmenityPlan
+      summary: "The plan of the automatic amenities in force and its history (inventory.view)"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAmenityPlan" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: saveInventoryAmenityPlan
+      summary: "Save the plan as a new version (inventory.manage); the next close that runs uses it; 422 AMENITY_PLAN_INVALID"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryAmenityPlanInput" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAmenityPlan" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/amenities/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: previewInventoryAmenities
+      summary: "Tonight's amenities as the close would make them now: rooms, guests, value and the items that will be short"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAmenityPreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/amenities/runs:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryAmenityRuns
+      summary: "The amenities documents of the closes, newest first"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD", schema: { type: string } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunBrief" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/amenities/runs/{date}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: date, in: path, required: true, description: "The business date, YYYY-MM-DD", schema: { $ref: "#/components/schemas/Date" } }
+    get:
+      operationId: getInventoryAmenityRun
+      summary: "The amenities document of one night: the rooms, the rules and quantities, what the shelf held, the journal"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAmenityRun" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/amenities/runs/{date}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: date, in: path, required: true, description: "The business date, YYYY-MM-DD", schema: { $ref: "#/components/schemas/Date" } }
+    post:
+      operationId: reverseInventoryAmenityRun
+      summary: "Reverse the whole document of a night with a reversing document dated the open day (inventory.manage); 409 AMENITY_RUN_NOT_REVERSIBLE, AMENITY_RUN_HELD"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryReason" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAmenityRun" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -20378,12 +20969,14 @@ components:
         levels: { type: array, items: { $ref: "#/components/schemas/InventoryApprovalLevel" } }
     InventoryNotice:
       type: object
-      required: [id, kind, request_id, request_number, step_id, step_name, level_no, created_at, seen_at]
+      required: [id, kind, request_id, request_number, requisition_id, requisition_number, step_id, step_name, level_no, created_at, seen_at]
       properties:
         id: { type: integer, format: int64 }
         kind: { type: string, enum: [APPROVAL_WAITING, APPROVED, RETURNED, CHAIN_STUCK] }
         request_id: { type: [integer, "null"], format: int64 }
         request_number: { type: [string, "null"] }
+        requisition_id: { type: [integer, "null"], format: int64 }
+        requisition_number: { type: [string, "null"] }
         step_id: { type: [integer, "null"], format: int64 }
         step_name: { type: [string, "null"] }
         level_no: { type: integer }
@@ -20397,8 +20990,11 @@ components:
         data: { type: array, items: { $ref: "#/components/schemas/InventoryNotice" } }
     InventoryInboxItem:
       type: object
-      required: [request_id, request_number, est_total, department_id, department_name, requester_id, requester_name, submitted_at, step_id, level_no, step_name]
+      required: [doc_type, doc_id, number, request_id, request_number, est_total, department_id, department_name, requester_id, requester_name, submitted_at, step_id, level_no, step_name]
       properties:
+        doc_type: { type: string, enum: [PR, SR], description: "A purchase request or a store requisition; the request fields are empty for a requisition." }
+        doc_id: { type: integer, format: int64 }
+        number: { type: string }
         request_id: { type: integer, format: int64 }
         request_number: { type: string }
         est_total: { type: string }
@@ -20489,3 +21085,540 @@ components:
         layers: { type: array, items: { $ref: "#/components/schemas/InventoryLayer" } }
         shortfalls: { type: array, items: { $ref: "#/components/schemas/InventoryShortfall" } }
         truncated: { type: boolean, description: "More than 1000 movements: narrow the period." }
+    InventoryRequisitionLine:
+      type: object
+      required: [line_no, item_id, item_code, item_name, unit_id, unit_code, qty, qty_stock, stock_unit_code, qty_issued_stock, qty_left_stock, on_hand, est_value, note]
+      properties:
+        line_no: { type: integer }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_id: { type: integer, format: int64 }
+        unit_code: { type: string }
+        qty: { type: string }
+        qty_stock: { type: string }
+        stock_unit_code: { type: string }
+        qty_issued_stock: { type: string }
+        qty_left_stock: { type: string }
+        on_hand: { type: string }
+        est_value: { type: string }
+        note: { type: [string, "null"] }
+    InventoryRequisition:
+      type: object
+      required: [id, sr_number, status, requester_id, requester_name, department_id, department_name, to_warehouse_id, to_warehouse_name, from_warehouse_id, from_warehouse_name, needed_on, est_total, cycle, submitted_at, returned_note, rejected_note, note, version, created_at, stage, lines, steps, edits, decision, transfers]
+      properties:
+        id: { type: integer, format: int64 }
+        sr_number: { type: string }
+        status: { type: string, enum: [DRAFT, SUBMITTED, RETURNED, APPROVED, PARTIAL, FULFILLED, REJECTED, CANCELLED] }
+        requester_id: { type: integer, format: int64 }
+        requester_name: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_name: { type: [string, "null"] }
+        to_warehouse_id: { type: integer, format: int64 }
+        to_warehouse_name: { type: string }
+        from_warehouse_id: { type: integer, format: int64 }
+        from_warehouse_name: { type: string }
+        needed_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        est_total: { type: string }
+        cycle: { type: integer }
+        submitted_at: { type: [string, "null"], format: date-time }
+        returned_note: { type: [string, "null"] }
+        rejected_note: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+        stage: { oneOf: [{ $ref: "#/components/schemas/InventoryStage" }, { type: "null" }] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryRequisitionLine" } }
+        steps: { type: array, items: { $ref: "#/components/schemas/InventoryApprovalStep" } }
+        edits: { type: array, items: { $ref: "#/components/schemas/InventoryApprovalEdit" } }
+        decision: { oneOf: [{ $ref: "#/components/schemas/InventoryDecision" }, { type: "null" }] }
+        transfers: { type: array, items: { $ref: "#/components/schemas/InventoryTransferBrief" } }
+    InventoryRequisitionBrief:
+      type: object
+      required: [id, sr_number, status, requester_id, requester_name, department_name, to_warehouse_name, from_warehouse_name, needed_on, est_total, line_count, answered_by, submitted_at, created_at, stage, waiting_for_me]
+      properties:
+        id: { type: integer, format: int64 }
+        sr_number: { type: string }
+        status: { type: string, enum: [DRAFT, SUBMITTED, RETURNED, APPROVED, PARTIAL, FULFILLED, REJECTED, CANCELLED] }
+        requester_id: { type: integer, format: int64 }
+        requester_name: { type: string }
+        department_name: { type: [string, "null"] }
+        to_warehouse_name: { type: string }
+        from_warehouse_name: { type: string }
+        needed_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        est_total: { type: string }
+        line_count: { type: integer }
+        answered_by: { type: string }
+        submitted_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        stage: { oneOf: [{ $ref: "#/components/schemas/InventoryStage" }, { type: "null" }] }
+        waiting_for_me: { type: boolean }
+    InventoryRequisitionLineInput:
+      type: object
+      required: [item_id, qty]
+      properties:
+        item_id: { type: integer, format: int64 }
+        unit_id: { type: [integer, "null"], format: int64 }
+        qty: { type: string }
+        note: { type: [string, "null"] }
+    InventoryRequisitionInput:
+      type: object
+      required: [to_warehouse_id, from_warehouse_id, lines]
+      properties:
+        client_uuid: { type: string }
+        to_warehouse_id: { type: integer, format: int64 }
+        from_warehouse_id: { type: integer, format: int64 }
+        department_id: { type: [integer, "null"], format: int64 }
+        needed_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        note: { type: [string, "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryRequisitionLineInput" } }
+        version: { type: integer }
+    InventoryReason:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string }
+    InventoryTransferLine:
+      type: object
+      required: [line_no, item_id, item_code, item_name, stock_unit_code, requisition_line_no, qty_stock, value]
+      properties:
+        line_no: { type: integer }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        stock_unit_code: { type: string }
+        requisition_line_no: { type: [integer, "null"] }
+        qty_stock: { type: string }
+        value: { type: string }
+    InventoryTransfer:
+      type: object
+      required: [id, trf_number, status, requisition_id, requisition_number, from_warehouse_id, from_warehouse_name, to_warehouse_id, to_warehouse_name, business_date, note, reverse_reason, created_by_name, created_at, total_value, reversible, lines]
+      properties:
+        id: { type: integer, format: int64 }
+        trf_number: { type: string }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        requisition_id: { type: [integer, "null"], format: int64 }
+        requisition_number: { type: [string, "null"] }
+        from_warehouse_id: { type: integer, format: int64 }
+        from_warehouse_name: { type: string }
+        to_warehouse_id: { type: integer, format: int64 }
+        to_warehouse_name: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        note: { type: [string, "null"] }
+        reverse_reason: { type: [string, "null"] }
+        created_by_name: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        total_value: { type: string }
+        reversible: { type: boolean }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryTransferLine" } }
+    InventoryTransferBrief:
+      type: object
+      required: [id, trf_number, status, requisition_id, requisition_number, from_warehouse_name, to_warehouse_name, business_date, line_count, total_value, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        trf_number: { type: string }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        requisition_id: { type: [integer, "null"], format: int64 }
+        requisition_number: { type: [string, "null"] }
+        from_warehouse_name: { type: string }
+        to_warehouse_name: { type: string }
+        business_date: { $ref: "#/components/schemas/Date" }
+        line_count: { type: integer }
+        total_value: { type: string }
+        created_at: { type: string, format: date-time }
+    InventoryTransferLineInput:
+      type: object
+      required: [item_id, qty]
+      properties:
+        item_id: { type: integer, format: int64 }
+        unit_id: { type: [integer, "null"], format: int64 }
+        qty: { type: string }
+    InventoryTransferInput:
+      type: object
+      required: [lines]
+      properties:
+        client_uuid: { type: string }
+        requisition_id: { type: [integer, "null"], format: int64 }
+        from_warehouse_id: { type: integer, format: int64 }
+        to_warehouse_id: { type: integer, format: int64 }
+        note: { type: [string, "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryTransferLineInput" } }
+    InventoryIssueLine:
+      type: object
+      required: [line_no, item_id, item_code, item_name, stock_unit_code, qty_stock, value, expense_account_id, expense_account_code, expense_account_name, department_id, department_name, status, applied_on]
+      properties:
+        line_no: { type: integer }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        stock_unit_code: { type: string }
+        qty_stock: { type: string }
+        value: { type: [string, "null"] }
+        expense_account_id: { type: [integer, "null"], format: int64 }
+        expense_account_code: { type: [string, "null"] }
+        expense_account_name: { type: [string, "null"] }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_name: { type: [string, "null"] }
+        status: { type: string, enum: [APPLIED, HELD] }
+        applied_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+    InventoryIssue:
+      type: object
+      required: [id, iss_number, purpose, origin, status, warehouse_id, warehouse_name, department_id, department_name, reason_code, covers, beneficiary, business_date, source_date, note, reverse_reason, reverses_number, reversed_by_number, created_by_name, created_at, total_value, held_lines, reversible, cost_per_cover, lines]
+      properties:
+        id: { type: integer, format: int64 }
+        iss_number: { type: string }
+        purpose: { type: string, enum: [USE, WASTE, STAFF_MEAL, ENTERTAINMENT] }
+        origin: { type: string, enum: [MANUAL, AMENITY] }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_name: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_name: { type: [string, "null"] }
+        reason_code: { type: [string, "null"] }
+        covers: { type: [integer, "null"] }
+        beneficiary: { type: [string, "null"] }
+        business_date: { $ref: "#/components/schemas/Date" }
+        source_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        note: { type: [string, "null"] }
+        reverse_reason: { type: [string, "null"] }
+        reverses_number: { type: [string, "null"] }
+        reversed_by_number: { type: [string, "null"] }
+        created_by_name: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        total_value: { type: string }
+        held_lines: { type: integer }
+        reversible: { type: boolean }
+        cost_per_cover: { type: [string, "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryIssueLine" } }
+    InventoryIssueBrief:
+      type: object
+      required: [id, iss_number, purpose, origin, status, warehouse_name, department_name, reason_code, covers, beneficiary, business_date, source_date, line_count, held_lines, total_value, is_reversal, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        iss_number: { type: string }
+        purpose: { type: string, enum: [USE, WASTE, STAFF_MEAL, ENTERTAINMENT] }
+        origin: { type: string, enum: [MANUAL, AMENITY] }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        warehouse_name: { type: string }
+        department_name: { type: [string, "null"] }
+        reason_code: { type: [string, "null"] }
+        covers: { type: [integer, "null"] }
+        beneficiary: { type: [string, "null"] }
+        business_date: { $ref: "#/components/schemas/Date" }
+        source_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        line_count: { type: integer }
+        held_lines: { type: integer }
+        total_value: { type: string }
+        is_reversal: { type: boolean }
+        created_at: { type: string, format: date-time }
+    InventoryCostByDepartment:
+      type: object
+      required: [department_name, purpose, value]
+      properties:
+        department_name: { type: string }
+        purpose: { type: string }
+        value: { type: string }
+    InventoryIssueList:
+      type: object
+      required: [data, cost_by_department]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/InventoryIssueBrief" } }
+        cost_by_department: { type: array, items: { $ref: "#/components/schemas/InventoryCostByDepartment" } }
+    InventoryIssueLineInput:
+      type: object
+      required: [item_id, qty]
+      properties:
+        item_id: { type: integer, format: int64 }
+        unit_id: { type: [integer, "null"], format: int64 }
+        qty: { type: string }
+        expense_account_id: { type: [integer, "null"], format: int64 }
+    InventoryIssueInput:
+      type: object
+      required: [warehouse_id, purpose, lines]
+      properties:
+        client_uuid: { type: string }
+        warehouse_id: { type: integer, format: int64 }
+        purpose: { type: string, enum: [USE, WASTE, STAFF_MEAL, ENTERTAINMENT] }
+        department_id: { type: [integer, "null"], format: int64 }
+        reason_code: { type: [string, "null"], enum: [SPOILAGE, EXPIRED, BREAKAGE, TASTING, OTHER, null] }
+        covers: { type: [integer, "null"] }
+        beneficiary: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryIssueLineInput" } }
+    InventoryHeldDocument:
+      type: object
+      required: [issue_id, iss_number, source_date, held_lines]
+      properties:
+        issue_id: { type: integer, format: int64 }
+        iss_number: { type: string }
+        source_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        held_lines: { type: integer }
+    InventoryCountLine:
+      type: object
+      required: [item_id, item_code, item_name, category_name, stock_unit_code, book_qty, counted_qty, counted_at, entered_unit_id, entered_qty, expected_qty, held_before_qty, variance_qty, variance_value, note]
+      properties:
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        category_name: { type: string }
+        stock_unit_code: { type: string }
+        book_qty: { type: [string, "null"] }
+        counted_qty: { type: [string, "null"] }
+        counted_at: { type: [string, "null"], format: date-time }
+        entered_unit_id: { type: [integer, "null"], format: int64 }
+        entered_qty: { type: [string, "null"] }
+        expected_qty: { type: [string, "null"] }
+        held_before_qty: { type: [string, "null"] }
+        variance_qty: { type: [string, "null"] }
+        variance_value: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+    InventoryCount:
+      type: object
+      required: [id, cnt_number, status, warehouse_id, warehouse_name, scope, category_name, started_at, started_by_name, business_date_started, submitted_at, submitted_by_name, decided_at, decided_by_name, total_variance_value, note, version, blind, preview, held_documents, lines]
+      properties:
+        id: { type: integer, format: int64 }
+        cnt_number: { type: string }
+        status: { type: string, enum: [OPEN, SUBMITTED, APPROVED, CANCELLED] }
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_name: { type: string }
+        scope: { type: string, enum: [ALL, CATEGORY, LIST] }
+        category_name: { type: [string, "null"] }
+        started_at: { type: string, format: date-time }
+        started_by_name: { type: [string, "null"] }
+        business_date_started: { $ref: "#/components/schemas/Date" }
+        submitted_at: { type: [string, "null"], format: date-time }
+        submitted_by_name: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+        decided_by_name: { type: [string, "null"] }
+        total_variance_value: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        version: { type: integer }
+        blind: { type: boolean }
+        preview: { type: boolean }
+        held_documents: { type: array, items: { $ref: "#/components/schemas/InventoryHeldDocument" } }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryCountLine" } }
+    InventoryCountBrief:
+      type: object
+      required: [id, cnt_number, status, warehouse_id, warehouse_name, scope, started_at, started_by_name, submitted_at, decided_at, total_variance_value, line_count, counted_count]
+      properties:
+        id: { type: integer, format: int64 }
+        cnt_number: { type: string }
+        status: { type: string, enum: [OPEN, SUBMITTED, APPROVED, CANCELLED] }
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_name: { type: string }
+        scope: { type: string, enum: [ALL, CATEGORY, LIST] }
+        started_at: { type: string, format: date-time }
+        started_by_name: { type: [string, "null"] }
+        submitted_at: { type: [string, "null"], format: date-time }
+        decided_at: { type: [string, "null"], format: date-time }
+        total_variance_value: { type: [string, "null"] }
+        line_count: { type: integer }
+        counted_count: { type: integer }
+    InventoryCountInput:
+      type: object
+      required: [warehouse_id, scope]
+      properties:
+        client_uuid: { type: string }
+        warehouse_id: { type: integer, format: int64 }
+        scope: { type: string, enum: [ALL, CATEGORY, LIST] }
+        category_id: { type: [integer, "null"], format: int64 }
+        item_ids: { type: array, items: { type: integer, format: int64 } }
+        note: { type: [string, "null"] }
+    InventoryCountLineInput:
+      type: object
+      required: [item_id]
+      properties:
+        item_id: { type: integer, format: int64 }
+        unit_id: { type: [integer, "null"], format: int64 }
+        qty: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+    InventoryCountLinesInput:
+      type: object
+      required: [lines]
+      properties:
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryCountLineInput" } }
+    InventoryAmenityPlanLine:
+      type: object
+      required: [line_no, room_type_id, room_type_name, item_id, item_code, item_name, unit_id, unit_code, stock_unit_code, qty, basis]
+      properties:
+        line_no: { type: integer }
+        room_type_id: { type: [integer, "null"], format: int64 }
+        room_type_name: { type: [string, "null"] }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_id: { type: integer, format: int64 }
+        unit_code: { type: string }
+        stock_unit_code: { type: string }
+        qty: { type: string }
+        basis: { type: string, enum: [PER_ROOM, PER_GUEST] }
+    InventoryRoomTypeCost:
+      type: object
+      required: [room_type_id, room_type_name, guests, cost]
+      properties:
+        room_type_id: { type: integer, format: int64 }
+        room_type_name: { type: string }
+        guests: { type: integer }
+        cost: { type: string }
+    InventoryPlanVersion:
+      type: object
+      required: [id, version_no, effective_from, is_enabled, line_count, created_at, created_by_name]
+      properties:
+        id: { type: integer, format: int64 }
+        version_no: { type: integer }
+        effective_from: { $ref: "#/components/schemas/Date" }
+        is_enabled: { type: boolean }
+        line_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        created_by_name: { type: [string, "null"] }
+    InventoryAmenityPlan:
+      type: object
+      required: [id, version_no, effective_from, is_enabled, warehouse_id, warehouse_name, department_id, department_name, expense_account_id, expense_account_code, expense_account_name, created_at, lines, cost_per_room, versions, applies_from_next_close]
+      properties:
+        id: { type: integer, format: int64 }
+        version_no: { type: integer }
+        effective_from: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        is_enabled: { type: boolean }
+        warehouse_id: { type: [integer, "null"], format: int64 }
+        warehouse_name: { type: [string, "null"] }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_name: { type: [string, "null"] }
+        expense_account_id: { type: [integer, "null"], format: int64 }
+        expense_account_code: { type: [string, "null"] }
+        expense_account_name: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityPlanLine" } }
+        cost_per_room: { type: array, items: { $ref: "#/components/schemas/InventoryRoomTypeCost" } }
+        versions: { type: array, items: { $ref: "#/components/schemas/InventoryPlanVersion" } }
+        applies_from_next_close: { type: boolean }
+    InventoryAmenityPlanLineInput:
+      type: object
+      required: [item_id, unit_id, qty, basis]
+      properties:
+        room_type_id: { type: [integer, "null"], format: int64 }
+        item_id: { type: integer, format: int64 }
+        unit_id: { type: integer, format: int64 }
+        qty: { type: string }
+        basis: { type: string, enum: [PER_ROOM, PER_GUEST] }
+    InventoryAmenityPlanInput:
+      type: object
+      required: [is_enabled, lines]
+      properties:
+        is_enabled: { type: boolean }
+        warehouse_id: { type: [integer, "null"], format: int64 }
+        department_id: { type: [integer, "null"], format: int64 }
+        expense_account_id: { type: [integer, "null"], format: int64 }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityPlanLineInput" } }
+    InventoryAmenityShort:
+      type: object
+      required: [item_id, item_code, item_name, stock_unit_code, need, on_hand, short]
+      properties:
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        stock_unit_code: { type: string }
+        need: { type: string }
+        on_hand: { type: string }
+        short: { type: string }
+    InventoryAmenityRunType:
+      type: object
+      required: [room_type_id, room_type_name, rooms, guests]
+      properties:
+        room_type_id: { type: integer, format: int64 }
+        room_type_name: { type: string }
+        rooms: { type: integer }
+        guests: { type: integer }
+    InventoryAmenityRunLine:
+      type: object
+      required: [line_no, item_id, item_code, item_name, stock_unit_code, room_type_id, room_type_name, basis, qty_per, multiplier, qty_stock, stock_before, value, status, applied_on]
+      properties:
+        line_no: { type: integer }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        stock_unit_code: { type: string }
+        room_type_id: { type: [integer, "null"], format: int64 }
+        room_type_name: { type: [string, "null"] }
+        basis: { type: string, enum: [PER_ROOM, PER_GUEST] }
+        qty_per: { type: string }
+        multiplier: { type: integer }
+        qty_stock: { type: string }
+        stock_before: { type: [string, "null"] }
+        value: { type: [string, "null"] }
+        status: { type: string }
+        applied_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+    InventoryAmenityPreview:
+      type: object
+      required: [business_date, enabled, rooms, guests, comp_rooms, house_use_rooms, value, short, held, held_by_count, invalid, types, lines]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        enabled: { type: boolean }
+        rooms: { type: integer }
+        guests: { type: integer }
+        comp_rooms: { type: integer }
+        house_use_rooms: { type: integer }
+        value: { type: string }
+        short: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityShort" } }
+        held: { oneOf: [{ $ref: "#/components/schemas/InventoryHeldDocument" }, { type: "null" }] }
+        held_by_count: { type: [string, "null"] }
+        invalid: { type: array, items: { type: string } }
+        types: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunType" } }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunLine" } }
+    InventoryAmenityRunBrief:
+      type: object
+      required: [business_date, iss_number, rooms, guests, comp_rooms, house_use_rooms, total_value, status, plan_version, held_lines]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        iss_number: { type: string }
+        rooms: { type: integer }
+        guests: { type: integer }
+        comp_rooms: { type: integer }
+        house_use_rooms: { type: integer }
+        total_value: { type: string }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        plan_version: { type: integer }
+        held_lines: { type: integer }
+    InventoryAmenityRunRoom:
+      type: object
+      required: [room_id, room_number, room_type_name, guests, occupancy_kind]
+      properties:
+        room_id: { type: integer, format: int64 }
+        room_number: { type: string }
+        room_type_name: { type: string }
+        guests: { type: integer }
+        occupancy_kind: { type: string, enum: [PAID, COMPLIMENTARY, HOUSE_USE] }
+    InventoryAmenityJournalLine:
+      type: object
+      required: [debit_code, debit_name, credit_code, credit_name, department_name, amount]
+      properties:
+        debit_code: { type: string }
+        debit_name: { type: string }
+        credit_code: { type: string }
+        credit_name: { type: string }
+        department_name: { type: [string, "null"] }
+        amount: { type: string }
+    InventoryAmenityRun:
+      type: object
+      required: [business_date, iss_number, rooms, guests, comp_rooms, house_use_rooms, total_value, status, plan_version, held_lines, issue_id, created_at, reversal_number, cost_per_room, reversible, held_by_count, types, lines, room_list, short, journal]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        iss_number: { type: string }
+        rooms: { type: integer }
+        guests: { type: integer }
+        comp_rooms: { type: integer }
+        house_use_rooms: { type: integer }
+        total_value: { type: string }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        plan_version: { type: integer }
+        held_lines: { type: integer }
+        issue_id: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        reversal_number: { type: [string, "null"] }
+        cost_per_room: { type: string }
+        reversible: { type: boolean }
+        held_by_count: { type: [string, "null"] }
+        types: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunType" } }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunLine" } }
+        room_list: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunRoom" } }
+        short: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunLine" } }
+        journal: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityJournalLine" } }

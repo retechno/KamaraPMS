@@ -277,7 +277,7 @@ func TestApprovalRuleOfAKindWithoutAnAmount(t *testing.T) {
 func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 	w := newApprovalWorld(t)
 	list, err := w.rules.List(w.managers, w.prop, 2)
-	if err != nil || len(list) != len(iam.ApprovalKinds()) || len(list) != 23 {
+	if err != nil || len(list) != len(iam.ApprovalKinds()) || len(list) != 24 {
 		t.Fatalf("every kind is answered: %d %v", len(list), err)
 	}
 	for _, r := range list {
@@ -291,7 +291,7 @@ func TestApprovalRulesAreChangedAndRead(t *testing.T) {
 	_, err = w.rules.List(w.nobody, w.prop, 2)
 	wantCode(t, err, "PERMISSION_DENIED")
 	inForce, err := w.rules.InForce(w.nobody, w.prop, 2)
-	if err != nil || len(inForce) != 23 {
+	if err != nil || len(inForce) != 24 {
 		t.Fatalf("the rule in force is read by any grant: %d %v", len(inForce), err)
 	}
 	// invalid

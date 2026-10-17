@@ -91,6 +91,14 @@ type Posted struct {
 	ShortQty   decimal.Decimal // the part of an OUT that the shelf did not have (AllowShortfall)
 	ShortID    int64
 	Settled    []Settlement
+	// Slices are the layers an OUT took, oldest first (FIFO): what a transfer in copies so that the age of the goods is not lost (4.3).
+	Slices []LayerSlice
+}
+
+// LayerSlice is a piece of a FIFO layer: the day the goods were received, the quantity and the value.
+type LayerSlice struct {
+	ReceivedOn civil.Date
+	Qty, Value decimal.Decimal
 }
 
 // Settlement is the stock sold below zero that an IN settled.
@@ -207,8 +215,10 @@ type InArgs struct {
 	Counter   *Counter // nil: the movement has no journal (a transfer)
 	CostClass string   // default: the class of the item
 	OutletID  *int64   // default: the outlet of the warehouse
-	// ReceivedOn dates the FIFO layer; default the open day. A transfer in keeps the date of the layer it copies (PR 3).
+	// ReceivedOn dates the FIFO layer; default the open day.
 	ReceivedOn *civil.Date
+	// Layers are the pieces of the layers a transfer out took: the transfer in makes one layer for each, with the same cost and the same date (4.3). Without them the goods make one layer.
+	Layers []LayerSlice
 }
 
 // OutArgs is goods leaving a warehouse.
@@ -401,9 +411,15 @@ func (s *Stock) In(ctx context.Context, a InArgs) (Posted, error) {
 			if a.ReceivedOn != nil {
 				on = *a.ReceivedOn
 			}
-			if _, err := q.LedgerInsertLayer(ctx, inventorydb.LedgerInsertLayerParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, WarehouseID: a.WarehouseID, ItemID: a.ItemID,
-				MovementID: id, ReceivedOn: on, QtyIn: layerQty, QtyRemaining: layerQty, ValueRemaining: val.Sub(coveredCost)}); err != nil {
-				return Posted{}, err
+			pieces := []LayerSlice{{ReceivedOn: on, Qty: layerQty, Value: val.Sub(coveredCost)}}
+			if len(a.Layers) > 0 {
+				pieces = s.copyLayers(a.Layers, covered, val.Sub(coveredCost))
+			}
+			for _, sl := range pieces {
+				if _, err := q.LedgerInsertLayer(ctx, inventorydb.LedgerInsertLayerParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, WarehouseID: a.WarehouseID, ItemID: a.ItemID,
+					MovementID: id, ReceivedOn: sl.ReceivedOn, QtyIn: sl.Qty, QtyRemaining: sl.Qty, ValueRemaining: sl.Value}); err != nil {
+					return Posted{}, err
+				}
 			}
 		}
 	}
@@ -412,6 +428,40 @@ func (s *Stock) In(ctx context.Context, a InArgs) (Posted, error) {
 	last := unit
 	r.lastUnitCost = &last
 	return out, s.save(ctx, q, a.Pair, r)
+}
+
+// copyLayers cuts the pieces of the layers that a transfer carries down to what the destination really holds: the quantity that settled a shortfall there (covered) takes the oldest pieces first, and the value
+// that is left (total) is shared by the pieces in proportion, the last one taking the remainder, so that the layers add up to the value of the goods exactly.
+func (s *Stock) copyLayers(in []LayerSlice, covered, total decimal.Decimal) []LayerSlice {
+	left := covered
+	var kept []LayerSlice
+	for _, sl := range in {
+		if left.IsPositive() {
+			drop := decimal.Min(left, sl.Qty)
+			left = left.Sub(drop)
+			if drop.Equal(sl.Qty) {
+				continue
+			}
+			sl.Value = s.round(sl.Value.Mul(sl.Qty.Sub(drop)).Div(sl.Qty))
+			sl.Qty = sl.Qty.Sub(drop)
+		}
+		kept = append(kept, sl)
+	}
+	sum := decimal.Zero
+	for _, sl := range kept {
+		sum = sum.Add(sl.Qty)
+	}
+	remaining := total
+	for i := range kept {
+		if i == len(kept)-1 {
+			kept[i].Value = remaining
+			break
+		}
+		v := s.round(total.Mul(kept[i].Qty).Div(sum))
+		kept[i].Value = v
+		remaining = remaining.Sub(v)
+	}
+	return kept
 }
 
 // estimate is the unit cost of goods that were not there (4.4): the last unit cost of the balance, else the reference cost of the item, else the cost of the newest receipt of the
@@ -496,6 +546,9 @@ func (s *Stock) Out(ctx context.Context, a OutArgs) (Posted, error) {
 		}
 	}
 	out := Posted{MovementID: id, Qty: qty.Neg(), Value: total.Neg(), UnitCost: UnitCost(total, qty), Estimated: estimated, ShortQty: short}
+	for _, u := range uses {
+		out.Slices = append(out.Slices, LayerSlice{ReceivedOn: u.receivedOn, Qty: u.qty, Value: u.value})
+	}
 	if short.IsPositive() {
 		var debit, dept *int64
 		if a.Counter != nil {
@@ -518,6 +571,7 @@ func (s *Stock) Out(ctx context.Context, a OutArgs) (Posted, error) {
 
 type layerUse struct {
 	layerID    int64
+	receivedOn civil.Date
 	qty, value decimal.Decimal
 }
 
@@ -554,7 +608,7 @@ func (s *Stock) consume(ctx context.Context, q *inventorydb.Queries, p Pair, qty
 			QtyRemaining: l.QtyRemaining.Sub(take), ValueRemaining: l.ValueRemaining.Sub(val)}); err != nil {
 			return decimal.Zero, nil, err
 		}
-		uses = append(uses, layerUse{layerID: l.ID, qty: take, value: val})
+		uses = append(uses, layerUse{layerID: l.ID, receivedOn: l.ReceivedOn, qty: take, value: val})
 		remaining = remaining.Sub(take)
 		total = total.Add(val)
 	}
@@ -616,14 +670,25 @@ func (s *Stock) Reverse(ctx context.Context, a ReverseArgs) (Posted, error) {
 			return Posted{}, errNegativeStock(p.WarehouseID, p.ItemID, decimal.Max(r.qty, decimal.Zero), m.QtyDelta)
 		}
 		if s.b.Method == MethodFIFO {
-			layer, err := q.LedgerGetLayerOfMovement(ctx, inventorydb.LedgerGetLayerOfMovementParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, MovementID: m.ID})
-			if err != nil || !layer.QtyRemaining.Equal(layer.QtyIn) {
-				return Posted{}, errNotReversible("part of its layer was used", m.ID)
-			}
-			if err := q.LedgerUpdateLayer(ctx, inventorydb.LedgerUpdateLayerParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, ID: layer.ID, QtyRemaining: decimal.Zero, ValueRemaining: decimal.Zero}); err != nil {
+			layers, err := q.LedgerListLayersOfMovement(ctx, inventorydb.LedgerListLayersOfMovementParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, MovementID: m.ID})
+			if err != nil {
 				return Posted{}, err
 			}
-			value = layer.ValueRemaining.Neg()
+			if len(layers) == 0 {
+				return Posted{}, errNotReversible("part of its layer was used", m.ID)
+			}
+			value = decimal.Zero
+			for _, layer := range layers {
+				if !layer.QtyRemaining.Equal(layer.QtyIn) {
+					return Posted{}, errNotReversible("part of its layer was used", m.ID)
+				}
+				value = value.Sub(layer.ValueRemaining)
+			}
+			for _, layer := range layers {
+				if err := q.LedgerUpdateLayer(ctx, inventorydb.LedgerUpdateLayerParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, ID: layer.ID, QtyRemaining: decimal.Zero, ValueRemaining: decimal.Zero}); err != nil {
+					return Posted{}, err
+				}
+			}
 		} else if r.qty.Equal(m.QtyDelta) {
 			value = r.value.Neg() // it empties the balance: all the value that is left goes with it
 		}
@@ -819,4 +884,65 @@ func (s *Stock) Adjust(ctx context.Context, a AdjustArgs) (Posted, error) {
 	}
 	r.value = r.value.Add(val)
 	return Posted{MovementID: id, Value: val}, s.save(ctx, q, a.Pair, r)
+}
+
+// Gain books the goods a count found that the books did not have (4.7): an IN of the quantity at the last unit cost of the balance (the estimate of 4.4 when it has none). It ends the shortfalls of the pair
+// without a settlement (4.4 item 4): what was sold below zero is covered by the goods that were really there, so under FIFO the layer holds only what is on hand after them and the balance equals the
+// quantity that was counted. The kind is COUNT_GAIN; the pair is locked.
+func (s *Stock) Gain(ctx context.Context, p Pair, qty decimal.Decimal, ref Ref, counter *Counter) (Posted, error) {
+	q := s.q
+	qty = Round6(qty)
+	if !qty.IsPositive() {
+		return Posted{}, apperr.Invalid("the movement is invalid", apperr.FieldError{Field: "qty", Code: "INVALID_VALUE", Message: "a quantity above zero"})
+	}
+	r, err := s.row(p)
+	if err != nil {
+		return Posted{}, err
+	}
+	cost, estimated, err := s.estimate(ctx, q, p, r)
+	if err != nil {
+		return Posted{}, err
+	}
+	val := s.round(qty.Mul(cost))
+	openQty, err := q.LedgerOpenShortfallQty(ctx, inventorydb.LedgerOpenShortfallQtyParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, WarehouseID: p.WarehouseID, ItemID: p.ItemID})
+	if err != nil {
+		return Posted{}, err
+	}
+	id, err := s.insert(ctx, q, movementOut{pair: p, kind: KindCountGain, qty: qty, value: val, ref: ref, counter: counter, estimated: estimated})
+	if err != nil {
+		return Posted{}, err
+	}
+	if s.b.Method == MethodFIFO {
+		layerQty, layerValue := qty.Sub(openQty), val
+		if openQty.IsPositive() { // the layers hold nothing while stock is owed: what the balance owes in value is taken from the gain
+			layerValue = decimal.Max(r.value.Add(val), decimal.Zero)
+		}
+		if layerQty.IsPositive() {
+			if _, err := q.LedgerInsertLayer(ctx, inventorydb.LedgerInsertLayerParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, WarehouseID: p.WarehouseID, ItemID: p.ItemID,
+				MovementID: id, ReceivedOn: s.b.Date, QtyIn: layerQty, QtyRemaining: layerQty, ValueRemaining: layerValue}); err != nil {
+				return Posted{}, err
+			}
+		}
+	}
+	if openQty.IsPositive() {
+		if err := q.LedgerCloseShortfallsByCount(ctx, inventorydb.LedgerCloseShortfallsByCountParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, WarehouseID: p.WarehouseID, ItemID: p.ItemID}); err != nil {
+			return Posted{}, err
+		}
+	}
+	r.qty = r.qty.Add(qty)
+	r.value = r.value.Add(val)
+	last := cost
+	r.lastUnitCost = &last
+	if r.qty.IsZero() {
+		r.value = decimal.Zero
+	}
+	return Posted{MovementID: id, Qty: qty, Value: val, UnitCost: cost, Estimated: estimated}, s.save(ctx, q, p, r)
+}
+
+// ExpectedQty is the quantity of a locked pair as the writer holds it now: what a count compares the counted quantity with after the held rows before it were applied.
+func (s *Stock) ExpectedQty(p Pair) decimal.Decimal {
+	if r, ok := s.rows[p]; ok {
+		return r.qty
+	}
+	return decimal.Zero
 }

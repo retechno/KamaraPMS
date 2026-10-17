@@ -176,6 +176,8 @@ function splitSentence(l: InventoryBillPreview['lines'][number]): string {
   const where = Number(l.ppv_part) === 0 ? 'splitAllStock' : Number(l.inventory_part) === 0 ? 'splitAllPpv' : 'splitPartStock'
   return t('inventory.bill.splitOnHand', { item: l.item_name, billed: formatQty(l.billed_qty_stock), on: formatQty(l.on_hand_qty_stock), unit, where: t(`inventory.bill.${where}`) })
 }
+/** The VAT that a property books to the cost of the goods (the treatment EXPENSE) is part of the price difference of the summary: the label says how much, so that the difference is not read as a price only. */
+const vatInVariance = computed(() => (preview.value?.vat_treatment === 'EXPENSE' ? preview.value.lines.reduce((a, l) => a + Number(l.vat_amount), 0) : 0))
 const previewOf = (r: Row) => preview.value?.lines.find((l) => l.receipt_id === r.receipt_id && l.receipt_line_no === r.receipt_line_no)
 const needsApproval = computed(() => !!preview.value?.approval_required)
 
@@ -350,7 +352,7 @@ const billsOfMatches = computed(() => {
         <h3 class="m-0 text-sm font-semibold">{{ t('inventory.bill.summary') }}</h3>
         <dl class="m-0 mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-sm">
           <dt class="text-muted-foreground">{{ t('inventory.bill.receiptValue') }}</dt><dd class="m-0 text-right">{{ formatMoney(preview.receipt_total) }}</dd>
-          <dt class="text-muted-foreground">{{ t('inventory.bill.priceDifference') }}</dt><dd class="m-0 text-right" data-testid="sum-variance">{{ Number(preview.variance) > 0 ? '+' : '' }}{{ formatMoney(preview.variance) }}</dd>
+          <dt class="text-muted-foreground" data-testid="sum-variance-label">{{ vatInVariance > 0 ? t('inventory.bill.priceDifferenceVat', { vat: formatMoney(String(vatInVariance)) }) : t('inventory.bill.priceDifference') }}</dt><dd class="m-0 text-right" data-testid="sum-variance">{{ Number(preview.variance) > 0 ? '+' : '' }}{{ formatMoney(preview.variance) }}</dd>
           <dt class="text-muted-foreground">{{ t('inventory.bill.nonStock') }}</dt><dd class="m-0 text-right">{{ formatMoney(preview.extra_total) }}</dd>
           <dt class="text-muted-foreground">{{ t('inventory.bill.vatTotal') }}</dt><dd class="m-0 text-right">{{ formatMoney(preview.vat_total) }}</dd>
           <dt class="font-semibold">{{ t('inventory.bill.billTotal') }}</dt><dd class="m-0 text-right font-semibold" data-testid="sum-total">{{ formatMoney(preview.bill_total) }}</dd>

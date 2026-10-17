@@ -1627,6 +1627,64 @@ func (q *Queries) NextArrivalOfRoom(ctx context.Context, arg NextArrivalOfRoomPa
 	return i, err
 }
 
+const nightOccupancy = `-- name: NightOccupancy :many
+SELECT sr.room_id, rm.room_number, rm.room_type_id, s.id AS stay_id, (s.adult_count + s.child_count)::int AS guests, COALESCE(rp.occupancy_kind, 'PAID')::text AS occupancy_kind
+  FROM stay_rooms sr
+  JOIN stays s ON s.property_id = sr.property_id AND s.id = sr.stay_id
+  JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+  JOIN reservation_rooms l ON l.property_id = s.property_id AND l.id = s.reservation_room_id
+  LEFT JOIN rate_plans rp ON rp.property_id = l.property_id AND rp.id = l.rate_plan_id
+ WHERE sr.tenant_id = $1 AND sr.property_id = $2 AND s.status <> 'CANCELLED'
+   AND s.arrival_date <= $3::date AND $3::date < s.departure_date
+   AND sr.start_business_date <= $3::date AND (sr.end_business_date IS NULL OR $3::date < sr.end_business_date)
+ ORDER BY rm.room_number, sr.room_id
+`
+
+type NightOccupancyParams struct {
+	TenantID   int64
+	PropertyID int64
+	Bd         civil.Date
+}
+
+type NightOccupancyRow struct {
+	RoomID        int64
+	RoomNumber    string
+	RoomTypeID    int64
+	StayID        int64
+	Guests        int32
+	OccupancyKind string
+}
+
+// The rooms slept in on a business date (35-inventory.md 5.9): the stay-room segment that covers the night (start_business_date <= bd < the end, the rule of 00009 that the room charge uses), for a stay that is not
+// cancelled and whose arrival is not after the night and whose departure is after it. A guest who moved room that day is counted once, under the room and the room type of that night. The guests are the adults
+// plus the children of the stay; the occupancy kind is the one of the rate plan of the reservation room (PAID, COMPLIMENTARY, HOUSE_USE).
+func (q *Queries) NightOccupancy(ctx context.Context, arg NightOccupancyParams) ([]NightOccupancyRow, error) {
+	rows, err := q.db.Query(ctx, nightOccupancy, arg.TenantID, arg.PropertyID, arg.Bd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NightOccupancyRow{}
+	for rows.Next() {
+		var i NightOccupancyRow
+		if err := rows.Scan(
+			&i.RoomID,
+			&i.RoomNumber,
+			&i.RoomTypeID,
+			&i.StayID,
+			&i.Guests,
+			&i.OccupancyKind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateStayDeparture = `-- name: UpdateStayDeparture :one
 UPDATE stays SET departure_date = $1, version = version + 1, updated_by = $2
 WHERE tenant_id = $3 AND property_id = $4 AND id = $5

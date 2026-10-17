@@ -26,6 +26,7 @@ const (
 	KindTransferOut     = "TRANSFER_OUT"
 	KindTransferIn      = "TRANSFER_IN"
 	KindIssue           = "ISSUE"
+	KindIssueReversal   = "ISSUE_REVERSAL"
 	KindWaste           = "WASTE"
 	KindStaffMeal       = "STAFF_MEAL"
 	KindEntertainment   = "ENTERTAINMENT"
@@ -40,7 +41,7 @@ const (
 
 // inKinds put goods into a warehouse, outKinds take them out. The other three kinds move value only.
 var (
-	inKinds  = map[string]bool{KindOpening: true, KindReceipt: true, KindTransferIn: true, KindCountGain: true, KindPosSaleReturn: true}
+	inKinds  = map[string]bool{KindOpening: true, KindReceipt: true, KindTransferIn: true, KindCountGain: true, KindPosSaleReturn: true, KindIssueReversal: true}
 	outKinds = map[string]bool{KindReceiptReversal: true, KindSupplierReturn: true, KindTransferOut: true, KindIssue: true, KindWaste: true, KindStaffMeal: true,
 		KindEntertainment: true, KindCountLoss: true, KindPosSale: true}
 	// settlesShortfalls are the kinds of goods coming in that settle the stock sold below zero (4.4): a receipt and a transfer in. A count gain does not (it closes them, PR 3).

@@ -589,6 +589,20 @@ func (s *Service) ListItems(ctx context.Context, propertyID int64, f ItemFilter)
 		page.Items[i].Stock = append(page.Items[i].Stock, WarehouseStock{WarehouseID: r.WarehouseID, WarehouseCode: r.WarehouseCode, WarehouseName: r.WarehouseName, Qty: r.Qty, Value: r.Value,
 			AverageCost: averageOf(r.Qty, r.Value), MinQty: r.MinQty})
 	}
+	// the units of each item (the stock unit first, as the detail gives them): the forms of the movements choose a unit from the list without reading each item
+	us, err := q.ListItemUnitsOf(ctx, inventorydb.ListItemUnitsOfParams{TenantID: p.TenantID, PropertyID: propertyID, ItemIds: ids})
+	if err != nil {
+		return ItemPage{}, err
+	}
+	for _, u := range us {
+		i := index[u.ItemID]
+		unit := ItemUnit{UnitID: u.UnitID, UnitCode: u.UnitCode, StockNum: u.StockNum, StockDen: u.StockDen, IsPurchase: u.IsPurchase, IsRecipe: u.IsRecipe, IsDefaultPurchase: u.IsDefaultPurchase, IsDefaultRecipe: u.IsDefaultRecipe}
+		if u.UnitID == page.Items[i].StockUnitID {
+			page.Items[i].Units = append([]ItemUnit{unit}, page.Items[i].Units...)
+		} else {
+			page.Items[i].Units = append(page.Items[i].Units, unit)
+		}
+	}
 	if page.Total, err = countInt(q.CountItems(ctx, inventorydb.CountItemsParams{TenantID: p.TenantID, PropertyID: propertyID, CategoryID: f.CategoryID, Active: f.Active, Q: qtext, OnlyBelowMin: f.BelowMin})); err != nil {
 		return ItemPage{}, err
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,7 +21,7 @@ import (
 // the notices. It is a small engine of its own, not iam.Verify: it remembers the levels, who decided and what they changed. The service methods that decide (Approve, Return) are in requests.go; chainpath_guard_test.go
 // holds that nothing else writes the states SUBMITTED, APPROVED and RETURNED of a request.
 
-// Documents that have a chain. The requisition (SR) joins in PR 3.
+// Documents that have a chain: the purchase request and the store requisition.
 const (
 	DocPR = "PR"
 	DocSR = "SR"
@@ -426,10 +427,57 @@ const (
 	NoticeStuck    = "CHAIN_STUCK"
 )
 
-func (s *Service) notify(ctx context.Context, tenantID, propertyID int64, users []int64, kind string, stepID, requestID *int64) error {
+// docRef names a document that has a chain: a purchase request or a store requisition.
+type docRef struct {
+	Kind string
+	ID   int64
+}
+
+// chainDoc is what the engine needs to know about a document in its chain, whichever kind it is.
+type chainDoc struct {
+	Ref          docRef
+	Status       string
+	Cycle        int16
+	RequesterID  int64
+	DepartmentID *int64
+}
+
+func chainDocOfRequest(r inventorydb.GetRequestRow) chainDoc {
+	return chainDoc{Ref: docRef{DocPR, r.ID}, Status: r.Status, Cycle: r.Cycle, RequesterID: r.RequesterID, DepartmentID: r.DepartmentID}
+}
+
+// stepsOfCycle reads the steps of one round of a document.
+func (s *Service) stepsOfCycle(ctx context.Context, p auth.Principal, propertyID int64, d docRef, cycle int16) ([]inventorydb.InvApprovalStep, error) {
+	if d.Kind == DocSR {
+		return s.q(ctx).ListSRStepsOfCycle(ctx, inventorydb.ListSRStepsOfCycleParams{TenantID: p.TenantID, PropertyID: propertyID, RequisitionID: &d.ID, Cycle: cycle})
+	}
+	return s.q(ctx).ListStepsOfCycle(ctx, inventorydb.ListStepsOfCycleParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: &d.ID, Cycle: cycle})
+}
+
+// insertStep copies a level of the chain into a round of a document, waiting.
+func (s *Service) insertStep(ctx context.Context, p auth.Principal, propertyID int64, d docRef, cycle int16, l ApprovalLevel, editAllowed bool) error {
+	level := int16(l.LevelNo) //nolint:gosec // G115: at most 5
+	if d.Kind == DocSR {
+		_, err := s.q(ctx).InsertSRStep(ctx, inventorydb.InsertSRStepParams{TenantID: p.TenantID, PropertyID: propertyID, RequisitionID: &d.ID, Cycle: cycle, LevelNo: level, Name: l.Name,
+			ApproverKind: l.ApproverKind, Permission: l.Permission, ConditionKind: l.ConditionKind, Threshold: l.Threshold, EditAllowed: editAllowed, Status: StepWaiting})
+		return err
+	}
+	_, err := s.q(ctx).InsertStep(ctx, inventorydb.InsertStepParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: &d.ID, Cycle: cycle, LevelNo: level, Name: l.Name,
+		ApproverKind: l.ApproverKind, Permission: l.Permission, ConditionKind: l.ConditionKind, Threshold: l.Threshold, EditAllowed: editAllowed, Status: StepWaiting})
+	return err
+}
+
+// notifyDoc writes a notice for each user, about a document and perhaps one of its steps.
+func (s *Service) notifyDoc(ctx context.Context, tenantID, propertyID int64, users []int64, kind string, stepID *int64, d docRef) error {
 	now := s.clock.Now()
 	for _, u := range users {
-		if err := s.q(ctx).InsertNotice(ctx, inventorydb.InsertNoticeParams{TenantID: tenantID, PropertyID: propertyID, UserID: u, Kind: kind, StepID: stepID, RequestID: requestID, CreatedAt: now}); err != nil {
+		var err error
+		if d.Kind == DocSR {
+			err = s.q(ctx).InsertSRNotice(ctx, inventorydb.InsertSRNoticeParams{TenantID: tenantID, PropertyID: propertyID, UserID: u, Kind: kind, StepID: stepID, RequisitionID: &d.ID, CreatedAt: now})
+		} else {
+			err = s.q(ctx).InsertNotice(ctx, inventorydb.InsertNoticeParams{TenantID: tenantID, PropertyID: propertyID, UserID: u, Kind: kind, StepID: stepID, RequestID: &d.ID, CreatedAt: now})
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -446,15 +494,18 @@ func ids(ps []person) []int64 {
 
 // Notice is a line of the bell of a user.
 type Notice struct {
-	ID            int64      `json:"id"`
-	Kind          string     `json:"kind"`
-	RequestID     *int64     `json:"request_id"`
-	RequestNumber *string    `json:"request_number"`
-	StepID        *int64     `json:"step_id"`
-	StepName      *string    `json:"step_name"`
-	LevelNo       int        `json:"level_no"`
-	CreatedAt     time.Time  `json:"created_at"`
-	SeenAt        *time.Time `json:"seen_at"`
+	ID            int64   `json:"id"`
+	Kind          string  `json:"kind"`
+	RequestID     *int64  `json:"request_id"`
+	RequestNumber *string `json:"request_number"`
+	// RequisitionID and RequisitionNumber are set when the notice is about a store requisition (SR).
+	RequisitionID     *int64     `json:"requisition_id"`
+	RequisitionNumber *string    `json:"requisition_number"`
+	StepID            *int64     `json:"step_id"`
+	StepName          *string    `json:"step_name"`
+	LevelNo           int        `json:"level_no"`
+	CreatedAt         time.Time  `json:"created_at"`
+	SeenAt            *time.Time `json:"seen_at"`
 }
 
 // NoticeList is the bell: the latest notices and how many are not seen.
@@ -483,7 +534,8 @@ func (s *Service) Notices(ctx context.Context, propertyID int64) (NoticeList, er
 	}
 	out := NoticeList{Unseen: int(n), Data: make([]Notice, 0, len(rows))}
 	for _, r := range rows {
-		out.Data = append(out.Data, Notice{ID: r.ID, Kind: r.Kind, RequestID: r.RequestID, RequestNumber: r.RequestNumber, StepID: r.StepID, StepName: r.StepName, LevelNo: int(r.LevelNo), CreatedAt: r.CreatedAt, SeenAt: r.SeenAt})
+		out.Data = append(out.Data, Notice{ID: r.ID, Kind: r.Kind, RequestID: r.RequestID, RequestNumber: r.RequestNumber, RequisitionID: r.RequisitionID, RequisitionNumber: r.RequisitionNumber,
+			StepID: r.StepID, StepName: r.StepName, LevelNo: int(r.LevelNo), CreatedAt: r.CreatedAt, SeenAt: r.SeenAt})
 	}
 	return out, nil
 }
@@ -510,6 +562,10 @@ func (s *Service) MarkNoticeSeen(ctx context.Context, propertyID, id int64) erro
 
 // InboxItem is a document that waits for the signed-in user ("Perlu saya setujui").
 type InboxItem struct {
+	// DocType is PR or SR, DocID and Number name the document; RequestID and RequestNumber are those of a purchase request (zero and empty for a requisition).
+	DocType        string          `json:"doc_type"`
+	DocID          int64           `json:"doc_id"`
+	Number         string          `json:"number"`
 	RequestID      int64           `json:"request_id"`
 	RequestNumber  string          `json:"request_number"`
 	EstTotal       decimal.Decimal `json:"est_total"`
@@ -538,8 +594,24 @@ func (s *Service) Inbox(ctx context.Context, propertyID int64) ([]InboxItem, err
 	}
 	out := make([]InboxItem, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, InboxItem{RequestID: r.RequestID, RequestNumber: r.RequestNumber, EstTotal: r.EstTotal, DepartmentID: r.DepartmentID, DepartmentName: r.DepartmentName, RequesterID: r.RequesterID,
+		out = append(out, InboxItem{DocType: DocPR, DocID: r.RequestID, Number: r.RequestNumber, RequestID: r.RequestID, RequestNumber: r.RequestNumber, EstTotal: r.EstTotal, DepartmentID: r.DepartmentID, DepartmentName: r.DepartmentName, RequesterID: r.RequesterID,
 			RequesterName: r.RequesterName, SubmittedAt: r.SubmittedAt, StepID: r.StepID, LevelNo: int(r.LevelNo), StepName: r.StepName})
 	}
+	srs, err := s.q(ctx).RequisitionInbox(ctx, inventorydb.RequisitionInboxParams{TenantID: p.TenantID, PropertyID: propertyID, UserID: p.UserID, IsAdmin: p.IsTenantAdmin})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range srs {
+		out = append(out, InboxItem{DocType: DocSR, DocID: r.RequisitionID, Number: r.SrNumber, EstTotal: r.EstTotal, DepartmentID: r.DepartmentID, DepartmentName: r.DepartmentName, RequesterID: r.RequesterID,
+			RequesterName: r.RequesterName, SubmittedAt: r.SubmittedAt, StepID: r.StepID, LevelNo: int(r.LevelNo), StepName: r.StepName})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i].SubmittedAt, out[j].SubmittedAt
+		switch {
+		case a == nil || b == nil:
+			return a != nil
+		}
+		return a.Before(*b)
+	})
 	return out, nil
 }

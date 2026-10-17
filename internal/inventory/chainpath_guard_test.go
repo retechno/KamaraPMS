@@ -48,7 +48,7 @@ func scanChainPaths(rel string, src any) ([]string, error) {
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			switch v := n.(type) {
 			case *ast.CompositeLit:
-				if sel, ok := v.Type.(*ast.SelectorExpr); ok && sel.Sel.Name == "SetRequestStateParams" {
+				if sel, ok := v.Type.(*ast.SelectorExpr); ok && (sel.Sel.Name == "SetRequestStateParams" || sel.Sel.Name == "SetRequisitionStateParams") {
 					for _, el := range v.Elts {
 						if kv, ok := el.(*ast.KeyValueExpr); ok {
 							if k, ok := kv.Key.(*ast.Ident); ok && k.Name == "Status" && isGuardedStatus(kv.Value) {
@@ -62,7 +62,7 @@ func scanChainPaths(rel string, src any) ([]string, error) {
 					switch sel.Sel.Name {
 					case "Write":
 						audits = true
-					case "notify", "advance", "finishRequest":
+					case "notify", "notifyDoc", "advance", "finishRequest":
 						notifies = true
 					}
 				}
@@ -73,7 +73,7 @@ func scanChainPaths(rel string, src any) ([]string, error) {
 			continue
 		}
 		name := fn.Name.Name
-		if rel != "inventory/requests.go" {
+		if rel != "inventory/requests.go" && rel != "inventory/requisitions.go" {
 			out = append(out, rel+": "+name+" writes a state of the chain, which only the engine does")
 			continue
 		}

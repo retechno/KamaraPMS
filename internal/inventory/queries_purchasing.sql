@@ -173,9 +173,10 @@ INSERT INTO inv_notices (tenant_id, property_id, user_id, kind, step_id, request
 VALUES (@tenant_id, @property_id, @user_id, @kind, sqlc.narg(step_id), sqlc.narg(request_id), @created_at);
 
 -- name: ListNotices :many
-SELECT n.id, n.kind, n.step_id, n.request_id, r.request_number, n.created_at, n.seen_at, st.name AS step_name, COALESCE(st.level_no, 0)::int AS level_no
+SELECT n.id, n.kind, n.step_id, n.request_id, r.request_number, n.requisition_id, sr.sr_number AS requisition_number, n.created_at, n.seen_at, st.name AS step_name, COALESCE(st.level_no, 0)::int AS level_no
   FROM inv_notices n
   LEFT JOIN inv_requests r ON r.property_id = n.property_id AND r.id = n.request_id
+  LEFT JOIN inv_requisitions sr ON sr.property_id = n.property_id AND sr.id = n.requisition_id
   LEFT JOIN inv_approval_steps st ON st.property_id = n.property_id AND st.id = n.step_id
  WHERE n.tenant_id = @tenant_id AND n.property_id = @property_id AND n.user_id = @user_id
  ORDER BY n.id DESC

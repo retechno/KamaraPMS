@@ -36,6 +36,8 @@ type Service struct {
 	// pay and approver are wired by internal/app (SetPayables, SetApprover): the bills of the purchasing are posted by the payables, and a price difference above the tolerance is approved with credentials.
 	pay      Payables
 	approver Approver
+	// occupancy is the front desk's answer to which rooms were slept in (SetOccupancy): the amenities of the close need it.
+	occupancy Occupancy
 }
 
 // NewService wires the service.

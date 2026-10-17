@@ -279,6 +279,10 @@ func TestMinimumLevelsAreReplacedAsAWholeAndMarkTheItem(t *testing.T) {
 	if beras == nil || !beras.BelowMin || beras.BelowZero || !beras.QtyOnHand.Equal(dec("5")) || len(beras.Stock) != 1 || !beras.Stock[0].MinQty.Equal(dec("10")) {
 		t.Fatalf("beras: %+v", beras)
 	}
+	// the list carries the units of each item, the stock unit first, so that a form can choose a unit without reading every item
+	if len(beras.Units) == 0 || beras.Units[0].UnitID != beras.StockUnitID {
+		t.Fatalf("the units of beras in the list: %+v", beras.Units)
+	}
 	below, err := f.svc.ListItems(f.admin, f.propID, inventory.ItemFilter{BelowMin: true})
 	must(t, err)
 	if below.Total != 1 || len(below.Items) != 1 {

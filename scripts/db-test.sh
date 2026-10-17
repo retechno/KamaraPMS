@@ -115,7 +115,9 @@ if [ "$rp_before" != "$rp_after" ]; then echo "FAIL: running 00077 again changed
 echo "==> migration 00084 (inventory) on properties with and without the accounts it adds"
 M84="$(ls "$ROOT"/migrations/00084_*.sql)"
 M85="$(ls "$ROOT"/migrations/00085_*.sql)"
-# 00085 stands on 00084: it goes first, and comes back after 00084 does
+M86="$(ls "$ROOT"/migrations/00086_*.sql)"
+# 00086 stands on 00085 and 00085 on 00084: they go first, and come back after 00084 does
+section down "$M86" | psql_run
 section down "$M85" | psql_run
 section down "$M84" | psql_run
 psql_run < "$ROOT/db/tests/migration_00084_pre.sql"
@@ -150,6 +152,20 @@ psql_run -c "DELETE FROM inv_approval_settings"
 section down "$M85" | psql_run >/dev/null
 psql_run < "$ROOT/db/tests/migration_00085_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M85" | psql_run >/dev/null
+
+echo "==> migration 00086 (movements) on the properties that exist"
+section up "$M86" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00086_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# the Down is refused while the movements hold anything (an amenities plan is enough), and changes nothing
+psql_run -c "INSERT INTO inv_amenity_plans (tenant_id, property_id, version_no, effective_from, is_enabled) SELECT p.tenant_id, p.id, 1, current_date, false FROM properties p WHERE p.code = 'I1'"
+if section down "$M86" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m86-down.err"; then echo "FAIL: the Down of 00086 ran while the movements held data" >&2; exit 1; fi
+grep -q "cannot roll back 00086" "${TMPDIR:-/tmp}/m86-down.err" || { echo "FAIL: the Down of 00086 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m86-down.err" >&2; exit 1; }
+echo "    down refused while the movements hold data"
+# an amenities plan is immutable, so the test clears the table the way the schema tests do: by truncating after switching the trigger off
+psql_run -c "ALTER TABLE inv_amenity_plans DISABLE TRIGGER inv_amenity_plans_append_only" -c "DELETE FROM inv_amenity_plans" -c "ALTER TABLE inv_amenity_plans ENABLE TRIGGER inv_amenity_plans_append_only"
+section down "$M86" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00086_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M86" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

@@ -128,6 +128,8 @@ const (
 	PermInventoryManage  Permission = "inventory.manage"
 	PermInventoryOpening Permission = "inventory.opening"
 	// Purchasing (PR 2): the request, the order, the receipt, the bill drafts, the approvals of the chain and of a price variance.
+	PermInventoryMove         Permission = "inventory.move"
+	PermInventoryCount        Permission = "inventory.count"
 	PermInventoryRequest      Permission = "inventory.request"
 	PermInventoryPurchase     Permission = "inventory.purchase"
 	PermInventoryReceive      Permission = "inventory.receive"
@@ -252,6 +254,8 @@ var Catalogue = []PermissionInfo{
 	{PermInventoryView, "Inventory", "Read items, warehouses, stock, the stock card and the opening stock", "S5"},
 	{PermInventoryManage, "Inventory", "Set up the inventory: the costing method, units, categories with their accounts, items, warehouses and minimum levels", "S5"},
 	{PermInventoryOpening, "Inventory", "Post the opening stock of a warehouse", "S5"},
+	{PermInventoryMove, "Inventory", "Transfer goods between warehouses, issue goods to a department, record waste, staff meals and entertainment", "S5"},
+	{PermInventoryCount, "Inventory", "Start, enter and submit a stock count of a warehouse", "S5"},
 	{PermInventoryRequest, "Inventory", "Write, submit and recall purchase requests", "S5"},
 	{PermInventoryPurchase, "Inventory", "Write, send, cancel and close purchase orders", "S5"},
 	{PermInventoryReceive, "Inventory", "Receive goods against an order or without one, reverse a receipt on its day and return goods to the supplier", "S5"},

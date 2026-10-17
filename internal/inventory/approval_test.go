@@ -31,9 +31,12 @@ func uid(t *testing.T, ctx context.Context) int64 {
 	return p.UserID
 }
 
-func newChain(t *testing.T) *cfx {
+func newChain(t *testing.T) *cfx { return newChainWith(t, inventory.MethodAverage) }
+
+// newChainWith is the fixture of the chain for a costing method.
+func newChainWith(t *testing.T, method string) *cfx {
 	t.Helper()
-	p := newPurchasing(t, inventory.MethodAverage, 0)
+	p := newPurchasing(t, method, 0)
 	p.settings(t, func(s *inventory.SettingsInput) { s.PoRequiresPr = true })
 	c := &cfx{pfx: p}
 	list, err := p.Departments.List(p.admin, p.propID, departments.Filter{})

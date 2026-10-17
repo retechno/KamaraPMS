@@ -163,7 +163,7 @@ func (w world) concrete(r routeSpec) string {
 		switch m {
 		case "{propertyId}":
 			return w.prop
-		case "{start}":
+		case "{start}", "{date}":
 			return "2026-01-01"
 		case "{kind}":
 			return "COMPLIMENTARY"

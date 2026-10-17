@@ -91,8 +91,8 @@ watch([pid, shown], () => void load())
       </div>
       <ul class="m-0 mt-2 max-h-72 list-none overflow-y-auto p-0 text-sm">
         <li v-for="n in list.data.slice(0, 8)" :key="n.id" class="border-t border-border first:border-0">
-          <RouterLink :to="n.request_id ? `/inventory/requests/${n.request_id}` : '/inventory/approvals'" class="block py-2 no-underline" :class="n.seen_at ? 'text-muted-foreground' : 'font-medium text-foreground'" :data-testid="`notice-${n.id}`" @click="seen(n.id)">
-            {{ t(`inventory.bell.kind.${n.kind}`, { number: n.request_number ?? '', level: n.step_name ?? '' }) }}
+          <RouterLink :to="n.request_id ? `/inventory/requests/${n.request_id}` : n.requisition_id ? `/inventory/requisitions/${n.requisition_id}` : '/inventory/approvals'" class="block py-2 no-underline" :class="n.seen_at ? 'text-muted-foreground' : 'font-medium text-foreground'" :data-testid="`notice-${n.id}`" @click="seen(n.id)">
+            {{ t(`inventory.bell.kind.${n.kind}`, { number: n.request_number ?? n.requisition_number ?? '', level: n.step_name ?? '' }) }}
             <span class="block text-xs font-normal text-muted-foreground">{{ formatDate(n.created_at.slice(0, 10)) }}</span>
           </RouterLink>
         </li>

@@ -74,6 +74,19 @@ describe('NightAuditView', () => {
     expect(w.get('[data-testid=run-audit]').attributes('disabled')).toBeDefined()
   })
 
+  it('shows an open count as a blocker with the way to the counts, and the amenities of a frozen warehouse as a warning', async () => {
+    const w = mountView({
+      ...clean(), can_run: false,
+      blockers: { ...clean().blockers, stock: [{ code: 'INVENTORY_COUNT_OPEN', ref: 'CNT-000001', message: 'the count CNT-000001 of Gudang Bar is still open: it freezes the warehouse' }] },
+      warnings: { ...clean().warnings, stock: [{ code: 'AMENITY_HELD', ref: 'CNT-000001', message: 'the amenities warehouse is frozen by the count CNT-000001' }] },
+    })
+    await flushPromises()
+    expect(w.get('[data-testid=stock-blockers]').text()).toContain('CNT-000001')
+    expect(w.get('[data-testid=stock-blockers] a').attributes('href')).toBe('/inventory/counts')
+    expect(w.get('[data-testid=warnings] [data-testid=stock-AMENITY_HELD] a').attributes('href')).toBe('/inventory/amenities')
+    expect(w.get('[data-testid=run-audit]').attributes('disabled')).toBeDefined()
+  })
+
   it('shows why the day could not close with its journal, and will not run', async () => {
     const w = mountView({
       ...clean(), can_run: false,

@@ -514,3 +514,28 @@ func (s *Service) NextArrivalOfRoom(ctx context.Context, propertyID, roomID int6
 		ArrivalDate: r.ArrivalDate, DepartureDate: r.DepartureDate, Nights: r.ArrivalDate.DaysUntil(r.DepartureDate), AdultCount: int(r.AdultCount), ChildCount: int(r.ChildCount),
 	}, nil
 }
+
+// NightRoom is a room slept in on a business date.
+type NightRoom struct {
+	RoomID     int64
+	RoomNumber string
+	RoomTypeID int64
+	StayID     int64
+	Guests     int
+	Kind       string // PAID, COMPLIMENTARY or HOUSE_USE
+}
+
+// NightOccupancy lists the rooms slept in on a business date, by the rule of the room night of the stay-room segments (the one the room charge uses): the arrival night counts, the departure day does not, a
+// guest who moved room that day counts once, under the room of that night; cancelled stays do not count. It reads; it takes no lock, because the night audit that asks has the stays and the folios locked
+// already (35-inventory.md 5.9).
+func (s *Service) NightOccupancy(ctx context.Context, tenantID, propertyID int64, date civil.Date) ([]NightRoom, error) {
+	rows, err := s.q(ctx).NightOccupancy(ctx, frontdeskdb.NightOccupancyParams{TenantID: tenantID, PropertyID: propertyID, Bd: date})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]NightRoom, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, NightRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, RoomTypeID: r.RoomTypeID, StayID: r.StayID, Guests: int(r.Guests), Kind: r.OccupancyKind})
+	}
+	return out, nil
+}
