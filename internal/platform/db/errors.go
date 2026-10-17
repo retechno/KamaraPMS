@@ -438,6 +438,9 @@ var constraintErrors = map[string]mapped{
 	"inventory_costing_method_locked":     {apperr.KindConflict, "COSTING_METHOD_LOCKED", "the costing method cannot change after the first stock movement"},
 	"inventory_settings_pct_ck":           {apperr.KindInvalid, "INVALID_VALUE", "a tolerance is a percentage between 0 and 100"},
 	"inventory_settings_method_ck":        {apperr.KindInvalid, "INVALID_VALUE", "the costing method is AVERAGE or FIFO"},
+	"inventory_settings_engineering_fk":   {apperr.KindInvalid, "DEPARTMENT_NOT_FOUND", "the department does not exist in this property"},
+	"inv_cost_targets_pct_ck":             {apperr.KindInvalid, "INVALID_VALUE", "a target is a percentage above 0 and up to 100"},
+	"inv_cost_targets_outlet_fk":          {apperr.KindInvalid, "OUTLET_NOT_FOUND", "the outlet does not exist in this property"},
 	// purchasing (35-inventory.md, PR 2)
 	"inv_requests_client_uk":            {apperr.KindConflict, "DUPLICATE_REQUEST", "this request was created already"},
 	"inv_requests_department_ck":        {apperr.KindInvalid, "DEPARTMENT_REQUIRED", "a request that is submitted names the department whose head approves it"},

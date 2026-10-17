@@ -102,6 +102,7 @@ export const navigation: NavSection[] = [
     id: 'inventory',
     icon: Boxes,
     items: [
+      { id: 'inventoryHome', to: '/inventory', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
       { id: 'inventoryItems', to: '/inventory/items', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
       { id: 'inventoryOpenings', to: '/inventory/openings', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
       { id: 'inventoryWarehouses', to: '/inventory/warehouses', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },

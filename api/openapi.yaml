@@ -10415,9 +10415,11 @@ paths:
         - { name: item, in: query, description: "Item id (required)", schema: { type: integer } }
         - { name: from, in: query, description: "Start of the period; the card starts from the opening balance of that day", schema: { $ref: "#/components/schemas/Date" } }
         - { name: to, in: query, description: "End of the period", schema: { $ref: "#/components/schemas/Date" } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
       responses:
         "200":
-          description: The card.
+          description: The card (a CSV file with format=csv).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/InventoryStockCard" }
@@ -11831,6 +11833,218 @@ paths:
               schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventorySalesWithoutDeduction" } } } }
         "403": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/dashboard:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getInventoryDashboard
+      summary: "The summary at the top of the inventory page"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryDashboard" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/daily-cost:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryDailyCost
+      summary: "The daily cost of all costs (D31): per day, month to date, by kind and department, with the targets"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryDailyCost" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/outlet-cost:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryOutletCost
+      summary: "Food and beverage cost per outlet: theory against actual"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryOutletCost" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/fb-reconciliation:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryFbReconciliation
+      summary: "The reconciliation of the food and beverage cost, with the check against the general ledger"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryReconciliation" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/stock-value:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryStockValue
+      summary: "The value of the stock by warehouse and category, against the control accounts"
+      tags: [inventory]
+      parameters:
+        - { name: as_of, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryValueReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/low-stock:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryLowStock
+      summary: "Items below their minimum"
+      tags: [inventory]
+      parameters:
+        - { name: warehouse_id, in: query, description: "", schema: { type: integer } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryLowStockRow" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/negative-stock:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryNegativeStock
+      summary: "Stock sold before the goods came in, still open"
+      tags: [inventory]
+      parameters:
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryNegativeStock" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/received-not-invoiced:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryReceivedNotInvoiced
+      summary: "Receipts that nobody has billed, by age"
+      tags: [inventory]
+      parameters:
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryGrni" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/usage:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryUsage
+      summary: "What the departments took from the stock"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: department_id, in: query, description: "", schema: { type: integer } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryUsage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/cost-targets:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryCostTargets
+      summary: "The target cost percentages of food and beverage, for the property and for the outlets"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventoryCostTarget" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setInventoryCostTarget
+      summary: "Sets the target of a class for the property (no outlet_id) or for one outlet"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryCostTarget" }
+      responses:
+        "200":
+          description: The target.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCostTarget" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteInventoryCostTarget
+      summary: "Removes a target; an outlet without its own takes the property's"
+      tags: [inventory]
+      parameters:
+        - { name: outlet_id, in: query, description: "Absent: the property's target.", schema: { type: integer } }
+        - { name: class, in: query, required: true, description: "", schema: { type: string, enum: [FOOD, BEVERAGE] } }
+      responses:
+        "204": { description: Removed. }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -20180,7 +20394,7 @@ components:
         rejected: { type: integer }
     InventorySettings:
       type: object
-      required: [exists, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version]
+      required: [exists, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, engineering_department_id, version]
       properties:
         exists: { type: boolean, description: "False for a property that has never saved the settings: the values are the defaults." }
         costing_method: { type: string, enum: [AVERAGE, FIFO] }
@@ -20192,6 +20406,7 @@ components:
         direct_receipt_limit: { type: [string, "null"] }
         count_blocks_night_audit: { type: boolean }
         count_blind: { type: boolean }
+        engineering_department_id: { type: [integer, "null"], format: int64, description: "The department whose manual issues are the engineering cost of the daily cost report; null: none." }
         version: { type: integer }
     InventorySettingsInput:
       type: object
@@ -20205,6 +20420,7 @@ components:
         direct_receipt_limit: { type: [string, "null"] }
         count_blocks_night_audit: { type: boolean }
         count_blind: { type: boolean }
+        engineering_department_id: { type: [integer, "null"], format: int64 }
         version: { type: integer }
     InventorySetupReport:
       type: object
@@ -21855,6 +22071,297 @@ components:
       properties:
         summary: { $ref: "#/components/schemas/InventoryQueueSummary" }
         rows: { type: array, items: { $ref: "#/components/schemas/InventoryQueueRow" } }
+    InventoryCostTarget:
+      type: object
+      required: [outlet_id, class, target_pct]
+      properties:
+        outlet_id: { type: [integer, "null"], format: int64, description: "null: the property's target, which an outlet without its own takes." }
+        class: { type: string, enum: [FOOD, BEVERAGE] }
+        target_pct: { type: string, description: "Above 0 and up to 100, two decimals." }
+    InventoryFbPart:
+      type: object
+      required: [revenue, cost, pct, target_pct, above_target, mtd_pct]
+      properties:
+        revenue: { type: string }
+        cost: { type: string }
+        pct: { type: [string, "null"] }
+        target_pct: { type: [string, "null"] }
+        above_target: { type: boolean }
+        mtd_pct: { type: [string, "null"] }
+    InventoryDailyCostDay:
+      type: object
+      required: [date, live, kinds, total, food, beverage, fb, occupied_rooms, amenity_cost_per_room, departments]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        live: { type: boolean, description: "True for a day the close has not stored (the open day): computed from the ledger." }
+        kinds: { type: object, additionalProperties: { type: string }, description: "Amount by kind of cost (SALE_COST_FOOD, SALE_COST_BEVERAGE, WASTE, STAFF_MEAL, ENTERTAINMENT, AMENITY, ENGINEERING, OTHER_USE, COUNT_VARIANCE, PRICE_VARIANCE)." }
+        total: { type: string }
+        food: { $ref: "#/components/schemas/InventoryFbPart" }
+        beverage: { $ref: "#/components/schemas/InventoryFbPart" }
+        fb: { $ref: "#/components/schemas/InventoryFbPart" }
+        occupied_rooms: { type: integer }
+        amenity_cost_per_room: { type: [string, "null"] }
+        departments: { type: object, additionalProperties: { type: string }, description: "Amount by department id; 0 is the cost with no department." }
+    InventoryNamedRef:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+    InventoryDailyCost:
+      type: object
+      required: [from, to, business_date, mtd_from, days, period, mtd, departments, targets]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        business_date: { $ref: "#/components/schemas/Date" }
+        mtd_from: { $ref: "#/components/schemas/Date" }
+        days: { type: array, items: { $ref: "#/components/schemas/InventoryDailyCostDay" } }
+        period: { $ref: "#/components/schemas/InventoryDailyCostDay" }
+        mtd: { $ref: "#/components/schemas/InventoryDailyCostDay" }
+        departments: { type: array, items: { $ref: "#/components/schemas/InventoryNamedRef" } }
+        targets: { type: array, items: { $ref: "#/components/schemas/InventoryCostTarget" } }
+    InventoryGlCheckLine:
+      type: object
+      required: [key, stock, gl, difference]
+      properties:
+        key: { type: string }
+        stock: { type: string }
+        gl: { type: string }
+        difference: { type: string }
+    InventoryGlCheck:
+      type: object
+      required: [status, gl_through, lines, stock_total, gl_total, difference]
+      properties:
+        status: { type: string, enum: [MATCH, DIFFERENCE, PENDING] }
+        gl_through: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryGlCheckLine" } }
+        stock_total: { type: string }
+        gl_total: { type: string }
+        difference: { type: string }
+    InventoryReconColumn:
+      type: object
+      required: [opening, purchases, transfer_in, transfer_out, closing, goods_used, staff_meal, entertainment, net_cost, revenue, actual_pct, theory, theory_pct, difference, difference_points, waste, count_variance, no_recipe_estimate, other_outflows, target_pct]
+      properties:
+        opening: { type: string }
+        purchases: { type: string }
+        transfer_in: { type: string }
+        transfer_out: { type: string }
+        closing: { type: string }
+        goods_used: { type: string }
+        staff_meal: { type: string }
+        entertainment: { type: string }
+        net_cost: { type: string }
+        revenue: { type: string }
+        actual_pct: { type: [string, "null"] }
+        theory: { type: string }
+        theory_pct: { type: [string, "null"] }
+        difference: { type: string }
+        difference_points: { type: [string, "null"] }
+        waste: { type: string }
+        count_variance: { type: string }
+        no_recipe_estimate: { type: string }
+        other_outflows: { type: string }
+        target_pct: { type: [string, "null"] }
+    InventoryReconciliation:
+      type: object
+      required: [from, to, food, beverage, total, closing_basis, gl]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        food: { $ref: "#/components/schemas/InventoryReconColumn" }
+        beverage: { $ref: "#/components/schemas/InventoryReconColumn" }
+        total: { $ref: "#/components/schemas/InventoryReconColumn" }
+        closing_basis: { type: string, enum: [COUNT, BOOK] }
+        gl: { $ref: "#/components/schemas/InventoryGlCheck" }
+    InventoryOutletCostRow:
+      type: object
+      required: [outlet_id, outlet_code, outlet_name, warehouse_name, class, revenue, no_recipe_revenue, theory, theory_pct, count_variance, actual, actual_pct, basis, difference, waste, staff_meal, entertainment, target_pct]
+      properties:
+        outlet_id: { type: [integer, "null"], format: int64 }
+        outlet_code: { type: string }
+        outlet_name: { type: string }
+        warehouse_name: { type: string }
+        class: { type: string, enum: [FOOD, BEVERAGE] }
+        revenue: { type: string }
+        no_recipe_revenue: { type: string }
+        theory: { type: string }
+        theory_pct: { type: [string, "null"] }
+        count_variance: { type: string }
+        actual: { type: string }
+        actual_pct: { type: [string, "null"] }
+        basis: { type: string, enum: [COUNT, BOOK] }
+        difference: { type: string }
+        waste: { type: string }
+        staff_meal: { type: string }
+        entertainment: { type: string }
+        target_pct: { type: [string, "null"] }
+    InventoryOutletCost:
+      type: object
+      required: [from, to, rows, gl]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventoryOutletCostRow" } }
+        gl: { $ref: "#/components/schemas/InventoryGlCheck" }
+    InventoryValueCell:
+      type: object
+      required: [category_id, category_code, category_name, account_id, items, value]
+      properties:
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        account_id: { type: integer, format: int64 }
+        items: { type: integer }
+        value: { type: string }
+    InventoryValueWarehouse:
+      type: object
+      required: [warehouse_id, code, name, categories, total]
+      properties:
+        warehouse_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        categories: { type: array, items: { $ref: "#/components/schemas/InventoryValueCell" } }
+        total: { type: string }
+    InventoryValueAccount:
+      type: object
+      required: [account_id, code, name, stock, gl, difference]
+      properties:
+        account_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        stock: { type: string }
+        gl: { type: string }
+        difference: { type: string }
+    InventoryValueReport:
+      type: object
+      required: [as_of, live, gl_through, status, warehouses, categories, accounts, total]
+      properties:
+        as_of: { $ref: "#/components/schemas/Date" }
+        live: { type: boolean }
+        gl_through: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        status: { type: string, enum: [MATCH, DIFFERENCE, PENDING] }
+        warehouses: { type: array, items: { $ref: "#/components/schemas/InventoryValueWarehouse" } }
+        categories: { type: array, items: { $ref: "#/components/schemas/InventoryValueCell" } }
+        accounts: { type: array, items: { $ref: "#/components/schemas/InventoryValueAccount" } }
+        total: { type: string }
+    InventoryLowStockRow:
+      type: object
+      required: [warehouse_id, warehouse_code, warehouse_name, item_id, item_code, item_name, unit_code, qty, min_qty, reorder_qty, missing, value]
+      properties:
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_code: { type: string }
+        warehouse_name: { type: string }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        qty: { type: string }
+        min_qty: { type: string }
+        reorder_qty: { type: string }
+        missing: { type: string }
+        value: { type: string }
+    InventoryNegativeStockRow:
+      type: object
+      required: [shortfall_id, warehouse_id, warehouse_code, warehouse_name, item_id, item_code, item_name, unit_code, qty_open, est_unit_cost, est_value, balance_qty, since, age_days, source]
+      properties:
+        shortfall_id: { type: integer, format: int64 }
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_code: { type: string }
+        warehouse_name: { type: string }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        qty_open: { type: string }
+        est_unit_cost: { type: string }
+        est_value: { type: string }
+        balance_qty: { type: string }
+        since: { $ref: "#/components/schemas/Date" }
+        age_days: { type: integer }
+        source: { type: string }
+    InventoryNegativeStock:
+      type: object
+      required: [business_date, rows, total]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventoryNegativeStockRow" } }
+        total: { type: string }
+    InventoryGrniRow:
+      type: object
+      required: [draft_id, receipt_id, receipt_number, received_on, supplier_id, supplier_name, warehouse_name, status, age_days, bucket, value]
+      properties:
+        draft_id: { type: integer, format: int64 }
+        receipt_id: { type: integer, format: int64 }
+        receipt_number: { type: string }
+        received_on: { $ref: "#/components/schemas/Date" }
+        supplier_id: { type: integer, format: int64 }
+        supplier_name: { type: string }
+        warehouse_name: { type: string }
+        status: { type: string }
+        age_days: { type: integer }
+        bucket: { type: string, enum: ["0-30", "31-60", "61-90", "90+"] }
+        value: { type: string }
+    InventoryGrniBucket:
+      type: object
+      required: [bucket, count, value]
+      properties:
+        bucket: { type: string }
+        count: { type: integer }
+        value: { type: string }
+    InventoryGrni:
+      type: object
+      required: [as_of, rows, buckets, total, ledger_balance]
+      properties:
+        as_of: { $ref: "#/components/schemas/Date" }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventoryGrniRow" } }
+        buckets: { type: array, items: { $ref: "#/components/schemas/InventoryGrniBucket" } }
+        total: { type: string }
+        ledger_balance: { type: string, description: "What the account of goods received not invoiced holds according to the stock ledger and the bills, positive for a liability." }
+    InventoryUsageItem:
+      type: object
+      required: [item_id, item_code, item_name, unit_code, category_name, kind, qty, value]
+      properties:
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        category_name: { type: string }
+        kind: { type: string, enum: [ISSUE, WASTE, STAFF_MEAL, ENTERTAINMENT] }
+        qty: { type: string }
+        value: { type: string }
+    InventoryUsageDepartment:
+      type: object
+      required: [department_id, name, total, by_kind, items]
+      properties:
+        department_id: { type: [integer, "null"], format: int64 }
+        name: { type: string }
+        total: { type: string }
+        by_kind: { type: object, additionalProperties: { type: string } }
+        items: { type: array, items: { $ref: "#/components/schemas/InventoryUsageItem" } }
+    InventoryUsage:
+      type: object
+      required: [from, to, departments, total]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        departments: { type: array, items: { $ref: "#/components/schemas/InventoryUsageDepartment" } }
+        total: { type: string }
+    InventoryDashboard:
+      type: object
+      required: [business_date, mtd_from, stock_value, food, beverage, fb, negative_items, negative_value, below_min, waiting_approvals]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        mtd_from: { $ref: "#/components/schemas/Date" }
+        stock_value: { type: string }
+        food: { $ref: "#/components/schemas/InventoryFbPart" }
+        beverage: { $ref: "#/components/schemas/InventoryFbPart" }
+        fb: { $ref: "#/components/schemas/InventoryFbPart" }
+        negative_items: { type: integer }
+        negative_value: { type: string }
+        below_min: { type: integer }
+        waiting_approvals: { type: integer }
     InventorySalesWithoutDeduction:
       type: object
       required: [bill_line_id, bill_number, outlet_id, outlet_code, outlet_name, product_id, product_name, quantity, sent_on, voided]

@@ -29,20 +29,23 @@ type Settings struct {
 	DirectReceiptLimit    *decimal.Decimal `json:"direct_receipt_limit"`
 	CountBlocksNightAudit bool             `json:"count_blocks_night_audit"`
 	CountBlind            bool             `json:"count_blind"`
-	Version               int32            `json:"version"`
+	// EngineeringDepartmentID is the department whose manual USE issues are the engineering cost of the daily cost report (12.2); nil: none.
+	EngineeringDepartmentID *int64 `json:"engineering_department_id"`
+	Version                 int32  `json:"version"`
 }
 
 // SettingsInput changes the settings; the costing method is accepted only before the first stock movement.
 type SettingsInput struct {
-	CostingMethod         string           `json:"costing_method"`
-	PriceTolerancePct     decimal.Decimal  `json:"price_tolerance_pct"`
-	QtyTolerancePct       decimal.Decimal  `json:"qty_tolerance_pct"`
-	OverReceiptPct        decimal.Decimal  `json:"over_receipt_pct"`
-	PoRequiresPr          bool             `json:"po_requires_pr"`
-	DirectReceiptLimit    *decimal.Decimal `json:"direct_receipt_limit"`
-	CountBlocksNightAudit bool             `json:"count_blocks_night_audit"`
-	CountBlind            bool             `json:"count_blind"`
-	Version               int32            `json:"version"`
+	CostingMethod           string           `json:"costing_method"`
+	PriceTolerancePct       decimal.Decimal  `json:"price_tolerance_pct"`
+	QtyTolerancePct         decimal.Decimal  `json:"qty_tolerance_pct"`
+	OverReceiptPct          decimal.Decimal  `json:"over_receipt_pct"`
+	PoRequiresPr            bool             `json:"po_requires_pr"`
+	DirectReceiptLimit      *decimal.Decimal `json:"direct_receipt_limit"`
+	CountBlocksNightAudit   bool             `json:"count_blocks_night_audit"`
+	CountBlind              bool             `json:"count_blind"`
+	EngineeringDepartmentID *int64           `json:"engineering_department_id"`
+	Version                 int32            `json:"version"`
 }
 
 func defaultSettings() Settings {
@@ -52,7 +55,7 @@ func defaultSettings() Settings {
 
 func toSettings(r inventorydb.InventorySetting) Settings {
 	return Settings{Exists: true, CostingMethod: r.CostingMethod, CostingLockedOn: r.CostingLockedOn, PriceTolerancePct: r.PriceTolerancePct, QtyTolerancePct: r.QtyTolerancePct,
-		OverReceiptPct: r.OverReceiptPct, PoRequiresPr: r.PoRequiresPr, DirectReceiptLimit: r.DirectReceiptLimit, CountBlocksNightAudit: r.CountBlocksNightAudit, CountBlind: r.CountBlind, Version: r.Version}
+		OverReceiptPct: r.OverReceiptPct, PoRequiresPr: r.PoRequiresPr, DirectReceiptLimit: r.DirectReceiptLimit, CountBlocksNightAudit: r.CountBlocksNightAudit, CountBlind: r.CountBlind, EngineeringDepartmentID: r.EngineeringDepartmentID, Version: r.Version}
 }
 
 // GetSettings answers the settings of the property (inventory.view or inventory.manage).
@@ -111,7 +114,7 @@ func (s *Service) UpdateSettings(ctx context.Context, propertyID int64, in Setti
 		}
 		row, err := q.UpdateSettings(ctx, inventorydb.UpdateSettingsParams{TenantID: p.TenantID, PropertyID: propertyID, CostingMethod: in.CostingMethod, PriceTolerancePct: in.PriceTolerancePct,
 			QtyTolerancePct: in.QtyTolerancePct, OverReceiptPct: in.OverReceiptPct, PoRequiresPr: in.PoRequiresPr, DirectReceiptLimit: in.DirectReceiptLimit,
-			CountBlocksNightAudit: in.CountBlocksNightAudit, CountBlind: in.CountBlind, Version: in.Version, ActorID: p.ActorID()})
+			CountBlocksNightAudit: in.CountBlocksNightAudit, CountBlind: in.CountBlind, EngineeringDepartmentID: in.EngineeringDepartmentID, Version: in.Version, ActorID: p.ActorID()})
 		if err != nil {
 			return orNotFound(err, versionConflict("settings", cur.Version))
 		}

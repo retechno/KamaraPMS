@@ -5,6 +5,7 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { InventoryItem, InventoryQueueList, InventorySettings, InventorySetupReport, InventoryStockCard, InventoryWarehouse } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +18,7 @@ import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney } from '@/utils/format'
 import { formatQty } from '@/utils/inventory'
 import { findingText } from '@/utils/findings'
+import { downloadCsv } from '@/views/accounting/reportApi'
 
 /**
  * Costing (docs/architecture/35-inventory.md 4, mockup 28): the four steps cost goes through, the method of the property (chosen before the first stock movement, then locked), the setup
@@ -43,6 +45,7 @@ const error = ref<ApiError | null>(null)
 const formError = ref<ApiError | null>(null)
 const notice = ref('')
 const method = ref<'AVERAGE' | 'FIFO'>('AVERAGE')
+const engineering = ref<number | null>(null)
 const pick = reactive({ warehouse: 0, item: 0, from: '', to: '' })
 
 /** The POS sales that are not in the stock yet: what a count holds and what failed (35-inventory.md 5.6). */
@@ -94,6 +97,7 @@ async function load(): Promise<void> {
     ])
     settings.value = s.data ?? null
     method.value = (s.data?.costing_method as 'AVERAGE' | 'FIFO' | undefined) ?? 'AVERAGE'
+    engineering.value = s.data?.engineering_department_id ?? null
     setup.value = c.data ?? null
     await loadQueue()
     warehouses.value = w.data?.data ?? []
@@ -138,7 +142,7 @@ async function saveMethod(): Promise<void> {
       params: { path: { propertyId } },
       body: {
         costing_method: method.value, price_tolerance_pct: s.price_tolerance_pct, qty_tolerance_pct: s.qty_tolerance_pct, over_receipt_pct: s.over_receipt_pct, po_requires_pr: s.po_requires_pr,
-        direct_receipt_limit: s.direct_receipt_limit, count_blocks_night_audit: s.count_blocks_night_audit, count_blind: s.count_blind, version: s.version,
+        direct_receipt_limit: s.direct_receipt_limit, count_blocks_night_audit: s.count_blocks_night_audit, count_blind: s.count_blind, engineering_department_id: engineering.value, version: s.version,
       },
     })
     settings.value = data ?? s
@@ -149,10 +153,19 @@ async function saveMethod(): Promise<void> {
     saving.value = false
   }
 }
+async function cardCsv(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null || !pick.warehouse || !pick.item) return
+  try {
+    await downloadCsv('/api/v1/properties/{propertyId}/inventory/stock-card', { path: { propertyId }, query: { warehouse: pick.warehouse, item: pick.item, from: pick.from || undefined, to: pick.to || undefined } }, 'stock-card.csv')
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
 watch(pid, load, { immediate: true })
 
 const locked = computed(() => settings.value?.costing_locked_on != null)
-const dirty = computed(() => settings.value !== null && method.value !== settings.value.costing_method)
+const dirty = computed(() => settings.value !== null && (method.value !== settings.value.costing_method || engineering.value !== (settings.value.engineering_department_id ?? null)))
 const steps = ['1', '2', '3', '4'] as const
 </script>
 
@@ -187,6 +200,12 @@ const steps = ['1', '2', '3', '4'] as const
       <div v-else class="mt-2 flex flex-wrap items-center gap-3">
         <span class="text-xs text-muted-foreground">{{ t('inventory.costing.freeNote') }}</span>
         <Button v-if="canManage" type="button" size="sm" :disabled="saving || !dirty" data-testid="method-save" @click="saveMethod">{{ t('inventory.costing.saveMethod') }}</Button>
+      </div>
+      <div v-if="canManage" class="mt-4 max-w-md" data-testid="engineering">
+        <FormField :label="t('inventory.costing.engineering')" :hint="t('inventory.costing.engineeringHint')">
+          <template #default="{ id }"><DepartmentSelect :id="id" v-model="engineering" name="engineering_department_id" :none-label="t('inventory.costing.engineeringNone')" data-testid="engineering-select" /></template>
+        </FormField>
+        <Button v-if="locked" type="button" size="sm" class="mt-2" :disabled="saving || !dirty" data-testid="engineering-save" @click="saveMethod">{{ t('inventory.costing.saveEngineering') }}</Button>
       </div>
     </section>
 
@@ -265,6 +284,7 @@ const steps = ['1', '2', '3', '4'] as const
         <div class="mb-2 flex flex-wrap items-center gap-2 text-sm">
           <strong>{{ card.item.name }}</strong><span class="text-muted-foreground">{{ card.warehouse }} · {{ card.item.stock_unit_code }}</span>
           <Badge variant="outline">{{ t(`inventory.method.${card.costing_method}`) }}</Badge>
+          <Button type="button" variant="outline" size="sm" class="ml-auto" data-testid="card-csv" @click="cardCsv">{{ t('inventory.reports.csv') }}</Button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full min-w-[44rem] text-sm" data-testid="card-table">

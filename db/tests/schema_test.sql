@@ -1935,7 +1935,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('inv_returns', 'CHILD', 'of inv_movements'), ('inv_return_lines', 'CHILD', 'of inv_movements'), ('inv_bill_matches', 'CHILD', 'of supplier_bills'),
     ('inv_transfer_lines', 'CHILD', 'of inv_movements: the pair of movements of a transfer'), ('inv_issue_lines', 'CHILD', 'of inv_movements: the movement of a line of an issue'),
     ('inv_counts', 'CHILD', 'of inv_movements: the variance of an approved count'), ('inv_count_lines', 'CHILD', 'of inv_movements'),
-    ('inv_amenity_runs', 'CHILD', 'of inv_movements: the cost of the night'), ('inv_amenity_run_lines', 'CHILD', 'of inv_movements');
+    ('inv_amenity_runs', 'CHILD', 'of inv_movements: the cost of the night'), ('inv_amenity_run_lines', 'CHILD', 'of inv_movements'),
+    ('inv_balance_days', 'CHILD', 'of inv_movements: the balance at the end of a day'), ('inv_cost_days', 'CHILD', 'of inv_movements: the cost of a day'),
+    ('inv_fb_cost_days', 'CHILD', 'of inv_movements: the food and beverage cost of a day beside the POS revenue');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -2676,6 +2678,44 @@ BEGIN
     INSERT INTO pms_test.results VALUES ('the names of the seeded data exist in en and id for the same codes', 'accepted');
     RAISE NOTICE 'PASS  the names of the seeded data exist in en and id for the same codes';
 END $$;
+
+------------------------------------------------------------------------------------------
+-- Inventory, PR 5 (00088): the snapshots of the day close and the targets
+------------------------------------------------------------------------------------------
+CREATE FUNCTION pms_test.inv_cost_day(p_kind text, p_amount numeric) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO inv_cost_days (tenant_id, property_id, business_date, cost_kind, amount)
+    VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), p_kind, p_amount)
+$$;
+SELECT expect_ok('a day stores a cost of each kind, and a gain or a favourable variance is negative', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_cost_day('WASTE', 1000)$q$, $q$SELECT pms_test.inv_cost_day('PRICE_VARIANCE', -250)$q$);
+SELECT expect_error('a day stores a kind of cost once for a department and an outlet', '23505', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_cost_day('WASTE', 1000)$q$, $q$SELECT pms_test.inv_cost_day('WASTE', 2000)$q$);
+SELECT expect_error('a kind of cost is one of the ten', '23514', $q$SELECT pms_test.inv_base()$q$, $q$SELECT pms_test.inv_cost_day('LUNCH', 1000)$q$);
+SELECT expect_error('a cost is stored for a day that exists', '23503', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_cost_days (tenant_id, property_id, business_date, cost_kind, amount) VALUES (tn('ABC'), pr('BALI'), DATE '2001-01-01', 'WASTE', 1)$q$);
+SELECT expect_ok('the food and beverage figures of a day: one row for each outlet (or none) and class', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_fb_cost_days (tenant_id, property_id, business_date, class, revenue_net, sale_cost) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'FOOD', 1000000, 300000)$q$,
+    $q$INSERT INTO inv_fb_cost_days (tenant_id, property_id, business_date, class, revenue_net, sale_cost) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'BEVERAGE', 500000, 100000)$q$);
+SELECT expect_error('the food and beverage figures of a day are one row for an outlet and a class', '23505', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_fb_cost_days (tenant_id, property_id, business_date, class, revenue_net) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'FOOD', 1)$q$,
+    $q$INSERT INTO inv_fb_cost_days (tenant_id, property_id, business_date, class, revenue_net) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'FOOD', 2)$q$);
+SELECT expect_error('the class of the figures of a day is one of three', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_fb_cost_days (tenant_id, property_id, business_date, class, revenue_net) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 'DRINK', 1)$q$);
+SELECT expect_ok('a day taken by the close is marked once', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_snapshot_days (tenant_id, property_id, business_date) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'))$q$);
+SELECT expect_error('a day is marked once', '23505', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_snapshot_days (tenant_id, property_id, business_date) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'))$q$,
+    $q$INSERT INTO inv_snapshot_days (tenant_id, property_id, business_date) VALUES (tn('ABC'), pr('BALI'), (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'))$q$);
+SELECT expect_ok('the balance of an item at the end of a day', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_balance_days (tenant_id, property_id, warehouse_id, item_id, business_date, qty, value) SELECT tn('ABC'), pr('BALI'), w.id, i.id, (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 10, 100000 FROM inv_warehouses w, inv_items i WHERE w.property_id = pr('BALI') AND i.property_id = pr('BALI')$q$);
+SELECT expect_error('a balance with no quantity has no value', '23514', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_balance_days (tenant_id, property_id, warehouse_id, item_id, business_date, qty, value) SELECT tn('ABC'), pr('BALI'), w.id, i.id, (SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN'), 0, 5 FROM inv_warehouses w, inv_items i WHERE w.property_id = pr('BALI') AND i.property_id = pr('BALI')$q$);
+SELECT expect_ok('a target for the property and one for an outlet side by side', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'FOOD', 30)$q$,
+    $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'BEVERAGE', 22.5)$q$);
+SELECT expect_error('a target is set once for the property and a class', '23505', $q$SELECT pms_test.inv_base()$q$,
+    $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'FOOD', 30)$q$,
+    $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'FOOD', 31)$q$);
+SELECT expect_error('a target is above zero', '23514', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'FOOD', 0)$q$);
+SELECT expect_error('a target is at most 100', '23514', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'FOOD', 100.5)$q$);
+SELECT expect_error('a target is for food or beverage', '23514', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'OTHER', 30)$q$);
+SELECT expect_error('the engineering department is a department of the property', '23503', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inventory_settings SET engineering_department_id = 999999$q$);
 
 ------------------------------------------------------------------------------------------
 -- Summary

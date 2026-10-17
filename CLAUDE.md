@@ -8,7 +8,7 @@ project: do not borrow conventions from other PMS products.
 - `docs/architecture/`: the approved design. **Read it before changing behaviour.** Start with `README.md`
   (status). Key files: `02-database-schema.md`, `03-financial-engines.md`, `04-operations.md`,
   `05-transactions-locking.md`, `06-api.md`, `07-milestones.md`.
-- Status: **M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15 done: the MVP in 07-milestones.md is complete.** Since then: PDF documents and confirmation e-mail, corporate accounts, groups and the city ledger (see `docs/architecture/README.md`).
+- Status: **M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15 done: the MVP in 07-milestones.md is complete.** Since then: PDF documents and confirmation e-mail, corporate accounts, groups and the city ledger, the POS, and the Inventory module (masters, ledger, purchasing, movements, recipes, snapshots and reports: finished with PR 5, `docs/architecture/35-inventory.md`); see `docs/architecture/README.md`.
   New work starts from a request, not from the milestone list; keep the same rules (DB, backend, API, frontend and
   tests together; see 07-milestones.md for how each area was built).
 - Rejected decisions must not come back: `rooms.status`, `taxes.is_inclusive`, `payments.currency_code`,
@@ -34,6 +34,7 @@ go run ./cmd/migrate up|down|status
 go run ./cmd/pms-admin create-tenant|create-admin ...   # also plans, subscriptions and invoices: run it without arguments (docs/architecture/26-subscriptions.md)
 go run ./cmd/pms-seed rooms -tenant DEMO -property BALI   # demo data for a DEVELOPMENT database: 100 rooms over 4 types (idempotent, -dry-run shows it)
 go run ./cmd/pms-seed rates -tenant DEMO -property BALI   # demo rate plan RO and 90 days of prices per room type, higher on Fri/Sat (idempotent)
+PMS_SEED_PASSWORD=... go run ./cmd/pms-seed inventory-days -tenant DEMO -property BALI   # ten business days of POS sales, waste, staff meals... closed by the night audit through the running API (-dry-run shows the plan)
 cd web && npm test && npm run type-check && npm run build
 docker compose -f deploy/compose.yaml up -d --build   # the production-like stack (docs/deployment.md); then scripts/prod-smoke.sh. Its project name is kamarapms-deploy: never rename it to kamarapms (that is the dev database)
 scripts/db-backup.sh | db-restore.sh | restore-drill.sh   # backup, restore into an EMPTY database, full rehearsal (docs/backup-restore.md). Restore targets are new containers (kamarapms-backup-test), never the dev database

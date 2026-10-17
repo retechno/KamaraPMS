@@ -253,3 +253,44 @@ func TestRecipesDemoRefersOnlyToWhatItCreates(t *testing.T) {
 		}
 	}
 }
+
+// The plan of the demo days is the same every time, every day has sales and a staff meal, and the days differ, so the daily cost has something to show.
+func TestPlanDayIsDeterministicAndVaried(t *testing.T) {
+	seen := map[int]bool{}
+	var waste, entertain, engineering, office int
+	for i := 0; i < 10; i++ {
+		d := planDay(i)
+		if again := planDay(i); len(again.nasgor) != len(d.nasgor) || again.wasteEggs != d.wasteEggs {
+			t.Fatalf("day %d changes between two calls", i)
+		}
+		if len(d.nasgor) == 0 || len(d.bar) == 0 || d.staffRiceKg == 0 {
+			t.Fatalf("day %d has no sales or no staff meal: %+v", i, d)
+		}
+		seen[d.nasgor[0].qty] = true
+		if d.wasteEggs > 0 {
+			waste++
+		}
+		if d.entertainBotol > 0 {
+			entertain++
+		}
+		if d.engineering > 0 {
+			engineering++
+		}
+		if d.office > 0 {
+			office++
+		}
+	}
+	if len(seen) < 3 || waste == 0 || entertain == 0 || engineering == 0 || office == 0 {
+		t.Fatalf("ten days should differ and use every kind of cost: %d sizes, waste %d, entertainment %d, engineering %d, office %d", len(seen), waste, entertain, engineering, office)
+	}
+}
+
+func TestInventoryDaysRefusesAnAPIThatIsNotThisMachineAndNeedsAPassword(t *testing.T) {
+	if err := runInventoryDays([]string{"-tenant", "DEMO", "-property", "BALI", "-api", "https://pms.example.com"}); err == nil {
+		t.Fatal("a remote API")
+	}
+	t.Setenv("PMS_SEED_PASSWORD", "")
+	if err := runInventoryDays([]string{"-tenant", "DEMO", "-property", "BALI"}); err == nil {
+		t.Fatal("no password")
+	}
+}
