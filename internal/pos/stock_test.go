@@ -2,6 +2,7 @@ package pos_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/inventory"
+	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/pos"
@@ -108,7 +110,7 @@ func newStockFx(t *testing.T, method string) *stockFx {
 	p, err := b.svc.CreateProduct(ctx, pid, pos.ProductInput{Code: "NASGOR", Name: "Nasi Goreng", CategoryID: b.k.cat.ID, ChargeCodeID: food2,
 		OptionGroups: []pos.OptionGroup{
 			{Name: "Portion", Kind: "VARIANT", MinSelect: 1, MaxSelect: 1, Options: []pos.Option{{Name: "Regular", MaxQty: 1, IsDefault: true}, {Name: "Jumbo", PriceDelta: dec("20000"), MaxQty: 1}}},
-			{Name: "Extras", Kind: "MODIFIER", MinSelect: 0, MaxSelect: 3, Options: []pos.Option{{Name: "Telur ceplok", PriceDelta: dec("8000"), MaxQty: 2}}},
+			{Name: "Extras", Kind: "MODIFIER", MinSelect: 0, MaxSelect: 3, Options: []pos.Option{{Name: "Telur ceplok", PriceDelta: dec("8000"), MaxQty: 2}, {Name: "Kerupuk", PriceDelta: dec("5000"), MaxQty: 1}}},
 		},
 		Prices: []pos.ProductPriceIn{{PriceListID: b.k.priceList.ID, Price: dec("85000"), IsSold: true}}})
 	must(t, err)
@@ -155,7 +157,7 @@ func (s *stockFx) sell(t *testing.T, p pos.Product, qty string, opts ...string) 
 	if p.ID == s.nasgor.ID { // the portion is a variant the guest must choose: Regular unless the test asks for Jumbo
 		jumbo := false
 		for _, o := range opts {
-			jumbo = jumbo || o == "Jumbo"
+			jumbo = jumbo || strings.HasPrefix(o, "Jumbo")
 		}
 		if !jumbo {
 			opts = append([]string{"Regular"}, opts...)
@@ -755,4 +757,138 @@ func TestTheWorkerAndTheVoidTakeTheirLocksInTheOrderOfTheStockLevel(t *testing.T
 	if !sawQueue {
 		t.Error("the void locks the queue row it decides on")
 	}
+}
+
+// asInput is the form of a product as the master sends it back: the groups and the choices with their ids, the prices, the version.
+func (s *stockFx) asInput(t *testing.T) pos.ProductInput {
+	t.Helper()
+	p, err := s.svc.GetProduct(s.admin, s.propID, s.nasgor.ID)
+	must(t, err)
+	in := pos.ProductInput{Code: p.Code, Name: p.Name, ShortName: p.ShortName, CategoryID: p.CategoryID, ChargeCodeID: p.ChargeCodeID, RuleProfileID: p.RuleProfileID, StationID: p.StationID,
+		IsActive: &p.IsActive, Version: p.Version, OptionGroups: p.OptionGroups}
+	for _, pr := range p.Prices {
+		in.Prices = append(in.Prices, pos.ProductPriceIn{PriceListID: pr.PriceListID, Price: pr.Price.Round(0), IsSold: pr.IsSold}) // the page sends the amounts at the decimals of the currency
+	}
+	for g := range in.OptionGroups {
+		for o := range in.OptionGroups[g].Options {
+			in.OptionGroups[g].Options[o].PriceDelta = in.OptionGroups[g].Options[o].PriceDelta.Round(0)
+		}
+	}
+	return in
+}
+
+func (s *stockFx) optionByName(t *testing.T, in pos.ProductInput, name string) (gi, oi int) {
+	t.Helper()
+	for g := range in.OptionGroups {
+		for o := range in.OptionGroups[g].Options {
+			if in.OptionGroups[g].Options[o].Name == name {
+				return g, o
+			}
+		}
+	}
+	t.Fatalf("no choice %s", name)
+	return 0, 0
+}
+
+func TestRenamingAndRepricingAChoiceKeepsItsRecipe(t *testing.T) {
+	s := newStockFx(t, inventory.MethodAverage)
+	in := s.asInput(t)
+	gi, oi := s.optionByName(t, in, "Jumbo")
+	id := in.OptionGroups[gi].Options[oi].ID
+	in.OptionGroups[gi].Options[oi].Name = "Jumbo besar"
+	in.OptionGroups[gi].Options[oi].PriceDelta = dec("25000")
+	// the groups and the choices move: the order of the groups is reversed, and a choice is added to the extras
+	in.OptionGroups[0], in.OptionGroups[1] = in.OptionGroups[1], in.OptionGroups[0]
+	gi, _ = s.optionByName(t, in, "Telur ceplok")
+	in.OptionGroups[gi].Options = append(in.OptionGroups[gi].Options, pos.Option{Name: "Keju", PriceDelta: dec("6000"), MaxQty: 1})
+	out, err := s.svc.UpdateProduct(s.admin, s.propID, s.nasgor.ID, in)
+	must(t, err)
+	var found pos.Option
+	for _, g := range out.OptionGroups {
+		for _, o := range g.Options {
+			if o.ID == id {
+				found = o
+			}
+		}
+	}
+	if found.Name != "Jumbo besar" || !found.PriceDelta.Equal(dec("25000")) {
+		t.Fatalf("the choice keeps its id and takes its new name and price: %+v", found)
+	}
+	r, err := s.inv.GetRecipe(s.admin, s.propID, s.nasgor.ID, nil)
+	must(t, err)
+	var seen bool
+	for _, o := range r.Options {
+		if o.OptionID == id {
+			seen = true
+			if o.Name != "Jumbo besar" || len(o.Lines) != 1 || o.Lines[0].ItemCode != "BERAS" || !o.Lines[0].Quantity.Equal(dec("300")) {
+				t.Fatalf("the recipe of the choice stays: %+v", o)
+			}
+		}
+	}
+	if !seen {
+		t.Fatal("the choice is in the recipe page under its id")
+	}
+	// the sale after the change still takes the 300 g
+	s.opt["Jumbo besar"] = id
+	s.sell(t, s.nasgor, "1", "Jumbo besar")
+	s.work(t)
+	s.wantBalance(t, "BERAS", "9.7", "164900")
+}
+
+func TestAChoiceThatHasARecipeIsNotRemovedUntilTheRecipeIsCleared(t *testing.T) {
+	s := newStockFx(t, inventory.MethodAverage)
+	in := s.asInput(t)
+	gi, oi := s.optionByName(t, in, "Telur ceplok")
+	removed := in.OptionGroups[gi].Options[oi]
+	in.OptionGroups[gi].Options = in.OptionGroups[gi].Options[oi+1:]
+	_, err := s.svc.UpdateProduct(s.admin, s.propID, s.nasgor.ID, in)
+	wantCode(t, err, "OPTION_HAS_RECIPE")
+	if e, _ := apperr.As(err); e == nil || e.Context["options"] != "Telur ceplok" {
+		t.Fatalf("the answer names the choice: %+v", err)
+	}
+	after := s.asInput(t)
+	if _, oj := s.optionByName(t, after, "Telur ceplok"); oj < 0 {
+		t.Fatal("nothing changed")
+	}
+	if s.Count(t, `SELECT count(*) FROM pos_recipe_lines WHERE option_id = $1`, removed.ID) != 2 {
+		t.Fatal("the recipe lines of the choice are there")
+	}
+	// the bill that sold it keeps its record, and so does the queue row
+	bill := s.sell(t, s.nasgor, "1", "Telur ceplok")
+	var comps string
+	must(t, s.Pool.QueryRow(context.Background(), `SELECT components::text FROM inv_consumption_queue ORDER BY id DESC LIMIT 1`).Scan(&comps))
+	// clear the recipe of the choice, then remove the choice
+	lines := []inventory.RecipeLineInput{{ItemID: s.item["BERAS"], UnitID: s.unit["g"], Quantity: dec("200")}}
+	jumbo := s.opt["Jumbo"]
+	lines = append(lines, inventory.RecipeLineInput{OptionID: &jumbo, ItemID: s.item["BERAS"], UnitID: s.unit["g"], Quantity: dec("300")})
+	_, err = s.inv.SaveRecipe(s.admin, s.propID, s.nasgor.ID, inventory.RecipeInput{Lines: lines})
+	must(t, err)
+	in = s.asInput(t)
+	gi, oi = s.optionByName(t, in, "Telur ceplok")
+	in.OptionGroups[gi].Options = in.OptionGroups[gi].Options[oi+1:]
+	_, err = s.svc.UpdateProduct(s.admin, s.propID, s.nasgor.ID, in)
+	must(t, err)
+	if s.Count(t, `SELECT count(*) FROM pos_options WHERE id = $1`, removed.ID) != 0 {
+		t.Fatal("the choice is gone")
+	}
+	var kept string
+	must(t, s.Pool.QueryRow(context.Background(), `SELECT components::text FROM inv_consumption_queue ORDER BY id DESC LIMIT 1`).Scan(&kept))
+	if kept != comps {
+		t.Fatalf("the queue row keeps the snapshot of what was sold: %s then %s", comps, kept)
+	}
+	b, err := s.svc.GetBill(s.cashier, s.propID, bill.ID)
+	must(t, err)
+	if len(b.Lines) != 1 || len(b.Lines[0].Options) == 0 || b.Lines[0].Options[len(b.Lines[0].Options)-1].Name != "Telur ceplok" {
+		t.Fatalf("the bill keeps the choice it sold: %+v", b.Lines)
+	}
+}
+
+func TestAGroupWhoseChoicesHaveARecipeDoesNotChangeFromVariantToAddOn(t *testing.T) {
+	s := newStockFx(t, inventory.MethodAverage)
+	in := s.asInput(t)
+	gi, _ := s.optionByName(t, in, "Telur ceplok")
+	in.OptionGroups[gi].Kind = "VARIANT"
+	in.OptionGroups[gi].MaxSelect = 1
+	_, err := s.svc.UpdateProduct(s.admin, s.propID, s.nasgor.ID, in)
+	wantCode(t, err, "OPTION_GROUP_HAS_RECIPE")
 }

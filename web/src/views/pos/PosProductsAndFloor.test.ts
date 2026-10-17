@@ -115,6 +115,20 @@ describe('the product master', () => {
     expect(opts.body.option_groups.map((g) => g.kind)).toEqual(['VARIANT', 'MODIFIER'])
     expect(opts.body.option_groups[0]).toMatchObject({ min_select: 1, max_select: 1 })
     expect(opts.body.option_groups[0]!.options).toHaveLength(2)
+    // the groups and the choices that exist travel with their ids: a choice stays the same choice, with its recipe, whatever its name becomes
+    expect((opts.body.option_groups as { id?: number; options: { id?: number }[] }[]).map((g) => [g.id, g.options.map((o) => o.id)])).toEqual([[1, [1, 2]], [2, [3]]])
+  })
+
+  it('says why a choice that has a recipe is not removed, with its name, in Indonesian', async () => {
+    setLocale('id')
+    setup(PosProductsView, productsGet)
+    await flushPromises()
+    await body('[data-testid=product-NASGOR]').trigger('click')
+    await flushPromises()
+    PUT.mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Conflict', status: 409, code: 'OPTION_HAS_RECIPE', detail: 'a choice that has a recipe cannot be removed: Jumbo', context: { options: 'Jumbo' } }))
+    await body('[data-testid=product-save]').trigger('submit')
+    await flushPromises()
+    expect(body('[data-testid=product-error]').text()).toContain('Pilihan Jumbo punya resep, jadi tidak bisa dihapus')
   })
 
   it('shows what the server refuses in the option groups', async () => {

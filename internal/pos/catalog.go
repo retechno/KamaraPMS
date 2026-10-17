@@ -656,26 +656,133 @@ func (s *Service) checkProductRefs(ctx context.Context, p auth.Principal, proper
 	return nil
 }
 
+// saveProductParts saves the choices of a product one by one and its prices. A group or a choice that comes with its id keeps it, whatever its name, price or place; one without an id is new; one that is
+// not in the form any more is removed, and a choice that has recipe lines is not removed (409 OPTION_HAS_RECIPE): the recipe names it, and the person says what becomes of the lines first. A bill that sold a
+// choice keeps its own snapshot of it, and so does a queue row of the stock, so removing a choice changes nothing that was sold.
 func (s *Service) saveProductParts(ctx context.Context, p auth.Principal, propertyID, id int64, in ProductInput) error {
 	q := s.q(ctx)
-	if err := q.DeleteProductRecipeOptionLines(ctx, posdb.DeleteProductRecipeOptionLinesParams{TenantID: p.TenantID, PropertyID: propertyID, ProductID: id}); err != nil {
+	pid := &id
+	groups, err := q.ListOptionGroups(ctx, posdb.ListOptionGroupsParams{TenantID: p.TenantID, PropertyID: propertyID, ProductID: pid})
+	if err != nil {
 		return err
 	}
-	if err := q.DeleteProductOptions(ctx, posdb.DeleteProductOptionsParams{TenantID: p.TenantID, PropertyID: propertyID, ProductID: id}); err != nil {
+	options, err := q.ListOptions(ctx, posdb.ListOptionsParams{TenantID: p.TenantID, PropertyID: propertyID, ProductID: pid})
+	if err != nil {
 		return err
 	}
-	if err := q.DeleteProductOptionGroups(ctx, posdb.DeleteProductOptionGroupsParams{TenantID: p.TenantID, PropertyID: propertyID, ProductID: id}); err != nil {
-		return err
+	groupOf := map[int64]posdb.ListOptionGroupsRow{}
+	for _, g := range groups {
+		groupOf[g.ID] = g
 	}
+	optionOf := map[int64]posdb.ListOptionsRow{}
+	for _, o := range options {
+		optionOf[o.ID] = o
+	}
+	keptGroup, keptOption := map[int64]bool{}, map[int64]bool{}
+	var f []apperr.FieldError
 	for gi, g := range in.OptionGroups {
-		gid, err := q.InsertOptionGroup(ctx, posdb.InsertOptionGroupParams{TenantID: p.TenantID, PropertyID: propertyID, ProductID: id, Name: strings.TrimSpace(g.Name), Kind: g.Kind,
-			MinSelect: int16(g.MinSelect), MaxSelect: int16(g.MaxSelect), SortOrder: int32(gi)}) //nolint:gosec // G115: validated
+		gf := "option_groups[" + itoa(gi) + "]."
+		if g.ID != 0 {
+			if _, ok := groupOf[g.ID]; !ok || keptGroup[g.ID] {
+				f = append(f, fieldErr(gf+"id", "NOT_FOUND", "not a group of this product, or named twice"))
+			}
+			keptGroup[g.ID] = true
+		}
+		for oi, o := range g.Options {
+			if o.ID == 0 {
+				continue
+			}
+			if _, ok := optionOf[o.ID]; !ok || keptOption[o.ID] {
+				f = append(f, fieldErr(gf+"options["+itoa(oi)+"].id", "NOT_FOUND", "not a choice of this product, or named twice"))
+			}
+			keptOption[o.ID] = true
+		}
+	}
+	if len(f) > 0 {
+		return invalid("product", f...)
+	}
+	// what leaves, and what the recipe says about it
+	var gone []int64
+	for _, o := range options {
+		if !keptOption[o.ID] {
+			gone = append(gone, o.ID)
+		}
+	}
+	changedKind := map[int64]bool{}
+	for _, g := range in.OptionGroups {
+		if g.ID != 0 && groupOf[g.ID].Kind != g.Kind {
+			for _, o := range options {
+				if o.GroupID == g.ID {
+					changedKind[o.ID] = true
+				}
+			}
+		}
+	}
+	check := append([]int64(nil), gone...)
+	for oid := range changedKind {
+		check = append(check, oid)
+	}
+	if len(check) > 0 {
+		rows, err := q.CountRecipeLinesOfOptions(ctx, posdb.CountRecipeLinesOfOptionsParams{TenantID: p.TenantID, PropertyID: propertyID, OptionIds: check})
 		if err != nil {
 			return err
 		}
+		var names []string
+		code := ""
+		for _, r := range rows {
+			if r.OptionID == nil {
+				continue
+			}
+			o := optionOf[*r.OptionID]
+			names = append(names, o.Name)
+			if keptOption[o.ID] {
+				code = "OPTION_GROUP_HAS_RECIPE"
+			} else if code == "" {
+				code = "OPTION_HAS_RECIPE"
+			}
+		}
+		if len(names) > 0 {
+			msg := "a choice that has a recipe cannot be removed: clear its recipe first, or keep the choice"
+			if code == "OPTION_GROUP_HAS_RECIPE" {
+				msg = "a group whose choices have a recipe cannot change from variant to add-on or back: the recipe means something else: clear the recipe first"
+			}
+			return apperr.Conflict(code, msg+": "+strings.Join(names, ", ")).WithContext("options", strings.Join(names, ", "))
+		}
+	}
+	for _, oid := range gone {
+		if err := q.DeleteOptionByID(ctx, posdb.DeleteOptionByIDParams{TenantID: p.TenantID, PropertyID: propertyID, ID: oid}); err != nil {
+			return err
+		}
+	}
+	for _, g := range groups {
+		if !keptGroup[g.ID] {
+			if err := q.DeleteOptionGroupByID(ctx, posdb.DeleteOptionGroupByIDParams{TenantID: p.TenantID, PropertyID: propertyID, ID: g.ID, ProductID: id}); err != nil {
+				return err
+			}
+		}
+	}
+	for gi, g := range in.OptionGroups {
+		gid := g.ID
+		if gid == 0 {
+			var err error
+			if gid, err = q.InsertOptionGroup(ctx, posdb.InsertOptionGroupParams{TenantID: p.TenantID, PropertyID: propertyID, ProductID: id, Name: strings.TrimSpace(g.Name), Kind: g.Kind,
+				MinSelect: int16(g.MinSelect), MaxSelect: int16(g.MaxSelect), SortOrder: int32(gi)}); err != nil { //nolint:gosec // G115: validated
+				return err
+			}
+		} else if err := q.UpdateOptionGroup(ctx, posdb.UpdateOptionGroupParams{TenantID: p.TenantID, PropertyID: propertyID, ID: gid, ProductID: id, Name: strings.TrimSpace(g.Name), Kind: g.Kind,
+			MinSelect: int16(g.MinSelect), MaxSelect: int16(g.MaxSelect), SortOrder: int32(gi)}); err != nil { //nolint:gosec // G115: validated
+			return err
+		}
 		for oi, o := range g.Options {
-			if err := q.InsertOption(ctx, posdb.InsertOptionParams{TenantID: p.TenantID, PropertyID: propertyID, GroupID: gid, Name: strings.TrimSpace(o.Name), PriceDelta: o.PriceDelta,
-				IsDefault: o.IsDefault, MaxQty: int16(o.MaxQty), SortOrder: int32(oi), IsActive: true}); err != nil { //nolint:gosec // G115: validated
+			if o.ID == 0 {
+				if err := q.InsertOption(ctx, posdb.InsertOptionParams{TenantID: p.TenantID, PropertyID: propertyID, GroupID: gid, Name: strings.TrimSpace(o.Name), PriceDelta: o.PriceDelta,
+					IsDefault: o.IsDefault, MaxQty: int16(o.MaxQty), SortOrder: int32(oi), IsActive: true}); err != nil { //nolint:gosec // G115: validated
+					return err
+				}
+				continue
+			}
+			if err := q.UpdateOption(ctx, posdb.UpdateOptionParams{TenantID: p.TenantID, PropertyID: propertyID, ID: o.ID, GroupID: gid, Name: strings.TrimSpace(o.Name), PriceDelta: o.PriceDelta,
+				IsDefault: o.IsDefault, MaxQty: int16(o.MaxQty), SortOrder: int32(oi), IsActive: optionOf[o.ID].IsActive}); err != nil { //nolint:gosec // G115: validated
 				return err
 			}
 		}

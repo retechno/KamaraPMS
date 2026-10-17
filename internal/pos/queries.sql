@@ -202,15 +202,25 @@ WHERE o.tenant_id = @tenant_id AND o.property_id = @property_id
   AND (sqlc.narg(product_id)::bigint IS NULL OR g.product_id = sqlc.narg(product_id)::bigint)
 ORDER BY g.product_id, g.sort_order, g.id, o.sort_order, o.id;
 
--- name: DeleteProductOptions :exec
-DELETE FROM pos_options o USING pos_option_groups g
-WHERE g.property_id = o.property_id AND g.id = o.group_id AND g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.product_id = @product_id;
+-- The choices of a product are saved one by one (a choice that stays keeps its id, and so the recipe lines that name it): these change or remove one.
+-- name: DeleteOptionByID :exec
+DELETE FROM pos_options WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
--- name: DeleteProductRecipeOptionLines :exec
-DELETE FROM pos_recipe_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND product_id = @product_id AND option_id IS NOT NULL;
+-- name: DeleteOptionGroupByID :exec
+DELETE FROM pos_option_groups WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND product_id = @product_id;
 
--- name: DeleteProductOptionGroups :exec
-DELETE FROM pos_option_groups WHERE tenant_id = @tenant_id AND property_id = @property_id AND product_id = @product_id;
+-- name: UpdateOptionGroup :exec
+UPDATE pos_option_groups SET name = @name, kind = @kind, min_select = @min_select, max_select = @max_select, sort_order = @sort_order
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND product_id = @product_id;
+
+-- name: UpdateOption :exec
+UPDATE pos_options SET group_id = @group_id, name = @name, price_delta = @price_delta, is_default = @is_default, max_qty = @max_qty, sort_order = @sort_order, is_active = @is_active
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- How many recipe lines each of these choices has: a choice with a recipe is not removed (35-inventory.md 20).
+-- name: CountRecipeLinesOfOptions :many
+SELECT option_id, count(*)::int AS n FROM pos_recipe_lines
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND option_id = ANY(@option_ids::bigint[]) GROUP BY option_id;
 
 -- name: InsertOptionGroup :one
 INSERT INTO pos_option_groups (tenant_id, property_id, product_id, name, kind, min_select, max_select, sort_order)

@@ -283,9 +283,10 @@ const steps = ['1', '2', '3', '4'] as const
               </tr>
               <tr v-for="l in card.lines" :key="l.movement_id" class="border-t border-border" :data-testid="`move-${l.movement_id}`">
                 <td class="py-2 pr-2 whitespace-nowrap">{{ formatDate(l.business_date) }}</td>
-                <td class="py-2 pr-2">{{ t(`inventory.kind.${l.kind}`) + (l.document_number ? ' ' + l.document_number : '') }}<span v-if="l.cost_estimated" class="ml-1 text-xs text-muted-foreground">({{ t('inventory.costing.estimated') }})</span></td>
-                <td class="py-2 pr-2 text-right" :class="l.qty.startsWith('-') ? 'text-destructive' : ''">{{ l.qty === '0' ? '' : (l.qty.startsWith('-') ? '' : '+') + formatQty(l.qty) }}</td>
-                <td class="py-2 pr-2 text-right">{{ formatMoney(l.value) }}</td>
+                <td class="py-2 pr-2">{{ t(`inventory.kind.${l.kind}`) + (l.document_number ? ' ' + l.document_number : '') }}<span v-if="l.cost_estimated" class="ml-1 text-xs text-muted-foreground">({{ t('inventory.costing.estimated') }})</span>
+                  <span v-if="l.kind === 'COGS_TO_WASTE'" class="block text-xs text-muted-foreground" data-testid="cost-to-waste">{{ t('inventory.costing.costToWaste') }}</span></td>
+                <td class="py-2 pr-2 text-right" :class="l.qty.startsWith('-') ? 'text-destructive' : ''">{{ l.kind === 'COGS_TO_WASTE' ? '–' : l.qty === '0' ? '' : (l.qty.startsWith('-') ? '' : '+') + formatQty(l.qty) }}</td>
+                <td class="py-2 pr-2 text-right">{{ l.kind === 'COGS_TO_WASTE' ? '–' : formatMoney(l.value) }}</td>
                 <td class="py-2 pr-2 text-right">{{ formatQty(l.balance_qty) }}</td>
                 <td class="py-2 pr-2 text-right">{{ formatMoney(l.balance_value) }}</td>
                 <td class="py-2 text-right">{{ l.average_cost !== '0' ? formatMoney(l.average_cost) : '—' }}</td>

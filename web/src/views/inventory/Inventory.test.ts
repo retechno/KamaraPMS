@@ -410,6 +410,17 @@ describe('costing', () => {
     expect(has('[data-testid=layers]')).toBe(false) // average: no layers
   })
 
+  it('writes the cost moved to waste without a quantity or a value, since the balance does not change', async () => {
+    const wasteCard = { ...card, lines: [...card.lines, { movement_id: 3, business_date: '2026-09-02', kind: 'COGS_TO_WASTE', source_type: 'POS_QUEUE', qty: '0', value: '0', unit_cost: '0', cost_estimated: false, balance_qty: '18', balance_value: '882000', average_cost: '49000' }] }
+    await setup(InventoryCostingView, undefined, '/inventory/costing?warehouse=3&item=7', (path) => (path.endsWith('/inventory/stock-card') ? { data: wasteCard } : ok(path)))
+    const row = body('[data-testid=move-3]')
+    const cells = row.findAll('td').map((c) => c.text())
+    expect(cells[2]).toBe('–')
+    expect(cells[3]).toBe('–')
+    expect(body('[data-testid=cost-to-waste]').text()).toBe('from cost of sales to waste expense')
+    expect(cells[4]).toBe('18') // the balance stays
+  })
+
   it('lets the manager choose the method while it is free', async () => {
     GET = vi.fn()
     await setup(InventoryCostingView)

@@ -256,7 +256,6 @@ const plus = (v: string): string => (Number(v) > 0 ? '+' : '') + formatMoney(v)
         <li v-if="recipe.sale_class">{{ t('pos.recipe.noteClass', { class: className(recipe.sale_class) }) }}</li>
         <li>{{ t('pos.recipe.noteCost') }}</li>
         <li>{{ t('pos.recipe.noteAfter') }}</li>
-        <li>{{ t('pos.recipe.noteOptions') }}</li>
       </ul>
       <div v-if="editable" class="mt-4 flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" :disabled="saving || !dirty" data-testid="recipe-cancel" @click="load">{{ t('common.cancel') }}</Button>

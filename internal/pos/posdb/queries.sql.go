@@ -289,6 +289,43 @@ func (q *Queries) CloseBill(ctx context.Context, arg CloseBillParams) (int64, er
 	return result.RowsAffected(), nil
 }
 
+const countRecipeLinesOfOptions = `-- name: CountRecipeLinesOfOptions :many
+SELECT option_id, count(*)::int AS n FROM pos_recipe_lines
+WHERE tenant_id = $1 AND property_id = $2 AND option_id = ANY($3::bigint[]) GROUP BY option_id
+`
+
+type CountRecipeLinesOfOptionsParams struct {
+	TenantID   int64
+	PropertyID int64
+	OptionIds  []int64
+}
+
+type CountRecipeLinesOfOptionsRow struct {
+	OptionID *int64
+	N        int32
+}
+
+// How many recipe lines each of these choices has: a choice with a recipe is not removed (35-inventory.md 20).
+func (q *Queries) CountRecipeLinesOfOptions(ctx context.Context, arg CountRecipeLinesOfOptionsParams) ([]CountRecipeLinesOfOptionsRow, error) {
+	rows, err := q.db.Query(ctx, countRecipeLinesOfOptions, arg.TenantID, arg.PropertyID, arg.OptionIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountRecipeLinesOfOptionsRow{}
+	for rows.Next() {
+		var i CountRecipeLinesOfOptionsRow
+		if err := rows.Scan(&i.OptionID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deactivateTables = `-- name: DeactivateTables :exec
 UPDATE pos_tables SET is_active = false
 WHERE tenant_id = $1 AND property_id = $2 AND area_id = $3 AND NOT (id = ANY($4::bigint[]))
@@ -350,6 +387,43 @@ func (q *Queries) DeleteMarks(ctx context.Context, arg DeleteMarksParams) error 
 	return err
 }
 
+const deleteOptionByID = `-- name: DeleteOptionByID :exec
+DELETE FROM pos_options WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type DeleteOptionByIDParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// The choices of a product are saved one by one (a choice that stays keeps its id, and so the recipe lines that name it): these change or remove one.
+func (q *Queries) DeleteOptionByID(ctx context.Context, arg DeleteOptionByIDParams) error {
+	_, err := q.db.Exec(ctx, deleteOptionByID, arg.TenantID, arg.PropertyID, arg.ID)
+	return err
+}
+
+const deleteOptionGroupByID = `-- name: DeleteOptionGroupByID :exec
+DELETE FROM pos_option_groups WHERE tenant_id = $1 AND property_id = $2 AND id = $3 AND product_id = $4
+`
+
+type DeleteOptionGroupByIDParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+	ProductID  int64
+}
+
+func (q *Queries) DeleteOptionGroupByID(ctx context.Context, arg DeleteOptionGroupByIDParams) error {
+	_, err := q.db.Exec(ctx, deleteOptionGroupByID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.ProductID,
+	)
+	return err
+}
+
 const deletePriceListItem = `-- name: DeletePriceListItem :exec
 DELETE FROM pos_price_list_items WHERE tenant_id = $1 AND property_id = $2 AND price_list_id = $3 AND product_id = $4
 `
@@ -368,52 +442,6 @@ func (q *Queries) DeletePriceListItem(ctx context.Context, arg DeletePriceListIt
 		arg.PriceListID,
 		arg.ProductID,
 	)
-	return err
-}
-
-const deleteProductOptionGroups = `-- name: DeleteProductOptionGroups :exec
-DELETE FROM pos_option_groups WHERE tenant_id = $1 AND property_id = $2 AND product_id = $3
-`
-
-type DeleteProductOptionGroupsParams struct {
-	TenantID   int64
-	PropertyID int64
-	ProductID  int64
-}
-
-func (q *Queries) DeleteProductOptionGroups(ctx context.Context, arg DeleteProductOptionGroupsParams) error {
-	_, err := q.db.Exec(ctx, deleteProductOptionGroups, arg.TenantID, arg.PropertyID, arg.ProductID)
-	return err
-}
-
-const deleteProductOptions = `-- name: DeleteProductOptions :exec
-DELETE FROM pos_options o USING pos_option_groups g
-WHERE g.property_id = o.property_id AND g.id = o.group_id AND g.tenant_id = $1 AND g.property_id = $2 AND g.product_id = $3
-`
-
-type DeleteProductOptionsParams struct {
-	TenantID   int64
-	PropertyID int64
-	ProductID  int64
-}
-
-func (q *Queries) DeleteProductOptions(ctx context.Context, arg DeleteProductOptionsParams) error {
-	_, err := q.db.Exec(ctx, deleteProductOptions, arg.TenantID, arg.PropertyID, arg.ProductID)
-	return err
-}
-
-const deleteProductRecipeOptionLines = `-- name: DeleteProductRecipeOptionLines :exec
-DELETE FROM pos_recipe_lines WHERE tenant_id = $1 AND property_id = $2 AND product_id = $3 AND option_id IS NOT NULL
-`
-
-type DeleteProductRecipeOptionLinesParams struct {
-	TenantID   int64
-	PropertyID int64
-	ProductID  int64
-}
-
-func (q *Queries) DeleteProductRecipeOptionLines(ctx context.Context, arg DeleteProductRecipeOptionLinesParams) error {
-	_, err := q.db.Exec(ctx, deleteProductRecipeOptionLines, arg.TenantID, arg.PropertyID, arg.ProductID)
 	return err
 }
 
@@ -5652,6 +5680,72 @@ func (q *Queries) UpdateDraftLine(ctx context.Context, arg UpdateDraftLineParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateOption = `-- name: UpdateOption :exec
+UPDATE pos_options SET group_id = $1, name = $2, price_delta = $3, is_default = $4, max_qty = $5, sort_order = $6, is_active = $7
+WHERE tenant_id = $8 AND property_id = $9 AND id = $10
+`
+
+type UpdateOptionParams struct {
+	GroupID    int64
+	Name       string
+	PriceDelta decimal.Decimal
+	IsDefault  bool
+	MaxQty     int16
+	SortOrder  int32
+	IsActive   bool
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) UpdateOption(ctx context.Context, arg UpdateOptionParams) error {
+	_, err := q.db.Exec(ctx, updateOption,
+		arg.GroupID,
+		arg.Name,
+		arg.PriceDelta,
+		arg.IsDefault,
+		arg.MaxQty,
+		arg.SortOrder,
+		arg.IsActive,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const updateOptionGroup = `-- name: UpdateOptionGroup :exec
+UPDATE pos_option_groups SET name = $1, kind = $2, min_select = $3, max_select = $4, sort_order = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND product_id = $9
+`
+
+type UpdateOptionGroupParams struct {
+	Name       string
+	Kind       string
+	MinSelect  int16
+	MaxSelect  int16
+	SortOrder  int32
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+	ProductID  int64
+}
+
+func (q *Queries) UpdateOptionGroup(ctx context.Context, arg UpdateOptionGroupParams) error {
+	_, err := q.db.Exec(ctx, updateOptionGroup,
+		arg.Name,
+		arg.Kind,
+		arg.MinSelect,
+		arg.MaxSelect,
+		arg.SortOrder,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.ProductID,
+	)
+	return err
 }
 
 const updateOutlet = `-- name: UpdateOutlet :one
