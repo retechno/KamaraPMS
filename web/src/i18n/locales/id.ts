@@ -6544,6 +6544,7 @@ export const id: Messages = {
   auditAction: {
     department_head_changed: 'Kepala departemen diubah',
     inventory_approval_chain_changed: 'Rantai persetujuan diubah',
+    inventory_queue_row_failed: 'Baris potongan stok POS gagal',
     inventory_queue_row_retried: 'Baris potongan stok POS dicoba lagi',
     inventory_queue_row_cancelled: 'Baris potongan stok POS dibatalkan',
     inventory_sr_created: 'Permintaan gudang ditulis',

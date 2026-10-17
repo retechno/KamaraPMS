@@ -27,10 +27,10 @@ import (
 //  (b) dynamic: the use cases of the stock and a use case of the groups run once under a lock trace (db.WithLockTrace); no trace holds both a group and a stock table, no trace
 //      descends in level, and inside the stock level the order is documents, warehouse, balances.
 
-var stockTables = map[string]bool{"StockOpenings": true, "StockRequests": true, "StockBillDrafts": true, "StockReceipts": true, "StockReturns": true, "StockOrders": true, "Warehouses": true, "StockBalances": true}
+var stockTables = map[string]bool{"StockOpenings": true, "StockRequests": true, "StockBillDrafts": true, "StockReceipts": true, "StockReturns": true, "StockOrders": true, "StockRequisitions": true, "StockTransfers": true, "StockCounts": true, "StockIssues": true, "StockAmenityRuns": true, "StockQueue": true, "Warehouses": true, "StockBalances": true}
 
 // stockRanks is the order inside the stock level: the documents of a purchase, then the warehouse, then the balances (db.LockTable.stockRank).
-var stockRanks = map[string]int{"inv_openings": 1, "inv_requests": 1, "inv_bill_drafts": 2, "inv_receipts": 3, "inv_returns": 4, "inv_purchase_orders": 5, "inv_warehouses": 10, "inv_balances": 11}
+var stockRanks = map[string]int{"inv_openings": 1, "inv_requests": 1, "inv_bill_drafts": 2, "inv_receipts": 3, "inv_returns": 4, "inv_purchase_orders": 5, "inv_requisitions": 6, "inv_transfers": 7, "inv_counts": 8, "inv_issues": 9, "inv_amenity_runs": 9, "inv_consumption_queue": 9, "inv_warehouses": 10, "inv_balances": 11}
 
 // lockKinds reads a package directory and returns, for each function (by name), whether it locks groups or stock directly and which functions of the package it calls.
 type lockGraph struct {

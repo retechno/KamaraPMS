@@ -24,7 +24,9 @@ import (
 //
 //	movements   (PR 3) a requisition that waits at level 2, a transfer, a use, a waste, the plan of the amenities and an open count: see inventory_movements.go
 //
-// Recipes and the POS come with the later PRs of the module.
+//	recipes     (PR 4) the outlets sell from their warehouses and the demo products of the POS have a recipe: see inventory_recipes.go
+//
+// The reports come with the last PR of the module.
 
 type invItem struct {
 	code, name, category, unit string
@@ -322,10 +324,14 @@ func seedInventory(e *env, dryRun bool) error {
 	if dryRun {
 		fmt.Println("purchasing: a supplier, a request that waits at level 2, and a request that was ordered and received in part (made once)")
 		fmt.Println("movements: a requisition at level 2, a transfer, a use of the housekeeping, a waste, the plan of the amenities and an open count of the bar (made once)")
+		fmt.Println("recipes: the outlets of the POS demo sell from their warehouses, and Nasi Goreng Kampung (variant Jumbo, add-on Telur ceplok), the iced tea and Kopi Bali get a recipe (made once)")
 		return nil
 	}
 	if err := seedPurchasing(e, svc, deptSvc, unit, item, warehouse, deptID); err != nil {
 		return err
 	}
-	return seedMovements(e, svc, deptSvc, unit, item, warehouse, deptID)
+	if err := seedMovements(e, svc, deptSvc, unit, item, warehouse, deptID); err != nil {
+		return err
+	}
+	return seedRecipes(e, svc, unit, item, warehouse)
 }

@@ -1009,3 +1009,18 @@ Same module gate and conventions as 25.1 (`{P}` is `/api/v1/properties/{property
 | `GET {P}/inventory/amenities/runs`; `GET …/runs/{date}`; `POST …/runs/{date}/reverse` | read; `inventory.manage` for the reverse | the document `AMN-YYYYMMDD` of one night with the rule of each line, the rooms, the shortage and the journal; `reverse` takes `{reason}` (409 `AMENITY_RUN_NOT_REVERSIBLE`, `AMENITY_RUN_HELD`) |
 
 Also in this PR: `GET {P}/inventory/approvals/inbox` and `GET …/notices` carry the requisitions (`doc_type` PR or SR, `doc_id`, `number`); `GET {P}/inventory/approval-chains/SR` is now used. The night audit reports `INVENTORY_COUNT_OPEN` (a warning, or a blocker when the setting says so) and `AMENITY_HELD`.
+
+### 25.3 Recipes and the deduction of POS sales (`35-inventory.md`, PR 4)
+
+Same conventions as 25.1 (`{P}` is `/api/v1/properties/{propertyId}`). The recipe routes sit under the POS (module gate POS) and ask the entitlement of the INVENTORY module themselves; the queue and the report are INVENTORY routes. The outlet and the category of the POS gain fields.
+
+| Route | Permission | Notes |
+|---|---|---|
+| `GET {P}/pos/products/{id}/recipe?outlet_id=` | `pos.manage` or an inventory read permission | the lines of the product and of each option with their cost at the warehouse of the outlet (the first outlet that has one when none is named), the net price, the margin, the food cost %, the outlets to choose from; `inventory_active` is false and `editable` false without the module in the plan |
+| `PUT {P}/pos/products/{id}/recipe` | `pos.manage` | `{lines: [{option_id?, item_id, unit_id, quantity, note?}]}` replaces the whole recipe: 422 `VALIDATION_FAILED` on `lines[i].option_id` (not an option of the product), `item_id`, `unit_id` (not a unit of the item), `quantity` (above zero, four decimals) and a duplicate (an item once for the product and once for each option); 403 `MODULE_NOT_IN_PLAN` without the module |
+| `GET {P}/inventory/consumption-queue?status=&limit=` | inventory read | `{summary: {pending, held, failed}, rows}`; the rows of the statuses asked for (comma separated; `HELD` and `FAILED` by default) with the outlet, the bill, the product, the class, the error code and message |
+| `POST {P}/inventory/consumption-queue/{id}/retry` | `inventory.manage` | applies a `FAILED` row now (409 `QUEUE_ROW_NOT_FAILED`); audited |
+| `POST {P}/inventory/consumption-queue/{id}/cancel` | `inventory.manage` | gives up a failed, held or pending row (409 `QUEUE_ROW_NOT_OPEN`); the sale is not deducted; audited |
+| `GET {P}/inventory/reports/pos-without-deduction?from=&to=&outlet_id=` | inventory read | POS lines with a recipe and no queue row, by the business date of the posting (400 days at most) |
+
+Also in this PR: `pos/outlets` carries `warehouse_id`, `warehouse_name` and `void_waste_after_minutes` (D5: 0 to 1440, absent keeps the value; 422 on `warehouse_id` when the warehouse is not of the property); `pos/categories` carries `fb_class` (`FOOD`, `BEVERAGE`, `OTHER` or empty); a count carries `held_sales`. The findings of the night audit (`blockers` and `warnings`, groups `outlet_bills` and `stock`) and of the setup check carry `params` (strings) next to `code`, `message` and `ref`; the web writes the sentence from the code. The new code `INVENTORY_QUEUE_FAILED` is a blocker, and the close of the day that finds a failed row answers 409 with the same code.

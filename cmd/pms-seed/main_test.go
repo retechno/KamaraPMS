@@ -216,3 +216,40 @@ func TestMovementsDemoRefersOnlyToWhatItCreates(t *testing.T) {
 		}
 	}
 }
+
+// The recipes of the demo name items of the seed in a unit they have, the warehouses of the outlets are made by the seed, and the items are in stock where the outlet sells.
+func TestRecipesDemoRefersOnlyToWhatItCreates(t *testing.T) {
+	byCode := map[string]invItem{}
+	for _, it := range invItems {
+		byCode[it.code] = it
+	}
+	warehouses := map[string]bool{}
+	for _, w := range invWarehouses {
+		warehouses[w.code] = true
+	}
+	for outlet, wh := range demoOutletWarehouses {
+		if !warehouses[wh] {
+			t.Errorf("the outlet %s sells from %s, which the seed does not make", outlet, wh)
+		}
+	}
+	for _, r := range demoRecipes {
+		for _, l := range r.lines {
+			it, ok := byCode[l.item]
+			if !ok {
+				t.Errorf("%s: the item %s is not made by the seed", r.product, l.item)
+				continue
+			}
+			has := l.unit == it.unit
+			for _, x := range it.extra {
+				has = has || x.UnitCode == l.unit
+			}
+			if !has {
+				t.Errorf("%s: %s has no unit %s", r.product, l.item, l.unit)
+			}
+			q, err := decimal.NewFromString(l.qty)
+			if err != nil || !q.IsPositive() {
+				t.Errorf("%s: the quantity %q", r.product, l.qty)
+			}
+		}
+	}
+}

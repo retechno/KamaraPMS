@@ -12,6 +12,7 @@ import (
 	"kamarapms/internal/iam"
 	"kamarapms/internal/inventory"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/db"
 	"kamarapms/internal/pos"
 )
 
@@ -454,6 +455,9 @@ func TestAFailedRowStopsTheCloseAndRetryOrCancelSetsItRight(t *testing.T) {
 		t.Fatal("the row fails with its code")
 	}
 	s.wantBalance(t, "BERAS", "10", "170000") // nothing of it is in the stock
+	if s.Count(t, `SELECT count(*) FROM audit_logs WHERE action = 'inventory.queue_row_failed'`) != 1 {
+		t.Fatal("a row that fails is in the audit trail")
+	}
 	day, err := s.Tenancy.CurrentBusinessDay(s.admin, s.propID)
 	must(t, err)
 	blockers, _, err := s.inv.NightAuditStock(s.admin, s.tenantID, s.propID, day.BusinessDate)
@@ -695,5 +699,60 @@ func TestACountEntryAndASaleAtTheSameTimeDeductTheSaleOnceOnOneSideOfTheCount(t 
 		if q, _ := s.balance(t, "BERAS"); q != "9.800000" && q != "9.600000" {
 			t.Fatalf("the rice is %s kg", q)
 		}
+	}
+}
+
+func TestTheWorkerAndTheVoidTakeTheirLocksInTheOrderOfTheStockLevel(t *testing.T) {
+	s := newStockFx(t, inventory.MethodAverage)
+	rank := map[string]int{"inv_consumption_queue": 9, "inv_warehouses": 10, "inv_balances": 11}
+	check := func(what string, ev []db.LockEvent) {
+		t.Helper()
+		last, level := 0, db.LockLevel(0)
+		seen := map[string]bool{}
+		for _, e := range ev {
+			if e.Begin {
+				last, level = 0, 0 // a new transaction: the order starts again
+				continue
+			}
+			if e.Level < level {
+				t.Errorf("%s: level %d after %d", what, e.Level, level)
+			}
+			level = e.Level
+			if r, ok := rank[e.Table]; ok {
+				seen[e.Table] = true
+				if r < last {
+					t.Errorf("%s: %s after a later table of the stock level", what, e.Table)
+				}
+				last = r
+			}
+		}
+		if !seen["inv_balances"] {
+			t.Errorf("%s: the trace shows no lock on the balances: the recorder reads nothing (%v)", what, ev)
+		}
+	}
+	bill := s.sell(t, s.nasgor, "2")
+	ctx, trace := db.WithLockTrace(context.Background())
+	_, err := s.inv.RunQueue(ctx)
+	must(t, err)
+	check("worker", trace.Events())
+	// the void of an applied sale takes the queue row, in the transaction of the POS, after the folios
+	ctx, trace = db.WithLockTrace(s.cashier)
+	_, err = s.svc.VoidLine(ctx, s.propID, bill.ID, bill.Lines[0].ID, pos.VoidLineInput{Reason: "x", Approval: s.superIn})
+	must(t, err)
+	last := db.LockLevel(0)
+	var sawQueue bool
+	for _, e := range trace.Events() {
+		if e.Begin {
+			last = 0
+			continue
+		}
+		if e.Level < last {
+			t.Errorf("the void goes down from level %d to %d", last, e.Level)
+		}
+		last = e.Level
+		sawQueue = sawQueue || e.Table == "inv_consumption_queue"
+	}
+	if !sawQueue {
+		t.Error("the void locks the queue row it decides on")
 	}
 }

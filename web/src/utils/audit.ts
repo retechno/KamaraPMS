@@ -145,6 +145,7 @@ export const AUDIT_ACTIONS = [
   'inventory.pr_submitted',
   'inventory.pr_updated',
   'inventory.queue_row_cancelled',
+  'inventory.queue_row_failed',
   'inventory.queue_row_retried',
   'inventory.receipt_posted',
   'inventory.receipt_reversed',

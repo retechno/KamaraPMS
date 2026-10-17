@@ -30,7 +30,7 @@ func TestEveryCodeOfAFindingHasATextInEnglishAndIndonesian(t *testing.T) {
 		}
 		block := text[start:end]
 		for _, c := range codes {
-			if !regexp.MustCompile(`\n\s+` + regexp.QuoteMeta(c) + `: '`).MatchString(block) && !regexp.MustCompile(`\n\s+` + regexp.QuoteMeta(c) + `: "`).MatchString(block) {
+			if !regexp.MustCompile(`\n\s+`+regexp.QuoteMeta(c)+`: '`).MatchString(block) && !regexp.MustCompile(`\n\s+`+regexp.QuoteMeta(c)+`: "`).MatchString(block) {
 				t.Errorf("%s: the finding %s has no text in findings", lang, c)
 			}
 		}

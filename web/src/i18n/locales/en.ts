@@ -6546,6 +6546,7 @@ export const en = {
   auditAction: {
     department_head_changed: 'Department head changed',
     inventory_approval_chain_changed: 'Approval chain changed',
+    inventory_queue_row_failed: 'POS deduction row failed',
     inventory_queue_row_retried: 'POS deduction row tried again',
     inventory_queue_row_cancelled: 'POS deduction row cancelled',
     inventory_sr_created: 'Store requisition written',

@@ -482,7 +482,7 @@ func (s *Service) applyGroup(ctx context.Context, p auth.Principal, propertyID i
 		var ae *apperr.Error
 		if errors.As(err, &ae) && ae.Code == "WAREHOUSE_INACTIVE" { // nothing can be taken from a warehouse that is switched off: the rows fail, and a person decides
 			for _, r := range rows {
-				if err := q.SetConsumptionFailed(ctx, inventorydb.SetConsumptionFailedParams{TenantID: p.TenantID, PropertyID: propertyID, ID: r.ID, ErrorCode: &ae.Code, ErrorMessage: &ae.Message}); err != nil {
+				if err := s.failRow(ctx, p, propertyID, bd, r.ID, ae.Code, ae.Message); err != nil {
 					return 0, err
 				}
 			}
@@ -522,7 +522,7 @@ func (s *Service) applyGroup(ctx context.Context, p auth.Principal, propertyID i
 			applied++
 		case errors.As(err, &rf):
 			code, msg := failureCode(rf.err)
-			if err := q.SetConsumptionFailed(ctx, inventorydb.SetConsumptionFailedParams{TenantID: p.TenantID, PropertyID: propertyID, ID: r.ID, ErrorCode: &code, ErrorMessage: &msg}); err != nil {
+			if err := s.failRow(ctx, p, propertyID, bd, r.ID, code, msg); err != nil {
 				return applied, err
 			}
 		default:
@@ -530,6 +530,14 @@ func (s *Service) applyGroup(ctx context.Context, p auth.Principal, propertyID i
 		}
 	}
 	return applied, nil
+}
+
+// failRow sets a row FAILED with its code and writes the audit entry: a row that stops the close is a state change somebody has to see (and retry or cancel).
+func (s *Service) failRow(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, id int64, code, msg string) error {
+	if err := s.q(ctx).SetConsumptionFailed(ctx, inventorydb.SetConsumptionFailedParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, ErrorCode: &code, ErrorMessage: &msg}); err != nil {
+		return err
+	}
+	return s.audit.Write(ctx, s.entry(p, propertyID, bd, "inventory.queue_row_failed", "inv_consumption_queue", id, fmt.Sprintf("queue row %d", id), map[string]any{"status": QueuePending}, map[string]any{"status": QueueFailed, "code": code}))
 }
 
 // RunQueue applies the pending rows of every property, one transaction for each warehouse (the worker of 5.6). It returns how many rows were applied. Two workers never take the same row: the rows are taken
