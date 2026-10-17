@@ -47,6 +47,8 @@ type Service struct {
 	purgedAt time.Time
 	// the last purge of the payloads of print jobs (jobs.go)
 	payloadsPurgedAt time.Time
+	// the stock a sale is deducted from (SetStock, stock_hook.go)
+	stock StockHook
 }
 
 // NewService wires the service.
@@ -165,7 +167,7 @@ func toOutlet(r posdb.ListOutletsRow) Outlet {
 		CompTreatment: r.CompTreatment, MaxDiscountPctNoApproval: r.MaxDiscountPctNoApproval, BlockNightAuditWithOpenBills: r.BlockNightAuditWithOpenBills,
 		IsActive: r.IsActive, SortOrder: int(r.SortOrder), Version: r.Version,
 		ReceiptTitle: r.ReceiptTitle, ReceiptHotel: r.ReceiptHotel, ReceiptAddress: r.ReceiptAddress, ReceiptTaxID: r.ReceiptTaxID, ReceiptFooter: r.ReceiptFooter,
-		ReceiptCopies: int(r.ReceiptCopies),
+		ReceiptCopies: int(r.ReceiptCopies), WarehouseID: r.WarehouseID, WarehouseName: r.WarehouseName, VoidWasteAfterMinutes: int(r.VoidWasteAfterMinutes),
 	}
 }
 
@@ -260,6 +262,9 @@ func validateOutlet(in OutletInput, create bool) []apperr.FieldError {
 	if in.ReceiptCopies != nil && (*in.ReceiptCopies < 0 || *in.ReceiptCopies > 5) {
 		f = append(f, fieldErr("receipt_copies", "INVALID_VALUE", "0 to 5"))
 	}
+	if in.VoidWasteAfterMinutes != nil && (*in.VoidWasteAfterMinutes < 0 || *in.VoidWasteAfterMinutes > 1440) {
+		f = append(f, fieldErr("void_waste_after_minutes", "INVALID_VALUE", "0 to 1440 minutes"))
+	}
 	return append(f, checkSort(in.SortOrder)...)
 }
 
@@ -300,7 +305,7 @@ func outletAudit(o Outlet) map[string]any {
 		"allow_company_charge": o.AllowCompanyCharge, "allow_comp": o.AllowComp, "comp_treatment": o.CompTreatment, "max_discount_pct_no_approval": o.MaxDiscountPctNoApproval.String(),
 		"block_night_audit_with_open_bills": o.BlockNightAuditWithOpenBills, "is_active": o.IsActive,
 		"receipt_title": o.ReceiptTitle, "receipt_hotel": o.ReceiptHotel, "receipt_address": o.ReceiptAddress, "receipt_tax_id": o.ReceiptTaxID,
-		"receipt_footer": o.ReceiptFooter, "receipt_copies": o.ReceiptCopies,
+		"receipt_footer": o.ReceiptFooter, "receipt_copies": o.ReceiptCopies, "warehouse_id": o.WarehouseID, "void_waste_after_minutes": o.VoidWasteAfterMinutes,
 	}
 }
 
@@ -326,7 +331,7 @@ func (s *Service) CreateOutlet(ctx context.Context, propertyID int64, in OutletI
 			AllowComp: in.AllowComp, CompTreatment: in.CompTreatment, MaxDiscountPctNoApproval: in.MaxDiscountPctNoApproval,
 			BlockNightAuditWithOpenBills: in.BlockNightAuditWithOpenBills, IsActive: active(in.IsActive), SortOrder: int32(in.SortOrder), ActorID: p.ActorID(), //nolint:gosec // G115: validated
 			ReceiptTitle: trimPtr(in.ReceiptTitle), ReceiptHotel: trimPtr(in.ReceiptHotel), ReceiptAddress: trimPtr(in.ReceiptAddress), ReceiptTaxID: trimPtr(in.ReceiptTaxID),
-			ReceiptFooter: trimPtr(in.ReceiptFooter), ReceiptCopies: copies16(in.ReceiptCopies),
+			ReceiptFooter: trimPtr(in.ReceiptFooter), ReceiptCopies: copies16(in.ReceiptCopies), WarehouseID: in.WarehouseID, VoidWasteAfterMinutes: int4Of(in.VoidWasteAfterMinutes),
 		})
 		if err != nil {
 			return err
@@ -347,6 +352,13 @@ func copies16(n *int) pgtype.Int2 {
 		return pgtype.Int2{}
 	}
 	return pgtype.Int2{Int16: int16(*n), Valid: true} //nolint:gosec // G115: validated 0 to 5
+}
+
+func int4Of(n *int) pgtype.Int4 {
+	if n == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*n), Valid: true} //nolint:gosec // G115: validated 0 to 1440
 }
 
 func trimPtr(s *string) *string {
@@ -397,7 +409,7 @@ func (s *Service) UpdateOutlet(ctx context.Context, propertyID, id int64, in Out
 			AllowComp: in.AllowComp, CompTreatment: in.CompTreatment, MaxDiscountPctNoApproval: in.MaxDiscountPctNoApproval,
 			BlockNightAuditWithOpenBills: in.BlockNightAuditWithOpenBills, IsActive: active(in.IsActive), SortOrder: int32(in.SortOrder), ActorID: p.ActorID(), //nolint:gosec // G115: validated
 			ReceiptTitle: trimPtr(in.ReceiptTitle), ReceiptHotel: trimPtr(in.ReceiptHotel), ReceiptAddress: trimPtr(in.ReceiptAddress), ReceiptTaxID: trimPtr(in.ReceiptTaxID),
-			ReceiptFooter: trimPtr(in.ReceiptFooter), ReceiptCopies: copies16(in.ReceiptCopies),
+			ReceiptFooter: trimPtr(in.ReceiptFooter), ReceiptCopies: copies16(in.ReceiptCopies), WarehouseID: in.WarehouseID, VoidWasteAfterMinutes: int4Of(in.VoidWasteAfterMinutes),
 		}); err != nil {
 			return orNotFound(err, apperr.Conflict("VERSION_CONFLICT", "the outlet was changed by someone else"))
 		}

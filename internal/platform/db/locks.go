@@ -86,7 +86,7 @@ func (t LockTable) stockRank() int {
 		return 7
 	case "inv_counts":
 		return 8 // a count approval locks the count, then the documents whose held lines it applies
-	case "inv_issues", "inv_amenity_runs":
+	case "inv_issues", "inv_amenity_runs", "inv_consumption_queue":
 		return 9
 	case "inv_warehouses":
 		return 10
@@ -120,8 +120,9 @@ var (
 	StockCounts       = LockTable{"inv_counts", LevelStock}
 	StockIssues       = LockTable{"inv_issues", LevelStock}
 	StockAmenityRuns  = LockTable{"inv_amenity_runs", LevelStock}
-	Warehouses        = LockTable{"inv_warehouses", LevelStock} // after the documents; FOR SHARE for a mutation (so it sees a freeze), FOR UPDATE to start or end a count
-	StockBalances     = LockTable{"inv_balances", LevelStock}   // last, all the balance rows the use case touches, in one call
+	StockQueue        = LockTable{"inv_consumption_queue", LevelStock} // PR 4: the rows of the POS queue, locked with the documents (a worker takes them with SKIP LOCKED and notes the table with NoteStockTable)
+	Warehouses        = LockTable{"inv_warehouses", LevelStock}        // after the documents; FOR SHARE for a mutation (so it sees a freeze), FOR UPDATE to start or end a count
+	StockBalances     = LockTable{"inv_balances", LevelStock}          // last, all the balance rows the use case touches, in one call
 	Accounting        = LockTable{"accounting_settings", LevelAccounting}
 	Suppliers         = LockTable{"suppliers", LevelPayables}
 	BankAccounts      = LockTable{"bank_accounts", LevelBank}
@@ -146,6 +147,23 @@ func EnterLockLevel(ctx context.Context, level LockLevel) error {
 		st.stockRank = 0 // a new level: the order inside LevelStock starts again if it is entered again
 	}
 	st.level = level
+	return nil
+}
+
+// NoteStockTable records that the caller took the rows of a stock table with a query of its own (the worker of the POS queue takes its rows with SKIP LOCKED): the order of the tables inside
+// LevelStock is enforced for it as it is for LockRows.
+func NoteStockTable(ctx context.Context, table LockTable) error {
+	if err := EnterLockLevel(ctx, table.level); err != nil {
+		return err
+	}
+	if rank := table.stockRank(); rank > 0 {
+		st := stateFrom(ctx)
+		if rank < st.stockRank {
+			return fmt.Errorf("%w: %s requested after a later table of the stock level", ErrLockOrder, table.name)
+		}
+		st.stockRank = rank
+	}
+	traceLock(ctx, table.name, table.level)
 	return nil
 }
 

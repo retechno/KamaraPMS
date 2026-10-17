@@ -122,6 +122,9 @@ func (s *Service) sendDrafts(ctx context.Context, p auth.Principal, propertyID i
 		if err := q.MarkLineSent(ctx, posdb.MarkLineSentParams{TenantID: p.TenantID, PropertyID: propertyID, ID: l.ID, RoundID: &roundID, FolioItemID: &posted.ItemID, ActorID: p.ActorID(), At: now}); err != nil {
 			return 0, err
 		}
+		if err := s.queueSale(ctx, p, propertyID, bd, o, l); err != nil { // the line is a sale: the stock is told in this transaction (5.6)
+			return 0, err
+		}
 		if o.OrderMode == "DIRECT" {
 			continue
 		}
@@ -270,6 +273,9 @@ func (s *Service) VoidLine(ctx context.Context, propertyID, billID, lineID int64
 		}
 		o, err := s.outletOf(ctx, p.TenantID, propertyID, b.OutletID)
 		if err != nil {
+			return err
+		}
+		if err := s.queueVoid(ctx, p, propertyID, day.BusinessDate, o, lineID, target.SentAt); err != nil { // the stock gets the goods back, or the cost moves to waste (5.6)
 			return err
 		}
 		if o.OrderMode != "DIRECT" && l.RoundID != nil {

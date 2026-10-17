@@ -11,6 +11,8 @@ import (
 	"kamarapms/internal/nightaudit"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/pos"
+	"kamarapms/internal/subscription"
 )
 
 // stockBooks is what the accounting asks of the inventory: the lines of the day close, the stock value by account and the accounts only the inventory posts to (so that internal/inventory
@@ -40,7 +42,7 @@ type stockClose struct{ inv *inventory.Service }
 func issues(list []inventory.Finding) []nightaudit.OutletIssue {
 	var out []nightaudit.OutletIssue
 	for _, f := range list {
-		out = append(out, nightaudit.OutletIssue{Code: f.Code, Message: f.Message, Ref: f.Ref})
+		out = append(out, nightaudit.OutletIssue{Code: f.Code, Message: f.Message, Ref: f.Ref, Params: f.Params})
 	}
 	return out
 }
@@ -64,4 +66,54 @@ func (n nightOccupancy) NightOccupancy(ctx context.Context, tenantID, propertyID
 		out = append(out, inventory.NightRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, RoomTypeID: r.RoomTypeID, StayID: r.StayID, Guests: r.Guests, Kind: r.Kind})
 	}
 	return out, err
+}
+
+// posStock is what the POS asks of the stock (internal/pos does not import internal/inventory): the hook of the deduction of a sale, gated by the plan (POS and INVENTORY, I12).
+type posStock struct {
+	inv  *inventory.Service
+	subs *subscription.Service
+}
+
+func (h posStock) on(ctx context.Context, tenantID int64) (bool, error) {
+	acc, err := h.subs.AccessOf(ctx, tenantID)
+	if err != nil {
+		return false, nil //nolint:nilerr // a tenant with no subscription has no stock module
+	}
+	return acc.Has(subscription.POS) && acc.Has(subscription.Inventory), nil
+}
+
+func (h posStock) QueueSale(ctx context.Context, tenantID, propertyID int64, sale pos.StockSale) error {
+	if on, err := h.on(ctx, tenantID); err != nil || !on {
+		return err
+	}
+	in := inventory.PosSale{BillLineID: sale.BillLineID, OutletID: sale.OutletID, ProductID: sale.ProductID, Quantity: sale.Quantity, BusinessDate: sale.BusinessDate}
+	for _, o := range sale.Options {
+		in.Options = append(in.Options, inventory.PosOption{OptionID: o.OptionID, Qty: o.Qty})
+	}
+	return h.inv.QueueSale(ctx, tenantID, propertyID, in)
+}
+
+func (h posStock) QueueVoid(ctx context.Context, tenantID, propertyID int64, v pos.StockVoid) error {
+	if on, err := h.on(ctx, tenantID); err != nil || !on {
+		return err
+	}
+	return h.inv.QueueVoid(ctx, tenantID, propertyID, inventory.PosVoid{BillLineID: v.BillLineID, Waste: v.Waste, BusinessDate: v.BusinessDate})
+}
+
+// posPricer answers the recipe's question of the net price of a product at an outlet.
+type posPricer struct{ pos *pos.Service }
+
+func (p posPricer) NetPrice(ctx context.Context, tenantID, propertyID, outletID, productID int64) (decimal.Decimal, bool, error) {
+	return p.pos.NetPrice(ctx, tenantID, propertyID, outletID, productID)
+}
+
+// stockPlan says whether the plan of a tenant has the stock module (the recipe is edited only then).
+type stockPlan struct{ subs *subscription.Service }
+
+func (p stockPlan) HasInventory(ctx context.Context, tenantID int64) (bool, error) {
+	acc, err := p.subs.AccessOf(ctx, tenantID)
+	if err != nil {
+		return false, nil //nolint:nilerr // no subscription, no module
+	}
+	return acc.Has(subscription.Inventory), nil
 }

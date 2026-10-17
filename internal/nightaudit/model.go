@@ -51,9 +51,10 @@ type Blockers struct {
 
 // OutletIssue is a finding about the bills of the outlets (and, for the stock, about the inventory).
 type OutletIssue struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Ref     string `json:"ref,omitempty"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Ref     string            `json:"ref,omitempty"`
+	Params  map[string]string `json:"params,omitempty"`
 }
 
 // Any reports whether something blocks the run.

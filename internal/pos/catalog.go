@@ -326,6 +326,21 @@ func (s *Service) SetPriceItems(ctx context.Context, propertyID, listID int64, i
 
 // ---------------------------------------------------------------- categories
 
+// checkFbClass reads the sale class of a category: empty is none (35-inventory.md 4.9).
+func checkFbClass(v *string) (*string, []apperr.FieldError) {
+	if v == nil {
+		return nil, nil
+	}
+	c := strings.ToUpper(strings.TrimSpace(*v))
+	switch c {
+	case "":
+		return nil, nil
+	case "FOOD", "BEVERAGE", "OTHER":
+		return &c, nil
+	}
+	return nil, []apperr.FieldError{fieldErr("fb_class", "INVALID_VALUE", "FOOD, BEVERAGE or OTHER")}
+}
+
 func (s *Service) ListCategories(ctx context.Context, propertyID int64) ([]Category, error) {
 	p, err := s.canRead(ctx, propertyID, readers...)
 	if err != nil {
@@ -337,7 +352,7 @@ func (s *Service) ListCategories(ctx context.Context, propertyID int64) ([]Categ
 	}
 	out := make([]Category, len(rows))
 	for i, r := range rows {
-		out[i] = Category{ID: r.ID, Code: r.Code, Name: r.Name, ParentID: r.ParentID, SortOrder: int(r.SortOrder), IsActive: r.IsActive, ProductCount: r.ProductCount}
+		out[i] = Category{ID: r.ID, Code: r.Code, Name: r.Name, ParentID: r.ParentID, SortOrder: int(r.SortOrder), IsActive: r.IsActive, ProductCount: r.ProductCount, FbClass: r.FbClass}
 	}
 	return out, nil
 }
@@ -350,6 +365,8 @@ func (s *Service) CreateCategory(ctx context.Context, propertyID int64, in Categ
 	}
 	in.Code, in.Name = normalCode(in.Code), strings.TrimSpace(in.Name)
 	f := append(append(checkCode("code", in.Code), checkName("name", in.Name)...), checkSort(in.SortOrder)...)
+	fbClass, cf := checkFbClass(in.FbClass)
+	f = append(f, cf...)
 	if len(f) > 0 {
 		return Category{}, invalid("category", f...)
 	}
@@ -365,11 +382,11 @@ func (s *Service) CreateCategory(ctx context.Context, propertyID int64, in Categ
 			}
 		}
 		id, err := s.q(ctx).InsertCategory(ctx, posdb.InsertCategoryParams{TenantID: p.TenantID, PropertyID: propertyID, Code: in.Code, Name: in.Name, ParentID: in.ParentID,
-			SortOrder: int32(in.SortOrder), IsActive: active(in.IsActive), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
+			SortOrder: int32(in.SortOrder), IsActive: active(in.IsActive), FbClass: fbClass, ActorID: p.ActorID()}) //nolint:gosec // G115: validated
 		if err != nil {
 			return err
 		}
-		out = Category{ID: id, Code: in.Code, Name: in.Name, ParentID: in.ParentID, SortOrder: in.SortOrder, IsActive: active(in.IsActive)}
+		out = Category{ID: id, Code: in.Code, Name: in.Name, ParentID: in.ParentID, SortOrder: in.SortOrder, IsActive: active(in.IsActive), FbClass: fbClass}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "pos.category_created", "pos_category", id, in.Code, nil, out))
 	})
 	return out, err
@@ -383,19 +400,21 @@ func (s *Service) UpdateCategory(ctx context.Context, propertyID, id int64, in C
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	f := append(checkName("name", in.Name), checkSort(in.SortOrder)...)
+	fbClass, cf := checkFbClass(in.FbClass)
+	f = append(f, cf...)
 	if len(f) > 0 {
 		return Category{}, invalid("category", f...)
 	}
 	var out Category
 	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
-		n, err := s.q(ctx).UpdateCategory(ctx, posdb.UpdateCategoryParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, SortOrder: int32(in.SortOrder), IsActive: active(in.IsActive), ActorID: p.ActorID()}) //nolint:gosec // G115: validated
+		n, err := s.q(ctx).UpdateCategory(ctx, posdb.UpdateCategoryParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, SortOrder: int32(in.SortOrder), IsActive: active(in.IsActive), FbClass: fbClass, ActorID: p.ActorID()}) //nolint:gosec // G115: validated
 		if err != nil {
 			return err
 		}
 		if n == 0 {
 			return notFound("CATEGORY_NOT_FOUND", "category")
 		}
-		out = Category{ID: id, Name: in.Name, SortOrder: in.SortOrder, IsActive: active(in.IsActive)}
+		out = Category{ID: id, Name: in.Name, SortOrder: in.SortOrder, IsActive: active(in.IsActive), FbClass: fbClass}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "pos.category_updated", "pos_category", id, in.Name, nil, out))
 	})
 	return out, err

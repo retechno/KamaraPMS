@@ -186,6 +186,23 @@ func (l *Ledger) Lock(ctx context.Context, q *inventorydb.Queries, b Book, pairs
 	return s, nil
 }
 
+// Snapshot remembers the balances the writer holds for the given pairs; the function it returns puts them back. A use case that undoes part of its work with a savepoint (the worker of the POS queue
+// leaves one failed row out and goes on) calls it, because the balances the writer holds in memory do not follow the rollback of the database.
+func (s *Stock) Snapshot(pairs []Pair) func() {
+	saved := map[Pair]balRow{}
+	for _, p := range pairs {
+		if r, ok := s.rows[p]; ok {
+			saved[p] = *r
+		}
+	}
+	return func() {
+		for p, r := range saved {
+			c := r
+			s.rows[p] = &c
+		}
+	}
+}
+
 // Balance is the quantity and the value of a locked pair as the writer holds them now.
 func (s *Stock) Balance(p Pair) (qty, value decimal.Decimal, ok bool) {
 	r, found := s.rows[p]
@@ -785,6 +802,43 @@ func (s *Stock) Variance(ctx context.Context, a VarianceArgs) (Posted, error) {
 	}
 	abs := amount.Abs()
 	id, err := s.insert(ctx, s.q, movementOut{pair: a.Pair, kind: KindCostAdjust, qty: decimal.Zero, value: decimal.Zero, ref: a.Ref, costClass: a.CostClass, debit: &debit, credit: &credit, dept: a.Dept, glAmount: &abs})
+	if err != nil {
+		return Posted{}, err
+	}
+	return Posted{MovementID: id, Value: amount}, nil
+}
+
+// CogsToWasteArgs moves the cost of a POS sale that was cooked and thrown away from the cost of sales to the waste account (35-inventory.md 5.6, VOID_WASTE): the goods are not returned, so the row has no
+// quantity and no value in the balance, only the journal of the close: Dr the waste account / Cr the account the sale was charged to, for the cost of the sale movement.
+type CogsToWasteArgs struct {
+	SaleMovementID int64
+	Waste          int64 // the account of INV_WASTE
+	Ref            Ref
+}
+
+// CogsToWaste writes the row. The pair of the sale movement must have been locked. It is written once for a sale movement (the source key of the ledger).
+func (s *Stock) CogsToWaste(ctx context.Context, a CogsToWasteArgs) (Posted, error) {
+	m, err := s.q.LedgerGetMovement(ctx, inventorydb.LedgerGetMovementParams{TenantID: s.b.TenantID, PropertyID: s.b.PropertyID, ID: a.SaleMovementID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Posted{}, apperr.NotFound("MOVEMENT_NOT_FOUND", "the movement does not exist in this property")
+	}
+	if err != nil {
+		return Posted{}, err
+	}
+	if m.Kind != KindPosSale || m.GlDebitAccountID == nil {
+		return Posted{}, errNotReversible("it is not a POS sale with a journal", m.ID)
+	}
+	p := Pair{m.WarehouseID, m.ItemID}
+	if _, err := s.row(p); err != nil {
+		return Posted{}, err
+	}
+	amount := m.ValueDelta.Neg().Abs()
+	if amount.IsZero() {
+		amount = m.GlAmount
+	}
+	debit, credit := a.Waste, *m.GlDebitAccountID
+	id, err := s.insert(ctx, s.q, movementOut{pair: p, kind: KindCogsToWaste, qty: decimal.Zero, value: decimal.Zero, ref: a.Ref, costClass: m.CostClass, outlet: m.OutletID, estimated: m.CostEstimated,
+		debit: &debit, credit: &credit, dept: m.GlDepartmentID, glAmount: &amount})
 	if err != nil {
 		return Posted{}, err
 	}

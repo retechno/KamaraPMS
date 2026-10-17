@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -22,8 +23,11 @@ import (
 
 // heldRow is a row that waits for a warehouse to be unfrozen.
 type heldRow struct {
-	Source       string // "AMENITY" now; "POS" with PR 4
+	Source       string // "AMENITY" (a line of an amenities document) or "POS" (a component of a row of the POS queue)
 	IssueID      int64  // the amenities document (Source AMENITY)
+	QueueID      int64  // the queue row (Source POS)
+	QueueKind    string // SALE, VOID_RETURN or VOID_WASTE (Source POS)
+	MovementID   int64  // the sale movement a void undoes (Source POS, a void)
 	LineNo       int32
 	Number       string
 	ItemID       int64
@@ -32,6 +36,17 @@ type heldRow struct {
 	DepartmentID *int64
 	CreatedAt    time.Time
 	SourceDate   *civil.Date
+}
+
+// takes is what the row does to the shelf before it is applied, signed: a sale takes goods (+), a void that returns them gives them back (-), a void that is waste moves cost only (0).
+func (r heldRow) takes() decimal.Decimal {
+	switch r.QueueKind {
+	case QueueVoidReturn:
+		return r.Qty.Neg()
+	case QueueVoidWaste:
+		return decimal.Zero
+	}
+	return r.Qty
 }
 
 // heldRows are the rows that wait for a warehouse, in the order they are applied: by the day of the document and then by its number and line.
@@ -48,6 +63,28 @@ func (s *Service) heldRows(ctx context.Context, p auth.Principal, propertyID, wa
 		}
 		out = append(out, h)
 	}
+	pos, err := s.q(ctx).ListHeldConsumption(ctx, inventorydb.ListHeldConsumptionParams{TenantID: p.TenantID, PropertyID: propertyID, WarehouseID: warehouseID})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range pos {
+		comps, err := decodeComponents(r.Components)
+		if err != nil {
+			return nil, err
+		}
+		moves, err := s.saleMovements(ctx, p.TenantID, propertyID, r)
+		if err != nil {
+			return nil, err
+		}
+		sd := r.SaleDate
+		for k, c := range comps {
+			h := heldRow{Source: "POS", QueueID: r.ID, QueueKind: r.Kind, LineNo: int32(k + 1), ItemID: c.ItemID, Qty: c.qty(), CreatedAt: r.CreatedAt, SourceDate: &sd, Number: fmt.Sprintf("POS-%d", r.ID)} //nolint:gosec // G115: a few components
+			if r.Kind != QueueSale && k < len(moves) {
+				h.MovementID = moves[k]
+			}
+			out = append(out, h)
+		}
+	}
 	return out, nil
 }
 
@@ -56,7 +93,7 @@ func heldBefore(rows []heldRow, itemID int64, at time.Time) decimal.Decimal {
 	sum := decimal.Zero
 	for _, r := range rows {
 		if r.ItemID == itemID && r.CreatedAt.Before(at) { // a row made at the same instant counts as after (4.7)
-			sum = sum.Add(r.Qty)
+			sum = sum.Add(r.takes())
 		}
 	}
 	return sum
@@ -75,10 +112,44 @@ func issueIDsOf(rows []heldRow) []int64 {
 	return out
 }
 
+// queueIDsOf lists the queue rows the held rows belong to, for the lock of the rows (with the documents, before the warehouse, 5.1).
+func queueIDsOf(rows []heldRow) []int64 {
+	seen := map[int64]bool{}
+	var out []int64
+	for _, r := range rows {
+		if r.Source == "POS" && !seen[r.QueueID] {
+			seen[r.QueueID] = true
+			out = append(out, r.QueueID)
+		}
+	}
+	return out
+}
+
 // applyHeld applies the given held rows in order, dated the open day, inside the transaction of the caller that holds the balances.
 func (s *Service) applyHeld(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, stock *Stock, rows []heldRow) error {
+	qc := s.newQueueCtx(p, propertyID)
+	cache := map[int64]inventorydb.InvConsumptionQueue{}
 	for _, r := range rows {
-		if err := s.applyHeldIssueLine(ctx, p, propertyID, bd, stock, r); err != nil {
+		if r.Source != "POS" {
+			if err := s.applyHeldIssueLine(ctx, p, propertyID, bd, stock, r); err != nil {
+				return err
+			}
+			continue
+		}
+		ra, ok := cache[r.QueueID]
+		if !ok {
+			var err error
+			if ra, err = s.q(ctx).GetConsumptionRow(ctx, inventorydb.GetConsumptionRowParams{TenantID: p.TenantID, PropertyID: propertyID, ID: r.QueueID}); err != nil {
+				return err
+			}
+			cache[r.QueueID] = ra
+		}
+		id, err := qc.applyRowComponent(ctx, stock, bd, ra, int(r.LineNo)-1, queueComponent{ItemID: r.ItemID, QtyStock: r.Qty.String()}, r.MovementID)
+		if err != nil {
+			return err
+		}
+		now := s.clock.Now()
+		if _, err := s.q(ctx).AppendConsumptionMovement(ctx, inventorydb.AppendConsumptionMovementParams{TenantID: p.TenantID, PropertyID: propertyID, ID: r.QueueID, MovementID: id, AppliedOn: bd, AppliedAt: now}); err != nil {
 			return err
 		}
 	}

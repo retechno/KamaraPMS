@@ -74,12 +74,36 @@ type Deps struct {
 
 // App is the assembled application: the API handler and the background work that goes with it.
 type App struct {
-	Handler  http.Handler
-	notifier *notifications.Service
+	Handler   http.Handler
+	notifier  *notifications.Service
+	inventory *inventory.Service
+	logger    *slog.Logger
 }
 
-// Background runs the e-mail worker until ctx ends. It returns at once when e-mail is off.
-func (a *App) Background(ctx context.Context) { a.notifier.Run(ctx, 15*time.Second) }
+// Background runs the workers until ctx ends: the deduction of POS sales from stock (a round every few seconds, 35-inventory.md 5.6) next to the e-mail worker, which returns at once when e-mail is off.
+func (a *App) Background(ctx context.Context) {
+	go a.stockWorker(ctx, 3*time.Second)
+	a.notifier.Run(ctx, 15*time.Second)
+}
+
+// stockWorker applies the rows of the POS queue: each round takes what is pending. A round that fails is logged and tried again at the next one.
+func (a *App) stockWorker(ctx context.Context, every time.Duration) {
+	if a.inventory == nil {
+		return
+	}
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if _, err := a.inventory.RunQueue(ctx); err != nil && ctx.Err() == nil && a.logger != nil {
+				a.logger.Warn("stock queue round failed", "error", err)
+			}
+		}
+	}
+}
 
 // NewHandler builds only the API handler (tests that need no background work).
 func NewHandler(d Deps) http.Handler { return New(d).Handler }
@@ -146,12 +170,15 @@ func New(d Deps) *App {
 	}
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
-	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})  // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
-	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc}) // and the close asks the stock whether its books agree
-	inventorySvc.SetPayables(payablesSvc)                        // the bills of the purchasing are posted by the payables, on goods received not invoiced
-	inventorySvc.SetApprover(iamSvc)                             // and a price difference above the tolerance is approved with credentials
-	payablesSvc.SetVoidGuard(inventorySvc)                       // a bill matched to goods received is voided only by unmatching it
-	inventorySvc.SetOccupancy(nightOccupancy{fd: frontdeskSvc})  // the amenities of the close need the rooms that were slept in
+	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})         // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
+	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc})        // and the close asks the stock whether its books agree
+	inventorySvc.SetPayables(payablesSvc)                               // the bills of the purchasing are posted by the payables, on goods received not invoiced
+	inventorySvc.SetApprover(iamSvc)                                    // and a price difference above the tolerance is approved with credentials
+	payablesSvc.SetVoidGuard(inventorySvc)                              // a bill matched to goods received is voided only by unmatching it
+	inventorySvc.SetOccupancy(nightOccupancy{fd: frontdeskSvc})         // the amenities of the close need the rooms that were slept in
+	inventorySvc.SetPricer(posPricer{pos: posSvc})                      // the margin of a recipe reads the net price of the POS
+	inventorySvc.SetEntitlement(stockPlan{subs: subscriptionSvc})       // and a recipe is edited only when the plan has the module
+	posSvc.SetStock(posStock{inv: inventorySvc, subs: subscriptionSvc}) // a POS line that is sold is queued for the deduction from stock, in the same transaction (5.6)
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)
@@ -213,7 +240,7 @@ func New(d Deps) *App {
 	// The subscription gate runs after authentication: the module of the route and the read-only state (docs/architecture/26-subscriptions.md).
 	mux.Handle("/api/", iamHTTP.Middleware(auth.RequireAuthenticated(subscriptionSvc.Gate(api))))
 
-	return &App{notifier: notifierSvc, Handler: httpx.Chain(mux,
+	return &App{notifier: notifierSvc, inventory: inventorySvc, logger: d.Logger, Handler: httpx.Chain(mux,
 		httpx.RequestID(d.Logger, d.TrustedProxies...),
 		httpx.SecurityHeaders,
 		httpx.AccessLog,
@@ -248,10 +275,10 @@ type outletClose struct {
 func (o outletClose) NightAuditOutlets(ctx context.Context, tenantID, propertyID int64) (blockers, warnings []nightaudit.OutletIssue, err error) {
 	b, w, err := o.pos.NightAuditChecks(ctx, tenantID, propertyID)
 	for _, i := range b {
-		blockers = append(blockers, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref})
+		blockers = append(blockers, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref, Params: i.Params})
 	}
 	for _, i := range w {
-		warnings = append(warnings, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref})
+		warnings = append(warnings, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref, Params: i.Params})
 	}
 	return blockers, warnings, err
 }

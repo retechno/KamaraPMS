@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/inventory/inventorydb"
+	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
@@ -19,10 +20,14 @@ import (
 // have asked for theirs (internal/app wires them through small adapters, so that inventory does not import accounting).
 
 // Finding is a thing the checks of the night audit or the setup check report.
+//
+// The web translates a finding by its code and its params (the language of the person, not of the server); Message is the English sentence for logs and for a client that does not know the code.
+// Codes lists every code the checks can report: a test keeps each of them translated in English and Indonesian.
 type Finding struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Ref     string `json:"ref,omitempty"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Ref     string            `json:"ref,omitempty"`
+	Params  map[string]string `json:"params,omitempty"`
 }
 
 // DayLine is one line the stock adds to the journal of a business date: the account, the department (on the cost side only), the source and the signed amount (debit +, credit -).
@@ -217,7 +222,14 @@ const (
 	FindGLMismatch   = "INVENTORY_GL_MISMATCH"
 	FindNegative     = "INVENTORY_NEGATIVE_STOCK"
 	FindUnbilled     = "INVENTORY_RECEIPT_UNBILLED"
+	FindQueueFailed  = "INVENTORY_QUEUE_FAILED"
 )
+
+// FindingCodes are the codes of the findings of the stock, in the night audit and in the setup check.
+var FindingCodes = []string{FindBalanceDrift, FindGLMismatch, FindNegative, FindUnbilled, FindQueueFailed, FindCountOpen, FindAmenityPlanInvalid, FindAmenityHeld, FindAmenityShort,
+	"NO_CATEGORY", "NO_WAREHOUSE", "NO_ITEM", "ACCOUNT_MAP_INCOMPLETE", "DEPARTMENT_HEAD_INACTIVE", "APPROVAL_CHAIN_EMPTY"}
+
+func str(v any) string { return fmt.Sprint(v) }
 
 // NightAuditStock is the stock's part of the analysis of the close of a business day (35-inventory.md 5.7): a blocker when a balance disagrees with the ledger or the stock value
 // disagrees with the general ledger, a warning for the balances below zero. It reads only.
@@ -228,11 +240,13 @@ func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int6
 	}
 	for _, r := range d.Balances {
 		blockers = append(blockers, Finding{Code: FindBalanceDrift, Ref: fmt.Sprintf("%d/%d", r.WarehouseID, r.ItemID),
-			Message: fmt.Sprintf("the balance of item %d in warehouse %d (%s, value %s) differs from the ledger (%s, value %s)", r.ItemID, r.WarehouseID, r.BalanceQty, r.BalanceValue, r.LedgerQty, r.LedgerValue)})
+			Message: fmt.Sprintf("the balance of item %d in warehouse %d (%s, value %s) differs from the ledger (%s, value %s)", r.ItemID, r.WarehouseID, r.BalanceQty, r.BalanceValue, r.LedgerQty, r.LedgerValue),
+			Params:  map[string]string{"part": "balance", "item": str(r.ItemID), "warehouse": str(r.WarehouseID), "qty": str(r.BalanceQty), "value": str(r.BalanceValue), "ledger_qty": str(r.LedgerQty), "ledger_value": str(r.LedgerValue)}})
 	}
 	for _, r := range d.Layers {
 		blockers = append(blockers, Finding{Code: FindBalanceDrift, Ref: fmt.Sprintf("%d/%d", r.WarehouseID, r.ItemID),
-			Message: fmt.Sprintf("the layers of item %d in warehouse %d (%s, value %s, less %s of stock sold below zero) differ from the balance (%s, value %s)", r.ItemID, r.WarehouseID, r.LayerQty, r.LayerValue, r.ShortQty, r.BalanceQty, r.BalanceValue)})
+			Message: fmt.Sprintf("the layers of item %d in warehouse %d (%s, value %s, less %s of stock sold below zero) differ from the balance (%s, value %s)", r.ItemID, r.WarehouseID, r.LayerQty, r.LayerValue, r.ShortQty, r.BalanceQty, r.BalanceValue),
+			Params:  map[string]string{"part": "layers", "item": str(r.ItemID), "warehouse": str(r.WarehouseID), "qty": str(r.LayerQty), "value": str(r.LayerValue), "short_qty": str(r.ShortQty), "balance_qty": str(r.BalanceQty), "balance_value": str(r.BalanceValue)}})
 	}
 	mm, err := s.GLMismatches(ctx, tenantID, propertyID)
 	if err != nil {
@@ -240,12 +254,18 @@ func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int6
 	}
 	for _, m := range mm {
 		blockers = append(blockers, Finding{Code: FindGLMismatch, Ref: m.AccountCode,
-			Message: fmt.Sprintf("the general ledger shows %s on %s %s and the stock is worth %s: a posting dated before the module started, or a journal on a control account, is the usual cause", m.Ledger, m.AccountCode, m.AccountName, m.Book)})
+			Message: fmt.Sprintf("the general ledger shows %s on %s %s and the stock is worth %s: a posting dated before the module started, or a journal on a control account, is the usual cause", m.Ledger, m.AccountCode, m.AccountName, m.Book),
+			Params:  map[string]string{"account": m.AccountCode, "account_name": m.AccountName, "ledger": str(m.Ledger), "book": str(m.Book)}})
 	}
 	if n, err := s.q(ctx).CountNegativeBalances(ctx, inventorydb.CountNegativeBalancesParams{TenantID: tenantID, PropertyID: propertyID}); err != nil {
 		return nil, nil, err
 	} else if n > 0 {
-		warnings = append(warnings, Finding{Code: FindNegative, Message: fmt.Sprintf("%d item(s) are below zero in a warehouse: stock was sold before the goods came in", n)})
+		warnings = append(warnings, Finding{Code: FindNegative, Message: fmt.Sprintf("%d item(s) are below zero in a warehouse: stock was sold before the goods came in", n), Params: map[string]string{"n": str(n)}})
+	}
+	if n, err := s.q(ctx).CountFailedConsumption(ctx, inventorydb.CountFailedConsumptionParams{TenantID: tenantID, PropertyID: propertyID}); err != nil {
+		return nil, nil, err
+	} else if n > 0 {
+		blockers = append(blockers, Finding{Code: FindQueueFailed, Message: fmt.Sprintf("%d POS sale(s) could not be deducted from stock: retry or cancel them (Inventory > Setup check) before the day closes", n), Params: map[string]string{"n": str(n)}})
 	}
 	if !bd.IsZero() { // the counts that are open and the amenities of tonight (5.7)
 		b, w, err := s.amenityFindings(ctx, tenantID, propertyID, bd)
@@ -258,7 +278,7 @@ func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int6
 		if n, err := s.q(ctx).CountUnbilledReceiptsOlderThan(ctx, inventorydb.CountUnbilledReceiptsOlderThanParams{TenantID: tenantID, PropertyID: propertyID, Before: bd.AddDays(-30)}); err != nil {
 			return nil, nil, err
 		} else if n > 0 {
-			warnings = append(warnings, Finding{Code: FindUnbilled, Message: fmt.Sprintf("%d receipt(s) older than 30 days have no bill: the supplier's invoice is missing, or the delivery was not charged", n)})
+			warnings = append(warnings, Finding{Code: FindUnbilled, Message: fmt.Sprintf("%d receipt(s) older than 30 days have no bill: the supplier's invoice is missing, or the delivery was not charged", n), Params: map[string]string{"n": str(n)}})
 		}
 	}
 	return blockers, warnings, nil
@@ -269,6 +289,15 @@ func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int6
 func (s *Service) CloseStock(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
 	if err := db.EnterLockLevel(ctx, db.LevelStock); err != nil {
 		return err
+	}
+	// the POS queue first (5.7 step 1): every sale of the day is in the stock before the journal; a row that cannot be applied stops the close
+	if _, err := s.DrainQueue(ctx, p, propertyID, bd); err != nil {
+		return err
+	}
+	if n, err := s.q(ctx).CountFailedConsumption(ctx, inventorydb.CountFailedConsumptionParams{TenantID: p.TenantID, PropertyID: propertyID}); err != nil {
+		return err
+	} else if n > 0 {
+		return apperr.Conflict("INVENTORY_QUEUE_FAILED", "POS sales could not be deducted from stock: retry or cancel them before the day closes").WithContext("rows", n)
 	}
 	// the amenities of the day, after the room charges and before the journal (5.7 step 2); idempotent, a shortage never stops it
 	if err := s.RunAmenities(ctx, p, propertyID, bd); err != nil {

@@ -27,6 +27,8 @@ type SetupIssue struct {
 	Code     string `json:"code"`
 	Message  string `json:"message"`
 	Ref      string `json:"ref,omitempty"`
+	// Params fill the translation of the code (the web translates a finding, 35-inventory.md 5.7); Message is the English sentence.
+	Params map[string]string `json:"params,omitempty"`
 }
 
 // SetupReport is the answer of the setup check: the state of the module and what is left to do.
@@ -78,7 +80,7 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupReport
 	}
 	for _, k := range inventoryKeys {
 		if !slices.Contains(mapped, k) {
-			rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "ACCOUNT_MAP_INCOMPLETE", Ref: k, Message: fmt.Sprintf("the system account %s is not mapped (Setup > Account mapping)", k)})
+			rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "ACCOUNT_MAP_INCOMPLETE", Ref: k, Message: fmt.Sprintf("the system account %s is not mapped (Setup > Account mapping)", k), Params: map[string]string{"key": k}})
 		}
 	}
 	leaders, err := q.InactiveDepartmentLeaders(ctx, inventorydb.InactiveDepartmentLeadersParams{TenantID: p.TenantID, PropertyID: propertyID})
@@ -90,7 +92,7 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupReport
 		if l.IsHead {
 			role = "head"
 		}
-		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "DEPARTMENT_HEAD_INACTIVE", Ref: l.Code, Message: fmt.Sprintf("%s is the %s of the department %s and is not active: choose another in Departments", l.FullName, role, l.Code)})
+		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "DEPARTMENT_HEAD_INACTIVE", Ref: l.Code, Message: fmt.Sprintf("%s is the %s of the department %s and is not active: choose another in Departments", l.FullName, role, l.Code), Params: map[string]string{"name": l.FullName, "role": role, "department": l.Code}})
 	}
 	for _, doc := range []string{DocPR, DocSR} {
 		if _, err := q.GetApprovalSettings(ctx, inventorydb.GetApprovalSettingsParams{TenantID: p.TenantID, PropertyID: propertyID, DocType: doc}); err != nil {
@@ -99,7 +101,7 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupReport
 		if n, err := q.CountApprovalLevels(ctx, inventorydb.CountApprovalLevelsParams{TenantID: p.TenantID, PropertyID: propertyID, DocType: doc}); err != nil {
 			return rep, err
 		} else if n == 0 {
-			rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "APPROVAL_CHAIN_EMPTY", Ref: doc, Message: "the chain of " + doc + " has no level: a document is approved when it is submitted"})
+			rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "APPROVAL_CHAIN_EMPTY", Ref: doc, Message: "the chain of " + doc + " has no level: a document is approved when it is submitted", Params: map[string]string{"doc": doc}})
 		}
 	}
 	blockers, warnings, err := s.NightAuditStock(ctx, p.TenantID, propertyID, civil.Date{})
@@ -107,10 +109,10 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupReport
 		return rep, err
 	}
 	for _, f := range blockers {
-		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityError, Code: f.Code, Message: f.Message, Ref: f.Ref})
+		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityError, Code: f.Code, Message: f.Message, Ref: f.Ref, Params: f.Params})
 	}
 	for _, f := range warnings {
-		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: f.Code, Message: f.Message, Ref: f.Ref})
+		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: f.Code, Message: f.Message, Ref: f.Ref, Params: f.Params})
 	}
 	rep.OK = true
 	for _, i := range rep.Issues {

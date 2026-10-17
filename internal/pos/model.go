@@ -71,6 +71,11 @@ type Outlet struct {
 	ReceiptTaxID   *string `json:"receipt_tax_id"`
 	ReceiptFooter  *string `json:"receipt_footer"`
 	ReceiptCopies  int     `json:"receipt_copies"`
+	// The stock (docs/architecture/35-inventory.md 5.6, D5): the warehouse the outlet sells from (none: it deducts nothing) and the minutes after which a void of an outlet that prints tickets
+	// is waste, not a return (0: off).
+	WarehouseID           *int64  `json:"warehouse_id"`
+	WarehouseName         *string `json:"warehouse_name"`
+	VoidWasteAfterMinutes int     `json:"void_waste_after_minutes"`
 }
 
 // OutletInput creates or replaces an outlet (the whole form is sent). The code never changes.
@@ -103,6 +108,9 @@ type OutletInput struct {
 	ReceiptFooter                *string         `json:"receipt_footer"`
 	// ReceiptCopies is how many copies print when a bill is paid (0 to 5); absent keeps the value (1 for a new outlet).
 	ReceiptCopies *int `json:"receipt_copies"`
+	// WarehouseID is the warehouse the outlet sells from; absent means none. VoidWasteAfterMinutes is D5 (0 to 1440); absent keeps the value (0 for a new outlet).
+	WarehouseID           *int64 `json:"warehouse_id"`
+	VoidWasteAfterMinutes *int   `json:"void_waste_after_minutes"`
 }
 
 // Printer is a printer of the property; the agent reaches it (stage 3), the master only records it.
@@ -241,6 +249,8 @@ type Category struct {
 	SortOrder    int    `json:"sort_order"`
 	IsActive     bool   `json:"is_active"`
 	ProductCount int64  `json:"product_count"`
+	// FbClass is the sale class of the products of the category (FOOD, BEVERAGE, OTHER); none: the parent's, then the class of the warehouse of the outlet (35-inventory.md 4.9).
+	FbClass *string `json:"fb_class"`
 }
 
 // CategoryInput creates or replaces a category. The code and the parent never change.
@@ -250,6 +260,8 @@ type CategoryInput struct {
 	ParentID  *int64 `json:"parent_id"`
 	SortOrder int    `json:"sort_order"`
 	IsActive  *bool  `json:"is_active"`
+	// FbClass is the sale class of the products (FOOD, BEVERAGE, OTHER); absent or empty clears it (35-inventory.md 4.9).
+	FbClass *string `json:"fb_class"`
 }
 
 // Option is a choice of a group: a variant (a price difference, pick one) or an add-on (priced or not, with a limit).

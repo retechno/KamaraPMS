@@ -10195,6 +10195,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/pos/products/{id}/recipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The recipe of a product with the cost of its ingredients at the warehouse of an outlet (the first outlet that has one when none is named), the net price, the margin and the food cost percentage; read with pos.manage or an inventory read permission */
+        get: operations["getPosProductRecipe"];
+        /** Replace the whole recipe of a product (pos.manage, the stock module in the plan; 403 MODULE_NOT_IN_PLAN without it): lines of the product and lines of its options; a variant line replaces the line of the same item, a modifier adds; applies to the orders sent after it */
+        put: operations["savePosProductRecipe"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/consumption-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The queue of the deduction of POS sales: the counts of what waits and the rows of the statuses asked for (HELD and FAILED by default) */
+        get: operations["listInventoryConsumptionQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/consumption-queue/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Try a failed row again now (inventory.manage); 409 QUEUE_ROW_NOT_FAILED */
+        post: operations["retryInventoryConsumptionRow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/consumption-queue/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give up a failed, held or pending row (inventory.manage): the sale is not deducted from stock; audited; 409 QUEUE_ROW_NOT_OPEN */
+        post: operations["cancelInventoryConsumptionRow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/pos-without-deduction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Lines of the POS with a recipe that left no deduction from stock (sold while the stock module was off), by business date */
+        get: operations["reportInventoryPosWithoutDeduction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -14236,10 +14335,15 @@ export interface components {
         };
         NightAuditOutletIssue: {
             /** @enum {string} */
-            code: "POS_OPEN_BILLS" | "POS_DRAFT_LINES" | "INVENTORY_BALANCE_DRIFT" | "INVENTORY_GL_MISMATCH" | "INVENTORY_NEGATIVE_STOCK";
+            code: "POS_OPEN_BILLS" | "POS_DRAFT_LINES" | "INVENTORY_BALANCE_DRIFT" | "INVENTORY_GL_MISMATCH" | "INVENTORY_NEGATIVE_STOCK" | "INVENTORY_RECEIPT_UNBILLED" | "INVENTORY_QUEUE_FAILED" | "INVENTORY_COUNT_OPEN" | "AMENITY_PLAN_INVALID" | "AMENITY_HELD" | "AMENITY_STOCK_SHORT";
+            /** @description The English sentence, for logs; the web translates the code with its params. */
             message: string;
-            /** @description The code of the outlet. */
+            /** @description The code of the outlet */
             ref?: string;
+            /** @description The values the translation of the code needs. */
+            params?: {
+                [key: string]: string;
+            };
         };
         NightAuditWarnings: {
             /** @description Open bills of the outlets with items sold (the sale is revenue of the day, the money is not counted yet) or with lines that were never sent. */
@@ -17394,6 +17498,13 @@ export interface components {
             sort_order?: number;
             /** @description Required to replace an outlet. */
             version?: number;
+            /**
+             * Format: int64
+             * @description The warehouse the outlet sells from (its sales are deducted from it); empty deducts nothing.
+             */
+            warehouse_id?: number | null;
+            /** @description For an outlet that prints tickets: a void this many minutes after the send is waste, not a return (0 is off). Absent keeps the value. */
+            void_waste_after_minutes?: number | null;
         };
         PosOutlet: {
             /** Format: int64 */
@@ -17405,6 +17516,10 @@ export interface components {
             receipt_tax_id?: string | null;
             receipt_footer?: string | null;
             receipt_copies?: number;
+            /** Format: int64 */
+            warehouse_id: number | null;
+            warehouse_name: string | null;
+            void_waste_after_minutes: number;
             name: string;
             outlet_type: string;
             /** @enum {string} */
@@ -17594,6 +17709,11 @@ export interface components {
             parent_id?: number | null;
             sort_order?: number;
             is_active?: boolean | null;
+            /**
+             * @description The sale class of the products of the category (the cost of sales follows it); empty takes the parent's, then the class of the warehouse of the outlet.
+             * @enum {string|null}
+             */
+            fb_class?: "FOOD" | "BEVERAGE" | "OTHER" | null;
         };
         PosCategory: {
             /** Format: int64 */
@@ -17605,6 +17725,8 @@ export interface components {
             sort_order: number;
             is_active: boolean;
             product_count: number;
+            /** @enum {string|null} */
+            fb_class: "FOOD" | "BEVERAGE" | "OTHER" | null;
         };
         PosOption: {
             /** Format: int64 */
@@ -18708,6 +18830,10 @@ export interface components {
                 code: string;
                 message: string;
                 ref?: string;
+                /** @description The values the translation of the code needs. */
+                params?: {
+                    [key: string]: string;
+                };
             }[];
         };
         InventoryAccount: {
@@ -20089,6 +20215,8 @@ export interface components {
             blind: boolean;
             preview: boolean;
             held_documents: components["schemas"]["InventoryHeldDocument"][];
+            /** @description Rows of the POS queue the freeze holds. */
+            held_sales: number;
             lines: components["schemas"]["InventoryCountLine"][];
         };
         InventoryCountBrief: {
@@ -20321,6 +20449,144 @@ export interface components {
             room_list: components["schemas"]["InventoryAmenityRunRoom"][];
             short: components["schemas"]["InventoryAmenityRunLine"][];
             journal: components["schemas"]["InventoryAmenityJournalLine"][];
+        };
+        InventoryRecipeLine: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            /** Format: int64 */
+            unit_id: number;
+            unit_code: string;
+            quantity: string;
+            note: string | null;
+            stock_unit_code: string;
+            stock_qty: string;
+            unit_cost: string;
+            /** @enum {string} */
+            cost_basis: "AVERAGE" | "LAST" | "REFERENCE" | "NONE";
+            cost: string;
+            replaced_qty: string;
+            replaced_cost: string;
+            replaces_label: string | null;
+        };
+        InventoryRecipeOption: {
+            /** Format: int64 */
+            option_id: number;
+            name: string;
+            /** Format: int64 */
+            group_id: number;
+            group_name: string;
+            /** @enum {string} */
+            kind: "VARIANT" | "MODIFIER";
+            is_active: boolean;
+            price_delta: string | null;
+            lines: components["schemas"]["InventoryRecipeLine"][];
+            extra_cost: string;
+        };
+        InventoryRecipeOutlet: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            warehouse_id: number | null;
+            warehouse_name: string | null;
+        };
+        InventoryRecipe: {
+            /** Format: int64 */
+            product_id: number;
+            product_code: string;
+            product_name: string;
+            inventory_active: boolean;
+            editable: boolean;
+            /** Format: int64 */
+            outlet_id: number | null;
+            outlet_name: string | null;
+            /** Format: int64 */
+            warehouse_id: number | null;
+            warehouse_name: string | null;
+            /** @enum {string|null} */
+            sale_class: "FOOD" | "BEVERAGE" | "OTHER" | null;
+            outlets: components["schemas"]["InventoryRecipeOutlet"][];
+            base: components["schemas"]["InventoryRecipeLine"][];
+            options: components["schemas"]["InventoryRecipeOption"][];
+            base_cost: string;
+            net_price: string | null;
+            margin: string | null;
+            food_cost_pct: string | null;
+            cost_basis_label: string;
+            currency_decimals: number;
+        };
+        InventoryRecipeLineInput: {
+            /** Format: int64 */
+            option_id?: number | null;
+            /** Format: int64 */
+            item_id: number;
+            /** Format: int64 */
+            unit_id: number;
+            quantity: string;
+            note?: string | null;
+        };
+        InventoryRecipeInput: {
+            lines: components["schemas"]["InventoryRecipeLineInput"][];
+        };
+        InventoryQueueRow: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            outlet_id: number;
+            outlet_code: string;
+            outlet_name: string;
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_name: string;
+            /** Format: int64 */
+            bill_line_id: number;
+            bill_number: string;
+            /** @enum {string} */
+            kind: "SALE" | "VOID_RETURN" | "VOID_WASTE";
+            /** Format: int64 */
+            product_id: number;
+            product_name: string;
+            quantity: string;
+            /** @enum {string} */
+            sale_class: "FOOD" | "BEVERAGE" | "OTHER";
+            sale_date: components["schemas"]["Date"];
+            /** @enum {string} */
+            status: "PENDING" | "HELD" | "APPLIED" | "CANCELLED" | "FAILED";
+            attempts: number;
+            error_code: string | null;
+            error_message: string | null;
+            /** Format: date-time */
+            created_at: string;
+            applied_on: components["schemas"]["Date"] | null;
+        };
+        InventoryQueueSummary: {
+            pending: number;
+            held: number;
+            failed: number;
+        };
+        InventoryQueueList: {
+            summary: components["schemas"]["InventoryQueueSummary"];
+            rows: components["schemas"]["InventoryQueueRow"][];
+        };
+        InventorySalesWithoutDeduction: {
+            /** Format: int64 */
+            bill_line_id: number;
+            bill_number: string;
+            /** Format: int64 */
+            outlet_id: number;
+            outlet_code: string;
+            outlet_name: string;
+            /** Format: int64 */
+            product_id: number;
+            product_name: string;
+            quantity: string;
+            sent_on: components["schemas"]["Date"];
+            voided: boolean;
         };
     };
     responses: {
@@ -36771,6 +37037,176 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getPosProductRecipe: {
+        parameters: {
+            query?: {
+                /** @description The outlet whose warehouse sets the cost */
+                outlet_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRecipe"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    savePosProductRecipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryRecipeInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRecipe"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryConsumptionQueue: {
+        parameters: {
+            query?: {
+                /** @description One or more of PENDING, HELD, APPLIED, CANCELLED, FAILED, separated by commas */
+                status?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryQueueList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    retryInventoryConsumptionRow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryQueueRow"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    cancelInventoryConsumptionRow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryQueueRow"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryPosWithoutDeduction: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD */
+                from?: string;
+                /** @description YYYY-MM-DD */
+                to?: string;
+                outlet_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventorySalesWithoutDeduction"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

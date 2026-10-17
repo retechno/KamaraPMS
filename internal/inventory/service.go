@@ -38,7 +38,16 @@ type Service struct {
 	approver Approver
 	// occupancy is the front desk's answer to which rooms were slept in (SetOccupancy): the amenities of the close need it.
 	occupancy Occupancy
+	// pricer and entitlement are wired by internal/app (SetPricer, SetEntitlement): the recipe is read against the net price of the POS and is edited only when the plan has the module.
+	pricer      PosPricer
+	entitlement Entitlement
 }
+
+// SetPricer wires the POS's answer to the net price of a product at an outlet (the margin of the recipe).
+func (s *Service) SetPricer(p PosPricer) { s.pricer = p }
+
+// SetEntitlement wires the check that the plan of the tenant has the stock module.
+func (s *Service) SetEntitlement(e Entitlement) { s.entitlement = e }
 
 // NewService wires the service.
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, depts DepartmentChecker) *Service {
