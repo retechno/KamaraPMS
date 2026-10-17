@@ -289,6 +289,43 @@ func (q *Queries) CloseBill(ctx context.Context, arg CloseBillParams) (int64, er
 	return result.RowsAffected(), nil
 }
 
+const countRecipeLinesOfOptions = `-- name: CountRecipeLinesOfOptions :many
+SELECT option_id, count(*)::int AS n FROM pos_recipe_lines
+WHERE tenant_id = $1 AND property_id = $2 AND option_id = ANY($3::bigint[]) GROUP BY option_id
+`
+
+type CountRecipeLinesOfOptionsParams struct {
+	TenantID   int64
+	PropertyID int64
+	OptionIds  []int64
+}
+
+type CountRecipeLinesOfOptionsRow struct {
+	OptionID *int64
+	N        int32
+}
+
+// How many recipe lines each of these choices has: a choice with a recipe is not removed (35-inventory.md 20).
+func (q *Queries) CountRecipeLinesOfOptions(ctx context.Context, arg CountRecipeLinesOfOptionsParams) ([]CountRecipeLinesOfOptionsRow, error) {
+	rows, err := q.db.Query(ctx, countRecipeLinesOfOptions, arg.TenantID, arg.PropertyID, arg.OptionIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountRecipeLinesOfOptionsRow{}
+	for rows.Next() {
+		var i CountRecipeLinesOfOptionsRow
+		if err := rows.Scan(&i.OptionID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deactivateTables = `-- name: DeactivateTables :exec
 UPDATE pos_tables SET is_active = false
 WHERE tenant_id = $1 AND property_id = $2 AND area_id = $3 AND NOT (id = ANY($4::bigint[]))
@@ -350,6 +387,43 @@ func (q *Queries) DeleteMarks(ctx context.Context, arg DeleteMarksParams) error 
 	return err
 }
 
+const deleteOptionByID = `-- name: DeleteOptionByID :exec
+DELETE FROM pos_options WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type DeleteOptionByIDParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// The choices of a product are saved one by one (a choice that stays keeps its id, and so the recipe lines that name it): these change or remove one.
+func (q *Queries) DeleteOptionByID(ctx context.Context, arg DeleteOptionByIDParams) error {
+	_, err := q.db.Exec(ctx, deleteOptionByID, arg.TenantID, arg.PropertyID, arg.ID)
+	return err
+}
+
+const deleteOptionGroupByID = `-- name: DeleteOptionGroupByID :exec
+DELETE FROM pos_option_groups WHERE tenant_id = $1 AND property_id = $2 AND id = $3 AND product_id = $4
+`
+
+type DeleteOptionGroupByIDParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+	ProductID  int64
+}
+
+func (q *Queries) DeleteOptionGroupByID(ctx context.Context, arg DeleteOptionGroupByIDParams) error {
+	_, err := q.db.Exec(ctx, deleteOptionGroupByID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.ProductID,
+	)
+	return err
+}
+
 const deletePriceListItem = `-- name: DeletePriceListItem :exec
 DELETE FROM pos_price_list_items WHERE tenant_id = $1 AND property_id = $2 AND price_list_id = $3 AND product_id = $4
 `
@@ -368,52 +442,6 @@ func (q *Queries) DeletePriceListItem(ctx context.Context, arg DeletePriceListIt
 		arg.PriceListID,
 		arg.ProductID,
 	)
-	return err
-}
-
-const deleteProductOptionGroups = `-- name: DeleteProductOptionGroups :exec
-DELETE FROM pos_option_groups WHERE tenant_id = $1 AND property_id = $2 AND product_id = $3
-`
-
-type DeleteProductOptionGroupsParams struct {
-	TenantID   int64
-	PropertyID int64
-	ProductID  int64
-}
-
-func (q *Queries) DeleteProductOptionGroups(ctx context.Context, arg DeleteProductOptionGroupsParams) error {
-	_, err := q.db.Exec(ctx, deleteProductOptionGroups, arg.TenantID, arg.PropertyID, arg.ProductID)
-	return err
-}
-
-const deleteProductOptions = `-- name: DeleteProductOptions :exec
-DELETE FROM pos_options o USING pos_option_groups g
-WHERE g.property_id = o.property_id AND g.id = o.group_id AND g.tenant_id = $1 AND g.property_id = $2 AND g.product_id = $3
-`
-
-type DeleteProductOptionsParams struct {
-	TenantID   int64
-	PropertyID int64
-	ProductID  int64
-}
-
-func (q *Queries) DeleteProductOptions(ctx context.Context, arg DeleteProductOptionsParams) error {
-	_, err := q.db.Exec(ctx, deleteProductOptions, arg.TenantID, arg.PropertyID, arg.ProductID)
-	return err
-}
-
-const deleteProductRecipeOptionLines = `-- name: DeleteProductRecipeOptionLines :exec
-DELETE FROM pos_recipe_lines WHERE tenant_id = $1 AND property_id = $2 AND product_id = $3 AND option_id IS NOT NULL
-`
-
-type DeleteProductRecipeOptionLinesParams struct {
-	TenantID   int64
-	PropertyID int64
-	ProductID  int64
-}
-
-func (q *Queries) DeleteProductRecipeOptionLines(ctx context.Context, arg DeleteProductRecipeOptionLinesParams) error {
-	_, err := q.db.Exec(ctx, deleteProductRecipeOptionLines, arg.TenantID, arg.PropertyID, arg.ProductID)
 	return err
 }
 
@@ -1366,8 +1394,8 @@ func (q *Queries) InsertBillLine(ctx context.Context, arg InsertBillLineParams) 
 }
 
 const insertCategory = `-- name: InsertCategory :one
-INSERT INTO pos_categories (tenant_id, property_id, code, name, parent_id, sort_order, is_active, created_by, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+INSERT INTO pos_categories (tenant_id, property_id, code, name, parent_id, sort_order, is_active, fb_class, created_by, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
 RETURNING id
 `
 
@@ -1379,6 +1407,7 @@ type InsertCategoryParams struct {
 	ParentID   *int64
 	SortOrder  int32
 	IsActive   bool
+	FbClass    *string
 	ActorID    *int64
 }
 
@@ -1391,6 +1420,7 @@ func (q *Queries) InsertCategory(ctx context.Context, arg InsertCategoryParams) 
 		arg.ParentID,
 		arg.SortOrder,
 		arg.IsActive,
+		arg.FbClass,
 		arg.ActorID,
 	)
 	var id int64
@@ -1637,11 +1667,11 @@ const insertOutlet = `-- name: InsertOutlet :one
 INSERT INTO pos_outlets (tenant_id, property_id, code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id, drawer, receipt_printer_id, uses_tables,
                          guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval,
                          block_night_audit_with_open_bills, is_active, sort_order, receipt_title, receipt_hotel, receipt_address, receipt_tax_id, receipt_footer,
-                         receipt_copies, created_by, updated_by)
+                         receipt_copies, warehouse_id, void_waste_after_minutes, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
         $13, $14, $15, $16, $17, $18, $19,
         $20, $21, $22, $23, $24, $25,
-        $26, $27, COALESCE($28::smallint, 1), $29, $29)
+        $26, $27, COALESCE($28::smallint, 1), $29, COALESCE($30::int, 0), $31, $31)
 RETURNING id
 `
 
@@ -1674,6 +1704,8 @@ type InsertOutletParams struct {
 	ReceiptTaxID                 *string
 	ReceiptFooter                *string
 	ReceiptCopies                pgtype.Int2
+	WarehouseID                  *int64
+	VoidWasteAfterMinutes        pgtype.Int4
 	ActorID                      *int64
 }
 
@@ -1707,6 +1739,8 @@ func (q *Queries) InsertOutlet(ctx context.Context, arg InsertOutletParams) (int
 		arg.ReceiptTaxID,
 		arg.ReceiptFooter,
 		arg.ReceiptCopies,
+		arg.WarehouseID,
+		arg.VoidWasteAfterMinutes,
 		arg.ActorID,
 	)
 	var id int64
@@ -2224,6 +2258,27 @@ func (q *Queries) JobToReprint(ctx context.Context, arg JobToReprintParams) (Job
 	return i, err
 }
 
+const lineTicketStatus = `-- name: LineTicketStatus :one
+SELECT t.status FROM pos_ticket_lines tl JOIN pos_tickets t ON t.property_id = tl.property_id AND t.id = tl.ticket_id
+ WHERE tl.tenant_id = $1 AND tl.property_id = $2 AND tl.bill_line_id = $3 AND t.kind <> 'VOID'
+ ORDER BY t.id DESC LIMIT 1
+`
+
+type LineTicketStatusParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillLineID int64
+}
+
+// A line voided before its ticket was served: the ticket line is struck through.
+// The ticket that holds a sent line (not the ticket of a void): its status says whether the kitchen began (35-inventory.md 5.6). No row for an outlet that makes no tickets.
+func (q *Queries) LineTicketStatus(ctx context.Context, arg LineTicketStatusParams) (string, error) {
+	row := q.db.QueryRow(ctx, lineTicketStatus, arg.TenantID, arg.PropertyID, arg.BillLineID)
+	var status string
+	err := row.Scan(&status)
+	return status, err
+}
+
 const listAreas = `-- name: ListAreas :many
 SELECT id, outlet_id, name, sort_order, grid_w, grid_h, layout_version, is_active FROM pos_areas
 WHERE tenant_id = $1 AND property_id = $2
@@ -2586,7 +2641,7 @@ func (q *Queries) ListBills(ctx context.Context, arg ListBillsParams) ([]ListBil
 }
 
 const listCategories = `-- name: ListCategories :many
-SELECT c.id, c.code, c.name, c.parent_id, c.sort_order, c.is_active,
+SELECT c.id, c.code, c.name, c.parent_id, c.sort_order, c.is_active, c.fb_class,
        (SELECT count(*) FROM pos_products p WHERE p.property_id = c.property_id AND p.category_id = c.id) AS product_count
 FROM pos_categories c WHERE c.tenant_id = $1 AND c.property_id = $2
 ORDER BY c.sort_order, c.name, c.id
@@ -2604,6 +2659,7 @@ type ListCategoriesRow struct {
 	ParentID     *int64
 	SortOrder    int32
 	IsActive     bool
+	FbClass      *string
 	ProductCount int64
 }
 
@@ -2624,6 +2680,7 @@ func (q *Queries) ListCategories(ctx context.Context, arg ListCategoriesParams) 
 			&i.ParentID,
 			&i.SortOrder,
 			&i.IsActive,
+			&i.FbClass,
 			&i.ProductCount,
 		); err != nil {
 			return nil, err
@@ -2976,8 +3033,10 @@ SELECT o.id, o.code, o.name, o.outlet_type, o.order_mode, o.department_id, d.nam
        o.price_list_id, pl.name AS price_list_name, o.drawer, o.receipt_printer_id, pr.name AS receipt_printer_name, o.uses_tables, o.guest_count_required,
        o.rounding_unit, o.allow_room_charge, o.allow_company_charge, o.allow_comp, o.comp_treatment, o.max_discount_pct_no_approval,
        o.block_night_audit_with_open_bills, o.is_active, o.sort_order, o.version,
-       o.receipt_title, o.receipt_hotel, o.receipt_address, o.receipt_tax_id, o.receipt_footer, o.receipt_copies
+       o.receipt_title, o.receipt_hotel, o.receipt_address, o.receipt_tax_id, o.receipt_footer, o.receipt_copies,
+       o.warehouse_id, w.name AS warehouse_name, o.void_waste_after_minutes
 FROM pos_outlets o
+LEFT JOIN inv_warehouses w ON w.property_id = o.property_id AND w.id = o.warehouse_id
 JOIN departments d ON d.property_id = o.property_id AND d.id = o.department_id
 JOIN pos_rule_profiles rp ON rp.property_id = o.property_id AND rp.id = o.rule_profile_id
 JOIN pos_price_lists pl ON pl.property_id = o.property_id AND pl.id = o.price_list_id
@@ -3028,6 +3087,9 @@ type ListOutletsRow struct {
 	ReceiptTaxID                 *string
 	ReceiptFooter                *string
 	ReceiptCopies                int16
+	WarehouseID                  *int64
+	WarehouseName                *string
+	VoidWasteAfterMinutes        int32
 }
 
 // POS masters (docs/architecture/34-pos.md, PR 1). Every query is scoped by tenant and property.
@@ -3079,6 +3141,9 @@ func (q *Queries) ListOutlets(ctx context.Context, arg ListOutletsParams) ([]Lis
 			&i.ReceiptTaxID,
 			&i.ReceiptFooter,
 			&i.ReceiptCopies,
+			&i.WarehouseID,
+			&i.WarehouseName,
+			&i.VoidWasteAfterMinutes,
 		); err != nil {
 			return nil, err
 		}
@@ -3415,51 +3480,6 @@ func (q *Queries) ListProducts(ctx context.Context, arg ListProductsParams) ([]L
 			&i.StationID,
 			&i.IsActive,
 			&i.Version,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listRecipeLines = `-- name: ListRecipeLines :many
-SELECT l.product_id, l.option_id, l.quantity, l.unit, l.note FROM pos_recipe_lines l
-WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.product_id = $3 ORDER BY l.id
-`
-
-type ListRecipeLinesParams struct {
-	TenantID   int64
-	PropertyID int64
-	ProductID  int64
-}
-
-type ListRecipeLinesRow struct {
-	ProductID int64
-	OptionID  *int64
-	Quantity  decimal.Decimal
-	Unit      string
-	Note      *string
-}
-
-func (q *Queries) ListRecipeLines(ctx context.Context, arg ListRecipeLinesParams) ([]ListRecipeLinesRow, error) {
-	rows, err := q.db.Query(ctx, listRecipeLines, arg.TenantID, arg.PropertyID, arg.ProductID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListRecipeLinesRow{}
-	for rows.Next() {
-		var i ListRecipeLinesRow
-		if err := rows.Scan(
-			&i.ProductID,
-			&i.OptionID,
-			&i.Quantity,
-			&i.Unit,
-			&i.Note,
 		); err != nil {
 			return nil, err
 		}
@@ -5439,7 +5459,6 @@ type StrikeTicketLinesParams struct {
 	BillLineID int64
 }
 
-// A line voided before its ticket was served: the ticket line is struck through.
 func (q *Queries) StrikeTicketLines(ctx context.Context, arg StrikeTicketLinesParams) error {
 	_, err := q.db.Exec(ctx, strikeTicketLines, arg.TenantID, arg.PropertyID, arg.BillLineID)
 	return err
@@ -5598,14 +5617,15 @@ func (q *Queries) UpdateBillMeta(ctx context.Context, arg UpdateBillMetaParams) 
 }
 
 const updateCategory = `-- name: UpdateCategory :execrows
-UPDATE pos_categories SET name = $1, sort_order = $2, is_active = $3, updated_by = $4
-WHERE tenant_id = $5 AND property_id = $6 AND id = $7
+UPDATE pos_categories SET name = $1, sort_order = $2, is_active = $3, fb_class = $4, updated_by = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8
 `
 
 type UpdateCategoryParams struct {
 	Name       string
 	SortOrder  int32
 	IsActive   bool
+	FbClass    *string
 	ActorID    *int64
 	TenantID   int64
 	PropertyID int64
@@ -5617,6 +5637,7 @@ func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) 
 		arg.Name,
 		arg.SortOrder,
 		arg.IsActive,
+		arg.FbClass,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -5661,6 +5682,72 @@ func (q *Queries) UpdateDraftLine(ctx context.Context, arg UpdateDraftLineParams
 	return result.RowsAffected(), nil
 }
 
+const updateOption = `-- name: UpdateOption :exec
+UPDATE pos_options SET group_id = $1, name = $2, price_delta = $3, is_default = $4, max_qty = $5, sort_order = $6, is_active = $7
+WHERE tenant_id = $8 AND property_id = $9 AND id = $10
+`
+
+type UpdateOptionParams struct {
+	GroupID    int64
+	Name       string
+	PriceDelta decimal.Decimal
+	IsDefault  bool
+	MaxQty     int16
+	SortOrder  int32
+	IsActive   bool
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) UpdateOption(ctx context.Context, arg UpdateOptionParams) error {
+	_, err := q.db.Exec(ctx, updateOption,
+		arg.GroupID,
+		arg.Name,
+		arg.PriceDelta,
+		arg.IsDefault,
+		arg.MaxQty,
+		arg.SortOrder,
+		arg.IsActive,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const updateOptionGroup = `-- name: UpdateOptionGroup :exec
+UPDATE pos_option_groups SET name = $1, kind = $2, min_select = $3, max_select = $4, sort_order = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND product_id = $9
+`
+
+type UpdateOptionGroupParams struct {
+	Name       string
+	Kind       string
+	MinSelect  int16
+	MaxSelect  int16
+	SortOrder  int32
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+	ProductID  int64
+}
+
+func (q *Queries) UpdateOptionGroup(ctx context.Context, arg UpdateOptionGroupParams) error {
+	_, err := q.db.Exec(ctx, updateOptionGroup,
+		arg.Name,
+		arg.Kind,
+		arg.MinSelect,
+		arg.MaxSelect,
+		arg.SortOrder,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+		arg.ProductID,
+	)
+	return err
+}
+
 const updateOutlet = `-- name: UpdateOutlet :one
 UPDATE pos_outlets SET name = $1, outlet_type = $2, order_mode = $3, department_id = $4, rule_profile_id = $5,
        price_list_id = $6, drawer = $7, receipt_printer_id = $8, uses_tables = $9,
@@ -5669,8 +5756,9 @@ UPDATE pos_outlets SET name = $1, outlet_type = $2, order_mode = $3, department_
        block_night_audit_with_open_bills = $17, is_active = $18, sort_order = $19,
        receipt_title = $20, receipt_hotel = $21, receipt_address = $22,
        receipt_tax_id = $23, receipt_footer = $24, receipt_copies = COALESCE($25::smallint, receipt_copies),
-       version = version + 1, updated_by = $26
-WHERE tenant_id = $27 AND property_id = $28 AND id = $29 AND version = $30
+       warehouse_id = $26, void_waste_after_minutes = COALESCE($27::int, void_waste_after_minutes),
+       version = version + 1, updated_by = $28
+WHERE tenant_id = $29 AND property_id = $30 AND id = $31 AND version = $32
 RETURNING id
 `
 
@@ -5700,6 +5788,8 @@ type UpdateOutletParams struct {
 	ReceiptTaxID                 *string
 	ReceiptFooter                *string
 	ReceiptCopies                pgtype.Int2
+	WarehouseID                  *int64
+	VoidWasteAfterMinutes        pgtype.Int4
 	ActorID                      *int64
 	TenantID                     int64
 	PropertyID                   int64
@@ -5734,6 +5824,8 @@ func (q *Queries) UpdateOutlet(ctx context.Context, arg UpdateOutletParams) (int
 		arg.ReceiptTaxID,
 		arg.ReceiptFooter,
 		arg.ReceiptCopies,
+		arg.WarehouseID,
+		arg.VoidWasteAfterMinutes,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,

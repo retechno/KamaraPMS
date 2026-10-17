@@ -116,7 +116,9 @@ echo "==> migration 00084 (inventory) on properties with and without the account
 M84="$(ls "$ROOT"/migrations/00084_*.sql)"
 M85="$(ls "$ROOT"/migrations/00085_*.sql)"
 M86="$(ls "$ROOT"/migrations/00086_*.sql)"
-# 00086 stands on 00085 and 00085 on 00084: they go first, and come back after 00084 does
+M87="$(ls "$ROOT"/migrations/00087_*.sql)"
+# 00087 stands on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
+section down "$M87" | psql_run
 section down "$M86" | psql_run
 section down "$M85" | psql_run
 section down "$M84" | psql_run
@@ -166,6 +168,19 @@ psql_run -c "ALTER TABLE inv_amenity_plans DISABLE TRIGGER inv_amenity_plans_app
 section down "$M86" | psql_run >/dev/null
 psql_run < "$ROOT/db/tests/migration_00086_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M86" | psql_run >/dev/null
+
+echo "==> migration 00087 (recipes and the POS deduction) on the properties that exist"
+section up "$M87" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00087_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# the Down is refused while the POS deduction holds anything (a category with a class is enough), and changes nothing
+psql_run -c "INSERT INTO pos_categories (tenant_id, property_id, code, name, fb_class) SELECT p.tenant_id, p.id, 'M87', 'Migration 87', 'FOOD' FROM properties p WHERE p.code = 'I1'"
+if section down "$M87" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m87-down.err"; then echo "FAIL: the Down of 00087 ran while the POS deduction held data" >&2; exit 1; fi
+grep -q "cannot roll back 00087" "${TMPDIR:-/tmp}/m87-down.err" || { echo "FAIL: the Down of 00087 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m87-down.err" >&2; exit 1; }
+echo "    down refused while the POS deduction holds data"
+psql_run -c "DELETE FROM pos_categories WHERE code = 'M87'"
+section down "$M87" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00087_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M87" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

@@ -71,6 +71,19 @@ const router = createRouter({
     { path: '/:p(.*)*', component: blank },
   ],
 })
+const click = async (sel: string): Promise<void> => {
+  ;(document.body.querySelector(sel) as HTMLElement).click()
+  await flushPromises()
+}
+
+const queueList = {
+  summary: { pending: 0, held: 1, failed: 1 },
+  rows: [
+    { id: 8, outlet_id: 1, outlet_code: 'R', outlet_name: 'Restoran', warehouse_id: 2, warehouse_name: 'Dapur', bill_line_id: 70, bill_number: 'R-0008', kind: 'SALE', product_id: 3, product_name: 'Es Sirup Vanila', quantity: '2', sale_class: 'BEVERAGE', sale_date: '2026-09-30', status: 'HELD', attempts: 0, error_code: null, error_message: null, created_at: '2026-09-30T10:00:00Z', applied_on: null },
+    { id: 9, outlet_id: 1, outlet_code: 'R', outlet_name: 'Restoran', warehouse_id: 2, warehouse_name: 'Dapur', bill_line_id: 71, bill_number: 'R-0009', kind: 'SALE', product_id: 4, product_name: 'Nasi Goreng', quantity: '1', sale_class: 'FOOD', sale_date: '2026-09-30', status: 'FAILED', attempts: 1, error_code: 'ACCOUNT_KEY_MISSING', error_message: 'the account is not set', created_at: '2026-09-30T10:05:00Z', applied_on: null },
+  ],
+}
+
 const mounted: VueWrapper[] = []
 
 function ok(path: string): unknown {
@@ -85,19 +98,20 @@ function ok(path: string): unknown {
   if (path.endsWith('/inventory/stock-card')) return { data: card }
   if (path.endsWith('/inventory/settings')) return { data: { exists: true, costing_method: 'AVERAGE', costing_locked_on: '2026-09-01', price_tolerance_pct: '1', qty_tolerance_pct: '0', over_receipt_pct: '5', po_requires_pr: true, direct_receipt_limit: null, count_blocks_night_audit: true, count_blind: true, version: 3 } }
   if (path.endsWith('/inventory/setup-check')) return { data: { ok: true, costing_method: 'AVERAGE', costing_locked_on: '2026-09-01', warehouses: 2, categories: 2, items: 2, issues: [{ severity: 'WARNING', code: 'NO_ITEM', message: 'there is no item yet' }] } }
+  if (path.endsWith('/inventory/consumption-queue')) return { data: queueList }
   if (path.endsWith('/pos/outlets')) return { data: { data: [{ id: 5, code: 'BAR', name: 'Bar' }] } }
   if (path.endsWith('/departments')) return { data: { data: [{ id: 6, code: 'FB', name: 'Food and beverage', level: 1, is_active: true }] } }
   return { data: { data: [] } }
 }
 
-async function setup(component: unknown, permissions = ['inventory.view', 'inventory.manage', 'inventory.opening'], route = '/inventory') {
+async function setup(component: unknown, permissions = ['inventory.view', 'inventory.manage', 'inventory.opening'], route = '/inventory', get?: (path: string) => unknown) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, email: 'm@hotel.test', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
   usePropertyStore().current = { id: 7, currency_decimals: 0 } as never
   resetDepartments()
-  GET = vi.fn(async (path: string) => ok(path))
+  GET = vi.fn(async (path: string) => (get ? get(path) : ok(path)))
   POST = vi.fn().mockResolvedValue({ data: { id: 1, number: 'OPN-000001' } })
   PUT = vi.fn().mockResolvedValue({ data: sirup })
   PATCH = vi.fn().mockResolvedValue({ data: {} })
@@ -359,7 +373,31 @@ describe('costing', () => {
     expect(body('[data-testid=locked]').text()).toContain('Locked since the first stock movement')
     expect((document.body.querySelector('[data-testid=method-FIFO]') as HTMLInputElement).disabled).toBe(true)
     expect(has('[data-testid=method-save]')).toBe(false)
-    expect(body('[data-testid=issue-NO_ITEM]').text()).toContain('there is no item yet')
+    expect(body('[data-testid=issue-NO_ITEM]').text()).toContain('There is no item yet.') // the sentence of the language of the page, by the code
+  })
+
+  it('writes a finding in Indonesian by its code and its params, not with the English sentence of the server', async () => {
+    setLocale('id')
+    await setup(InventoryCostingView, undefined, '/inventory', (path) => (path.endsWith('/inventory/setup-check')
+      ? { data: { ok: false, costing_method: 'AVERAGE', costing_locked_on: null, warehouses: 1, categories: 1, items: 1, issues: [{ severity: 'ERROR', code: 'INVENTORY_QUEUE_FAILED', message: '2 POS sale(s) could not be deducted', params: { n: '2' } }] } }
+      : ok(path)))
+    const text = body('[data-testid=issue-INVENTORY_QUEUE_FAILED]').text()
+    expect(text).toContain('2 penjualan POS gagal dipotong dari stok')
+    expect(text).not.toContain('could not be deducted')
+  })
+
+  it('lists what the POS queue holds and lets the manager retry a failed row or cancel it', async () => {
+    await setup(InventoryCostingView)
+    expect(body('[data-testid=queue-summary]').text()).toContain('Failed 1')
+    expect(body('[data-testid=queue-row-9]').text()).toContain('Nasi Goreng')
+    expect(body('[data-testid=queue-row-9]').text()).toContain('An account that this needs is not set in this property.')
+    expect(has('[data-testid=queue-retry-8]')).toBe(false) // a held row is not tried again by hand, only cancelled
+    expect(has('[data-testid=queue-cancel-8]')).toBe(true)
+    await click('[data-testid=queue-retry-9]')
+    expect(POST.mock.calls[0]![0]).toContain('/consumption-queue/{id}/retry')
+    expect(POST.mock.calls[0]![1].params.path.id).toBe(9)
+    await click('[data-testid=queue-cancel-9]')
+    expect(POST.mock.calls[1]![0]).toContain('/consumption-queue/{id}/cancel')
   })
 
   it('shows the stock card of an item in a warehouse with its running balance', async () => {
@@ -370,6 +408,17 @@ describe('costing', () => {
     expect(table).toContain('980,000')
     expect(table).toContain('882,000')
     expect(has('[data-testid=layers]')).toBe(false) // average: no layers
+  })
+
+  it('writes the cost moved to waste without a quantity or a value, since the balance does not change', async () => {
+    const wasteCard = { ...card, lines: [...card.lines, { movement_id: 3, business_date: '2026-09-02', kind: 'COGS_TO_WASTE', source_type: 'POS_QUEUE', qty: '0', value: '0', unit_cost: '0', cost_estimated: false, balance_qty: '18', balance_value: '882000', average_cost: '49000' }] }
+    await setup(InventoryCostingView, undefined, '/inventory/costing?warehouse=3&item=7', (path) => (path.endsWith('/inventory/stock-card') ? { data: wasteCard } : ok(path)))
+    const row = body('[data-testid=move-3]')
+    const cells = row.findAll('td').map((c) => c.text())
+    expect(cells[2]).toBe('–')
+    expect(cells[3]).toBe('–')
+    expect(body('[data-testid=cost-to-waste]').text()).toBe('from cost of sales to waste expense')
+    expect(cells[4]).toBe('18') // the balance stays
   })
 
   it('lets the manager choose the method while it is free', async () => {

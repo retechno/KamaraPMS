@@ -59,6 +59,7 @@ afterEach(() => {
 })
 
 const productsGet = (path: string) => {
+  if (path.endsWith('/pos/products/{id}/recipe')) return { data: { product_id: 10, product_code: 'NASGOR', product_name: 'Nasi Goreng Kampung', inventory_active: false, editable: false, outlet_id: null, outlet_name: null, warehouse_id: null, warehouse_name: null, sale_class: null, outlets: [], base: [], options: [], base_cost: '0', net_price: null, margin: null, food_cost_pct: null, cost_basis_label: 'REFERENCE', currency_decimals: 0 } }
   if (path.endsWith('/pos/products/{id}')) return { data: product }
   if (path.endsWith('/pos/products')) return { data: { data: [{ ...product, option_groups: undefined, prices: undefined }] } }
   if (path.endsWith('/pos/categories')) return { data: { data: [{ id: 1, code: 'MAINS', name: 'Main dishes', parent_id: null, sort_order: 1, is_active: true, product_count: 1 }] } }
@@ -114,6 +115,20 @@ describe('the product master', () => {
     expect(opts.body.option_groups.map((g) => g.kind)).toEqual(['VARIANT', 'MODIFIER'])
     expect(opts.body.option_groups[0]).toMatchObject({ min_select: 1, max_select: 1 })
     expect(opts.body.option_groups[0]!.options).toHaveLength(2)
+    // the groups and the choices that exist travel with their ids: a choice stays the same choice, with its recipe, whatever its name becomes
+    expect((opts.body.option_groups as { id?: number; options: { id?: number }[] }[]).map((g) => [g.id, g.options.map((o) => o.id)])).toEqual([[1, [1, 2]], [2, [3]]])
+  })
+
+  it('says why a choice that has a recipe is not removed, with its name, in Indonesian', async () => {
+    setLocale('id')
+    setup(PosProductsView, productsGet)
+    await flushPromises()
+    await body('[data-testid=product-NASGOR]').trigger('click')
+    await flushPromises()
+    PUT.mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Conflict', status: 409, code: 'OPTION_HAS_RECIPE', detail: 'a choice that has a recipe cannot be removed: Jumbo', context: { options: 'Jumbo' } }))
+    await body('[data-testid=product-save]').trigger('submit')
+    await flushPromises()
+    expect(body('[data-testid=product-error]').text()).toContain('Pilihan Jumbo punya resep, jadi tidak bisa dihapus')
   })
 
   it('shows what the server refuses in the option groups', async () => {

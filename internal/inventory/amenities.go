@@ -442,30 +442,33 @@ func amenityNumber(bd civil.Date) string {
 
 // planRunnable says whether the plan in force can run tonight (5.7): its warehouse is active, its account and department rule hold, its items are active. A warehouse frozen by a count is not a cause (D24).
 // It answers the reasons, empty when it can.
-func (s *Service) planRunnable(ctx context.Context, p auth.Principal, propertyID int64, plan *inventorydb.GetAmenityPlanInForceRow, lines []inventorydb.ListAmenityPlanLinesRow) ([]string, error) {
-	var why []string
+func (s *Service) planRunnable(ctx context.Context, p auth.Principal, propertyID int64, plan *inventorydb.GetAmenityPlanInForceRow, lines []inventorydb.ListAmenityPlanLinesRow) ([]planCause, error) {
+	var why []planCause
 	if plan.WarehouseID == nil || plan.ExpenseAccountID == nil {
-		return []string{"the plan has no warehouse or no account"}, nil
+		return []planCause{{Code: "NO_WAREHOUSE_OR_ACCOUNT", Message: "the plan has no warehouse or no account"}}, nil
 	}
 	w, err := s.q(ctx).GetWarehouseLite(ctx, inventorydb.GetWarehouseLiteParams{TenantID: p.TenantID, PropertyID: propertyID, ID: *plan.WarehouseID})
 	if err != nil || !w.IsActive {
-		why = append(why, "the warehouse of the plan is switched off")
+		why = append(why, planCause{Code: "WAREHOUSE_INACTIVE", Message: "the warehouse of the plan is switched off"})
 	}
 	if _, err := s.resolveDepartment(ctx, p, propertyID, *plan.ExpenseAccountID, plan.DepartmentID, false, "expense_account_id"); err != nil {
 		var ae *apperr.Error
 		if errors.As(err, &ae) {
-			why = append(why, ae.Message)
+			why = append(why, planCause{Code: "ACCOUNT_RULE", Message: ae.Message})
 		} else {
 			return nil, err
 		}
 	}
 	for _, l := range lines {
 		if !l.ItemActive {
-			why = append(why, "the item "+l.ItemCode+" is switched off")
+			why = append(why, planCause{Code: "ITEM_INACTIVE", Item: l.ItemCode, Message: "the item " + l.ItemCode + " is switched off"})
 		}
 	}
 	return why, nil
 }
+
+// planCause is a reason the plan cannot run tonight: a code for the screens to translate, the item it is about, and the sentence.
+type planCause struct{ Code, Item, Message string }
 
 // ---------------------------------------------------------------------------------------------- the preview
 
@@ -493,6 +496,7 @@ type AmenityPreview struct {
 	Held       *HeldDocument    `json:"held"`
 	HeldCount  *string          `json:"held_by_count"`
 	Invalid    []string         `json:"invalid"`
+	Causes     []planCause      `json:"-"`
 	Types      []AmenityRunType `json:"types"`
 	Lines      []AmenityRunLine `json:"lines"`
 }
@@ -521,11 +525,12 @@ func (s *Service) amenityPreview(ctx context.Context, p auth.Principal, property
 	if err != nil {
 		return out, err
 	}
-	if out.Invalid, err = s.planRunnable(ctx, p, propertyID, plan, lines); err != nil {
+	if out.Causes, err = s.planRunnable(ctx, p, propertyID, plan, lines); err != nil {
 		return out, err
 	}
-	if out.Invalid == nil {
-		out.Invalid = []string{} // a list in the JSON, never null
+	out.Invalid = []string{} // a list in the JSON, never null
+	for _, c := range out.Causes {
+		out.Invalid = append(out.Invalid, c.Message)
 	}
 	if s.occupancy == nil || plan.WarehouseID == nil {
 		return out, nil
@@ -628,7 +633,7 @@ func (s *Service) RunAmenities(ctx context.Context, p auth.Principal, propertyID
 	if why, err := s.planRunnable(ctx, p, propertyID, plan, lines); err != nil {
 		return err
 	} else if len(why) > 0 {
-		return planInvalid(fieldErr("plan", "INVALID_VALUE", why[0]))
+		return planInvalid(fieldErr("plan", "INVALID_VALUE", why[0].Message))
 	}
 	t := totalsOf(rooms)
 	needs := needsOf(lines, t)
@@ -982,7 +987,8 @@ func (s *Service) amenityFindings(ctx context.Context, tenantID, propertyID int6
 		return nil, nil, err
 	}
 	for _, c := range counts {
-		f := Finding{Code: FindCountOpen, Ref: c.CntNumber, Message: fmt.Sprintf("the count %s of %s is still open: it freezes the warehouse", c.CntNumber, c.WarehouseName)}
+		f := Finding{Code: FindCountOpen, Ref: c.CntNumber, Message: fmt.Sprintf("the count %s of %s is still open: it freezes the warehouse", c.CntNumber, c.WarehouseName),
+			Params: map[string]string{"number": c.CntNumber, "warehouse": c.WarehouseName}}
 		if cfg.CountBlocksNightAudit {
 			blockers = append(blockers, f)
 		} else {
@@ -994,15 +1000,16 @@ func (s *Service) amenityFindings(ctx context.Context, tenantID, propertyID int6
 	if err != nil || !pv.Enabled {
 		return blockers, warnings, err
 	}
-	for _, why := range pv.Invalid {
-		blockers = append(blockers, Finding{Code: FindAmenityPlanInvalid, Message: "the amenities plan cannot run tonight: " + why})
+	for _, why := range pv.Causes {
+		blockers = append(blockers, Finding{Code: FindAmenityPlanInvalid, Message: "the amenities plan cannot run tonight: " + why.Message, Params: map[string]string{"cause": why.Code, "item": why.Item, "detail": why.Message}})
 	}
 	if pv.HeldCount != nil && pv.Rooms > 0 {
-		warnings = append(warnings, Finding{Code: FindAmenityHeld, Ref: *pv.HeldCount, Message: fmt.Sprintf("the amenities warehouse is frozen by the count %s: tonight's amenities are written and applied when the count ends", *pv.HeldCount)})
+		warnings = append(warnings, Finding{Code: FindAmenityHeld, Ref: *pv.HeldCount, Message: fmt.Sprintf("the amenities warehouse is frozen by the count %s: tonight's amenities are written and applied when the count ends", *pv.HeldCount), Params: map[string]string{"number": *pv.HeldCount}})
 	}
 	sort.Slice(pv.Short, func(i, j int) bool { return pv.Short[i].ItemCode < pv.Short[j].ItemCode })
 	for _, sh := range pv.Short {
-		warnings = append(warnings, Finding{Code: FindAmenityShort, Ref: sh.ItemCode, Message: fmt.Sprintf("%s: %s %s needed tonight, %s on the shelf: the close goes on and the balance goes below zero", sh.ItemName, sh.Need, sh.StockUnitCode, sh.OnHand)})
+		warnings = append(warnings, Finding{Code: FindAmenityShort, Ref: sh.ItemCode, Message: fmt.Sprintf("%s: %s %s needed tonight, %s on the shelf: the close goes on and the balance goes below zero", sh.ItemName, sh.Need, sh.StockUnitCode, sh.OnHand),
+			Params: map[string]string{"item": sh.ItemName, "need": sh.Need.String(), "unit": sh.StockUnitCode, "on_hand": sh.OnHand.String()}})
 	}
 	return blockers, warnings, nil
 }

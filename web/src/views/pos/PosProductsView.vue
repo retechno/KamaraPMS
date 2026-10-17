@@ -6,6 +6,7 @@ import type { PosCategory, PosImportResult, PosOutlet, PosProduct, PosRuleProfil
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import MoneyInput from '@/components/app/MoneyInput.vue'
+import ProductRecipe from '@/components/pos/ProductRecipe.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -39,8 +40,9 @@ const listOutlet = ref(0)
 const selectedId = ref<number | null>(null) // null with `creating`: a new product
 const creating = ref(false)
 
-interface OptionRow { name: string; price_delta: string; is_default: boolean; max_qty: number }
-interface GroupRow { name: string; kind: 'VARIANT' | 'MODIFIER'; required: boolean; max_select: number; options: OptionRow[] }
+/** `id` is the id of a group or a choice that exists already: it travels with the form so that the choice stays the same choice (and keeps its recipe) whatever its name or price becomes. */
+interface OptionRow { id?: number; name: string; price_delta: string; is_default: boolean; max_qty: number }
+interface GroupRow { id?: number; name: string; kind: 'VARIANT' | 'MODIFIER'; required: boolean; max_select: number; options: OptionRow[] }
 interface PriceRow { outletId: number; listId: number; sold: boolean; price: string; shared: boolean }
 const form = reactive({
   version: 0, code: '', name: '', short_name: '', category_id: 0, charge_code_id: 0, station_id: 0, rule_profile_id: 0, own_profile: false, is_active: true,
@@ -121,8 +123,8 @@ async function select(p: PosProduct): Promise<void> {
       version: data.version, code: data.code, name: data.name, short_name: data.short_name ?? '', category_id: data.category_id, charge_code_id: data.charge_code_id,
       station_id: data.station_id ?? 0, rule_profile_id: data.rule_profile_id ?? 0, own_profile: data.rule_profile_id !== null && data.rule_profile_id !== undefined, is_active: data.is_active,
       groups: (data.option_groups ?? []).map((g) => ({
-        name: g.name, kind: g.kind, required: g.min_select >= 1, max_select: g.max_select,
-        options: g.options.map((o) => ({ name: o.name, price_delta: stripZeros(o.price_delta), is_default: o.is_default, max_qty: o.max_qty })),
+        id: g.id, name: g.name, kind: g.kind, required: g.min_select >= 1, max_select: g.max_select,
+        options: g.options.map((o) => ({ id: o.id, name: o.name, price_delta: stripZeros(o.price_delta), is_default: o.is_default, max_qty: o.max_qty })),
       })),
       prices: blankPrices(data.prices ?? []),
     })
@@ -161,8 +163,8 @@ async function save(): Promise<void> {
     station_id: form.station_id || null, rule_profile_id: form.own_profile && form.rule_profile_id ? form.rule_profile_id : null, is_active: form.is_active,
     version: creating.value ? undefined : form.version,
     option_groups: form.groups.map((g, gi) => ({
-      name: g.name.trim(), kind: g.kind, min_select: g.kind === 'VARIANT' ? (g.required ? 1 : 0) : g.required ? 1 : 0, max_select: g.kind === 'VARIANT' ? 1 : g.max_select, sort_order: gi,
-      options: g.options.map((o, oi) => ({ name: o.name.trim(), price_delta: o.price_delta.trim() || '0', is_default: o.is_default, max_qty: o.max_qty, sort_order: oi, is_active: true })),
+      id: g.id, name: g.name.trim(), kind: g.kind, min_select: g.kind === 'VARIANT' ? (g.required ? 1 : 0) : g.required ? 1 : 0, max_select: g.kind === 'VARIANT' ? 1 : g.max_select, sort_order: gi,
+      options: g.options.map((o, oi) => ({ id: o.id, name: o.name.trim(), price_delta: o.price_delta.trim() || '0', is_default: o.is_default, max_qty: o.max_qty, sort_order: oi, is_active: true })),
     })),
     prices: [...lists.values()].map((r) => ({ price_list_id: r.listId, price: r.price.trim(), is_sold: r.sold })),
   }
@@ -386,9 +388,10 @@ watch(pid, load, { immediate: true })
           </NativeSelect>
         </section>
 
-        <section class="rounded-xl border border-dashed border-border bg-card p-4" data-testid="product-recipe">
-          <h3 class="m-0 text-base font-semibold">{{ t('pos.products.recipe') }}</h3>
-          <p class="m-0 mt-1 text-sm text-muted-foreground">{{ t('pos.products.recipeNote') }}</p>
+        <ProductRecipe v-if="!creating && selectedId" :key="selectedId" class="xl:col-span-2" :product-id="selectedId" />
+        <section v-else class="rounded-xl border border-dashed border-border bg-card p-4" data-testid="product-recipe-later">
+          <h3 class="m-0 text-base font-semibold">{{ t('pos.recipe.title') }}</h3>
+          <p class="m-0 mt-1 text-sm text-muted-foreground">{{ t('pos.recipe.saveFirst') }}</p>
         </section>
       </div>
 

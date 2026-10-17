@@ -151,6 +151,7 @@ const varianceNegative = (l: InventoryCountLine): boolean => hasValue(l.variance
   <div v-else-if="loaded && count" class="flex flex-col gap-3">
     <ErrorNotice v-if="formError" :error="formError" inline data-testid="count-error" />
     <p v-if="count.status === 'OPEN' || count.status === 'SUBMITTED'" class="alert warning m-0" data-testid="freeze-banner">{{ t('inventory.count.frozen', { time: formatDateTime(count.started_at) }) }}</p>
+    <p v-if="count.held_sales > 0" class="alert warning m-0 text-sm" data-testid="held-sales">{{ t('inventory.count.heldSales', { n: count.held_sales }) }}</p>
     <ul v-if="count.held_documents.length" class="m-0 list-none rounded-lg border border-border bg-card p-3 text-sm" data-testid="held-documents">
       <li v-for="d in count.held_documents" :key="d.issue_id">{{ t('inventory.count.heldDocument', { number: d.iss_number, n: d.held_lines }) }}</li>
     </ul>
@@ -202,7 +203,7 @@ const varianceNegative = (l: InventoryCountLine): boolean => hasValue(l.variance
             <tr v-for="l in lines" :key="l.item_id" class="border-t border-border" :class="counted(l) ? '' : 'text-muted-foreground'" :data-testid="`review-${l.item_code}`">
               <td class="py-2 pr-2">{{ l.item_name }} <span class="text-xs text-muted-foreground">{{ l.item_code }}</span></td>
               <td class="py-2 pr-2 text-right">{{ l.book_qty !== null ? formatQty(l.book_qty) : '' }}</td>
-              <td class="py-2 pr-2 text-right">{{ hasValue(l.held_before_qty) && Number(l.held_before_qty) !== 0 ? formatQty(l.held_before_qty) : '' }}</td>
+              <td class="py-2 pr-2 text-right" :data-testid="`held-${l.item_code}`">{{ hasValue(l.held_before_qty) ? (Number(l.held_before_qty) !== 0 ? formatQty(l.held_before_qty) : '–') : '' }}</td>
               <td class="py-2 pr-2 text-right">{{ hasValue(l.expected_qty) ? formatQty(l.expected_qty) : '' }}</td>
               <td class="py-2 pr-2 text-right">{{ counted(l) ? formatQty(l.counted_qty) : t('inventory.count.notCounted') }} <span v-if="counted(l)" class="text-xs text-muted-foreground">{{ l.stock_unit_code }}</span></td>
               <td class="py-2 pr-2 text-right text-xs">{{ l.counted_at ? formatTime(l.counted_at) : '' }}</td>

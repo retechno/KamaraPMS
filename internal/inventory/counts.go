@@ -99,6 +99,7 @@ type Count struct {
 	Blind               bool             `json:"blind"`
 	Preview             bool             `json:"preview"`
 	HeldDocuments       []HeldDocument   `json:"held_documents"`
+	HeldSales           int              `json:"held_sales"` // POS rows the count holds (35-inventory.md 5.5)
 	Lines               []CountLine      `json:"lines"`
 }
 
@@ -241,6 +242,11 @@ func (s *Service) count(ctx context.Context, p auth.Principal, propertyID, id in
 		for _, d := range docs {
 			out.HeldDocuments = append(out.HeldDocuments, HeldDocument{IssueID: d.ID, Number: d.IssNumber, SourceDate: d.SourceDate, HeldLines: int(d.HeldLines)})
 		}
+		n, err := q.CountHeldConsumption(ctx, inventorydb.CountHeldConsumptionParams{TenantID: p.TenantID, PropertyID: propertyID, WarehouseID: r.WarehouseID})
+		if err != nil {
+			return Count{}, err
+		}
+		out.HeldSales = int(n)
 	}
 	return out, nil
 }
@@ -549,6 +555,9 @@ func (s *Service) endFreeze(ctx context.Context, p auth.Principal, propertyID in
 		return err
 	}
 	if err := db.LockRows(ctx, db.StockIssues, db.ForUpdate, propertyID, issueIDsOf(held)); err != nil { // the documents, then the warehouse and the balances (5.1)
+		return err
+	}
+	if err := db.LockRows(ctx, db.StockQueue, db.ForUpdate, propertyID, queueIDsOf(held)); err != nil { // the rows of the POS queue sit with the documents
 		return err
 	}
 	if err := db.LockRows(ctx, db.Warehouses, db.ForUpdate, propertyID, []int64{cur.WarehouseID}); err != nil {

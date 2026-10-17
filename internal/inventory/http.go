@@ -48,6 +48,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/stock-card", httpx.HandlerFunc(h.stockCard))
 	h.registerPurchasing(mux)
 	h.registerMovements(mux)
+	h.registerPOS(mux)
 }
 
 func pathID(r *http.Request) (int64, error) {

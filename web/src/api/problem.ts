@@ -38,7 +38,7 @@ export class ApiError extends Error {
   private localizedMessage(): string {
     const locale = i18n.global.locale.value
     const key = `errors.${this.code}`
-    return locale !== 'en' && i18n.global.te(key, locale) ? t(key as never) : this.serverMessage
+    return locale !== 'en' && i18n.global.te(key, locale) ? t(key as never, this.context as never) : this.serverMessage
   }
 
   /** Message for a given input field, if the server rejected it (in the language of the page when it has a text for the code). */

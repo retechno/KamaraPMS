@@ -6,8 +6,10 @@ SELECT o.id, o.code, o.name, o.outlet_type, o.order_mode, o.department_id, d.nam
        o.price_list_id, pl.name AS price_list_name, o.drawer, o.receipt_printer_id, pr.name AS receipt_printer_name, o.uses_tables, o.guest_count_required,
        o.rounding_unit, o.allow_room_charge, o.allow_company_charge, o.allow_comp, o.comp_treatment, o.max_discount_pct_no_approval,
        o.block_night_audit_with_open_bills, o.is_active, o.sort_order, o.version,
-       o.receipt_title, o.receipt_hotel, o.receipt_address, o.receipt_tax_id, o.receipt_footer, o.receipt_copies
+       o.receipt_title, o.receipt_hotel, o.receipt_address, o.receipt_tax_id, o.receipt_footer, o.receipt_copies,
+       o.warehouse_id, w.name AS warehouse_name, o.void_waste_after_minutes
 FROM pos_outlets o
+LEFT JOIN inv_warehouses w ON w.property_id = o.property_id AND w.id = o.warehouse_id
 JOIN departments d ON d.property_id = o.property_id AND d.id = o.department_id
 JOIN pos_rule_profiles rp ON rp.property_id = o.property_id AND rp.id = o.rule_profile_id
 JOIN pos_price_lists pl ON pl.property_id = o.property_id AND pl.id = o.price_list_id
@@ -21,11 +23,11 @@ ORDER BY o.sort_order, o.name, o.id;
 INSERT INTO pos_outlets (tenant_id, property_id, code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id, drawer, receipt_printer_id, uses_tables,
                          guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval,
                          block_night_audit_with_open_bills, is_active, sort_order, receipt_title, receipt_hotel, receipt_address, receipt_tax_id, receipt_footer,
-                         receipt_copies, created_by, updated_by)
+                         receipt_copies, warehouse_id, void_waste_after_minutes, created_by, updated_by)
 VALUES (@tenant_id, @property_id, @code, @name, @outlet_type, @order_mode, @department_id, @rule_profile_id, @price_list_id, sqlc.narg(drawer), sqlc.narg(receipt_printer_id), @uses_tables,
         @guest_count_required, @rounding_unit, @allow_room_charge, @allow_company_charge, @allow_comp, @comp_treatment, @max_discount_pct_no_approval,
         @block_night_audit_with_open_bills, @is_active, @sort_order, sqlc.narg(receipt_title), sqlc.narg(receipt_hotel), sqlc.narg(receipt_address),
-        sqlc.narg(receipt_tax_id), sqlc.narg(receipt_footer), COALESCE(sqlc.narg(receipt_copies)::smallint, 1), sqlc.narg(actor_id), sqlc.narg(actor_id))
+        sqlc.narg(receipt_tax_id), sqlc.narg(receipt_footer), COALESCE(sqlc.narg(receipt_copies)::smallint, 1), sqlc.narg(warehouse_id), COALESCE(sqlc.narg(void_waste_after_minutes)::int, 0), sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateOutlet :one
@@ -36,6 +38,7 @@ UPDATE pos_outlets SET name = @name, outlet_type = @outlet_type, order_mode = @o
        block_night_audit_with_open_bills = @block_night_audit_with_open_bills, is_active = @is_active, sort_order = @sort_order,
        receipt_title = sqlc.narg(receipt_title), receipt_hotel = sqlc.narg(receipt_hotel), receipt_address = sqlc.narg(receipt_address),
        receipt_tax_id = sqlc.narg(receipt_tax_id), receipt_footer = sqlc.narg(receipt_footer), receipt_copies = COALESCE(sqlc.narg(receipt_copies)::smallint, receipt_copies),
+       warehouse_id = sqlc.narg(warehouse_id), void_waste_after_minutes = COALESCE(sqlc.narg(void_waste_after_minutes)::int, void_waste_after_minutes),
        version = version + 1, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND version = @version
 RETURNING id;
@@ -148,18 +151,18 @@ DELETE FROM pos_price_list_items WHERE tenant_id = @tenant_id AND property_id = 
 
 -- ---------------------------------------------------------------- categories
 -- name: ListCategories :many
-SELECT c.id, c.code, c.name, c.parent_id, c.sort_order, c.is_active,
+SELECT c.id, c.code, c.name, c.parent_id, c.sort_order, c.is_active, c.fb_class,
        (SELECT count(*) FROM pos_products p WHERE p.property_id = c.property_id AND p.category_id = c.id) AS product_count
 FROM pos_categories c WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id
 ORDER BY c.sort_order, c.name, c.id;
 
 -- name: InsertCategory :one
-INSERT INTO pos_categories (tenant_id, property_id, code, name, parent_id, sort_order, is_active, created_by, updated_by)
-VALUES (@tenant_id, @property_id, @code, @name, sqlc.narg(parent_id), @sort_order, @is_active, sqlc.narg(actor_id), sqlc.narg(actor_id))
+INSERT INTO pos_categories (tenant_id, property_id, code, name, parent_id, sort_order, is_active, fb_class, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @code, @name, sqlc.narg(parent_id), @sort_order, @is_active, sqlc.narg(fb_class), sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateCategory :execrows
-UPDATE pos_categories SET name = @name, sort_order = @sort_order, is_active = @is_active, updated_by = sqlc.narg(actor_id)
+UPDATE pos_categories SET name = @name, sort_order = @sort_order, is_active = @is_active, fb_class = sqlc.narg(fb_class), updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- ---------------------------------------------------------------- products
@@ -199,15 +202,25 @@ WHERE o.tenant_id = @tenant_id AND o.property_id = @property_id
   AND (sqlc.narg(product_id)::bigint IS NULL OR g.product_id = sqlc.narg(product_id)::bigint)
 ORDER BY g.product_id, g.sort_order, g.id, o.sort_order, o.id;
 
--- name: DeleteProductOptions :exec
-DELETE FROM pos_options o USING pos_option_groups g
-WHERE g.property_id = o.property_id AND g.id = o.group_id AND g.tenant_id = @tenant_id AND g.property_id = @property_id AND g.product_id = @product_id;
+-- The choices of a product are saved one by one (a choice that stays keeps its id, and so the recipe lines that name it): these change or remove one.
+-- name: DeleteOptionByID :exec
+DELETE FROM pos_options WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
--- name: DeleteProductRecipeOptionLines :exec
-DELETE FROM pos_recipe_lines WHERE tenant_id = @tenant_id AND property_id = @property_id AND product_id = @product_id AND option_id IS NOT NULL;
+-- name: DeleteOptionGroupByID :exec
+DELETE FROM pos_option_groups WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND product_id = @product_id;
 
--- name: DeleteProductOptionGroups :exec
-DELETE FROM pos_option_groups WHERE tenant_id = @tenant_id AND property_id = @property_id AND product_id = @product_id;
+-- name: UpdateOptionGroup :exec
+UPDATE pos_option_groups SET name = @name, kind = @kind, min_select = @min_select, max_select = @max_select, sort_order = @sort_order
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND product_id = @product_id;
+
+-- name: UpdateOption :exec
+UPDATE pos_options SET group_id = @group_id, name = @name, price_delta = @price_delta, is_default = @is_default, max_qty = @max_qty, sort_order = @sort_order, is_active = @is_active
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- How many recipe lines each of these choices has: a choice with a recipe is not removed (35-inventory.md 20).
+-- name: CountRecipeLinesOfOptions :many
+SELECT option_id, count(*)::int AS n FROM pos_recipe_lines
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND option_id = ANY(@option_ids::bigint[]) GROUP BY option_id;
 
 -- name: InsertOptionGroup :one
 INSERT INTO pos_option_groups (tenant_id, property_id, product_id, name, kind, min_select, max_select, sort_order)
@@ -217,10 +230,6 @@ RETURNING id;
 -- name: InsertOption :exec
 INSERT INTO pos_options (tenant_id, property_id, group_id, name, price_delta, is_default, max_qty, sort_order, is_active)
 VALUES (@tenant_id, @property_id, @group_id, @name, @price_delta, @is_default, @max_qty, @sort_order, @is_active);
-
--- name: ListRecipeLines :many
-SELECT l.product_id, l.option_id, l.quantity, l.unit, l.note FROM pos_recipe_lines l
-WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.product_id = @product_id ORDER BY l.id;
 
 -- ---------------------------------------------------------------- sold out today
 -- name: ListSoldOut :many
@@ -478,6 +487,12 @@ INSERT INTO pos_ticket_lines (tenant_id, property_id, ticket_id, bill_line_id, q
 VALUES (@tenant_id, @property_id, @ticket_id, @bill_line_id, @quantity, @name, sqlc.narg(options_text), sqlc.narg(note), @is_void);
 
 -- A line voided before its ticket was served: the ticket line is struck through.
+-- The ticket that holds a sent line (not the ticket of a void): its status says whether the kitchen began (35-inventory.md 5.6). No row for an outlet that makes no tickets.
+-- name: LineTicketStatus :one
+SELECT t.status FROM pos_ticket_lines tl JOIN pos_tickets t ON t.property_id = tl.property_id AND t.id = tl.ticket_id
+ WHERE tl.tenant_id = @tenant_id AND tl.property_id = @property_id AND tl.bill_line_id = @bill_line_id AND t.kind <> 'VOID'
+ ORDER BY t.id DESC LIMIT 1;
+
 -- name: StrikeTicketLines :exec
 UPDATE pos_ticket_lines SET is_void = true WHERE tenant_id = @tenant_id AND property_id = @property_id AND bill_line_id = @bill_line_id AND NOT is_void;
 

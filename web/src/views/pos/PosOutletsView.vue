@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Department, PosOutlet, PosPriceList, PosPrinter, PosRuleProfile } from '@/api/types'
+import type { Department, InventoryWarehouse, PosOutlet, PosPriceList, PosPrinter, PosRuleProfile } from '@/api/types'
 import { departmentLabel, loadDepartments } from '@/composables/useDepartments'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -25,6 +25,7 @@ const departments = ref<Department[]>([])
 const profiles = ref<PosRuleProfile[]>([])
 const lists = ref<PosPriceList[]>([])
 const printers = ref<PosPrinter[]>([])
+const warehouses = ref<InventoryWarehouse[]>([]) // empty when the person may not read the stock or the module is off: the stock part of the form is then left out
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const notice = ref('')
@@ -61,13 +62,15 @@ interface Form {
   receipt_tax_id: string
   receipt_footer: string
   receipt_copies: number
+  warehouse_id: number
+  void_waste_after_minutes: number
 }
 
 const blank = (): Form => ({
   id: null, version: 0, code: '', name: '', outlet_type: 'RESTAURANT', order_mode: 'PRINT', department_id: 0, rule_profile_id: 0, price_list_id: 0, drawer: '', receipt_printer_id: 0,
   uses_tables: true, guest_count_required: false, rounding_unit: 0, allow_room_charge: true, allow_company_charge: false, allow_comp: false, comp_treatment: 'PAYMENT_COMP',
   max_discount_pct_no_approval: '0', block_night_audit_with_open_bills: false, is_active: true, sort_order: 0,
-  receipt_title: '', receipt_hotel: '', receipt_address: '', receipt_tax_id: '', receipt_footer: '', receipt_copies: 1,
+  receipt_title: '', receipt_hotel: '', receipt_address: '', receipt_tax_id: '', receipt_footer: '', receipt_copies: 1, warehouse_id: 0, void_waste_after_minutes: 0,
 })
 const form = reactive<Form>(blank())
 const dialog = ref(false)
@@ -96,6 +99,12 @@ async function load(): Promise<void> {
     lists.value = l.data?.data ?? []
     printers.value = pr.data?.data ?? []
     departments.value = await loadDepartments(propertyId)
+    try {
+      const w = await api.GET('/api/v1/properties/{propertyId}/inventory/warehouses', path)
+      warehouses.value = (w.data?.data ?? []).filter((x) => x.is_active)
+    } catch {
+      warehouses.value = []
+    }
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -120,7 +129,7 @@ function openEdit(o: PosOutlet): void {
     rounding_unit: o.rounding_unit, allow_room_charge: o.allow_room_charge, allow_company_charge: o.allow_company_charge, allow_comp: o.allow_comp, comp_treatment: o.comp_treatment,
     max_discount_pct_no_approval: o.max_discount_pct_no_approval, block_night_audit_with_open_bills: o.block_night_audit_with_open_bills, is_active: o.is_active, sort_order: o.sort_order,
     receipt_title: o.receipt_title ?? '', receipt_hotel: o.receipt_hotel ?? '', receipt_address: o.receipt_address ?? '', receipt_tax_id: o.receipt_tax_id ?? '',
-    receipt_footer: o.receipt_footer ?? '', receipt_copies: o.receipt_copies ?? 1,
+    receipt_footer: o.receipt_footer ?? '', receipt_copies: o.receipt_copies ?? 1, warehouse_id: o.warehouse_id ?? 0, void_waste_after_minutes: o.void_waste_after_minutes ?? 0,
   })
   formError.value = null
   dialog.value = true
@@ -140,6 +149,7 @@ async function save(): Promise<void> {
     sort_order: form.sort_order, version: isNew.value ? undefined : form.version,
     receipt_title: form.receipt_title.trim() || null, receipt_hotel: form.receipt_hotel.trim() || null, receipt_address: form.receipt_address.trim() || null,
     receipt_tax_id: form.receipt_tax_id.trim() || null, receipt_footer: form.receipt_footer.trim() || null, receipt_copies: form.receipt_copies,
+    warehouse_id: form.warehouse_id || null, void_waste_after_minutes: form.order_mode === 'PRINT' ? form.void_waste_after_minutes : 0,
   }
   try {
     if (isNew.value) {
@@ -268,6 +278,24 @@ watch(pid, load, { immediate: true })
             </template>
           </FormField>
         </div>
+
+        <fieldset v-if="warehouses.length || form.warehouse_id" class="m-0 rounded-lg border border-border p-3" data-testid="outlet-stock">
+          <legend class="px-1 text-sm font-semibold">{{ t('pos.outlets.stock') }}</legend>
+          <p class="m-0 mb-3 text-xs text-muted-foreground">{{ t('pos.outlets.stockHint') }}</p>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <FormField :label="t('pos.outlets.warehouse')" :error="fieldError('warehouse_id')">
+              <template #default="{ id }">
+                <NativeSelect :id="id" v-model.number="form.warehouse_id" name="warehouse_id" data-testid="outlet-warehouse">
+                  <option :value="0">{{ t('pos.outlets.noWarehouse') }}</option>
+                  <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.code }} · {{ w.name }}</option>
+                </NativeSelect>
+              </template>
+            </FormField>
+            <FormField v-if="form.order_mode === 'PRINT'" :label="t('pos.outlets.voidWaste')" :hint="t('pos.outlets.voidWasteHint')" :error="fieldError('void_waste_after_minutes')">
+              <template #default="{ id }"><Input :id="id" v-model.number="form.void_waste_after_minutes" name="void_waste_after_minutes" type="number" min="0" max="1440" class="w-28" data-testid="outlet-void-waste" /></template>
+            </FormField>
+          </div>
+        </fieldset>
 
         <fieldset class="m-0 rounded-lg border border-border p-3" data-testid="comp-treatment">
           <legend class="px-1 text-sm font-semibold">{{ t('pos.outlets.compTreatment') }}</legend>

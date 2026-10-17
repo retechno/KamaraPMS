@@ -224,10 +224,14 @@ func (s *Service) ReleaseHold(ctx context.Context, propertyID, holdID int64, sea
 
 // NightAuditIssue is a finding of the night audit about the bills.
 type NightAuditIssue struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Ref     string `json:"ref,omitempty"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Ref     string            `json:"ref,omitempty"`
+	Params  map[string]string `json:"params,omitempty"`
 }
+
+// FindingCodes are the codes of the findings of the night audit about the bills: the web translates each by its code and its params, and a test keeps them translated.
+var FindingCodes = []string{"POS_OPEN_BILLS", "POS_DRAFT_LINES"}
 
 // NightAuditChecks answers what the bills say about closing the day (34-pos.md 13.1): open bills with sold lines are a warning, or a blocker when the outlet says so; draft lines never sent are a
 // warning. It writes nothing and takes no lock.
@@ -238,7 +242,8 @@ func (s *Service) NightAuditChecks(ctx context.Context, tenantID, propertyID int
 	}
 	for _, r := range rows {
 		if r.WithSoldLines > 0 {
-			is := NightAuditIssue{Code: "POS_OPEN_BILLS", Ref: r.OutletCode, Message: itoaN(int(r.WithSoldLines)) + " open bill(s) of " + r.OutletName + " with items sold: the sale is revenue of the day, the payment is not taken yet"}
+			is := NightAuditIssue{Code: "POS_OPEN_BILLS", Ref: r.OutletCode, Message: itoaN(int(r.WithSoldLines)) + " open bill(s) of " + r.OutletName + " with items sold: the sale is revenue of the day, the payment is not taken yet",
+				Params: map[string]string{"n": itoaN(int(r.WithSoldLines)), "outlet": r.OutletName}}
 			if r.Blocks {
 				blockers = append(blockers, is)
 			} else {
@@ -246,7 +251,8 @@ func (s *Service) NightAuditChecks(ctx context.Context, tenantID, propertyID int
 			}
 		}
 		if r.DraftsOnly > 0 {
-			warnings = append(warnings, NightAuditIssue{Code: "POS_DRAFT_LINES", Ref: r.OutletCode, Message: itoaN(int(r.DraftsOnly)) + " open bill(s) of " + r.OutletName + " have lines that were never sent: they would post on tomorrow's date"})
+			warnings = append(warnings, NightAuditIssue{Code: "POS_DRAFT_LINES", Ref: r.OutletCode, Message: itoaN(int(r.DraftsOnly)) + " open bill(s) of " + r.OutletName + " have lines that were never sent: they would post on tomorrow's date",
+				Params: map[string]string{"n": itoaN(int(r.DraftsOnly)), "outlet": r.OutletName}})
 		}
 	}
 	return blockers, warnings, nil

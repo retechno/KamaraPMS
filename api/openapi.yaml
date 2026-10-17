@@ -11724,6 +11724,113 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/products/{id}/recipe:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPosProductRecipe
+      summary: "The recipe of a product with the cost of its ingredients at the warehouse of an outlet (the first outlet that has one when none is named), the net price, the margin and the food cost percentage; read with pos.manage or an inventory read permission"
+      tags: [inventory]
+      parameters:
+        - { name: outlet_id, in: query, description: "The outlet whose warehouse sets the cost", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRecipe" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: savePosProductRecipe
+      summary: "Replace the whole recipe of a product (pos.manage, the stock module in the plan; 403 MODULE_NOT_IN_PLAN without it): lines of the product and lines of its options; a variant line replaces the line of the same item, a modifier adds; applies to the orders sent after it"
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryRecipeInput" }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRecipe" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/consumption-queue:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listInventoryConsumptionQueue
+      summary: "The queue of the deduction of POS sales: the counts of what waits and the rows of the statuses asked for (HELD and FAILED by default)"
+      tags: [inventory]
+      parameters:
+        - { name: status, in: query, description: "One or more of PENDING, HELD, APPLIED, CANCELLED, FAILED, separated by commas", schema: { type: string } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryQueueList" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/consumption-queue/{id}/retry:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: retryInventoryConsumptionRow
+      summary: "Try a failed row again now (inventory.manage); 409 QUEUE_ROW_NOT_FAILED"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryQueueRow" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/consumption-queue/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelInventoryConsumptionRow
+      summary: "Give up a failed, held or pending row (inventory.manage): the sale is not deducted from stock; audited; 409 QUEUE_ROW_NOT_OPEN"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryQueueRow" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/pos-without-deduction:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryPosWithoutDeduction
+      summary: "Lines of the POS with a recipe that left no deduction from stock (sold while the stock module was off), by business date"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD", schema: { type: string } }
+        - { name: outlet_id, in: query, description: "", schema: { type: integer } }
+        - { name: limit, in: query, description: "", schema: { type: integer } }
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/InventorySalesWithoutDeduction" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -15744,9 +15851,10 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: { type: string, enum: [POS_OPEN_BILLS, POS_DRAFT_LINES, INVENTORY_BALANCE_DRIFT, INVENTORY_GL_MISMATCH, INVENTORY_NEGATIVE_STOCK] }
-        message: { type: string }
-        ref: { type: string, description: The code of the outlet. }
+        code: { type: string, enum: [POS_OPEN_BILLS, POS_DRAFT_LINES, INVENTORY_BALANCE_DRIFT, INVENTORY_GL_MISMATCH, INVENTORY_NEGATIVE_STOCK, INVENTORY_RECEIPT_UNBILLED, INVENTORY_QUEUE_FAILED, INVENTORY_COUNT_OPEN, AMENITY_PLAN_INVALID, AMENITY_HELD, AMENITY_STOCK_SHORT] }
+        message: { type: string, description: "The English sentence, for logs; the web translates the code with its params." }
+        ref: { type: string, description: The code of the outlet, or what the finding is about. }
+        params: { type: object, additionalProperties: { type: string }, description: The values the translation of the code needs. }
     NightAuditWarnings:
       type: object
       required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending]
@@ -18906,9 +19014,11 @@ components:
         is_active: { type: [boolean, "null"] }
         sort_order: { type: integer }
         version: { type: integer, description: Required to replace an outlet. }
+        warehouse_id: { type: [integer, "null"], format: int64, description: "The warehouse the outlet sells from (its sales are deducted from it); empty deducts nothing." }
+        void_waste_after_minutes: { type: [integer, "null"], minimum: 0, maximum: 1440, description: "For an outlet that prints tickets: a void this many minutes after the send is waste, not a return (0 is off). Absent keeps the value." }
     PosOutlet:
       type: object
-      required: [id, code, name, outlet_type, order_mode, department_id, department_name, rule_profile_id, rule_profile_name, price_list_id, price_list_name, drawer, receipt_printer_id, uses_tables, guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval, block_night_audit_with_open_bills, is_active, sort_order, version]
+      required: [id, code, name, outlet_type, order_mode, department_id, department_name, rule_profile_id, rule_profile_name, price_list_id, price_list_name, drawer, receipt_printer_id, warehouse_id, warehouse_name, void_waste_after_minutes, uses_tables, guest_count_required, rounding_unit, allow_room_charge, allow_company_charge, allow_comp, comp_treatment, max_discount_pct_no_approval, block_night_audit_with_open_bills, is_active, sort_order, version]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -18918,6 +19028,9 @@ components:
         receipt_tax_id: { type: [string, "null"] }
         receipt_footer: { type: [string, "null"] }
         receipt_copies: { type: integer, minimum: 0, maximum: 5 }
+        warehouse_id: { type: [integer, "null"], format: int64 }
+        warehouse_name: { type: [string, "null"] }
+        void_waste_after_minutes: { type: integer, minimum: 0, maximum: 1440 }
         name: { type: string }
         outlet_type: { type: string }
         order_mode: { type: string, enum: [PRINT, KDS, DIRECT] }
@@ -19074,9 +19187,10 @@ components:
         parent_id: { type: [integer, "null"], format: int64, description: One level only; never changes. }
         sort_order: { type: integer }
         is_active: { type: [boolean, "null"] }
+        fb_class: { type: [string, "null"], enum: [FOOD, BEVERAGE, OTHER, null], description: "The sale class of the products of the category (the cost of sales follows it); empty takes the parent's, then the class of the warehouse of the outlet." }
     PosCategory:
       type: object
-      required: [id, code, name, parent_id, sort_order, is_active, product_count]
+      required: [id, code, name, parent_id, sort_order, is_active, product_count, fb_class]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -19085,6 +19199,7 @@ components:
         sort_order: { type: integer }
         is_active: { type: boolean }
         product_count: { type: integer }
+        fb_class: { type: [string, "null"], enum: [FOOD, BEVERAGE, OTHER, null] }
     PosOption:
       type: object
       required: [name, price_delta, is_default, max_qty, sort_order, is_active]
@@ -20111,6 +20226,7 @@ components:
               code: { type: string }
               message: { type: string }
               ref: { type: string }
+              params: { type: object, additionalProperties: { type: string }, description: The values the translation of the code needs. }
     InventoryAccount:
       type: object
       required: [id, code, name]
@@ -21374,7 +21490,7 @@ components:
         note: { type: [string, "null"] }
     InventoryCount:
       type: object
-      required: [id, cnt_number, status, warehouse_id, warehouse_name, scope, category_name, started_at, started_by_name, business_date_started, submitted_at, submitted_by_name, decided_at, decided_by_name, total_variance_value, note, version, blind, preview, held_documents, lines]
+      required: [id, cnt_number, status, warehouse_id, warehouse_name, scope, category_name, started_at, started_by_name, business_date_started, submitted_at, submitted_by_name, decided_at, decided_by_name, total_variance_value, note, version, blind, preview, held_documents, held_sales, lines]
       properties:
         id: { type: integer, format: int64 }
         cnt_number: { type: string }
@@ -21396,6 +21512,7 @@ components:
         blind: { type: boolean }
         preview: { type: boolean }
         held_documents: { type: array, items: { $ref: "#/components/schemas/InventoryHeldDocument" } }
+        held_sales: { type: integer, description: "Rows of the POS queue the freeze holds." }
         lines: { type: array, items: { $ref: "#/components/schemas/InventoryCountLine" } }
     InventoryCountBrief:
       type: object
@@ -21622,3 +21739,133 @@ components:
         room_list: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunRoom" } }
         short: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityRunLine" } }
         journal: { type: array, items: { $ref: "#/components/schemas/InventoryAmenityJournalLine" } }
+    InventoryRecipeLine:
+      type: object
+      required: [id, item_id, item_code, item_name, unit_id, unit_code, quantity, note, stock_unit_code, stock_qty, unit_cost, cost_basis, cost, replaced_qty, replaced_cost, replaces_label]
+      properties:
+        id: { type: integer, format: int64 }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_id: { type: integer, format: int64 }
+        unit_code: { type: string }
+        quantity: { type: string }
+        note: { type: [string, "null"] }
+        stock_unit_code: { type: string }
+        stock_qty: { type: string }
+        unit_cost: { type: string }
+        cost_basis: { type: string, enum: [AVERAGE, LAST, REFERENCE, NONE] }
+        cost: { type: string }
+        replaced_qty: { type: string }
+        replaced_cost: { type: string }
+        replaces_label: { type: [string, "null"] }
+    InventoryRecipeOption:
+      type: object
+      required: [option_id, name, group_id, group_name, kind, is_active, price_delta, lines, extra_cost]
+      properties:
+        option_id: { type: integer, format: int64 }
+        name: { type: string }
+        group_id: { type: integer, format: int64 }
+        group_name: { type: string }
+        kind: { type: string, enum: [VARIANT, MODIFIER] }
+        is_active: { type: boolean }
+        price_delta: { type: [string, "null"] }
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryRecipeLine" } }
+        extra_cost: { type: string }
+    InventoryRecipeOutlet:
+      type: object
+      required: [id, code, name, warehouse_id, warehouse_name]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        warehouse_id: { type: [integer, "null"], format: int64 }
+        warehouse_name: { type: [string, "null"] }
+    InventoryRecipe:
+      type: object
+      required: [product_id, product_code, product_name, inventory_active, editable, outlet_id, outlet_name, warehouse_id, warehouse_name, sale_class, outlets, base, options, base_cost, net_price, margin, food_cost_pct, cost_basis_label, currency_decimals]
+      properties:
+        product_id: { type: integer, format: int64 }
+        product_code: { type: string }
+        product_name: { type: string }
+        inventory_active: { type: boolean }
+        editable: { type: boolean }
+        outlet_id: { type: [integer, "null"], format: int64 }
+        outlet_name: { type: [string, "null"] }
+        warehouse_id: { type: [integer, "null"], format: int64 }
+        warehouse_name: { type: [string, "null"] }
+        sale_class: { type: [string, "null"], enum: [FOOD, BEVERAGE, OTHER, null] }
+        outlets: { type: array, items: { $ref: "#/components/schemas/InventoryRecipeOutlet" } }
+        base: { type: array, items: { $ref: "#/components/schemas/InventoryRecipeLine" } }
+        options: { type: array, items: { $ref: "#/components/schemas/InventoryRecipeOption" } }
+        base_cost: { type: string }
+        net_price: { type: [string, "null"] }
+        margin: { type: [string, "null"] }
+        food_cost_pct: { type: [string, "null"] }
+        cost_basis_label: { type: string }
+        currency_decimals: { type: integer }
+    InventoryRecipeLineInput:
+      type: object
+      required: [item_id, unit_id, quantity]
+      properties:
+        option_id: { type: [integer, "null"], format: int64 }
+        item_id: { type: integer, format: int64 }
+        unit_id: { type: integer, format: int64 }
+        quantity: { type: string }
+        note: { type: [string, "null"] }
+    InventoryRecipeInput:
+      type: object
+      required: [lines]
+      properties:
+        lines: { type: array, items: { $ref: "#/components/schemas/InventoryRecipeLineInput" } }
+    InventoryQueueRow:
+      type: object
+      required: [id, outlet_id, outlet_code, outlet_name, warehouse_id, warehouse_name, bill_line_id, bill_number, kind, product_id, product_name, quantity, sale_class, sale_date, status, attempts, error_code, error_message, created_at, applied_on]
+      properties:
+        id: { type: integer, format: int64 }
+        outlet_id: { type: integer, format: int64 }
+        outlet_code: { type: string }
+        outlet_name: { type: string }
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_name: { type: string }
+        bill_line_id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        kind: { type: string, enum: [SALE, VOID_RETURN, VOID_WASTE] }
+        product_id: { type: integer, format: int64 }
+        product_name: { type: string }
+        quantity: { type: string }
+        sale_class: { type: string, enum: [FOOD, BEVERAGE, OTHER] }
+        sale_date: { $ref: "#/components/schemas/Date" }
+        status: { type: string, enum: [PENDING, HELD, APPLIED, CANCELLED, FAILED] }
+        attempts: { type: integer }
+        error_code: { type: [string, "null"] }
+        error_message: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        applied_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+    InventoryQueueSummary:
+      type: object
+      required: [pending, held, failed]
+      properties:
+        pending: { type: integer }
+        held: { type: integer }
+        failed: { type: integer }
+    InventoryQueueList:
+      type: object
+      required: [summary, rows]
+      properties:
+        summary: { $ref: "#/components/schemas/InventoryQueueSummary" }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventoryQueueRow" } }
+    InventorySalesWithoutDeduction:
+      type: object
+      required: [bill_line_id, bill_number, outlet_id, outlet_code, outlet_name, product_id, product_name, quantity, sent_on, voided]
+      properties:
+        bill_line_id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        outlet_id: { type: integer, format: int64 }
+        outlet_code: { type: string }
+        outlet_name: { type: string }
+        product_id: { type: integer, format: int64 }
+        product_name: { type: string }
+        quantity: { type: string }
+        sent_on: { $ref: "#/components/schemas/Date" }
+        voided: { type: boolean }

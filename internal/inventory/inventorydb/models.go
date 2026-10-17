@@ -116,6 +116,30 @@ type InvCategory struct {
 	UpdatedBy          *int64
 }
 
+type InvConsumptionQueue struct {
+	ID            int64
+	TenantID      int64
+	PropertyID    int64
+	OutletID      int64
+	WarehouseID   int64
+	PosBillLineID int64
+	Kind          string
+	SaleQueueID   *int64
+	ProductID     int64
+	Quantity      decimal.Decimal
+	SaleClass     string
+	SaleDate      civil.Date
+	Components    []byte
+	Status        string
+	Attempts      int32
+	ErrorCode     *string
+	ErrorMessage  *string
+	MovementIds   []int64
+	AppliedOn     *civil.Date
+	CreatedAt     time.Time
+	AppliedAt     *time.Time
+}
+
 type InvMovement struct {
 	ID                int64
 	TenantID          int64
