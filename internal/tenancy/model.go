@@ -310,6 +310,11 @@ const (
 	SeqInvPO  SequenceType = "INV_PO"
 	SeqInvGR  SequenceType = "INV_GR"
 	SeqInvRet SequenceType = "INV_RET"
+	// SeqInvSR, SeqInvTRF, SeqInvISS and SeqInvCNT number the store requisitions, the transfers, the issues (to a department, waste, staff meal, entertainment) and the stock counts.
+	SeqInvSR  SequenceType = "INV_SR"
+	SeqInvTRF SequenceType = "INV_TRF"
+	SeqInvISS SequenceType = "INV_ISS"
+	SeqInvCNT SequenceType = "INV_CNT"
 )
 
 // defaultSequences are created with every property.
@@ -341,4 +346,8 @@ var defaultSequences = []struct {
 	{SeqInvPO, "PO-"},
 	{SeqInvGR, "GR-"},
 	{SeqInvRet, "RET-"},
+	{SeqInvSR, "SR-"},
+	{SeqInvTRF, "TRF-"},
+	{SeqInvISS, "ISS-"},
+	{SeqInvCNT, "CNT-"},
 }

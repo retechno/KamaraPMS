@@ -1620,7 +1620,7 @@ RETURNING id
 type InsertStepParams struct {
 	TenantID      int64
 	PropertyID    int64
-	RequestID     int64
+	RequestID     *int64
 	Cycle         int16
 	LevelNo       int16
 	Name          string
@@ -1923,7 +1923,7 @@ SELECT e.id, e.step_id, s.level_no, s.cycle, e.line_no, e.field, e.old_value, e.
 type ListEditsParams struct {
 	TenantID   int64
 	PropertyID int64
-	RequestID  int64
+	RequestID  *int64
 }
 
 type ListEditsRow struct {
@@ -2217,9 +2217,10 @@ func (q *Queries) ListNonStockBillLinesOfBill(ctx context.Context, arg ListNonSt
 }
 
 const listNotices = `-- name: ListNotices :many
-SELECT n.id, n.kind, n.step_id, n.request_id, r.request_number, n.created_at, n.seen_at, st.name AS step_name, COALESCE(st.level_no, 0)::int AS level_no
+SELECT n.id, n.kind, n.step_id, n.request_id, r.request_number, n.requisition_id, sr.sr_number AS requisition_number, n.created_at, n.seen_at, st.name AS step_name, COALESCE(st.level_no, 0)::int AS level_no
   FROM inv_notices n
   LEFT JOIN inv_requests r ON r.property_id = n.property_id AND r.id = n.request_id
+  LEFT JOIN inv_requisitions sr ON sr.property_id = n.property_id AND sr.id = n.requisition_id
   LEFT JOIN inv_approval_steps st ON st.property_id = n.property_id AND st.id = n.step_id
  WHERE n.tenant_id = $1 AND n.property_id = $2 AND n.user_id = $3
  ORDER BY n.id DESC
@@ -2234,15 +2235,17 @@ type ListNoticesParams struct {
 }
 
 type ListNoticesRow struct {
-	ID            int64
-	Kind          string
-	StepID        *int64
-	RequestID     *int64
-	RequestNumber *string
-	CreatedAt     time.Time
-	SeenAt        *time.Time
-	StepName      *string
-	LevelNo       int32
+	ID                int64
+	Kind              string
+	StepID            *int64
+	RequestID         *int64
+	RequestNumber     *string
+	RequisitionID     *int64
+	RequisitionNumber *string
+	CreatedAt         time.Time
+	SeenAt            *time.Time
+	StepName          *string
+	LevelNo           int32
 }
 
 func (q *Queries) ListNotices(ctx context.Context, arg ListNoticesParams) ([]ListNoticesRow, error) {
@@ -2265,6 +2268,8 @@ func (q *Queries) ListNotices(ctx context.Context, arg ListNoticesParams) ([]Lis
 			&i.StepID,
 			&i.RequestID,
 			&i.RequestNumber,
+			&i.RequisitionID,
+			&i.RequisitionNumber,
 			&i.CreatedAt,
 			&i.SeenAt,
 			&i.StepName,
@@ -2953,7 +2958,7 @@ func (q *Queries) ListReturns(ctx context.Context, arg ListReturnsParams) ([]Lis
 }
 
 const listSteps = `-- name: ListSteps :many
-SELECT s.id, s.tenant_id, s.property_id, s.request_id, s.cycle, s.level_no, s.name, s.approver_kind, s.permission, s.condition_kind, s.threshold, s.edit_allowed, s.status, s.skip_reason, s.activated_at, s.decided_by, s.decided_at, s.total_seen, s.note, u.full_name AS decided_by_name
+SELECT s.id, s.tenant_id, s.property_id, s.request_id, s.cycle, s.level_no, s.name, s.approver_kind, s.permission, s.condition_kind, s.threshold, s.edit_allowed, s.status, s.skip_reason, s.activated_at, s.decided_by, s.decided_at, s.total_seen, s.note, s.requisition_id, u.full_name AS decided_by_name
   FROM inv_approval_steps s LEFT JOIN users u ON u.tenant_id = s.tenant_id AND u.id = s.decided_by
  WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.request_id = ANY($3::bigint[])
  ORDER BY s.request_id, s.cycle, s.level_no
@@ -2969,7 +2974,7 @@ type ListStepsRow struct {
 	ID            int64
 	TenantID      int64
 	PropertyID    int64
-	RequestID     int64
+	RequestID     *int64
 	Cycle         int16
 	LevelNo       int16
 	Name          string
@@ -2985,6 +2990,7 @@ type ListStepsRow struct {
 	DecidedAt     *time.Time
 	TotalSeen     *decimal.Decimal
 	Note          *string
+	RequisitionID *int64
 	DecidedByName *string
 }
 
@@ -3017,6 +3023,7 @@ func (q *Queries) ListSteps(ctx context.Context, arg ListStepsParams) ([]ListSte
 			&i.DecidedAt,
 			&i.TotalSeen,
 			&i.Note,
+			&i.RequisitionID,
 			&i.DecidedByName,
 		); err != nil {
 			return nil, err
@@ -3030,13 +3037,13 @@ func (q *Queries) ListSteps(ctx context.Context, arg ListStepsParams) ([]ListSte
 }
 
 const listStepsOfCycle = `-- name: ListStepsOfCycle :many
-SELECT id, tenant_id, property_id, request_id, cycle, level_no, name, approver_kind, permission, condition_kind, threshold, edit_allowed, status, skip_reason, activated_at, decided_by, decided_at, total_seen, note FROM inv_approval_steps WHERE tenant_id = $1 AND property_id = $2 AND request_id = $3 AND cycle = $4 ORDER BY level_no
+SELECT id, tenant_id, property_id, request_id, cycle, level_no, name, approver_kind, permission, condition_kind, threshold, edit_allowed, status, skip_reason, activated_at, decided_by, decided_at, total_seen, note, requisition_id FROM inv_approval_steps WHERE tenant_id = $1 AND property_id = $2 AND request_id = $3 AND cycle = $4 ORDER BY level_no
 `
 
 type ListStepsOfCycleParams struct {
 	TenantID   int64
 	PropertyID int64
-	RequestID  int64
+	RequestID  *int64
 	Cycle      int16
 }
 
@@ -3074,6 +3081,7 @@ func (q *Queries) ListStepsOfCycle(ctx context.Context, arg ListStepsOfCyclePara
 			&i.DecidedAt,
 			&i.TotalSeen,
 			&i.Note,
+			&i.RequisitionID,
 		); err != nil {
 			return nil, err
 		}

@@ -41,7 +41,7 @@ type InvApprovalStep struct {
 	ID            int64
 	TenantID      int64
 	PropertyID    int64
-	RequestID     int64
+	RequestID     *int64
 	Cycle         int16
 	LevelNo       int16
 	Name          string
@@ -57,6 +57,7 @@ type InvApprovalStep struct {
 	DecidedAt     *time.Time
 	TotalSeen     *decimal.Decimal
 	Note          *string
+	RequisitionID *int64
 }
 
 type InvBillDraft struct {

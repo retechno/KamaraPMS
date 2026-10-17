@@ -28,11 +28,12 @@ import (
 // ledgerWriters are the generated queries that change the ledger tables.
 var ledgerWriters = map[string]bool{
 	"LedgerEnsureBalance": true, "LedgerUpdateBalance": true, "LedgerInsertMovement": true, "LedgerInsertLayer": true, "LedgerUpdateLayer": true,
-	"LedgerInsertLayerUse": true, "LedgerInsertShortfall": true, "LedgerUpdateShortfall": true,
+	"LedgerInsertLayerUse": true, "LedgerInsertShortfall": true, "LedgerUpdateShortfall": true, "LedgerCloseShortfallsByCount": true,
 }
 
-// mayAllowShortfall are the files (relative to internal/inventory) that may call AllowShortfall. None yet: the POS queue (PR 4) and the amenities run (PR 3) add theirs here.
-var mayAllowShortfall = map[string]string{}
+// mayAllowShortfall are the files (relative to internal/inventory) that may call AllowShortfall: the amenities run of the close (PR 3, 5.9) and what it holds over a count; the POS queue (PR 4) adds
+// its file here.
+var mayAllowShortfall = map[string]string{"amenities.go": "the amenities of the close may take stock below zero (I16, 4.4)"}
 
 var ledgerSQL = regexp.MustCompile(`(?is)\b(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+(only\s+)?(inv_movements|inv_balances|inv_layers|inv_layer_uses|inv_shortfalls)\b`)
 

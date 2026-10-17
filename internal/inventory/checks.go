@@ -37,7 +37,7 @@ type DayLine struct {
 // sourceTypes name what a line of the day close comes from (6.2).
 var sourceTypes = map[string]string{
 	KindOpening: "INV_OPENING", KindReceipt: "INV_RECEIPT", KindReceiptReversal: "INV_RECEIPT", KindSupplierReturn: "INV_RETURN", KindCostAdjust: "INV_COST_ADJUST",
-	KindPosSale: "INV_SALE_COST", KindPosSaleReturn: "INV_SALE_COST", KindNegSettle: "INV_SALE_COST", KindCogsToWaste: "INV_WASTE", KindIssue: "INV_ISSUE", KindWaste: "INV_WASTE",
+	KindPosSale: "INV_SALE_COST", KindPosSaleReturn: "INV_SALE_COST", KindNegSettle: "INV_SALE_COST", KindCogsToWaste: "INV_WASTE", KindIssue: "INV_ISSUE", KindIssueReversal: "INV_ISSUE", KindWaste: "INV_WASTE",
 	KindStaffMeal: "INV_STAFF_MEAL", KindEntertainment: "INV_ENTERTAINMENT", KindCountLoss: "INV_COUNT", KindCountGain: "INV_COUNT",
 }
 
@@ -247,6 +247,13 @@ func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int6
 	} else if n > 0 {
 		warnings = append(warnings, Finding{Code: FindNegative, Message: fmt.Sprintf("%d item(s) are below zero in a warehouse: stock was sold before the goods came in", n)})
 	}
+	if !bd.IsZero() { // the counts that are open and the amenities of tonight (5.7)
+		b, w, err := s.amenityFindings(ctx, tenantID, propertyID, bd)
+		if err != nil {
+			return nil, nil, err
+		}
+		blockers, warnings = append(blockers, b...), append(warnings, w...)
+	}
 	if !bd.IsZero() { // goods received that nobody has billed for 30 days (5.7)
 		if n, err := s.q(ctx).CountUnbilledReceiptsOlderThan(ctx, inventorydb.CountUnbilledReceiptsOlderThanParams{TenantID: tenantID, PropertyID: propertyID, Before: bd.AddDays(-30)}); err != nil {
 			return nil, nil, err
@@ -261,6 +268,10 @@ func (s *Service) NightAuditStock(ctx context.Context, tenantID, propertyID int6
 // once (as accounting.deposit_release_locked is audited). It takes the stock level, which is below the accounting settings the close takes next.
 func (s *Service) CloseStock(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
 	if err := db.EnterLockLevel(ctx, db.LevelStock); err != nil {
+		return err
+	}
+	// the amenities of the day, after the room charges and before the journal (5.7 step 2); idempotent, a shortage never stops it
+	if err := s.RunAmenities(ctx, p, propertyID, bd); err != nil {
 		return err
 	}
 	q := s.q(ctx)

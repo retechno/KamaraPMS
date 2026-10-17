@@ -220,7 +220,7 @@ func (s *Service) stepsOf(ctx context.Context, tenantID, propertyID int64, reque
 	}
 	out := map[int64][]ApprovalStep{}
 	for _, r := range rows {
-		out[r.RequestID] = append(out[r.RequestID], toStep(r, totals[r.RequestID]))
+		out[*r.RequestID] = append(out[*r.RequestID], toStep(r, totals[*r.RequestID]))
 	}
 	return out, nil
 }
@@ -332,7 +332,7 @@ func (s *Service) request(ctx context.Context, p auth.Principal, propertyID, id 
 	if r.Status != ReqDraft && r.Status != ReqCancelled {
 		out.Stage = stageOf(out.Steps, int(r.Cycle), r.EstTotal)
 	}
-	edits, err := q.ListEdits(ctx, inventorydb.ListEditsParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: id})
+	edits, err := q.ListEdits(ctx, inventorydb.ListEditsParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: &id})
 	if err != nil {
 		return Request{}, err
 	}
@@ -698,7 +698,7 @@ func (s *Service) SubmitRequest(ctx context.Context, propertyID, id int64) (Requ
 			return err
 		}
 		// the round: one more than the rounds there were
-		old, err := s.q(ctx).ListStepsOfCycle(ctx, inventorydb.ListStepsOfCycleParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: id, Cycle: cur.Cycle})
+		old, err := s.stepsOfCycle(ctx, p, propertyID, docRef{DocPR, id}, cur.Cycle)
 		if err != nil {
 			return err
 		}
@@ -738,8 +738,7 @@ func (s *Service) SubmitRequest(ctx context.Context, propertyID, id int64) (Requ
 		}
 		now := s.clock.Now()
 		for _, l := range chain.Levels {
-			if _, err := s.q(ctx).InsertStep(ctx, inventorydb.InsertStepParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: id, Cycle: cycle, LevelNo: int16(l.LevelNo), //nolint:gosec // G115: small
-				Name: l.Name, ApproverKind: l.ApproverKind, Permission: l.Permission, ConditionKind: l.ConditionKind, Threshold: l.Threshold, EditAllowed: chain.ApproverMayEdit, Status: StepWaiting}); err != nil {
+			if err := s.insertStep(ctx, p, propertyID, docRef{DocPR, id}, cycle, l, chain.ApproverMayEdit); err != nil {
 				return err
 			}
 		}
@@ -747,7 +746,7 @@ func (s *Service) SubmitRequest(ctx context.Context, propertyID, id int64) (Requ
 			ReturnedNote: nil, EstTotal: total, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		done, err := s.advance(ctx, p, propertyID, id, cycle, cur.DepartmentID, p.UserID, total, chain.SkipLevel1IfHead, leader)
+		done, err := s.advance(ctx, p, propertyID, docRef{DocPR, id}, cycle, cur.DepartmentID, p.UserID, total, chain.SkipLevel1IfHead, leader)
 		if err != nil {
 			return err
 		}
@@ -768,9 +767,9 @@ func (s *Service) SubmitRequest(ctx context.Context, propertyID, id int64) (Requ
 
 // advance gives the request to its next level: each waiting level is read in order, a conditional level the total does not reach is skipped, the first that applies becomes active and its people are told.
 // It reports true when no level is left: the request is approved.
-func (s *Service) advance(ctx context.Context, p auth.Principal, propertyID, requestID int64, cycle int16, departmentID *int64, requesterID int64, total decimal.Decimal, skipHead, requesterLeads bool) (bool, error) {
+func (s *Service) advance(ctx context.Context, p auth.Principal, propertyID int64, d docRef, cycle int16, departmentID *int64, requesterID int64, total decimal.Decimal, skipHead, requesterLeads bool) (bool, error) {
 	q := s.q(ctx)
-	steps, err := q.ListStepsOfCycle(ctx, inventorydb.ListStepsOfCycleParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: requestID, Cycle: cycle})
+	steps, err := s.stepsOfCycle(ctx, p, propertyID, d, cycle)
 	if err != nil {
 		return false, err
 	}
@@ -807,7 +806,7 @@ func (s *Service) advance(ctx context.Context, p auth.Principal, propertyID, req
 		if err != nil {
 			return false, err
 		}
-		stepID, reqID := st.ID, requestID
+		stepID := st.ID
 		if len(who) == 0 { // stuck: the administrators are told
 			admins, err := q.ListUsersWithPermission(ctx, inventorydb.ListUsersWithPermissionParams{TenantID: p.TenantID, PropertyID: propertyID, Permission: string(auth.PermPropertyManage)})
 			if err != nil {
@@ -817,9 +816,9 @@ func (s *Service) advance(ctx context.Context, p auth.Principal, propertyID, req
 			for _, a := range admins {
 				adminIDs = append(adminIDs, a.ID)
 			}
-			return false, s.notify(ctx, p.TenantID, propertyID, adminIDs, NoticeStuck, &stepID, &reqID)
+			return false, s.notifyDoc(ctx, p.TenantID, propertyID, adminIDs, NoticeStuck, &stepID, d)
 		}
-		return false, s.notify(ctx, p.TenantID, propertyID, ids(who), NoticeWaiting, &stepID, &reqID)
+		return false, s.notifyDoc(ctx, p.TenantID, propertyID, ids(who), NoticeWaiting, &stepID, d)
 	}
 	return true, nil
 }
@@ -835,8 +834,7 @@ func (s *Service) finishRequest(ctx context.Context, p auth.Principal, propertyI
 		ReturnedNote: nil, EstTotal: total, ActorID: p.ActorID()}); err != nil {
 		return err
 	}
-	reqID := id
-	if err := s.notify(ctx, p.TenantID, propertyID, []int64{cur.RequesterID}, NoticeApproved, nil, &reqID); err != nil {
+	if err := s.notifyDoc(ctx, p.TenantID, propertyID, []int64{cur.RequesterID}, NoticeApproved, nil, docRef{DocPR, id}); err != nil {
 		return err
 	}
 	return s.audit.Write(ctx, s.entry(p, propertyID, bd, "inventory.pr_approved", "inv_request", id, number, map[string]any{"status": ReqSubmitted},
@@ -865,11 +863,11 @@ type ReturnRequestInput struct {
 
 // activeStepFor checks that the signed-in user may decide the active step of a request, in the order of the rules: R3 the level that is active, R2 not the requester, R1 not twice in a round, then eligibility.
 // Replay reports that this user has decided that level already: the caller answers the request as it is.
-func (s *Service) activeStepFor(ctx context.Context, p auth.Principal, propertyID int64, cur inventorydb.GetRequestRow, levelNo *int) (step inventorydb.InvApprovalStep, replay bool, err error) {
+func (s *Service) activeStepFor(ctx context.Context, p auth.Principal, propertyID int64, cur chainDoc, levelNo *int) (step inventorydb.InvApprovalStep, replay bool, err error) {
 	if cur.Status != ReqSubmitted {
-		return step, false, apperr.Conflict("APPROVAL_NOT_IN_PROGRESS", "the request is not waiting for an approval").WithContext("status", cur.Status)
+		return step, false, apperr.Conflict("APPROVAL_NOT_IN_PROGRESS", "the document is not waiting for an approval").WithContext("status", cur.Status)
 	}
-	steps, err := s.q(ctx).ListStepsOfCycle(ctx, inventorydb.ListStepsOfCycleParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: cur.ID, Cycle: cur.Cycle})
+	steps, err := s.stepsOfCycle(ctx, p, propertyID, cur.Ref, cur.Cycle)
 	if err != nil {
 		return step, false, err
 	}
@@ -930,7 +928,7 @@ func (s *Service) ApproveRequest(ctx context.Context, propertyID, id int64, in A
 		if err := s.canDecideAt(ctx, p, propertyID); err != nil {
 			return err
 		}
-		step, replay, err := s.activeStepFor(ctx, p, propertyID, cur, in.LevelNo)
+		step, replay, err := s.activeStepFor(ctx, p, propertyID, chainDocOfRequest(cur), in.LevelNo)
 		if err != nil {
 			return err
 		}
@@ -969,7 +967,7 @@ func (s *Service) ApproveRequest(ctx context.Context, propertyID, id int64, in A
 		if err != nil {
 			return err
 		}
-		done, err := s.advance(ctx, p, propertyID, id, cur.Cycle, cur.DepartmentID, cur.RequesterID, total, chain.SkipLevel1IfHead, false)
+		done, err := s.advance(ctx, p, propertyID, docRef{DocPR, id}, cur.Cycle, cur.DepartmentID, cur.RequesterID, total, chain.SkipLevel1IfHead, false)
 		if err != nil {
 			return err
 		}
@@ -1095,7 +1093,7 @@ func (s *Service) ReturnRequest(ctx context.Context, propertyID, id int64, in Re
 		if err := s.canDecideAt(ctx, p, propertyID); err != nil {
 			return err
 		}
-		step, _, err := s.activeStepFor(ctx, p, propertyID, cur, in.LevelNo)
+		step, _, err := s.activeStepFor(ctx, p, propertyID, chainDocOfRequest(cur), in.LevelNo)
 		if err != nil {
 			return err
 		}
@@ -1105,7 +1103,7 @@ func (s *Service) ReturnRequest(ctx context.Context, propertyID, id int64, in Re
 			TotalSeen: &cur.EstTotal, Note: &note}); err != nil {
 			return err
 		}
-		steps, err := q.ListStepsOfCycle(ctx, inventorydb.ListStepsOfCycleParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: id, Cycle: cur.Cycle})
+		steps, err := s.stepsOfCycle(ctx, p, propertyID, docRef{DocPR, id}, cur.Cycle)
 		if err != nil {
 			return err
 		}
@@ -1123,8 +1121,7 @@ func (s *Service) ReturnRequest(ctx context.Context, propertyID, id int64, in Re
 			ReturnedNote: &note, EstTotal: cur.EstTotal, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		reqID := id
-		if err := s.notify(ctx, p.TenantID, propertyID, []int64{cur.RequesterID}, NoticeReturned, &step.ID, &reqID); err != nil {
+		if err := s.notifyDoc(ctx, p.TenantID, propertyID, []int64{cur.RequesterID}, NoticeReturned, &step.ID, docRef{DocPR, id}); err != nil {
 			return err
 		}
 		if err := s.audit.Write(ctx, s.entry(p, propertyID, bd, "inventory.approval_step_decided", "inv_request", id, cur.RequestNumber, nil,
@@ -1157,7 +1154,7 @@ func (s *Service) RecallRequest(ctx context.Context, propertyID, id int64) (Requ
 			return errRequestState(cur.Status, "submitted")
 		}
 		q := s.q(ctx)
-		steps, err := q.ListStepsOfCycle(ctx, inventorydb.ListStepsOfCycleParams{TenantID: p.TenantID, PropertyID: propertyID, RequestID: id, Cycle: cur.Cycle})
+		steps, err := s.stepsOfCycle(ctx, p, propertyID, docRef{DocPR, id}, cur.Cycle)
 		if err != nil {
 			return err
 		}
