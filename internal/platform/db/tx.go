@@ -90,6 +90,7 @@ func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context) e
 		}
 	}
 
+	traceBegin(ctx)
 	if err := fn(context.WithValue(ctx, txKey{}, &txState{tx: tx})); err != nil {
 		rollback()
 		return MapError(err)

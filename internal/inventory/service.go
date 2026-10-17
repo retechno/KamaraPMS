@@ -33,6 +33,9 @@ type Service struct {
 	days   *tenancy.Service
 	depts  DepartmentChecker
 	ledger *Ledger
+	// pay and approver are wired by internal/app (SetPayables, SetApprover): the bills of the purchasing are posted by the payables, and a price difference above the tolerance is approved with credentials.
+	pay      Payables
+	approver Approver
 }
 
 // NewService wires the service.
@@ -43,7 +46,9 @@ func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Au
 func (s *Service) q(ctx context.Context) *inventorydb.Queries { return inventorydb.New(s.txm.DB(ctx)) }
 
 // readers may read the masters and the stock: who manages the module and who works with it.
-var readers = []auth.Permission{auth.PermInventoryView, auth.PermInventoryManage, auth.PermInventoryOpening}
+// The permissions of a screen that uses the masters read them too (35-inventory.md 9.1, document 33): a request is written by who holds inventory.request, an order by inventory.purchase, a receipt by
+// inventory.receive, a bill by inventory.bill.
+var readers = []auth.Permission{auth.PermInventoryView, auth.PermInventoryManage, auth.PermInventoryOpening, auth.PermInventoryRequest, auth.PermInventoryPurchase, auth.PermInventoryReceive, auth.PermInventoryBill}
 
 func (s *Service) canRead(ctx context.Context, propertyID int64) (auth.Principal, error) {
 	p, err := auth.Require(ctx)

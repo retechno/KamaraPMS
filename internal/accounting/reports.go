@@ -502,8 +502,11 @@ func (s *Service) Reconciliation(ctx context.Context, propertyID int64, asOf *ci
 				continue
 			}
 			l := bal[a.ID]
-			out.Controls = append(out.Controls, Control{Key: "INVENTORY_" + a.Code, Title: "Inventory " + a.Name, Account: a.Code + " " + a.Name, Ledger: l, Source: src, Difference: l.Sub(src),
-				Basis: "The stock ledger, valued by the category of the items, up to the date"})
+			title, basis := "Inventory "+a.Name, "The stock ledger, valued by the category of the items, up to the date"
+			if e, ok := acct[KeyInvGRNI]; ok && e.AccountID == a.ID { // goods received not invoiced: a liability, in the sign of the ledger
+				title, basis = a.Name, "Goods received less returns, less the bills and the credit notes on the account, from the stock tables and the bills, up to the date"
+			}
+			out.Controls = append(out.Controls, Control{Key: "INVENTORY_" + a.Code, Title: title, Account: a.Code + " " + a.Name, Ledger: l, Source: src, Difference: l.Sub(src), Basis: basis})
 		}
 	}
 	out.Reconciled = out.PendingDays == 0

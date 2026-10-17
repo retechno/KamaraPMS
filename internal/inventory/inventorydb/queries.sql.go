@@ -416,6 +416,45 @@ func (q *Queries) GLBalancesOf(ctx context.Context, arg GLBalancesOfParams) ([]G
 	return items, nil
 }
 
+const gRNIFromSources = `-- name: GRNIFromSources :one
+WITH acc AS (
+    SELECT m.account_id FROM gl_account_map m WHERE m.tenant_id = $1 AND m.property_id = $2 AND m.map_key = 'INV_GRNI'
+)
+SELECT (SELECT a.account_id FROM acc a)::bigint AS account_id,
+       (COALESCE((SELECT sum(CASE WHEN mv.gl_debit_account_id = a.account_id THEN mv.gl_amount ELSE 0 END) - sum(CASE WHEN mv.gl_credit_account_id = a.account_id THEN mv.gl_amount ELSE 0 END)
+                    FROM inv_movements mv, acc a WHERE mv.tenant_id = $1 AND mv.property_id = $2 AND mv.business_date <= $3::date AND mv.gl_amount > 0), 0)
+        + COALESCE((SELECT sum(l.amount + CASE WHEN l.vat_treatment = 'EXPENSE' THEN l.vat_amount ELSE 0 END)
+                      FROM supplier_bill_lines l JOIN supplier_bills b ON b.property_id = l.property_id AND b.id = l.bill_id
+                      LEFT JOIN gl_journals vj ON vj.property_id = b.property_id AND vj.id = b.void_journal_id, acc a
+                     WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = a.account_id AND b.bill_date <= $3::date
+                       AND (vj.id IS NULL OR vj.journal_date > $3::date)), 0)
+        - COALESCE((SELECT sum(l.amount + CASE WHEN l.vat_treatment = 'EXPENSE' THEN l.vat_amount ELSE 0 END)
+                      FROM supplier_credit_note_lines l JOIN supplier_credit_notes c ON c.property_id = l.property_id AND c.id = l.credit_id
+                      LEFT JOIN gl_journals vj ON vj.property_id = c.property_id AND vj.id = c.void_journal_id, acc a
+                     WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = a.account_id AND c.credit_date <= $3::date
+                       AND (vj.id IS NULL OR vj.journal_date > $3::date)), 0))::numeric AS balance
+`
+
+type GRNIFromSourcesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AsOf       civil.Date
+}
+
+type GRNIFromSourcesRow struct {
+	AccountID int64
+	Balance   decimal.Decimal
+}
+
+// Goods received not invoiced as the stock and the bills say it (6.3), as a balance in the convention of the ledger (debits less credits): the receipts, returns and clearings of the stock ledger, the bill lines on the
+// account (with their VAT when it is part of the cost), less the credit note lines on it, all dated up to the day; a bill or a credit note voided by then is out.
+func (q *Queries) GRNIFromSources(ctx context.Context, arg GRNIFromSourcesParams) (GRNIFromSourcesRow, error) {
+	row := q.db.QueryRow(ctx, gRNIFromSources, arg.TenantID, arg.PropertyID, arg.AsOf)
+	var i GRNIFromSourcesRow
+	err := row.Scan(&i.AccountID, &i.Balance)
+	return i, err
+}
+
 const getAccountByCode = `-- name: GetAccountByCode :one
 SELECT a.id, a.code, a.name, a.account_type, a.is_postable, a.is_active
   FROM gl_accounts a WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.code = $3
@@ -3146,16 +3185,22 @@ WITH g AS (
       FROM inv_movements m
      WHERE m.tenant_id = $1 AND m.property_id = $2 AND m.business_date = $3::date AND m.gl_amount > 0
      GROUP BY m.gl_debit_account_id, m.gl_credit_account_id, m.gl_department_id, m.kind, m.source_type, m.source_id
+), named AS (
+    SELECT g.debit_id, g.credit_id, g.department_id, g.kind, g.source_type, g.source_id, g.amount, COALESCE(o.opening_number, rc.receipt_number, rt.return_number, b.bill_number, cn.credit_number, g.source_type || ' ' || g.source_id)::text AS ref
+      FROM g
+      LEFT JOIN inv_openings o ON g.source_type = 'INV_OPENING' AND o.property_id = $2 AND o.id = g.source_id
+      LEFT JOIN inv_receipts rc ON g.source_type = 'INV_RECEIPT' AND rc.property_id = $2 AND rc.id = g.source_id
+      LEFT JOIN inv_returns rt ON g.source_type = 'INV_RETURN' AND rt.property_id = $2 AND rt.id = g.source_id
+      LEFT JOIN supplier_bills b ON g.source_type = 'INV_BILL' AND b.property_id = $2 AND b.id = g.source_id
+      LEFT JOIN supplier_credit_notes cn ON g.source_type = 'INV_CREDIT' AND cn.property_id = $2 AND cn.id = g.source_id
 )
-SELECT g.debit_id::bigint AS account_id, g.department_id, g.kind::text AS kind, g.source_type::text AS source_type,
-       COALESCE(o.opening_number, g.source_type || ' ' || g.source_id)::text AS source_ref, g.amount::numeric AS amount, true AS is_debit,
-       (g.debit_id IN (SELECT c.inventory_account_id FROM inv_categories c WHERE c.property_id = $2))::boolean AS is_inventory
-  FROM g LEFT JOIN inv_openings o ON g.source_type = 'INV_OPENING' AND o.property_id = $2 AND o.id = g.source_id
+SELECT n.debit_id::bigint AS account_id, n.department_id, n.kind::text AS kind, n.source_type::text AS source_type, n.ref AS source_ref, n.amount::numeric AS amount, true AS is_debit,
+       (n.debit_id IN (SELECT c.inventory_account_id FROM inv_categories c WHERE c.property_id = $2))::boolean AS is_inventory
+  FROM named n
 UNION ALL
-SELECT g.credit_id::bigint, g.department_id, g.kind::text, g.source_type::text,
-       COALESCE(o.opening_number, g.source_type || ' ' || g.source_id)::text, (-g.amount)::numeric, false,
-       (g.credit_id IN (SELECT c.inventory_account_id FROM inv_categories c WHERE c.property_id = $2))::boolean
-  FROM g LEFT JOIN inv_openings o ON g.source_type = 'INV_OPENING' AND o.property_id = $2 AND o.id = g.source_id
+SELECT n.credit_id::bigint, n.department_id, n.kind::text, n.source_type::text, n.ref, (-n.amount)::numeric, false,
+       (n.credit_id IN (SELECT c.inventory_account_id FROM inv_categories c WHERE c.property_id = $2))::boolean
+  FROM named n
 ORDER BY 1, 3, 5, 7
 `
 

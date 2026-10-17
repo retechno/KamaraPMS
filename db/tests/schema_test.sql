@@ -1930,7 +1930,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('budget_lines', 'CHILD', 'of budgets'), ('budget_statistics', 'CHILD', 'of budgets'),
     ('folio_transfers', 'CHILD', 'of folio_items'), ('pos_room_charges', 'CHILD', 'of folio_items'),
     ('inv_openings', 'CHILD', 'of inv_movements'), ('inv_opening_lines', 'CHILD', 'of inv_movements'), ('inv_balances', 'CHILD', 'of inv_movements'),
-    ('inv_layers', 'CHILD', 'of inv_movements'), ('inv_layer_uses', 'CHILD', 'of inv_movements'), ('inv_shortfalls', 'CHILD', 'of inv_movements');
+    ('inv_layers', 'CHILD', 'of inv_movements'), ('inv_layer_uses', 'CHILD', 'of inv_movements'), ('inv_shortfalls', 'CHILD', 'of inv_movements'),
+    ('inv_receipts', 'CHILD', 'of inv_movements: a posted receipt has its movements'), ('inv_receipt_lines', 'CHILD', 'of inv_movements'),
+    ('inv_returns', 'CHILD', 'of inv_movements'), ('inv_return_lines', 'CHILD', 'of inv_movements'), ('inv_bill_matches', 'CHILD', 'of supplier_bills');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -1943,7 +1945,11 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('pos_options', 'CONFIG', 'add-on and variant price differences'), ('pos_price_list_items', 'CONFIG', 'prices of an outlet'), ('folio_outlet_locks', 'CONFIG', 'the limit of outlet charges of a folio'),
     ('pos_room_charge_attempts', 'PLAN', 'a request of an outlet to charge a room, kept as a trail; the money is in the ledger'),
     ('pos_bill_lines', 'PLAN', 'the line of an order with its price snapshot; the money is the ledger row it posts when it is sent'),
-    ('inv_items', 'CONFIG', 'the reference cost of an item'), ('inv_levels', 'CONFIG', 'minimum and maximum quantities'), ('inventory_settings', 'CONFIG', 'tolerances and the receipt limit');
+    ('inv_items', 'CONFIG', 'the reference cost of an item'), ('inv_levels', 'CONFIG', 'minimum and maximum quantities'), ('inventory_settings', 'CONFIG', 'tolerances and the receipt limit'),
+    ('inv_supplier_items', 'CONFIG', 'the last price of a supplier for an item'), ('inv_approval_levels', 'CONFIG', 'the amount a level of a chain applies above'),
+    ('inv_requests', 'PLAN', 'a purchase request: an estimate of what will be bought'), ('inv_request_lines', 'PLAN', 'the estimate of a line'),
+    ('inv_approval_steps', 'PLAN', 'the snapshot of a level and the total the approver saw'), ('inv_approval_edits', 'PLAN', 'what an approver changed: a quantity or an estimated price'),
+    ('inv_purchase_orders', 'PLAN', 'an order to a supplier: money to be paid, not yet owed'), ('inv_po_lines', 'PLAN', 'the price and the quantity ordered');
 DO $$
 DECLARE v_missing text;
 BEGIN
@@ -2548,6 +2554,94 @@ SELECT expect_ok('the standard chart has the four inventory accounts, in both la
         IF (SELECT count(*) FROM usali_chart() WHERE code IN ('2130', '5290', '5295', '5299')) <> 4 THEN RAISE EXCEPTION 'missing accounts'; END IF;
         IF (SELECT count(*) FROM usali_chart_names('id') WHERE code IN ('2130', '5290', '5295', '5299')) <> 4 THEN RAISE EXCEPTION 'missing names'; END IF;
     END $d$;$q$);
+
+------------------------------------------------------------------------------------------
+-- Inventory, PR 2 (migration 00085, docs/architecture/35-inventory.md): the approval chain, requests, orders, receipts, returns
+------------------------------------------------------------------------------------------
+CREATE FUNCTION pms_test.pur_base() RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM pms_test.inv_base();
+    INSERT INTO inv_item_units (tenant_id, property_id, item_id, unit_id, stock_num, stock_den, is_purchase, is_default_purchase)
+    SELECT i.tenant_id, i.property_id, i.id, i.stock_unit_id, 1, 1, true, true FROM inv_items i WHERE i.property_id = pr('BALI') AND i.code = 'RICE';
+    INSERT INTO inv_requests (tenant_id, property_id, request_number, client_uuid, requester_id, status)
+    VALUES (tn('ABC'), pr('BALI'), 'PR-000001', gen_random_uuid(), (SELECT id FROM users WHERE email = 'admin@hotel.com' AND tenant_id = tn('ABC')), 'DRAFT');
+    INSERT INTO inv_request_lines (tenant_id, property_id, request_id, line_no, item_id, purchase_unit_id, qty_purchase, qty_stock)
+    SELECT r.tenant_id, r.property_id, r.id, 1, i.id, i.stock_unit_id, 5, 5 FROM inv_requests r, inv_items i WHERE r.property_id = pr('BALI') AND i.property_id = pr('BALI') AND i.code = 'RICE';
+END $$;
+CREATE FUNCTION pms_test.pur_step(p_level int, p_status text, p_by text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO inv_approval_steps (tenant_id, property_id, request_id, cycle, level_no, name, approver_kind, condition_kind, edit_allowed, status, decided_by, decided_at)
+    SELECT r.tenant_id, r.property_id, r.id, 1, p_level, 'Level ' || p_level, 'DEPT_HEAD', 'ALWAYS', true, p_status,
+           (SELECT id FROM users WHERE email = p_by AND tenant_id = r.tenant_id), CASE WHEN p_by IS NULL THEN NULL ELSE now() END
+      FROM inv_requests r WHERE r.property_id = pr('BALI') $$;
+CREATE FUNCTION pms_test.pur_edit(p_field text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO inv_approval_edits (tenant_id, property_id, step_id, line_no, field, old_value, new_value, edited_by)
+    SELECT tenant_id, property_id, id, 1, p_field, 5, 4, (SELECT id FROM users LIMIT 1) FROM inv_approval_steps $$;
+CREATE FUNCTION pms_test.pur_order(p_number text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO inv_purchase_orders (tenant_id, property_id, po_number, client_uuid, supplier_id, warehouse_id, order_date)
+    SELECT w.tenant_id, w.property_id, p_number, gen_random_uuid(), s.id, w.id, CURRENT_DATE
+      FROM inv_warehouses w, suppliers s WHERE w.property_id = pr('BALI') AND w.code = 'MAIN' AND s.property_id = pr('BALI') AND s.code = 'S1' $$;
+CREATE FUNCTION pms_test.pur_receipt(p_status text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO inv_receipts (tenant_id, property_id, receipt_number, client_uuid, supplier_id, warehouse_id, received_on, status, total_value)
+    SELECT w.tenant_id, w.property_id, 'GR-1', gen_random_uuid(), s.id, w.id, CURRENT_DATE, p_status, 0
+      FROM inv_warehouses w, suppliers s WHERE w.property_id = pr('BALI') AND w.code = 'MAIN' AND s.property_id = pr('BALI') AND s.code = 'S1' $$;
+
+SELECT expect_ok('a request, its line and a level of the chain are accepted', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'ACTIVE')$q$);
+SELECT expect_error('a request is DRAFT, SUBMITTED, APPROVED, RETURNED, CONVERTED or CANCELLED', '23514', $q$SELECT pms_test.pur_base()$q$, $q$UPDATE inv_requests SET status = 'DONE'$q$);
+SELECT expect_error('a submitted request names its department', '23514', $q$SELECT pms_test.pur_base()$q$, $q$UPDATE inv_requests SET status = 'SUBMITTED'$q$);
+SELECT expect_error('a returned request carries the note of the return', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$UPDATE inv_requests SET status = 'RETURNED', department_id = (SELECT id FROM departments WHERE property_id = pr('BALI') LIMIT 1)$q$);
+SELECT expect_error('a request number is unique in the property', '23505', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_requests (tenant_id, property_id, request_number, client_uuid, requester_id) SELECT tenant_id, property_id, request_number, gen_random_uuid(), requester_id FROM inv_requests$q$);
+SELECT expect_error('an item is once on a request', '23505', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_request_lines (tenant_id, property_id, request_id, line_no, item_id, purchase_unit_id, qty_purchase, qty_stock) SELECT tenant_id, property_id, request_id, 2, item_id, purchase_unit_id, 1, 1 FROM inv_request_lines$q$);
+SELECT expect_error('a line asks for a positive quantity', '23514', $q$SELECT pms_test.pur_base()$q$, $q$UPDATE inv_request_lines SET qty_purchase = 0$q$);
+SELECT expect_error('a line is in a unit the item is bought in (a unit that is not one of the item is refused)', '23503', $q$SELECT pms_test.pur_base()$q$,
+    $q$UPDATE inv_request_lines SET purchase_unit_id = (SELECT id FROM inv_units WHERE property_id = pr('BALI') AND code = 'g')$q$);
+SELECT expect_error('the requester is a user of the tenant', '23503', $q$SELECT pms_test.pur_base()$q$,
+    $q$UPDATE inv_requests SET requester_id = (SELECT id FROM users WHERE tenant_id = tn('XYZ') LIMIT 1)$q$);
+SELECT expect_error('a level is approved by the head or by one permission, not both', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_approval_levels (tenant_id, property_id, doc_type, level_no, name, approver_kind, permission, condition_kind) VALUES (tn('ABC'), pr('BALI'), 'PR', 1, 'Head', 'DEPT_HEAD', 'inventory.cost_control', 'ALWAYS')$q$);
+SELECT expect_error('a level above an amount names the amount', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_approval_levels (tenant_id, property_id, doc_type, level_no, name, approver_kind, condition_kind) VALUES (tn('ABC'), pr('BALI'), 'PR', 1, 'Head', 'DEPT_HEAD', 'TOTAL_ABOVE')$q$);
+SELECT expect_error('a chain has at most five levels', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_approval_levels (tenant_id, property_id, doc_type, level_no, name, approver_kind, condition_kind) VALUES (tn('ABC'), pr('BALI'), 'PR', 6, 'Head', 'DEPT_HEAD', 'ALWAYS')$q$);
+SELECT expect_error('a level of a request is once in a round', '23505', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'WAITING')$q$, $q$SELECT pms_test.pur_step(1, 'WAITING')$q$);
+SELECT expect_error('one level of a request is active at a time', '23505', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'ACTIVE')$q$, $q$SELECT pms_test.pur_step(2, 'ACTIVE')$q$);
+SELECT expect_error('one person approves one level of a document', '23505', $q$SELECT pms_test.pur_base()$q$,
+    $q$SELECT pms_test.pur_step(1, 'APPROVED', 'admin@hotel.com')$q$, $q$SELECT pms_test.pur_step(2, 'APPROVED', 'admin@hotel.com')$q$);
+SELECT expect_error('a decided level says who decided and when', '23514', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'APPROVED')$q$);
+SELECT expect_error('a skipped level says why', '23514', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'SKIPPED')$q$);
+SELECT expect_ok('an approver edit is recorded', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'ACTIVE')$q$, $q$SELECT pms_test.pur_edit('QTY')$q$);
+SELECT expect_error('an approver changes the quantity or the estimated price, nothing else', '23514', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'ACTIVE')$q$, $q$SELECT pms_test.pur_edit('NOTE')$q$);
+SELECT expect_error('what an approver changed cannot be changed', '23001', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'ACTIVE')$q$, $q$SELECT pms_test.pur_edit('QTY')$q$,
+    $q$UPDATE inv_approval_edits SET new_value = 3$q$);
+SELECT expect_error('what an approver changed cannot be deleted', '23001', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_step(1, 'ACTIVE')$q$, $q$SELECT pms_test.pur_edit('QTY')$q$,
+    $q$DELETE FROM inv_approval_edits$q$);
+SELECT expect_error('a notice has one of four kinds', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_notices (tenant_id, property_id, user_id, kind) SELECT tenant_id, property_id, requester_id, 'HELLO' FROM inv_requests$q$);
+SELECT expect_error('the head and the deputy of a department are two people', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$UPDATE departments SET head_user_id = (SELECT id FROM users WHERE tenant_id = tn('ABC') LIMIT 1), deputy_user_id = (SELECT id FROM users WHERE tenant_id = tn('ABC') LIMIT 1) WHERE property_id = pr('BALI')$q$);
+SELECT expect_error('a deputy needs a head', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$UPDATE departments SET deputy_user_id = (SELECT id FROM users WHERE tenant_id = tn('ABC') LIMIT 1) WHERE property_id = pr('BALI')$q$);
+SELECT expect_error('the head of a department is a user of the tenant', '23503', $q$SELECT pms_test.pur_base()$q$,
+    $q$UPDATE departments SET head_user_id = (SELECT id FROM users WHERE tenant_id = tn('XYZ') LIMIT 1) WHERE property_id = pr('BALI')$q$);
+SELECT expect_ok('an order is accepted', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_order('PO-1')$q$);
+SELECT expect_error('an order number is unique in the property', '23505', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_order('PO-1')$q$, $q$SELECT pms_test.pur_order('PO-1')$q$);
+SELECT expect_error('a line of a request is on one order only', '23505', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_order('PO-1')$q$, $q$SELECT pms_test.pur_order('PO-2')$q$,
+    $q$INSERT INTO inv_po_lines (tenant_id, property_id, po_id, line_no, item_id, purchase_unit_id, qty_purchase, qty_stock, unit_price, amount, request_id, request_line_no)
+       SELECT o.tenant_id, o.property_id, o.id, 1, l.item_id, l.purchase_unit_id, 5, 5, 100, 500, l.request_id, l.line_no FROM inv_purchase_orders o, inv_request_lines l$q$);
+SELECT expect_error('an order line has a positive quantity', '23514', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_order('PO-1')$q$,
+    $q$INSERT INTO inv_po_lines (tenant_id, property_id, po_id, line_no, item_id, purchase_unit_id, qty_purchase, qty_stock, unit_price, amount)
+       SELECT o.tenant_id, o.property_id, o.id, 1, l.item_id, l.purchase_unit_id, 0, 0, 100, 0 FROM inv_purchase_orders o, inv_request_lines l$q$);
+SELECT expect_error('a receipt is POSTED or REVERSED', '23514', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_receipt('LOST')$q$);
+SELECT expect_error('a reversed receipt says when it was reversed', '23514', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_receipt('REVERSED')$q$);
+SELECT expect_ok('a posted receipt is accepted', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_receipt('POSTED')$q$);
+SELECT expect_error('a return gives its reason', '23514', $q$SELECT pms_test.pur_base()$q$, $q$SELECT pms_test.pur_receipt('POSTED')$q$,
+    $q$INSERT INTO inv_returns (tenant_id, property_id, return_number, client_uuid, supplier_id, warehouse_id, receipt_id, reason, total_value) SELECT tenant_id, property_id, 'RET-1', gen_random_uuid(), supplier_id, warehouse_id, id, '  ', 0 FROM inv_receipts$q$);
+SELECT expect_error('the price of a supplier for an item is not negative', '23514', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_supplier_items (tenant_id, property_id, supplier_id, item_id, purchase_unit_id, last_price) SELECT i.tenant_id, i.property_id, s.id, i.id, i.stock_unit_id, -1 FROM inv_items i, suppliers s WHERE i.property_id = pr('BALI') AND s.property_id = pr('BALI') AND s.code = 'S1'$q$);
+SELECT expect_error('a match names a receipt line and a bill that exist', '23503', $q$SELECT pms_test.pur_base()$q$,
+    $q$INSERT INTO inv_bill_matches (tenant_id, property_id, receipt_id, receipt_line_no, bill_id, bill_line_no, qty_stock, bill_cost, receipt_value, variance) VALUES (tn('ABC'), pr('BALI'), 1, 1, 1, 1, 1, 0, 0, 0)$q$);
 
 ------------------------------------------------------------------------------------------
 -- The language of the seeded data: the names of the chart of accounts, departments and charge codes exist in en and id, for exactly the same codes

@@ -42,6 +42,10 @@ UPDATE users SET last_login_at = @at::timestamptz WHERE id = @id;
 -- name: CountActiveAdmins :one
 SELECT count(*) FROM users WHERE tenant_id = @tenant_id AND is_tenant_admin AND is_active;
 
+-- The departments a user is the head or the deputy of (35-inventory.md 3.3): a user who leads one is replaced before they are switched off.
+-- name: CountDepartmentsLedBy :one
+SELECT count(*)::int FROM departments WHERE tenant_id = @tenant_id AND (head_user_id = @user_id OR deputy_user_id = @user_id);
+
 -- Sessions ------------------------------------------------------------------
 
 -- name: CreateSession :one

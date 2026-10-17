@@ -305,6 +305,11 @@ const (
 	SeqLostFound SequenceType = "LOST_FOUND"
 	// SeqInvOpening numbers the opening stock documents of the inventory.
 	SeqInvOpening SequenceType = "INV_OPENING"
+	// SeqInvPR, SeqInvPO, SeqInvGR and SeqInvRet number the purchase requests, the purchase orders, the goods receipts and the returns to suppliers.
+	SeqInvPR  SequenceType = "INV_PR"
+	SeqInvPO  SequenceType = "INV_PO"
+	SeqInvGR  SequenceType = "INV_GR"
+	SeqInvRet SequenceType = "INV_RET"
 )
 
 // defaultSequences are created with every property.
@@ -332,4 +337,8 @@ var defaultSequences = []struct {
 	{SeqMaintenance, "MNT"},
 	{SeqLostFound, "LF"},
 	{SeqInvOpening, "OPN-"},
+	{SeqInvPR, "PR-"},
+	{SeqInvPO, "PO-"},
+	{SeqInvGR, "GR-"},
+	{SeqInvRet, "RET-"},
 }

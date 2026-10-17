@@ -407,7 +407,9 @@ sql:
 
   - engine: postgresql
     schema: migrations
-    queries: internal/inventory/queries.sql
+    queries:
+      - internal/inventory/queries.sql
+      - internal/inventory/queries_purchasing.sql
     gen:
       go:
         package: inventorydb
@@ -415,3 +417,8 @@ sql:
         sql_package: pgx/v5
         omit_unused_structs: true
         emit_empty_slices: true
+        overrides:
+          # the nullable line numbers of the purchasing tables (an order line that has no request line, a receipt line that has no order line)
+          - db_type: "pg_catalog.int4"
+            nullable: true
+            go_type: { type: "int32", pointer: true }

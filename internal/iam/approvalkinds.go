@@ -33,6 +33,9 @@ const (
 	KindPOSDiscount ApprovalKind = "POS_DISCOUNT"
 	KindPOSComp     ApprovalKind = "POS_COMP"
 	KindPOSReopen   ApprovalKind = "POS_REOPEN"
+	// The kinds of the inventory (docs/architecture/35-inventory.md 9.2): a price difference on a supplier bill above the tolerance (credentials, at once). The approval of a purchase request is a chain
+	// with its own engine, not a kind; the result of a stock count (INV_COUNT, a decision of the signed-in approver, ApprovalRequest.Decision) comes with PR 3.
+	KindInvBillVariance ApprovalKind = "INV_BILL_VARIANCE"
 )
 
 // KindInfo describes a kind: whether it has an amount (a rule DISTINCT_ABOVE needs one) and the permission its approver
@@ -67,6 +70,7 @@ var approvalKinds = []KindInfo{
 	{KindPOSDiscount, true, auth.PermPOSApprove},
 	{KindPOSComp, true, auth.PermPOSApprove},
 	{KindPOSReopen, true, auth.PermPOSApprove},
+	{KindInvBillVariance, true, auth.PermInventoryApprove},
 }
 
 // ApprovalKinds lists the kinds, in screen order.

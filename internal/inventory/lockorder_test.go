@@ -27,7 +27,10 @@ import (
 //  (b) dynamic: the use cases of the stock and a use case of the groups run once under a lock trace (db.WithLockTrace); no trace holds both a group and a stock table, no trace
 //      descends in level, and inside the stock level the order is documents, warehouse, balances.
 
-var stockTables = map[string]bool{"StockOpenings": true, "Warehouses": true, "StockBalances": true}
+var stockTables = map[string]bool{"StockOpenings": true, "StockRequests": true, "StockBillDrafts": true, "StockReceipts": true, "StockReturns": true, "StockOrders": true, "Warehouses": true, "StockBalances": true}
+
+// stockRanks is the order inside the stock level: the documents of a purchase, then the warehouse, then the balances (db.LockTable.stockRank).
+var stockRanks = map[string]int{"inv_openings": 1, "inv_requests": 1, "inv_bill_drafts": 2, "inv_receipts": 3, "inv_returns": 4, "inv_purchase_orders": 5, "inv_warehouses": 10, "inv_balances": 11}
 
 // lockKinds reads a package directory and returns, for each function (by name), whether it locks groups or stock directly and which functions of the package it calls.
 type lockGraph struct {
@@ -156,8 +159,12 @@ func checkTrace(t *testing.T, label string, events []db.LockEvent) {
 	t.Helper()
 	var group, stock bool
 	level, rank := db.LevelNone, 0
-	ranks := map[string]int{"inv_openings": 1, "inv_warehouses": 2, "inv_balances": 3}
+	ranks := stockRanks
 	for _, e := range events {
+		if e.Begin { // a new transaction
+			level, rank = db.LevelNone, 0
+			continue
+		}
 		if e.Level < level {
 			t.Errorf("%s: the level fell from %d to %d (%s)", label, level, e.Level, e.Table)
 		}
@@ -270,8 +277,12 @@ func TestTheDynamicLockTestSeesADescentAndAMix(t *testing.T) {
 func traceBroken(events []db.LockEvent) bool {
 	var group, stock bool
 	level, rank := db.LevelNone, 0
-	ranks := map[string]int{"inv_openings": 1, "inv_warehouses": 2, "inv_balances": 3}
+	ranks := stockRanks
 	for _, e := range events {
+		if e.Begin {
+			level, rank = db.LevelNone, 0
+			continue
+		}
 		if e.Level < level {
 			return true
 		}
@@ -289,4 +300,73 @@ func traceBroken(events []db.LockEvent) bool {
 		}
 	}
 	return group && stock
+}
+
+// The use cases of the purchasing (PR 2) run once under the trace: the open day (10), the documents in the order of a purchase, the warehouse, the balances, then the payables (46, 47, 49) and the numbers (50),
+// never a descent and never a group.
+func TestThePurchasingUseCasesTakeTheirLocksInOrder(t *testing.T) {
+	for _, m := range methods {
+		t.Run(m, func(t *testing.T) {
+			c := newChain(t)
+			trace := func(label string, ctx context.Context, run func(ctx context.Context)) {
+				tctx, tr := db.WithLockTrace(ctx)
+				run(tctx)
+				checkTrace(t, label, tr.Events())
+			}
+			c.open(t, "MAIN", "SIRUP", "botol", "20", "48000")
+			var r inventory.Request
+			trace("create request", c.req, func(ctx context.Context) { r = c.request(t, ctx, c.line("SIRUP", "karton", "5", "600000")) })
+			trace("submit", c.req, func(ctx context.Context) { r = c.submit(t, ctx, r) })
+			trace("approve 1", c.head, func(ctx context.Context) { r = c.approve(t, ctx, r, 1) })
+			trace("approve 2", c.cc, func(ctx context.Context) { r = c.approve(t, ctx, r, 2) })
+			var pos []inventory.PurchaseOrder
+			trace("orders", c.req, func(ctx context.Context) {
+				var err error
+				pos, err = c.svc.CreateOrdersFromRequest(ctx, c.propID, r.ID, inventory.POFromRequestInput{Send: true, Orders: []inventory.POFromRequestOrder{{ClientUUID: c.id(), SupplierID: c.sup,
+					Lines: []inventory.POFromRequestLine{{LineNo: 1, UnitPrice: dec("600000")}}}}})
+				must(t, err)
+			})
+			var rc inventory.Receipt
+			trace("receipt", c.admin, func(ctx context.Context) {
+				var err error
+				rc, err = c.svc.PostReceipt(ctx, c.propID, inventory.ReceiptInput{ClientUUID: c.id(), POID: &pos[0].ID, Lines: []inventory.ReceiptLineInput{{POLineNo: ptr(1), Qty: dec("5")}}})
+				must(t, err)
+			})
+			trace("reverse", c.admin, func(ctx context.Context) {
+				_, err := c.svc.ReverseReceipt(ctx, c.propID, rc.ID, "x")
+				must(t, err)
+			})
+			trace("receipt again", c.admin, func(ctx context.Context) {
+				var err error
+				rc, err = c.svc.PostReceipt(ctx, c.propID, inventory.ReceiptInput{ClientUUID: c.id(), POID: &pos[0].ID, Lines: []inventory.ReceiptLineInput{{POLineNo: ptr(1), Qty: dec("5")}}})
+				must(t, err)
+			})
+			var res inventory.ConfirmResult
+			trace("confirm", c.admin, func(ctx context.Context) {
+				var err error
+				in := invoice(c.sup, "T-1", billLine(rc, 1, "5", "612000", "0"))
+				in.Approval = c.approver(t)
+				res, err = c.svc.ConfirmBill(ctx, c.propID, in, "kt")
+				must(t, err)
+			})
+			var ret inventory.Return
+			trace("return", c.admin, func(ctx context.Context) {
+				var err error
+				ret, err = c.svc.PostReturn(ctx, c.propID, inventory.ReturnInput{ClientUUID: c.id(), ReceiptID: rc.ID, Reason: "damaged", Lines: []inventory.ReturnLineInput{{ReceiptLineNo: 1, Qty: dec("1")}}})
+				must(t, err)
+			})
+			trace("unmatch", c.admin, func(ctx context.Context) {
+				_, err := c.svc.UnmatchBill(ctx, c.propID, res.Bill.ID, inventory.UnmatchInput{Reason: "x", Approval: c.voider(t)})
+				must(t, err)
+			})
+			_ = ret
+			trace("receive and bill", c.admin, func(ctx context.Context) {
+				c.settings(t, func(s *inventory.SettingsInput) { s.DirectReceiptLimit = ptr(dec("0")) })
+				_, err := c.svc.PostReceipt(ctx, c.propID, inventory.ReceiptInput{ClientUUID: c.id(), SupplierID: c.pasar, WarehouseID: c.wh["MAIN"],
+					Lines: []inventory.ReceiptLineInput{{ItemID: c.item["BERAS"], UnitID: c.unit["karung"], Qty: dec("2"), UnitPrice: ptr(dec("375000"))}},
+					Bill:  &inventory.ReceiptBillInput{SupplierInvoiceNumber: "N-1", BillDate: civil.MustParseDate("2026-09-30")}})
+				must(t, err)
+			})
+		})
+	}
 }

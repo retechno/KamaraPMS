@@ -12,6 +12,88 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+type InvApprovalLevel struct {
+	TenantID      int64
+	PropertyID    int64
+	DocType       string
+	LevelNo       int16
+	Name          string
+	ApproverKind  string
+	Permission    *string
+	ConditionKind string
+	Threshold     *decimal.Decimal
+	UpdatedAt     time.Time
+	UpdatedBy     *int64
+}
+
+type InvApprovalSetting struct {
+	TenantID         int64
+	PropertyID       int64
+	DocType          string
+	SkipLevel1IfHead bool
+	ApproverMayEdit  bool
+	Version          int32
+	UpdatedAt        time.Time
+	UpdatedBy        *int64
+}
+
+type InvApprovalStep struct {
+	ID            int64
+	TenantID      int64
+	PropertyID    int64
+	RequestID     int64
+	Cycle         int16
+	LevelNo       int16
+	Name          string
+	ApproverKind  string
+	Permission    *string
+	ConditionKind string
+	Threshold     *decimal.Decimal
+	EditAllowed   bool
+	Status        string
+	SkipReason    *string
+	ActivatedAt   *time.Time
+	DecidedBy     *int64
+	DecidedAt     *time.Time
+	TotalSeen     *decimal.Decimal
+	Note          *string
+}
+
+type InvBillDraft struct {
+	ID         int64
+	TenantID   int64
+	PropertyID int64
+	ReceiptID  int64
+	SupplierID int64
+	Status     string
+	Version    int32
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type InvBillMatch struct {
+	ID                  int64
+	TenantID            int64
+	PropertyID          int64
+	ReceiptID           int64
+	ReceiptLineNo       int32
+	BillID              int64
+	BillLineNo          int32
+	QtyStock            decimal.Decimal
+	BillCost            decimal.Decimal
+	ReceiptValue        decimal.Decimal
+	Variance            decimal.Decimal
+	InventoryPart       decimal.Decimal
+	PpvPart             decimal.Decimal
+	ClearingMovementIds []int64
+	CreditNoteID        *int64
+	ReturnID            *int64
+	CreatedAt           time.Time
+	CreatedBy           *int64
+	UnmatchedAt         *time.Time
+	UnmatchedBy         *int64
+}
+
 type InvCategory struct {
 	ID                 int64
 	TenantID           int64

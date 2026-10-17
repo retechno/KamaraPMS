@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/payables/payablesdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/taxfiling"
 	"kamarapms/internal/tenancy"
@@ -147,6 +148,11 @@ func validateBill(in BillInput, decimals int32) (decimal.Decimal, []apperr.Field
 // PostBill enters a supplier bill (payables.post): its journal debits each line's account against ACCOUNTS PAYABLE
 // on the bill date. The Idempotency-Key makes a retry return the first bill.
 func (s *Service) PostBill(ctx context.Context, propertyID int64, in BillInput, key string) (Bill, error) {
+	return s.PostBillWith(ctx, propertyID, in, key, BillOptions{})
+}
+
+// PostBillWith is PostBill for a caller that has its own rules about the accounts of the lines (BillOptions).
+func (s *Service) PostBillWith(ctx context.Context, propertyID int64, in BillInput, key string, opt BillOptions) (Bill, error) {
 	p, err := s.need(ctx, propertyID, auth.PermPayablesPost)
 	if err != nil {
 		return Bill{}, err
@@ -160,23 +166,26 @@ func (s *Service) PostBill(ctx context.Context, propertyID int64, in BillInput, 
 		return Bill{}, apperr.Invalid("the bill is invalid", fields...)
 	}
 	var id int64
-	err = retryOnDuplicate(key, func() error { return s.postBill(ctx, p, propertyID, in, total, key, &id) })
+	err = retryOnDuplicate(key, func() error { return s.postBill(ctx, p, propertyID, in, total, key, opt, &id) })
 	if err != nil {
 		return Bill{}, err
 	}
 	return s.loadBill(ctx, p.TenantID, propertyID, id)
 }
 
-func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int64, in BillInput, total decimal.Decimal, key string, out *int64) error {
+func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int64, in BillInput, total decimal.Decimal, key string, opt BillOptions, out *int64) error {
 	inv := strings.TrimSpace(in.SupplierInvoiceNumber)
 	return s.txm.WithinTx(ctx, func(ctx context.Context) error {
-		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
+		bd, err := s.openDay(ctx, propertyID, opt.Day)
 		if err != nil {
 			return err
 		}
 		po, err := s.acct.BeginPosting(ctx, propertyID) // accounting settings (46) before the supplier (47)
 		if err != nil {
 			return err
+		}
+		if opt.AllowInventory {
+			po.AllowControl(accounting.KeyInventory)
 		}
 		q := s.q(ctx)
 		if _, err := q.SupplierActive(ctx, payablesdb.SupplierActiveParams{TenantID: p.TenantID, PropertyID: propertyID, ID: in.SupplierID}); isNoRows(err) {
@@ -304,7 +313,7 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 			}
 		}
 		*out = id
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.bill_posted", "supplier_bill", id, auditlabel.SupplierBill(ctx, propertyID, id), nil,
+		return s.audit.Write(ctx, entry(p, propertyID, bd, "payables.bill_posted", "supplier_bill", id, auditlabel.SupplierBill(ctx, propertyID, id), nil,
 			map[string]any{"bill_number": number, "supplier": sup.Code, "invoice": inv, "total": total.String(), "vat": vatOf(in.Lines).String(), "vat_treatment": treatment, "journal": jnum}))
 	})
 }
@@ -312,6 +321,28 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 // VoidBill voids a bill that has no payments (payables.post plus an approval): its journal is reversed on the current
 // business date.
 func (s *Service) VoidBill(ctx context.Context, propertyID, id int64, in VoidInput) (Bill, error) {
+	return s.voidBill(ctx, propertyID, id, in, true, nil)
+}
+
+// VoidBillOfInventory is VoidBill for the inventory's Unmatch, which has reversed the clearing of the bill and so is the one caller that the guard of the stock does not stop. It holds the open business day
+// already (day), so the lock is not taken again after the stock.
+func (s *Service) VoidBillOfInventory(ctx context.Context, propertyID, id int64, in VoidInput, day civil.Date) (Bill, error) {
+	return s.voidBill(ctx, propertyID, id, in, false, &day)
+}
+
+// openDay is the open business day: the one the caller holds, or the lock in share mode.
+func (s *Service) openDay(ctx context.Context, propertyID int64, held *civil.Date) (civil.Date, error) {
+	if held != nil {
+		return *held, nil
+	}
+	day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
+	if err != nil {
+		return civil.Date{}, err
+	}
+	return day.BusinessDate, nil
+}
+
+func (s *Service) voidBill(ctx context.Context, propertyID, id int64, in VoidInput, guarded bool, held *civil.Date) (Bill, error) {
 	p, err := s.need(ctx, propertyID, auth.PermPayablesPost)
 	if err != nil {
 		return Bill{}, err
@@ -329,7 +360,7 @@ func (s *Service) VoidBill(ctx context.Context, propertyID, id int64, in VoidInp
 		return Bill{}, err
 	}
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
-		day, err := s.days.RequireOpenBusinessDay(ctx, propertyID, db.ForShare, nil)
+		bd, err := s.openDay(ctx, propertyID, held)
 		if err != nil {
 			return err
 		}
@@ -355,6 +386,11 @@ func (s *Service) VoidBill(ctx context.Context, propertyID, id int64, in VoidInp
 		if b.Status != "POSTED" {
 			return apperr.Conflict("BILL_ALREADY_VOIDED", "the bill is voided already")
 		}
+		if guarded && s.guard != nil {
+			if err := s.guard.CheckVoid(ctx, p.TenantID, propertyID, id); err != nil {
+				return err
+			}
+		}
 		n, err := q.CountLiveAllocations(ctx, payablesdb.CountLiveAllocationsParams{TenantID: p.TenantID, PropertyID: propertyID, BillID: id})
 		if err != nil {
 			return err
@@ -370,7 +406,7 @@ func (s *Service) VoidBill(ctx context.Context, propertyID, id int64, in VoidInp
 			return apperr.Conflict("BILL_HAS_CREDIT_NOTES", "a bill with credit notes cannot be voided: void its credit notes first").WithContext("credit_notes", credits)
 		}
 		by := approval.UserID()
-		rj, err := po.Reverse(ctx, b.JournalID, day.BusinessDate, reason, by)
+		rj, err := po.Reverse(ctx, b.JournalID, bd, reason, by)
 		if err != nil {
 			return err
 		}
@@ -379,7 +415,7 @@ func (s *Service) VoidBill(ctx context.Context, propertyID, id int64, in VoidInp
 		}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "payables.bill_voided", "supplier_bill", id, auditlabel.SupplierBill(ctx, propertyID, id),
+		return s.audit.Write(ctx, entry(p, propertyID, bd, "payables.bill_voided", "supplier_bill", id, auditlabel.SupplierBill(ctx, propertyID, id),
 			map[string]any{"status": "POSTED"}, approval.AuditFields(map[string]any{"status": "VOIDED", "reason": reason, "bill_number": b.Number})))
 	})
 	if err != nil {
@@ -418,4 +454,17 @@ func vatOf(lines []BillLineInput) decimal.Decimal {
 		v = v.Add(l.VATAmount)
 	}
 	return v
+}
+
+// VATTreatment is how the input VAT of a bill dated on the given day is treated: CREDITABLE, EXPENSE or DEFERRED (the PKP status of the property on that date). The inventory reads it to know what a purchase cost.
+func (s *Service) VATTreatment(ctx context.Context, propertyID int64, date civil.Date) (string, error) {
+	p, err := auth.Require(ctx)
+	if err != nil {
+		return "", err
+	}
+	st, err := s.tax.SettingsOnDate(ctx, p.TenantID, propertyID, date)
+	if err != nil {
+		return "", err
+	}
+	return st.InputVATTreatment, nil
 }

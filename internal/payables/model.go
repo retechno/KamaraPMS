@@ -163,6 +163,15 @@ type BillFilter struct {
 	Limit      int
 }
 
+// BillOptions says what a caller that is not the payables screen may do. AllowInventory lets the lines of the bill be on the accounts that only the inventory posts to (the inventory accounts and goods
+// received not invoiced): ConfirmBill of the inventory is the only caller that sets it.
+type BillOptions struct {
+	AllowInventory bool
+	// Day is the open business day when the caller holds it already (it took the lock of level 10 before the locks of its own, 35-inventory.md 5.1): the bill is dated by it and the lock is not taken a second time,
+	// which the order of the locks would refuse after the stock (45).
+	Day *civil.Date
+}
+
 // VoidInput voids a bill or a payment with a reason and an approval.
 type VoidInput struct {
 	Reason   string             `json:"reason"`

@@ -70,6 +70,9 @@ func newFx(t *testing.T, method string, decimals int32) *fx {
 		accounts: map[string]int64{}, unit: map[string]int64{}, cat: map[string]int64{}, wh: map[string]int64{}, item: map[string]int64{}}
 	f.svc = inventory.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, e.Departments)
 	f.ledger = &inventory.Ledger{}
+	f.svc.SetPayables(e.Payables)
+	f.svc.SetApprover(e.IAM)
+	e.Payables.SetVoidGuard(f.svc)
 	rows, err := e.Pool.Query(context.Background(), `SELECT code, id FROM gl_accounts WHERE property_id = $1`, p.ID)
 	must(t, err)
 	for rows.Next() {

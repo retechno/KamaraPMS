@@ -4,7 +4,7 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Department, DepartmentSetupReport } from '@/api/types'
+import type { Department, DepartmentHeadCandidate, DepartmentSetupReport } from '@/api/types'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -32,7 +32,8 @@ const error = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const adding = ref(false)
-const editing = ref<{ id: number; name: string; sort_order: string } | null>(null)
+const editing = ref<{ id: number; name: string; sort_order: string; head: number; deputy: number } | null>(null)
+const candidates = ref<DepartmentHeadCandidate[]>([])
 const form = reactive({ code: '', name: '', parent_id: '', sort_order: '' })
 const setup = ref<DepartmentSetupReport | null>(null)
 
@@ -48,6 +49,10 @@ async function load(): Promise<void> {
     departments.value = data?.data ?? []
     const check = await api.GET('/api/v1/properties/{propertyId}/accounting/department-setup', { params: { path: { propertyId } } })
     setup.value = Array.isArray(check.data?.issues) ? check.data : null
+    if (can('accounting.manage')) {
+      const people = await api.GET('/api/v1/properties/{propertyId}/departments/head-candidates', { params: { path: { propertyId } } })
+      candidates.value = people.data?.data ?? []
+    }
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -105,7 +110,7 @@ function rowAction(d: Department, key: string): void {
 }
 
 function startEditing(d: Department): void {
-  editing.value = { id: d.id, name: d.name, sort_order: String(d.sort_order) }
+  editing.value = { id: d.id, name: d.name, sort_order: String(d.sort_order), head: d.head_user_id ?? 0, deputy: d.deputy_user_id ?? 0 }
   error.value = null
 }
 
@@ -115,7 +120,7 @@ async function saveEdit(): Promise<void> {
   if (propertyId === null || e === null) return
   const ok = await run(async () => {
     await api.PATCH('/api/v1/properties/{propertyId}/departments/{id}', {
-      params: { path: { propertyId, id: e.id } }, body: { name: e.name.trim(), sort_order: Number(e.sort_order) },
+      params: { path: { propertyId, id: e.id } }, body: { name: e.name.trim(), sort_order: Number(e.sort_order), head_user_id: e.head, deputy_user_id: e.head === 0 ? 0 : e.deputy },
     })
     notice.value = t('departments.saved')
   })
@@ -215,6 +220,7 @@ watch(() => pid.value, () => {
           <tr class="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th class="px-3 py-2">{{ t('departments.code') }}</th>
             <th class="px-3 py-2">{{ t('departments.name') }}</th>
+            <th class="px-3 py-2">{{ t('departments.head') }}</th>
             <th class="px-3 py-2 text-right">{{ t('departments.order') }}</th>
             <th class="px-3 py-2">{{ t('departments.state') }}</th>
             <th class="px-3 py-2" />
@@ -225,14 +231,26 @@ watch(() => pid.value, () => {
             <td class="px-3 py-2 tabular-nums" :class="d.level === 2 ? 'pl-8' : 'font-medium'">{{ d.code }}</td>
             <td class="px-3 py-2">
               <template v-if="editing?.id === d.id">
-                <form class="flex items-center gap-2" novalidate :data-testid="`edit-form-${d.code}`" @submit.prevent="saveEdit">
-                  <Input v-model="editing.name" name="edit_name" maxlength="100" class="h-8" :aria-label="t('departments.name')" />
+                <form class="flex flex-wrap items-center gap-2" novalidate :data-testid="`edit-form-${d.code}`" @submit.prevent="saveEdit">
+                  <Input v-model="editing.name" name="edit_name" maxlength="100" class="h-8 min-w-48 flex-1" :aria-label="t('departments.name')" />
                   <Input v-model="editing.sort_order" name="edit_order" inputmode="numeric" class="h-8 w-20" :aria-label="t('departments.order')" />
+                  <NativeSelect v-model.number="editing.head" name="edit_head" class="h-8 w-48 shrink-0" :aria-label="t('departments.head')" data-testid="edit-head">
+                    <option :value="0">{{ t('departments.noHead') }}</option>
+                    <option v-for="c in candidates" :key="c.id" :value="c.id">{{ c.full_name }}</option>
+                  </NativeSelect>
+                  <NativeSelect v-model.number="editing.deputy" name="edit_deputy" class="h-8 w-48 shrink-0" :disabled="editing.head === 0" :aria-label="t('departments.deputy')" data-testid="edit-deputy">
+                    <option :value="0">{{ t('departments.noDeputy') }}</option>
+                    <option v-for="c in candidates.filter((x) => x.id !== editing?.head)" :key="c.id" :value="c.id">{{ c.full_name }}</option>
+                  </NativeSelect>
                   <Button type="submit" size="sm" :disabled="busy || !editing.name.trim()" data-testid="save-edit">{{ t('common.save') }}</Button>
                   <Button type="button" size="sm" variant="outline" @click="editing = null">{{ t('common.cancel') }}</Button>
                 </form>
               </template>
               <span v-else :class="d.level === 2 ? 'pl-4' : ''">{{ d.name }}</span>
+            </td>
+            <td class="px-3 py-2 text-xs" :data-testid="`heads-${d.code}`">
+              <template v-if="d.head_name">{{ d.head_name }}<template v-if="d.deputy_name"> · {{ t('departments.deputyShort', { name: d.deputy_name }) }}</template></template>
+              <span v-else-if="d.level === 2" class="text-muted-foreground">{{ t('departments.headOfParent') }}</span><span v-else class="text-muted-foreground">—</span>
             </td>
             <td class="px-3 py-2 text-right tabular-nums">{{ d.sort_order }}</td>
             <td class="px-3 py-2">

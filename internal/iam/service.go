@@ -585,6 +585,15 @@ func (s *Service) UpdateUser(ctx context.Context, id int64, patch UserPatch) (Us
 				return apperr.Conflict("LAST_ADMIN", "the tenant must keep at least one active administrator")
 			}
 		}
+		if !active && row.IsActive {
+			led, err := q.CountDepartmentsLedBy(ctx, iamdb.CountDepartmentsLedByParams{TenantID: p.TenantID, UserID: &id})
+			if err != nil {
+				return err
+			}
+			if led > 0 {
+				return apperr.Conflict("USER_IS_DEPARTMENT_HEAD", "the user is the head or the deputy of a department: choose another one in Departments before the user is switched off").WithContext("departments", led)
+			}
+		}
 		updated, err := q.UpdateUser(ctx, iamdb.UpdateUserParams{TenantID: p.TenantID, ID: id, FullName: name,
 			IsActive: active, IsTenantAdmin: admin, ActorID: p.ActorID()})
 		if err != nil {

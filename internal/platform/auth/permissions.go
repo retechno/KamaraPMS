@@ -127,6 +127,17 @@ const (
 	PermInventoryView    Permission = "inventory.view"
 	PermInventoryManage  Permission = "inventory.manage"
 	PermInventoryOpening Permission = "inventory.opening"
+	// Purchasing (PR 2): the request, the order, the receipt, the bill drafts, the approvals of the chain and of a price variance.
+	PermInventoryRequest      Permission = "inventory.request"
+	PermInventoryPurchase     Permission = "inventory.purchase"
+	PermInventoryReceive      Permission = "inventory.receive"
+	PermInventoryBill         Permission = "inventory.bill"
+	PermInventoryApprove      Permission = "inventory.approve"
+	PermInventoryDeptApprove  Permission = "inventory.dept_approve"
+	PermInventoryCostControl  Permission = "inventory.cost_control"
+	PermInventoryFinalApprove Permission = "inventory.final_approve"
+	// The final approval of a requisition (SR) is a level of the chain; the requisition itself comes with PR 3, the permission is here so that the chain can be set up.
+	PermInventorySRFinalApprove Permission = "inventory.sr_final_approve"
 )
 
 // Catalogue is the complete, ordered list of permissions (the only valid codes).
@@ -241,6 +252,15 @@ var Catalogue = []PermissionInfo{
 	{PermInventoryView, "Inventory", "Read items, warehouses, stock, the stock card and the opening stock", "S5"},
 	{PermInventoryManage, "Inventory", "Set up the inventory: the costing method, units, categories with their accounts, items, warehouses and minimum levels", "S5"},
 	{PermInventoryOpening, "Inventory", "Post the opening stock of a warehouse", "S5"},
+	{PermInventoryRequest, "Inventory", "Write, submit and recall purchase requests", "S5"},
+	{PermInventoryPurchase, "Inventory", "Write, send, cancel and close purchase orders", "S5"},
+	{PermInventoryReceive, "Inventory", "Receive goods against an order or without one, reverse a receipt on its day and return goods to the supplier", "S5"},
+	{PermInventoryBill, "Inventory", "Confirm the draft bills of the receipts against the supplier's invoice and unmatch a bill (also needs the permission to post payables)", "S5"},
+	{PermInventoryApprove, "Inventory", "Approve a price difference on a supplier bill above the tolerance, as the second person", "S5"},
+	{PermInventoryDeptApprove, "Inventory", "Approve the first level of a request as the head or the deputy of its department", "S5"},
+	{PermInventoryCostControl, "Inventory", "Approve the level of a request that is given to cost control", "S5"},
+	{PermInventoryFinalApprove, "Inventory", "Approve the final level of a request (financial controller, general manager)", "S5"},
+	{PermInventorySRFinalApprove, "Inventory", "Approve the final level of a store requisition (store manager, financial controller)", "S5"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

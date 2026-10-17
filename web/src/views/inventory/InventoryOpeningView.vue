@@ -8,8 +8,8 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import MoneyInput from '@/components/app/MoneyInput.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import QuantityInput from '@/components/app/QuantityInput.vue'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
@@ -215,7 +215,7 @@ const lineError = (i: number, f: string): string | undefined => formError.value?
               </NativeSelect>
             </td>
             <td class="py-2 pr-2">
-              <Input v-model="l.qty" :name="`qty_${i}`" inputmode="decimal" class="w-28" :aria-label="t('inventory.openings.qty')" :aria-invalid="!!lineError(i, 'qty')" />
+              <QuantityInput v-model="l.qty" :name="`qty_${i}`" class="w-28" :aria-label="t('inventory.openings.qty')" :aria-invalid="!!lineError(i, 'qty')" />
               <p v-if="stockQty(l)" class="m-0 mt-1 text-xs text-muted-foreground">{{ t('inventory.openings.inStock', { qty: formatQty(stockQty(l)), unit: itemById(l.item_id)?.stock_unit_code ?? '' }) }}</p>
               <p v-if="lineError(i, 'qty')" class="m-0 mt-1 text-xs text-destructive">{{ lineError(i, 'qty') }}</p>
             </td>

@@ -2,7 +2,10 @@ package departments
 
 import (
 	"context"
+	"errors"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlabel"
@@ -72,7 +75,7 @@ func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string
 func toDepartment(r departmentsdb.ListDepartmentsRow) Department {
 	d := Department{
 		ID: r.ID, ParentID: r.ParentID, ParentCode: deref(r.ParentCode), Code: r.Code, Name: r.Name, SortOrder: int(r.SortOrder), Active: r.IsActive,
-		Level: 1, Children: int(r.ChildCount), InUse: r.InUse,
+		Level: 1, Children: int(r.ChildCount), InUse: r.InUse, HeadUserID: r.HeadUserID, HeadName: deref(r.HeadName), DeputyUserID: r.DeputyUserID, DeputyName: deref(r.DeputyName),
 	}
 	if r.ParentID != nil {
 		d.Level = 2
@@ -92,9 +95,10 @@ func (s *Service) list(ctx context.Context, tenantID, propertyID int64, id *int6
 	return out, nil
 }
 
-// List answers the departments, each department followed by its sub-departments (accounting.view, or pos.manage for the department of an outlet).
+// List answers the departments, each department followed by its sub-departments (accounting.view, or the permission of a screen that uses them: pos.manage for the department of an outlet, inventory.request for
+// the department of a purchase request, inventory.manage for the department of a warehouse).
 func (s *Service) List(ctx context.Context, propertyID int64, f Filter) ([]Department, error) {
-	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage)
+	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage, auth.PermInventoryRequest, auth.PermInventoryManage)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +107,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, f Filter) ([]Depar
 
 // Get answers one department (accounting.view).
 func (s *Service) Get(ctx context.Context, propertyID, id int64) (Department, error) {
-	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage)
+	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage, auth.PermInventoryRequest, auth.PermInventoryManage)
 	if err != nil {
 		return Department{}, err
 	}
@@ -263,13 +267,39 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 		}); err != nil {
 			return err
 		}
+		headChanged := false
+		if patch.HeadUserID != nil || patch.DeputyUserID != nil {
+			head, deputy := old.HeadUserID, old.DeputyUserID
+			if patch.HeadUserID != nil {
+				head = personOf(*patch.HeadUserID)
+			}
+			if patch.DeputyUserID != nil {
+				deputy = personOf(*patch.DeputyUserID)
+			}
+			if err := s.checkHeads(ctx, p.TenantID, propertyID, head, deputy); err != nil {
+				return err
+			}
+			if !samePerson(old.HeadUserID, head) || !samePerson(old.DeputyUserID, deputy) {
+				headChanged = true
+				if err := s.q(ctx).UpdateDepartmentHeads(ctx, departmentsdb.UpdateDepartmentHeadsParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, HeadUserID: head, DeputyUserID: deputy, ActorID: p.ActorID()}); err != nil {
+					return err
+				}
+			}
+		}
 		after, err := s.list(ctx, p.TenantID, propertyID, &id, nil)
 		if err != nil {
 			return err
 		}
 		out = after[0]
-		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.updated", id, after[0].Code,
-			map[string]any{"name": old.Name, "sort_order": old.SortOrder, "is_active": old.Active}, map[string]any{"name": out.Name, "sort_order": out.SortOrder, "is_active": out.Active}))
+		if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.updated", id, after[0].Code,
+			map[string]any{"name": old.Name, "sort_order": old.SortOrder, "is_active": old.Active}, map[string]any{"name": out.Name, "sort_order": out.SortOrder, "is_active": out.Active})); err != nil {
+			return err
+		}
+		if !headChanged {
+			return nil
+		}
+		return s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "department.head_changed", id, after[0].Code,
+			map[string]any{"head_user_id": old.HeadUserID, "deputy_user_id": old.DeputyUserID}, map[string]any{"head_user_id": out.HeadUserID, "deputy_user_id": out.DeputyUserID}))
 	})
 	return out, err
 }
@@ -317,4 +347,65 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 		TenantID: in.TenantID, PropertyID: &in.PropertyID, BusinessDate: &bd, UserID: in.ActorID,
 		Action: "department.seeded", EntityType: "property", EntityID: in.PropertyID, EntityLabel: auditlabel.Property(ctx, in.PropertyID), New: map[string]any{"departments": n, "data_language": in.DataLanguage},
 	})
+}
+
+// personOf is a user id of a patch: below 1 is nobody.
+func personOf(id int64) *int64 {
+	if id < 1 {
+		return nil
+	}
+	return &id
+}
+
+func samePerson(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// checkHeads refuses a head or a deputy that cannot lead the department (35-inventory.md 3.3): a user who is inactive or has no access to the property, a deputy without a head, the same person twice.
+func (s *Service) checkHeads(ctx context.Context, tenantID, propertyID int64, head, deputy *int64) error {
+	var f []apperr.FieldError
+	if deputy != nil && head == nil {
+		f = append(f, fieldErr("deputy_user_id", "DEPARTMENT_HEAD_NOT_ASSIGNED", "a deputy needs a head"))
+	}
+	if head != nil && deputy != nil && *head == *deputy {
+		f = append(f, fieldErr("deputy_user_id", "DEPARTMENT_HEAD_NOT_ASSIGNED", "the head and the deputy are two people"))
+	}
+	for field, id := range map[string]*int64{"head_user_id": head, "deputy_user_id": deputy} {
+		if id == nil {
+			continue
+		}
+		ok, err := s.q(ctx).UserMayLead(ctx, departmentsdb.UserMayLeadParams{TenantID: tenantID, PropertyID: propertyID, UserID: *id})
+		if err != nil && !isNoRows(err) {
+			return err
+		}
+		if err != nil || !ok {
+			f = append(f, fieldErr(field, "DEPARTMENT_HEAD_NOT_ASSIGNED", "an active user who has access to this property"))
+		}
+	}
+	if len(f) > 0 {
+		return apperr.Invalid("the department is invalid", f...)
+	}
+	return nil
+}
+
+func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+
+// HeadCandidates lists the people who can lead a department of the property (accounting.manage: the screen that sets the heads).
+func (s *Service) HeadCandidates(ctx context.Context, propertyID int64) ([]HeadCandidate, error) {
+	p, err := s.need(ctx, propertyID, auth.PermAccountingManage)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.q(ctx).ListHeadCandidates(ctx, departmentsdb.ListHeadCandidatesParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]HeadCandidate, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, HeadCandidate{ID: r.ID, FullName: r.FullName, Email: r.Email, IsTenantAdmin: r.IsTenantAdmin})
+	}
+	return out, nil
 }
