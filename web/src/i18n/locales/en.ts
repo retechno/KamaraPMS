@@ -678,7 +678,7 @@ export const en = {
   },
   nightAudit: {
     outletBillsBlock: '{n} outlet bill finding(s) stop the day: close or void the open bills.',
-    stockBlock: '{n} stock finding(s) stop the day: finish the count or fix the amenities plan.',
+    stockBlock: '{n} stock finding(s) stop the day.',
     stockOpen: 'Open',
     outletBillsOpen: 'Open the floor plan',
     openShiftsBlock: '{n} cashier shift(s) are still open: close them before the day closes.',

@@ -677,7 +677,7 @@ export const id: Messages = {
   },
   nightAudit: {
     outletBillsBlock: '{n} temuan bill outlet menahan penutupan hari: selesaikan atau void bill yang masih terbuka.',
-    stockBlock: '{n} temuan persediaan menahan penutupan hari: selesaikan opname atau perbaiki paket amenities.',
+    stockBlock: '{n} temuan persediaan menahan penutupan hari.',
     stockOpen: 'Buka',
     outletBillsOpen: 'Buka denah meja',
     openShiftsBlock: '{n} shift kasir masih terbuka: tutup dulu sebelum hari ditutup.',

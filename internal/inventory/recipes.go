@@ -248,7 +248,7 @@ func (s *Service) GetRecipe(ctx context.Context, propertyID, productID int64, ou
 	toLine := func(l inventorydb.ListRecipeLinesRow) RecipeLine {
 		sq := stockQtyOf(l.Quantity, l.StockNum, l.StockDen)
 		return RecipeLine{ID: l.ID, ItemID: l.ItemID, ItemCode: l.ItemCode, ItemName: l.ItemName, UnitID: l.UnitID, UnitCode: l.UnitCode, Quantity: l.Quantity, Note: l.Note,
-			StockUnitCode: l.StockUnitCode, StockQty: sq.Round(6), UnitCost: costs[l.ItemID], CostBasis: basis[l.ItemID], Cost: round(sq.Mul(costs[l.ItemID]))}
+			StockUnitCode: l.StockUnitCode, StockQty: sq.Round(6), UnitCost: round(costs[l.ItemID]), CostBasis: basis[l.ItemID], Cost: round(sq.Mul(costs[l.ItemID]))}
 	}
 	baseByItem := map[int64]RecipeLine{}
 	for _, l := range lines {
