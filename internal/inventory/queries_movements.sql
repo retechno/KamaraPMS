@@ -212,7 +212,7 @@ SELECT id FROM inv_issues WHERE tenant_id = @tenant_id AND property_id = @proper
 
 -- name: GetIssue :one
 SELECT i.*, w.code AS warehouse_code, w.name AS warehouse_name, d.code AS department_code, d.name AS department_name, u.full_name AS created_by_name,
-       rv.iss_number AS reverses_number, (SELECT x.iss_number FROM inv_issues x WHERE x.property_id = i.property_id AND x.reverses_issue_id = i.id) AS reversed_by_number,
+       rv.iss_number AS reverses_number, COALESCE((SELECT x.iss_number FROM inv_issues x WHERE x.property_id = i.property_id AND x.reverses_issue_id = i.id), '')::text AS reversed_by_number,
        (SELECT COALESCE(sum(l.value), 0) FROM inv_issue_lines l WHERE l.issue_id = i.id)::numeric(18,3) AS total_value,
        (SELECT count(*) FROM inv_issue_lines l WHERE l.issue_id = i.id AND l.status = 'HELD')::int AS held_lines
   FROM inv_issues i
@@ -550,7 +550,7 @@ SELECT a.id, a.code, a.name, a.account_type, a.is_active, a.is_postable, a.depar
 
 -- The department a warehouse stands for: its own, else its outlet's.
 -- name: WarehouseDepartment :one
-SELECT w.id, w.kind, w.outlet_id, COALESCE(w.department_id, o.department_id)::bigint AS department_id
+SELECT w.id, w.kind, w.outlet_id, COALESCE(w.department_id, o.department_id, 0)::bigint AS department_id
   FROM inv_warehouses w LEFT JOIN pos_outlets o ON o.property_id = w.property_id AND o.id = w.outlet_id
  WHERE w.tenant_id = @tenant_id AND w.property_id = @property_id AND w.id = @id;
 

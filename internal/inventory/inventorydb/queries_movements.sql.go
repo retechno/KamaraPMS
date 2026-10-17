@@ -423,7 +423,7 @@ func (q *Queries) GetCountByClientUUID(ctx context.Context, arg GetCountByClient
 
 const getIssue = `-- name: GetIssue :one
 SELECT i.id, i.tenant_id, i.property_id, i.iss_number, i.client_uuid, i.warehouse_id, i.purpose, i.origin, i.department_id, i.outlet_id, i.reason_code, i.covers, i.beneficiary, i.reverses_issue_id, i.status, i.business_date, i.source_date, i.note, i.reverse_reason, i.created_at, i.created_by, w.code AS warehouse_code, w.name AS warehouse_name, d.code AS department_code, d.name AS department_name, u.full_name AS created_by_name,
-       rv.iss_number AS reverses_number, (SELECT x.iss_number FROM inv_issues x WHERE x.property_id = i.property_id AND x.reverses_issue_id = i.id) AS reversed_by_number,
+       rv.iss_number AS reverses_number, COALESCE((SELECT x.iss_number FROM inv_issues x WHERE x.property_id = i.property_id AND x.reverses_issue_id = i.id), '')::text AS reversed_by_number,
        (SELECT COALESCE(sum(l.value), 0) FROM inv_issue_lines l WHERE l.issue_id = i.id)::numeric(18,3) AS total_value,
        (SELECT count(*) FROM inv_issue_lines l WHERE l.issue_id = i.id AND l.status = 'HELD')::int AS held_lines
   FROM inv_issues i
@@ -3665,7 +3665,7 @@ func (q *Queries) UpdateRequisitionLineEdit(ctx context.Context, arg UpdateRequi
 }
 
 const warehouseDepartment = `-- name: WarehouseDepartment :one
-SELECT w.id, w.kind, w.outlet_id, COALESCE(w.department_id, o.department_id)::bigint AS department_id
+SELECT w.id, w.kind, w.outlet_id, COALESCE(w.department_id, o.department_id, 0)::bigint AS department_id
   FROM inv_warehouses w LEFT JOIN pos_outlets o ON o.property_id = w.property_id AND o.id = w.outlet_id
  WHERE w.tenant_id = $1 AND w.property_id = $2 AND w.id = $3
 `

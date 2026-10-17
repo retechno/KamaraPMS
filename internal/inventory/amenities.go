@@ -826,7 +826,7 @@ type AmenityRun struct {
 	HeldByCount    *string              `json:"held_by_count"`
 	Types          []AmenityRunType     `json:"types"`
 	Lines          []AmenityRunLine     `json:"lines"`
-	Rooms_         []AmenityRunRoom     `json:"room_list"`
+	RoomList       []AmenityRunRoom     `json:"room_list"`
 	Short          []AmenityRunLine     `json:"short"`
 	Journal        []AmenityJournalLine `json:"journal"`
 }
@@ -866,7 +866,7 @@ func (s *Service) GetAmenityRun(ctx context.Context, propertyID int64, date civi
 	}
 	out := AmenityRun{AmenityRunBrief: AmenityRunBrief{BusinessDate: r.BusinessDate, Number: r.IssNumber, Rooms: int(r.Rooms), Guests: int(r.Guests), CompRooms: int(r.CompRooms), HouseUseRooms: int(r.HouseUseRooms),
 		TotalValue: r.TotalValue, Status: r.Status, PlanVersion: int(r.PlanVersion), HeldLines: int(held)}, IssueID: r.IssueID, CreatedAt: r.CreatedAt, ReversalNumber: r.ReversalNumber,
-		Types: []AmenityRunType{}, Lines: []AmenityRunLine{}, Rooms_: []AmenityRunRoom{}, Short: []AmenityRunLine{}, Journal: []AmenityJournalLine{}}
+		Types: []AmenityRunType{}, Lines: []AmenityRunLine{}, RoomList: []AmenityRunRoom{}, Short: []AmenityRunLine{}, Journal: []AmenityJournalLine{}}
 	out.Reversible = r.Status == IssuePosted && held == 0
 	if r.Rooms > 0 {
 		out.CostPerRoom = r.TotalValue.Div(decimal.NewFromInt32(r.Rooms)).Round(2)
@@ -877,7 +877,7 @@ func (s *Service) GetAmenityRun(ctx context.Context, propertyID int64, date civi
 	}
 	typeAt := map[string]int{}
 	for _, rm := range rooms {
-		out.Rooms_ = append(out.Rooms_, AmenityRunRoom{RoomID: rm.RoomID, RoomNumber: rm.RoomNumber, RoomTypeName: rm.RoomTypeName, Guests: int(rm.Guests), Kind: rm.OccupancyKind})
+		out.RoomList = append(out.RoomList, AmenityRunRoom{RoomID: rm.RoomID, RoomNumber: rm.RoomNumber, RoomTypeName: rm.RoomTypeName, Guests: int(rm.Guests), Kind: rm.OccupancyKind})
 		i, ok := typeAt[rm.RoomTypeName]
 		if !ok {
 			out.Types = append(out.Types, AmenityRunType{RoomTypeID: rm.RoomTypeID, RoomTypeName: rm.RoomTypeName})

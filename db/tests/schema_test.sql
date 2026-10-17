@@ -1932,7 +1932,10 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('inv_openings', 'CHILD', 'of inv_movements'), ('inv_opening_lines', 'CHILD', 'of inv_movements'), ('inv_balances', 'CHILD', 'of inv_movements'),
     ('inv_layers', 'CHILD', 'of inv_movements'), ('inv_layer_uses', 'CHILD', 'of inv_movements'), ('inv_shortfalls', 'CHILD', 'of inv_movements'),
     ('inv_receipts', 'CHILD', 'of inv_movements: a posted receipt has its movements'), ('inv_receipt_lines', 'CHILD', 'of inv_movements'),
-    ('inv_returns', 'CHILD', 'of inv_movements'), ('inv_return_lines', 'CHILD', 'of inv_movements'), ('inv_bill_matches', 'CHILD', 'of supplier_bills');
+    ('inv_returns', 'CHILD', 'of inv_movements'), ('inv_return_lines', 'CHILD', 'of inv_movements'), ('inv_bill_matches', 'CHILD', 'of supplier_bills'),
+    ('inv_transfer_lines', 'CHILD', 'of inv_movements: the pair of movements of a transfer'), ('inv_issue_lines', 'CHILD', 'of inv_movements: the movement of a line of an issue'),
+    ('inv_counts', 'CHILD', 'of inv_movements: the variance of an approved count'), ('inv_count_lines', 'CHILD', 'of inv_movements'),
+    ('inv_amenity_runs', 'CHILD', 'of inv_movements: the cost of the night'), ('inv_amenity_run_lines', 'CHILD', 'of inv_movements');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -1949,7 +1952,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('inv_supplier_items', 'CONFIG', 'the last price of a supplier for an item'), ('inv_approval_levels', 'CONFIG', 'the amount a level of a chain applies above'),
     ('inv_requests', 'PLAN', 'a purchase request: an estimate of what will be bought'), ('inv_request_lines', 'PLAN', 'the estimate of a line'),
     ('inv_approval_steps', 'PLAN', 'the snapshot of a level and the total the approver saw'), ('inv_approval_edits', 'PLAN', 'what an approver changed: a quantity or an estimated price'),
-    ('inv_purchase_orders', 'PLAN', 'an order to a supplier: money to be paid, not yet owed'), ('inv_po_lines', 'PLAN', 'the price and the quantity ordered');
+    ('inv_purchase_orders', 'PLAN', 'an order to a supplier: money to be paid, not yet owed'), ('inv_po_lines', 'PLAN', 'the price and the quantity ordered'),
+    ('inv_requisitions', 'PLAN', 'a store requisition: an estimate of the value asked'), ('inv_requisition_lines', 'PLAN', 'the quantity asked and sent'),
+    ('inv_amenity_plan_lines', 'CONFIG', 'the quantities of the amenities plan');
 DO $$
 DECLARE v_missing text;
 BEGIN

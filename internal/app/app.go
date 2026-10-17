@@ -151,6 +151,7 @@ func New(d Deps) *App {
 	inventorySvc.SetPayables(payablesSvc)                        // the bills of the purchasing are posted by the payables, on goods received not invoiced
 	inventorySvc.SetApprover(iamSvc)                             // and a price difference above the tolerance is approved with credentials
 	payablesSvc.SetVoidGuard(inventorySvc)                       // a bill matched to goods received is voided only by unmatching it
+	inventorySvc.SetOccupancy(nightOccupancy{fd: frontdeskSvc})  // the amenities of the close need the rooms that were slept in
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)

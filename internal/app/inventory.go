@@ -6,6 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/inventory"
 	"kamarapms/internal/nightaudit"
 	"kamarapms/internal/platform/auth"
@@ -51,4 +52,16 @@ func (c stockClose) NightAuditStock(ctx context.Context, tenantID, propertyID in
 
 func (c stockClose) CloseStock(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
 	return c.inv.CloseStock(ctx, p, propertyID, bd)
+}
+
+// nightOccupancy is what the amenities of the close ask of the front desk: the rooms slept in on a business date, by the rule of the room night (so that inventory does not import the front desk).
+type nightOccupancy struct{ fd *frontdesk.Service }
+
+func (n nightOccupancy) NightOccupancy(ctx context.Context, tenantID, propertyID int64, date civil.Date) ([]inventory.NightRoom, error) {
+	rooms, err := n.fd.NightOccupancy(ctx, tenantID, propertyID, date)
+	out := make([]inventory.NightRoom, 0, len(rooms))
+	for _, r := range rooms {
+		out = append(out, inventory.NightRoom{RoomID: r.RoomID, RoomNumber: r.RoomNumber, RoomTypeID: r.RoomTypeID, StayID: r.StayID, Guests: r.Guests, Kind: r.Kind})
+	}
+	return out, err
 }
