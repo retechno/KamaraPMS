@@ -11,7 +11,8 @@ import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate } from '@/utils/format'
 
-/** "Perlu saya setujui" (docs/architecture/35-inventory.md 5.8 item 10): the requests whose active level the signed-in user can decide now. */
+/** "Perlu saya setujui" (docs/architecture/35-inventory.md 5.8 item 10): the purchase requests and the store requisitions whose active level the signed-in user can decide now. */
+const pathOf = (r: InventoryInboxItem): string => (r.doc_type === 'SR' ? `/inventory/requisitions/${r.doc_id}` : `/inventory/requests/${r.doc_id}`)
 const property = usePropertyStore()
 const pid = computed(() => property.currentId)
 const items = ref<InventoryInboxItem[]>([])
@@ -37,7 +38,7 @@ async function load(): Promise<void> {
 watch(pid, load, { immediate: true })
 
 const columns = computed<Column<InventoryInboxItem>[]>(() => [
-  { key: 'request_number', label: t('inventory.inbox.number'), class: 'font-medium whitespace-nowrap' },
+  { key: 'number', label: t('inventory.inbox.number'), class: 'font-medium whitespace-nowrap' },
   { key: 'department_name', label: t('inventory.inbox.department') },
   { key: 'requester_name', label: t('inventory.inbox.requester') },
   { key: 'submitted_at', label: t('inventory.inbox.submitted') },
@@ -50,9 +51,9 @@ const columns = computed<Column<InventoryInboxItem>[]>(() => [
   <PageHeader :title="t('inventory.inbox.title')" :description="t('inventory.inbox.intro')" />
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
-  <DataTable v-else :columns="columns" :rows="items" row-key="request_id" :loading="!loaded" :empty-title="t('inventory.inbox.empty')" :empty-description="t('emptyState.inventoryInbox')"
-    :row-to="(r) => `/inventory/requests/${r.request_id}`" :row-test-id="(r) => `inbox-${r.request_number}`" data-testid="inbox-table">
-    <template #cell-request_number="{ row }"><RouterLink :to="`/inventory/requests/${row.request_id}`" class="text-primary hover:underline">{{ row.request_number }}</RouterLink></template>
+  <DataTable v-else :columns="columns" :rows="items" row-key="step_id" :loading="!loaded" :empty-title="t('inventory.inbox.empty')" :empty-description="t('emptyState.inventoryInbox')"
+    :row-to="pathOf" :row-test-id="(r) => `inbox-${r.number}`" data-testid="inbox-table">
+    <template #cell-number="{ row }"><RouterLink :to="pathOf(row)" class="text-primary hover:underline">{{ row.number }}</RouterLink> <span class="text-xs text-muted-foreground">{{ t(`inventory.inbox.doc.${row.doc_type}`) }}</span></template>
     <template #cell-department_name="{ row }">{{ row.department_name ?? '—' }}</template>
     <template #cell-submitted_at="{ row }">{{ row.submitted_at ? formatDate(row.submitted_at.slice(0, 10)) : '' }}</template>
     <template #cell-level="{ row }">{{ row.level_no }} · {{ row.step_name }}</template>

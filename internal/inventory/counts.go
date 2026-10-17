@@ -210,7 +210,7 @@ func (s *Service) count(ctx context.Context, p auth.Principal, propertyID, id in
 		cl := CountLine{ItemID: l.ItemID, ItemCode: l.ItemCode, ItemName: l.ItemName, CategoryName: l.CategoryName, StockUnitCode: l.StockUnitCode, CountedQty: l.CountedQty, CountedAt: l.CountedAt,
 			EnteredUnitID: l.EnteredUnitID, EnteredQty: l.EnteredQty, ExpectedQty: l.ExpectedQty, HeldBeforeQty: l.HeldBeforeQty, VarianceQty: l.VarianceQty, VarianceValue: l.VarianceValue, Note: l.Note}
 		book := l.BookQty
-		if !(cfg.CountBlind && r.Status == CountOpen) {
+		if !cfg.CountBlind || r.Status != CountOpen {
 			cl.BookQty = &book
 		}
 		if out.Preview && l.CountedQty != nil && l.CountedAt != nil {

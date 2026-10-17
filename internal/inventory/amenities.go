@@ -524,6 +524,9 @@ func (s *Service) amenityPreview(ctx context.Context, p auth.Principal, property
 	if out.Invalid, err = s.planRunnable(ctx, p, propertyID, plan, lines); err != nil {
 		return out, err
 	}
+	if out.Invalid == nil {
+		out.Invalid = []string{} // a list in the JSON, never null
+	}
 	if s.occupancy == nil || plan.WarehouseID == nil {
 		return out, nil
 	}
@@ -697,7 +700,7 @@ func (s *Service) RunAmenities(ctx context.Context, p auth.Principal, propertyID
 		total = total.Add(value)
 	}
 	runID, err := q.InsertAmenityRun(ctx, inventorydb.InsertAmenityRunParams{TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: bd, PlanID: plan.ID, IssueID: issueID, Rooms: int32(t.rooms), //nolint:gosec // G115: rooms
-		Guests: int32(t.guests), CompRooms: int32(t.comp), HouseUseRooms: int32(t.house), TotalValue: total, CreatedAt: now})
+		Guests: int32(t.guests), CompRooms: int32(t.comp), HouseUseRooms: int32(t.house), TotalValue: total, CreatedAt: now}) //nolint:gosec // G115: small counts
 	if err != nil {
 		return err
 	}

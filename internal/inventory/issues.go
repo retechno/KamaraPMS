@@ -363,7 +363,7 @@ func (s *Service) PostIssue(ctx context.Context, propertyID int64, in IssueInput
 		}
 		docLines := make([]docLine, 0, len(in.Lines))
 		for _, l := range in.Lines {
-			docLines = append(docLines, docLine{ItemID: l.ItemID, UnitID: l.UnitID, Qty: l.Qty, ExpenseAccountID: l.ExpenseAccountID})
+			docLines = append(docLines, docLine(l))
 		}
 		lines, err := s.checkDocLines(ctx, p, propertyID, "issue", docLines)
 		if err != nil {
@@ -408,7 +408,7 @@ func (s *Service) PostIssue(ctx context.Context, propertyID int64, in IssueInput
 		if err != nil {
 			return err
 		}
-		var outletID *int64 = wd.OutletID
+		outletID := wd.OutletID
 		id, err = q.InsertIssue(ctx, inventorydb.InsertIssueParams{TenantID: p.TenantID, PropertyID: propertyID, IssNumber: number, ClientUuid: key, WarehouseID: in.WarehouseID, Purpose: in.Purpose,
 			Origin: OriginManual, DepartmentID: dept, OutletID: outletID, ReasonCode: in.ReasonCode, Covers: coversOf(in.Covers), Beneficiary: optional(in.Beneficiary), BusinessDate: bd,
 			Note: optional(in.Note), CreatedAt: s.clock.Now(), ActorID: p.ActorID()})

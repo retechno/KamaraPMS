@@ -43,7 +43,7 @@ const mounted: VueWrapper[] = []
 
 function ok(path: string): unknown {
   if (path.endsWith('/approval-chains/{doc}')) return { data: prChain }
-  if (path.endsWith('/approvals/inbox')) return { data: { data: [{ request_id: 1, request_number: 'PR-000001', est_total: '1200000', department_id: 3, department_name: 'Kitchen', requester_id: 9, requester_name: 'Dewi', submitted_at: '2026-10-16T02:00:00Z', step_id: 11, level_no: 2, step_name: 'Cost control' }] } }
+  if (path.endsWith('/approvals/inbox')) return { data: { data: [{ doc_type: 'PR', doc_id: 1, number: 'PR-000001', request_id: 1, request_number: 'PR-000001', est_total: '1200000', department_id: 3, department_name: 'Kitchen', requester_id: 9, requester_name: 'Dewi', submitted_at: '2026-10-16T02:00:00Z', step_id: 11, level_no: 2, step_name: 'Cost control' }] } }
   if (path.endsWith('/inventory/requests')) return { data: { data: requests } }
   if (path.endsWith('/inventory/bill-drafts')) return { data: { data: drafts } }
   if (path.endsWith('/inventory/settings')) return { data: { direct_receipt_limit: '500000', po_requires_pr: true } }

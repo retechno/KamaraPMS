@@ -165,3 +165,54 @@ func TestPurchasingDemoRefersOnlyToWhatItCreates(t *testing.T) {
 		t.Errorf("the first delivery (%s) is part of the first line (%s)", demoReceivedQty, demoReceivedLines[0].qty)
 	}
 }
+
+// The demo documents of the movements name items and units that the seed makes, in a unit the item has, and the warehouses they take from hold the stock (the source may not go below zero).
+func TestMovementsDemoRefersOnlyToWhatItCreates(t *testing.T) {
+	byCode := map[string]invItem{}
+	for _, it := range invItems {
+		byCode[it.code] = it
+	}
+	holds := func(code, warehouse string) bool {
+		for _, o := range byCode[code].open {
+			if o.warehouse == warehouse {
+				return true
+			}
+		}
+		return false
+	}
+	for name, c := range map[string]struct {
+		lines     []demoLine
+		warehouse string
+	}{
+		"requisition": {demoSRLines, "UTAMA"}, "transfer": {demoTransferLines, "UTAMA"}, "issue": {demoIssueLines, "HK"}, "waste": {demoWasteLines, "DAPUR"}, "amenities": {demoAmenityLines, "HK"},
+	} {
+		for _, l := range c.lines {
+			it, ok := byCode[l.item]
+			if !ok {
+				t.Errorf("%s: the item %s is not made by the seed", name, l.item)
+				continue
+			}
+			has := l.unit == it.unit
+			for _, x := range it.extra {
+				has = has || x.UnitCode == l.unit
+			}
+			if !has {
+				t.Errorf("%s: %s has no unit %s", name, l.item, l.unit)
+			}
+			if !holds(l.item, c.warehouse) {
+				t.Errorf("%s: %s has no opening stock in %s", name, l.item, c.warehouse)
+			}
+		}
+	}
+	for _, code := range demoCountItems {
+		if !holds(code, "BAR") {
+			t.Errorf("count: %s has no opening stock in the bar", code)
+		}
+	}
+	// the amenities are per room in the stock unit and belong to the supplies
+	for _, l := range demoAmenityLines {
+		if byCode[l.item].category != "PERLENGKAPAN" || l.unit != byCode[l.item].unit {
+			t.Errorf("amenities: %s is not a supply in its stock unit", l.item)
+		}
+	}
+}

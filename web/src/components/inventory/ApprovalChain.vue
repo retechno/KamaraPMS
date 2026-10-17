@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Check, CircleDot, CornerUpLeft, Minus, X } from 'lucide-vue-next'
 import { computed } from 'vue'
-import type { InventoryApprovalEdit, InventoryApprovalStep, InventoryRequest } from '@/api/types'
+import type { InventoryApprovalEdit, InventoryApprovalStep } from '@/api/types'
 import { t } from '@/i18n'
 import { formatDate, formatMoney } from '@/utils/format'
 import { formatQty } from '@/utils/inventory'
@@ -10,7 +10,16 @@ import { formatQty } from '@/utils/inventory'
  * The approval chain of a purchase request (docs/architecture/35-inventory.md 5.8, mockup 19): the submission, then each level of the round with its state, who decided it and when, the note, who is waited for at
  * the active level, and why a conditional level applies or not. Earlier rounds (after a return) are listed under it; the edits of the approvers are recorded under the levels.
  */
-const props = defineProps<{ request: InventoryRequest }>()
+/** What the card reads of a document in its chain: a purchase request or a store requisition. */
+interface ChainDocument {
+  status: string
+  cycle: number
+  requester_name: string
+  submitted_at: string | null
+  steps: InventoryApprovalStep[]
+  edits: InventoryApprovalEdit[]
+}
+const props = defineProps<{ request: ChainDocument }>()
 
 const cycles = computed(() => [...new Set(props.request.steps.map((s) => s.cycle))].sort((a, b) => b - a))
 const stepsOf = (cycle: number): InventoryApprovalStep[] => props.request.steps.filter((s) => s.cycle === cycle).sort((a, b) => a.level_no - b.level_no)

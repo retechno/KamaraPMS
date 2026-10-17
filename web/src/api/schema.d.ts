@@ -9694,6 +9694,507 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/inventory/requisitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The store requisitions (SR), newest first, with the stage of each in its chain and whether it waits for the signed-in user */
+        get: operations["listInventoryRequisitions"];
+        put?: never;
+        /** Write a requisition as a draft (inventory.request); repeating the client_uuid returns the first */
+        post: operations["createInventoryRequisition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/requisitions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A requisition with its lines (what the store holds, what was sent), the steps of every round of its chain, the edits, the transfers that answered it and what the signed-in user can decide */
+        get: operations["getInventoryRequisition"];
+        /** Change a requisition while it is a draft or has been returned (the requester); the lines are replaced */
+        put: operations["updateInventoryRequisition"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/requisitions/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a requisition: the chain of the SR is copied into the steps of a new round and the first level is told (inventory.request, the requester); 409 APPROVAL_CHAIN_UNSATISFIABLE */
+        post: operations["submitInventoryRequisition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/requisitions/{id}/recall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pull a submitted requisition back to a draft (the requester) */
+        post: operations["recallInventoryRequisition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/requisitions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a draft or a returned requisition (the requester) */
+        post: operations["cancelInventoryRequisition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/requisitions/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve the active level of a requisition as the signed-in approver, with optional edits of the quantities; 409 APPROVAL_NOT_YOUR_TURN, APPROVAL_SAME_PERSON, 403 APPROVAL_OWN_DOCUMENT, APPROVAL_NOT_ELIGIBLE */
+        post: operations["approveInventoryRequisition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/requisitions/{id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a requisition back to its requester from the active level, with a note */
+        post: operations["returnInventoryRequisition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/requisitions/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The store says it cannot supply an approved requisition (inventory.move), with a reason; what was sent stays sent */
+        post: operations["rejectInventoryRequisition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The transfers between warehouses, newest first (free: only those that answer no requisition) */
+        get: operations["listInventoryTransfers"];
+        put?: never;
+        /** Move goods from one warehouse to another (inventory.move): one step, the value goes with the goods, no journal; 409 SR_NOT_APPROVED, TRANSFER_EXCEEDS_SR, NEGATIVE_STOCK_NOT_ALLOWED, WAREHOUSE_FROZEN */
+        post: operations["postInventoryTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/transfers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A transfer with its lines */
+        get: operations["getInventoryTransfer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/transfers/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo a transfer on the day it was posted (inventory.move), with a reason; 409 MOVEMENT_NOT_REVERSIBLE, TRANSFER_NOT_REVERSIBLE */
+        post: operations["reverseInventoryTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The issues to a department, wastes, staff meals, entertainments and the amenities documents of the closes, newest first, with the cost of the period by department */
+        get: operations["listInventoryIssues"];
+        put?: never;
+        /** Take goods out of a warehouse (inventory.move): to a department, as waste, as a staff meal or as entertainment; 409 NEGATIVE_STOCK_NOT_ALLOWED, WAREHOUSE_FROZEN, 422 DEPARTMENT_REQUIRED */
+        post: operations["postInventoryIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/issues/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** An issue with its lines */
+        get: operations["getInventoryIssue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/issues/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo an issue on the day it was posted (inventory.move): a reversing document puts the goods back at the cost they were taken */
+        post: operations["reverseInventoryIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The stock counts, newest first */
+        get: operations["listInventoryCounts"];
+        put?: never;
+        /** Start a count of a warehouse and freeze it for the manual movements (inventory.count); 409 COUNT_IN_PROGRESS */
+        post: operations["startInventoryCount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/counts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A count with its sheet; the book quantity is hidden on a blind sheet while the count is open, and a submitted count shows the preview of the variance */
+        get: operations["getInventoryCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/counts/{id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Record what the counters found (inventory.count); the server stamps counted_at; 409 COUNT_STATE_INVALID */
+        put: operations["enterInventoryCountLines"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/counts/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lock the sheet and send it for approval (inventory.count) */
+        post: operations["submitInventoryCount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/counts/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a submitted count (inventory.approve, the kind INV_COUNT, a decision of the signed-in approver): the held rows before each item are applied, each item is adjusted, the freeze ends */
+        post: operations["approveInventoryCount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/counts/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the freeze and post nothing (inventory.count); the held rows are applied */
+        post: operations["cancelInventoryCount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/amenities/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The plan of the automatic amenities in force and its history (inventory.view) */
+        get: operations["getInventoryAmenityPlan"];
+        /** Save the plan as a new version (inventory.manage); the next close that runs uses it; 422 AMENITY_PLAN_INVALID */
+        put: operations["saveInventoryAmenityPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/amenities/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Tonight's amenities as the close would make them now: rooms, guests, value and the items that will be short */
+        get: operations["previewInventoryAmenities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/amenities/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The amenities documents of the closes, newest first */
+        get: operations["listInventoryAmenityRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/amenities/runs/{date}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The business date, YYYY-MM-DD */
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        /** The amenities document of one night: the rooms, the rules and quantities, what the shelf held, the journal */
+        get: operations["getInventoryAmenityRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/amenities/runs/{date}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The business date, YYYY-MM-DD */
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse the whole document of a night with a reversing document dated the open day (inventory.manage); 409 AMENITY_RUN_NOT_REVERSIBLE, AMENITY_RUN_HELD */
+        post: operations["reverseInventoryAmenityRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -19131,6 +19632,9 @@ export interface components {
             request_id: number | null;
             request_number: string | null;
             /** Format: int64 */
+            requisition_id: number | null;
+            requisition_number: string | null;
+            /** Format: int64 */
             step_id: number | null;
             step_name: string | null;
             level_no: number;
@@ -19144,6 +19648,14 @@ export interface components {
             data: components["schemas"]["InventoryNotice"][];
         };
         InventoryInboxItem: {
+            /**
+             * @description A purchase request or a store requisition; the request fields are empty for a requisition.
+             * @enum {string}
+             */
+            doc_type: "PR" | "SR";
+            /** Format: int64 */
+            doc_id: number;
+            number: string;
             /** Format: int64 */
             request_id: number;
             request_number: string;
@@ -19238,6 +19750,577 @@ export interface components {
             shortfalls: components["schemas"]["InventoryShortfall"][];
             /** @description More than 1000 movements: narrow the period. */
             truncated: boolean;
+        };
+        InventoryRequisitionLine: {
+            line_no: number;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            /** Format: int64 */
+            unit_id: number;
+            unit_code: string;
+            qty: string;
+            qty_stock: string;
+            stock_unit_code: string;
+            qty_issued_stock: string;
+            qty_left_stock: string;
+            on_hand: string;
+            est_value: string;
+            note: string | null;
+        };
+        InventoryRequisition: {
+            /** Format: int64 */
+            id: number;
+            sr_number: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED" | "PARTIAL" | "FULFILLED" | "REJECTED" | "CANCELLED";
+            /** Format: int64 */
+            requester_id: number;
+            requester_name: string;
+            /** Format: int64 */
+            department_id: number | null;
+            department_name: string | null;
+            /** Format: int64 */
+            to_warehouse_id: number;
+            to_warehouse_name: string;
+            /** Format: int64 */
+            from_warehouse_id: number;
+            from_warehouse_name: string;
+            needed_on: components["schemas"]["Date"] | null;
+            est_total: string;
+            cycle: number;
+            /** Format: date-time */
+            submitted_at: string | null;
+            returned_note: string | null;
+            rejected_note: string | null;
+            note: string | null;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+            stage: components["schemas"]["InventoryStage"] | null;
+            lines: components["schemas"]["InventoryRequisitionLine"][];
+            steps: components["schemas"]["InventoryApprovalStep"][];
+            edits: components["schemas"]["InventoryApprovalEdit"][];
+            decision: components["schemas"]["InventoryDecision"] | null;
+            transfers: components["schemas"]["InventoryTransferBrief"][];
+        };
+        InventoryRequisitionBrief: {
+            /** Format: int64 */
+            id: number;
+            sr_number: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED" | "PARTIAL" | "FULFILLED" | "REJECTED" | "CANCELLED";
+            /** Format: int64 */
+            requester_id: number;
+            requester_name: string;
+            department_name: string | null;
+            to_warehouse_name: string;
+            from_warehouse_name: string;
+            needed_on: components["schemas"]["Date"] | null;
+            est_total: string;
+            line_count: number;
+            answered_by: string;
+            /** Format: date-time */
+            submitted_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            stage: components["schemas"]["InventoryStage"] | null;
+            waiting_for_me: boolean;
+        };
+        InventoryRequisitionLineInput: {
+            /** Format: int64 */
+            item_id: number;
+            /** Format: int64 */
+            unit_id?: number | null;
+            qty: string;
+            note?: string | null;
+        };
+        InventoryRequisitionInput: {
+            client_uuid?: string;
+            /** Format: int64 */
+            to_warehouse_id: number;
+            /** Format: int64 */
+            from_warehouse_id: number;
+            /** Format: int64 */
+            department_id?: number | null;
+            needed_on?: components["schemas"]["Date"] | null;
+            note?: string | null;
+            lines: components["schemas"]["InventoryRequisitionLineInput"][];
+            version?: number;
+        };
+        InventoryReason: {
+            reason: string;
+        };
+        InventoryTransferLine: {
+            line_no: number;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            stock_unit_code: string;
+            requisition_line_no: number | null;
+            qty_stock: string;
+            value: string;
+        };
+        InventoryTransfer: {
+            /** Format: int64 */
+            id: number;
+            trf_number: string;
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            /** Format: int64 */
+            requisition_id: number | null;
+            requisition_number: string | null;
+            /** Format: int64 */
+            from_warehouse_id: number;
+            from_warehouse_name: string;
+            /** Format: int64 */
+            to_warehouse_id: number;
+            to_warehouse_name: string;
+            business_date: components["schemas"]["Date"];
+            note: string | null;
+            reverse_reason: string | null;
+            created_by_name: string | null;
+            /** Format: date-time */
+            created_at: string;
+            total_value: string;
+            reversible: boolean;
+            lines: components["schemas"]["InventoryTransferLine"][];
+        };
+        InventoryTransferBrief: {
+            /** Format: int64 */
+            id: number;
+            trf_number: string;
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            /** Format: int64 */
+            requisition_id: number | null;
+            requisition_number: string | null;
+            from_warehouse_name: string;
+            to_warehouse_name: string;
+            business_date: components["schemas"]["Date"];
+            line_count: number;
+            total_value: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        InventoryTransferLineInput: {
+            /** Format: int64 */
+            item_id: number;
+            /** Format: int64 */
+            unit_id?: number | null;
+            qty: string;
+        };
+        InventoryTransferInput: {
+            client_uuid?: string;
+            /** Format: int64 */
+            requisition_id?: number | null;
+            /** Format: int64 */
+            from_warehouse_id?: number;
+            /** Format: int64 */
+            to_warehouse_id?: number;
+            note?: string | null;
+            lines: components["schemas"]["InventoryTransferLineInput"][];
+        };
+        InventoryIssueLine: {
+            line_no: number;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            stock_unit_code: string;
+            qty_stock: string;
+            value: string | null;
+            /** Format: int64 */
+            expense_account_id: number | null;
+            expense_account_code: string | null;
+            expense_account_name: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            department_name: string | null;
+            /** @enum {string} */
+            status: "APPLIED" | "HELD";
+            applied_on: components["schemas"]["Date"] | null;
+        };
+        InventoryIssue: {
+            /** Format: int64 */
+            id: number;
+            iss_number: string;
+            /** @enum {string} */
+            purpose: "USE" | "WASTE" | "STAFF_MEAL" | "ENTERTAINMENT";
+            /** @enum {string} */
+            origin: "MANUAL" | "AMENITY";
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_name: string;
+            /** Format: int64 */
+            department_id: number | null;
+            department_name: string | null;
+            reason_code: string | null;
+            covers: number | null;
+            beneficiary: string | null;
+            business_date: components["schemas"]["Date"];
+            source_date: components["schemas"]["Date"] | null;
+            note: string | null;
+            reverse_reason: string | null;
+            reverses_number: string | null;
+            reversed_by_number: string | null;
+            created_by_name: string | null;
+            /** Format: date-time */
+            created_at: string;
+            total_value: string;
+            held_lines: number;
+            reversible: boolean;
+            cost_per_cover: string | null;
+            lines: components["schemas"]["InventoryIssueLine"][];
+        };
+        InventoryIssueBrief: {
+            /** Format: int64 */
+            id: number;
+            iss_number: string;
+            /** @enum {string} */
+            purpose: "USE" | "WASTE" | "STAFF_MEAL" | "ENTERTAINMENT";
+            /** @enum {string} */
+            origin: "MANUAL" | "AMENITY";
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            warehouse_name: string;
+            department_name: string | null;
+            reason_code: string | null;
+            covers: number | null;
+            beneficiary: string | null;
+            business_date: components["schemas"]["Date"];
+            source_date: components["schemas"]["Date"] | null;
+            line_count: number;
+            held_lines: number;
+            total_value: string;
+            is_reversal: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        InventoryCostByDepartment: {
+            department_name: string;
+            purpose: string;
+            value: string;
+        };
+        InventoryIssueList: {
+            data: components["schemas"]["InventoryIssueBrief"][];
+            cost_by_department: components["schemas"]["InventoryCostByDepartment"][];
+        };
+        InventoryIssueLineInput: {
+            /** Format: int64 */
+            item_id: number;
+            /** Format: int64 */
+            unit_id?: number | null;
+            qty: string;
+            /** Format: int64 */
+            expense_account_id?: number | null;
+        };
+        InventoryIssueInput: {
+            client_uuid?: string;
+            /** Format: int64 */
+            warehouse_id: number;
+            /** @enum {string} */
+            purpose: "USE" | "WASTE" | "STAFF_MEAL" | "ENTERTAINMENT";
+            /** Format: int64 */
+            department_id?: number | null;
+            /** @enum {string|null} */
+            reason_code?: "SPOILAGE" | "EXPIRED" | "BREAKAGE" | "TASTING" | "OTHER" | null;
+            covers?: number | null;
+            beneficiary?: string | null;
+            note?: string | null;
+            lines: components["schemas"]["InventoryIssueLineInput"][];
+        };
+        InventoryHeldDocument: {
+            /** Format: int64 */
+            issue_id: number;
+            iss_number: string;
+            source_date: components["schemas"]["Date"] | null;
+            held_lines: number;
+        };
+        InventoryCountLine: {
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            category_name: string;
+            stock_unit_code: string;
+            book_qty: string | null;
+            counted_qty: string | null;
+            /** Format: date-time */
+            counted_at: string | null;
+            /** Format: int64 */
+            entered_unit_id: number | null;
+            entered_qty: string | null;
+            expected_qty: string | null;
+            held_before_qty: string | null;
+            variance_qty: string | null;
+            variance_value: string | null;
+            note: string | null;
+        };
+        InventoryCount: {
+            /** Format: int64 */
+            id: number;
+            cnt_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "SUBMITTED" | "APPROVED" | "CANCELLED";
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_name: string;
+            /** @enum {string} */
+            scope: "ALL" | "CATEGORY" | "LIST";
+            category_name: string | null;
+            /** Format: date-time */
+            started_at: string;
+            started_by_name: string | null;
+            business_date_started: components["schemas"]["Date"];
+            /** Format: date-time */
+            submitted_at: string | null;
+            submitted_by_name: string | null;
+            /** Format: date-time */
+            decided_at: string | null;
+            decided_by_name: string | null;
+            total_variance_value: string | null;
+            note: string | null;
+            version: number;
+            blind: boolean;
+            preview: boolean;
+            held_documents: components["schemas"]["InventoryHeldDocument"][];
+            lines: components["schemas"]["InventoryCountLine"][];
+        };
+        InventoryCountBrief: {
+            /** Format: int64 */
+            id: number;
+            cnt_number: string;
+            /** @enum {string} */
+            status: "OPEN" | "SUBMITTED" | "APPROVED" | "CANCELLED";
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_name: string;
+            /** @enum {string} */
+            scope: "ALL" | "CATEGORY" | "LIST";
+            /** Format: date-time */
+            started_at: string;
+            started_by_name: string | null;
+            /** Format: date-time */
+            submitted_at: string | null;
+            /** Format: date-time */
+            decided_at: string | null;
+            total_variance_value: string | null;
+            line_count: number;
+            counted_count: number;
+        };
+        InventoryCountInput: {
+            client_uuid?: string;
+            /** Format: int64 */
+            warehouse_id: number;
+            /** @enum {string} */
+            scope: "ALL" | "CATEGORY" | "LIST";
+            /** Format: int64 */
+            category_id?: number | null;
+            item_ids?: number[];
+            note?: string | null;
+        };
+        InventoryCountLineInput: {
+            /** Format: int64 */
+            item_id: number;
+            /** Format: int64 */
+            unit_id?: number | null;
+            qty?: string | null;
+            note?: string | null;
+        };
+        InventoryCountLinesInput: {
+            lines: components["schemas"]["InventoryCountLineInput"][];
+        };
+        InventoryAmenityPlanLine: {
+            line_no: number;
+            /** Format: int64 */
+            room_type_id: number | null;
+            room_type_name: string | null;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            /** Format: int64 */
+            unit_id: number;
+            unit_code: string;
+            stock_unit_code: string;
+            qty: string;
+            /** @enum {string} */
+            basis: "PER_ROOM" | "PER_GUEST";
+        };
+        InventoryRoomTypeCost: {
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_name: string;
+            guests: number;
+            cost: string;
+        };
+        InventoryPlanVersion: {
+            /** Format: int64 */
+            id: number;
+            version_no: number;
+            effective_from: components["schemas"]["Date"];
+            is_enabled: boolean;
+            line_count: number;
+            /** Format: date-time */
+            created_at: string;
+            created_by_name: string | null;
+        };
+        InventoryAmenityPlan: {
+            /** Format: int64 */
+            id: number;
+            version_no: number;
+            effective_from: components["schemas"]["Date"] | null;
+            is_enabled: boolean;
+            /** Format: int64 */
+            warehouse_id: number | null;
+            warehouse_name: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            department_name: string | null;
+            /** Format: int64 */
+            expense_account_id: number | null;
+            expense_account_code: string | null;
+            expense_account_name: string | null;
+            /** Format: date-time */
+            created_at: string | null;
+            lines: components["schemas"]["InventoryAmenityPlanLine"][];
+            cost_per_room: components["schemas"]["InventoryRoomTypeCost"][];
+            versions: components["schemas"]["InventoryPlanVersion"][];
+            applies_from_next_close: boolean;
+        };
+        InventoryAmenityPlanLineInput: {
+            /** Format: int64 */
+            room_type_id?: number | null;
+            /** Format: int64 */
+            item_id: number;
+            /** Format: int64 */
+            unit_id: number;
+            qty: string;
+            /** @enum {string} */
+            basis: "PER_ROOM" | "PER_GUEST";
+        };
+        InventoryAmenityPlanInput: {
+            is_enabled: boolean;
+            /** Format: int64 */
+            warehouse_id?: number | null;
+            /** Format: int64 */
+            department_id?: number | null;
+            /** Format: int64 */
+            expense_account_id?: number | null;
+            lines: components["schemas"]["InventoryAmenityPlanLineInput"][];
+        };
+        InventoryAmenityShort: {
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            stock_unit_code: string;
+            need: string;
+            on_hand: string;
+            short: string;
+        };
+        InventoryAmenityRunType: {
+            /** Format: int64 */
+            room_type_id: number;
+            room_type_name: string;
+            rooms: number;
+            guests: number;
+        };
+        InventoryAmenityRunLine: {
+            line_no: number;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            stock_unit_code: string;
+            /** Format: int64 */
+            room_type_id: number | null;
+            room_type_name: string | null;
+            /** @enum {string} */
+            basis: "PER_ROOM" | "PER_GUEST";
+            qty_per: string;
+            multiplier: number;
+            qty_stock: string;
+            stock_before: string | null;
+            value: string | null;
+            status: string;
+            applied_on: components["schemas"]["Date"] | null;
+        };
+        InventoryAmenityPreview: {
+            business_date: components["schemas"]["Date"];
+            enabled: boolean;
+            rooms: number;
+            guests: number;
+            comp_rooms: number;
+            house_use_rooms: number;
+            value: string;
+            short: components["schemas"]["InventoryAmenityShort"][];
+            held: components["schemas"]["InventoryHeldDocument"] | null;
+            held_by_count: string | null;
+            invalid: string[];
+            types: components["schemas"]["InventoryAmenityRunType"][];
+            lines: components["schemas"]["InventoryAmenityRunLine"][];
+        };
+        InventoryAmenityRunBrief: {
+            business_date: components["schemas"]["Date"];
+            iss_number: string;
+            rooms: number;
+            guests: number;
+            comp_rooms: number;
+            house_use_rooms: number;
+            total_value: string;
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            plan_version: number;
+            held_lines: number;
+        };
+        InventoryAmenityRunRoom: {
+            /** Format: int64 */
+            room_id: number;
+            room_number: string;
+            room_type_name: string;
+            guests: number;
+            /** @enum {string} */
+            occupancy_kind: "PAID" | "COMPLIMENTARY" | "HOUSE_USE";
+        };
+        InventoryAmenityJournalLine: {
+            debit_code: string;
+            debit_name: string;
+            credit_code: string;
+            credit_name: string;
+            department_name: string | null;
+            amount: string;
+        };
+        InventoryAmenityRun: {
+            business_date: components["schemas"]["Date"];
+            iss_number: string;
+            rooms: number;
+            guests: number;
+            comp_rooms: number;
+            house_use_rooms: number;
+            total_value: string;
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            plan_version: number;
+            held_lines: number;
+            /** Format: int64 */
+            issue_id: number;
+            /** Format: date-time */
+            created_at: string;
+            reversal_number: string | null;
+            cost_per_room: string;
+            reversible: boolean;
+            held_by_count: string | null;
+            types: components["schemas"]["InventoryAmenityRunType"][];
+            lines: components["schemas"]["InventoryAmenityRunLine"][];
+            room_list: components["schemas"]["InventoryAmenityRunRoom"][];
+            short: components["schemas"]["InventoryAmenityRunLine"][];
+            journal: components["schemas"]["InventoryAmenityJournalLine"][];
         };
     };
     responses: {
@@ -34787,6 +35870,902 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InventoryReturn"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryRequisitions: {
+        parameters: {
+            query?: {
+                status?: string;
+                /** @description Only the requisitions the signed-in user wrote */
+                mine?: boolean;
+                /** @description The number */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryRequisitionBrief"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryRequisitionInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryRequisitionInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    submitInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    recallInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    cancelInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    approveInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryApproveInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    returnInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryReturnRequestInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    rejectInventoryRequisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryReason"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryRequisition"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryTransfers: {
+        parameters: {
+            query?: {
+                status?: string;
+                requisition_id?: number;
+                /** @description Only transfers with no requisition */
+                free?: boolean;
+                /** @description The number */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryTransferBrief"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    postInventoryTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryTransferInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryTransfer"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryTransfer"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseInventoryTransfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryReason"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryTransfer"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryIssues: {
+        parameters: {
+            query?: {
+                purpose?: string;
+                /** @description MANUAL or AMENITY */
+                origin?: string;
+                warehouse_id?: number;
+                department_id?: number;
+                /** @description YYYY-MM-DD */
+                from?: string;
+                /** @description YYYY-MM-DD */
+                to?: string;
+                /** @description The number */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryIssueList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    postInventoryIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryIssueInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryIssue"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryIssue"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseInventoryIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryReason"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryIssue"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryCounts: {
+        parameters: {
+            query?: {
+                status?: string;
+                warehouse_id?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryCountBrief"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    startInventoryCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryCountInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    enterInventoryCountLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryCountLinesInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    submitInventoryCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    approveInventoryCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    cancelInventoryCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCount"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getInventoryAmenityPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryAmenityPlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    saveInventoryAmenityPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryAmenityPlanInput"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryAmenityPlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewInventoryAmenities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryAmenityPreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listInventoryAmenityRuns: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD */
+                from?: string;
+                /** @description YYYY-MM-DD */
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryAmenityRunBrief"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getInventoryAmenityRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The business date, YYYY-MM-DD */
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryAmenityRun"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseInventoryAmenityRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The business date, YYYY-MM-DD */
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryReason"];
+            };
+        };
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryAmenityRun"];
                 };
             };
             403: components["responses"]["Problem"];

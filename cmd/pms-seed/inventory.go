@@ -22,7 +22,9 @@ import (
 //
 //	purchasing  (PR 2) a supplier, a purchase request that waits at level 2 of the approval chain, and one that was ordered and received in part: see inventory_purchasing.go
 //
-// Requisitions, counts, recipes and the amenities come with the later PRs of the module.
+//	movements   (PR 3) a requisition that waits at level 2, a transfer, a use, a waste, the plan of the amenities and an open count: see inventory_movements.go
+//
+// Recipes and the POS come with the later PRs of the module.
 
 type invItem struct {
 	code, name, category, unit string
@@ -319,7 +321,11 @@ func seedInventory(e *env, dryRun bool) error {
 	}
 	if dryRun {
 		fmt.Println("purchasing: a supplier, a request that waits at level 2, and a request that was ordered and received in part (made once)")
+		fmt.Println("movements: a requisition at level 2, a transfer, a use of the housekeeping, a waste, the plan of the amenities and an open count of the bar (made once)")
 		return nil
 	}
-	return seedPurchasing(e, svc, deptSvc, unit, item, warehouse, deptID)
+	if err := seedPurchasing(e, svc, deptSvc, unit, item, warehouse, deptID); err != nil {
+		return err
+	}
+	return seedMovements(e, svc, deptSvc, unit, item, warehouse, deptID)
 }

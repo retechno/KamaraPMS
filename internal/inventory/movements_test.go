@@ -16,10 +16,10 @@ import (
 // mfx is the purchasing fixture with the people and the warehouses of the movements: a housekeeping warehouse, a store keeper, the head of the department, the final approver of a requisition.
 type mfx struct {
 	*cfx
-	hk               int64
-	mover, sr, head2 context.Context
-	cnt, apr         context.Context // who counts, and who approves a count
-	srID             int64
+	hk        int64
+	mover, sr context.Context
+	cnt, apr  context.Context // who counts, and who approves a count
+	srID      int64
 }
 
 func newMovements(t *testing.T, method string) *mfx {
@@ -571,8 +571,8 @@ func TestTheMovementsNeedTheirPermissionsAndTheTenantWall(t *testing.T) {
 	_, err = m.svc.ListTransfers(nobody, m.propID, inventory.TransferFilter{})
 	wantCode(t, err, "PERMISSION_DENIED")
 	// another tenant's property is not found
-	other := m.Env.Tenant(t, "OTH")
-	op := m.Env.PropertyIn(t, other.ID, "OTH1", "IDR", 0)
+	other := m.Tenant(t, "OTH")
+	op := m.PropertyIn(t, other.ID, "OTH1", "IDR", 0)
 	stranger := m.User(t, other.ID, op.ID, auth.PermInventoryMove)
 	_, err = m.svc.ListTransfers(stranger, m.propID, inventory.TransferFilter{})
 	wantCode(t, err, "PROPERTY_NOT_FOUND")

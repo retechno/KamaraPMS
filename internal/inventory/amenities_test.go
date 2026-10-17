@@ -50,8 +50,8 @@ func newAmenities(t *testing.T, method string) *afx {
 	a.svc.SetOccupancy(occupancy{fd: a.Front})
 	a.newItem(t, "TBRUSH", "Toothbrush", "SUP", "pcs")
 	a.newItem(t, "SLIPPER", "Hotel slippers", "SUP", "pcs")
-	std := a.Env.RoomType(t, a.admin, a.propID, "STD")
-	ste := a.Env.RoomType(t, a.admin, a.propID, "STE")
+	std := a.RoomType(t, a.admin, a.propID, "STD")
+	ste := a.RoomType(t, a.admin, a.propID, "STE")
 	a.std, a.ste = std.ID, ste.ID
 	for _, r := range []struct {
 		no   string
@@ -59,9 +59,9 @@ func newAmenities(t *testing.T, method string) *afx {
 		from string
 		to   string
 	}{{"101", a.std, a.night, "2026-10-02"}, {"102", a.std, a.night, "2026-10-02"}, {"103", a.std, a.night, "2026-10-02"}, {"201", a.ste, a.night, "2026-10-02"}} {
-		room := a.Env.Room(t, a.admin, a.propID, r.typ, r.no)
+		room := a.Room(t, a.admin, a.propID, r.typ, r.no)
 		a.rooms[r.no] = room.ID
-		a.stays[r.no] = a.Env.Stay(t, a.tenantID, a.propID, r.typ, room.ID, r.from, r.to)
+		a.stays[r.no] = a.Stay(t, a.tenantID, a.propID, r.typ, room.ID, r.from, r.to)
 	}
 	a.open(t, "HK", "SOAP", "pcs", "3", soapCost) // short by one tonight
 	a.open(t, "HK", "TBRUSH", "pcs", "20", brushCost)
@@ -118,6 +118,9 @@ func TestTheCloseMakesOneDocumentForTheRoomsThatWereSleptInAndAShortageDoesNotSt
 			must(t, err)
 			if pv.Rooms != 4 || pv.Guests != 8 || len(pv.Short) != 1 || pv.Short[0].ItemCode != "SOAP" || !pv.Short[0].Short.Equal(dec("1")) {
 				t.Fatalf("preview: rooms %d guests %d short %+v", pv.Rooms, pv.Guests, pv.Short)
+			}
+			if pv.Invalid == nil || pv.Types == nil || pv.Lines == nil {
+				t.Fatalf("the lists of the preview are lists in the JSON, never null: invalid %v types %v lines %v", pv.Invalid, pv.Types, pv.Lines)
 			}
 			day, _ := a.Tenancy.CurrentBusinessDay(a.admin, a.propID)
 			b, w, err := a.svc.NightAuditStock(a.admin, a.tenantID, a.propID, day.BusinessDate)
@@ -329,15 +332,15 @@ func TestTheRoomsOfTheNightAreTheRoomsThatWereSleptIn(t *testing.T) {
 	a := newAmenities(t, inventory.MethodAverage)
 	type spec struct{ no, from, to string }
 	for _, s := range []spec{{"301", "2026-09-29", a.night}, {"302", "2026-10-01", "2026-10-03"}, {"303", a.night, "2026-10-01"}, {"304", a.night, "2026-10-01"}, {"305", "2026-09-28", "2026-10-02"}} {
-		room := a.Env.Room(t, a.admin, a.propID, a.std, s.no)
+		room := a.Room(t, a.admin, a.propID, a.std, s.no)
 		a.rooms[s.no] = room.ID
-		a.stays[s.no] = a.Env.Stay(t, a.tenantID, a.propID, a.std, room.ID, s.from, s.to)
+		a.stays[s.no] = a.Stay(t, a.tenantID, a.propID, a.std, room.ID, s.from, s.to)
 	}
 	// 303 is cancelled; 304 is complimentary; 305 moved from 305 to 306 on the night: its first segment ended that day
 	must(t, a.Exec(t, `UPDATE stays SET status = 'CANCELLED' WHERE id = $1`, a.stays["303"]))
 	must(t, a.Exec(t, `INSERT INTO rate_plans (tenant_id, property_id, code, name, room_charge_code_id, occupancy_kind) SELECT tenant_id, property_id, 'FREE', 'Free', room_charge_code_id, 'COMPLIMENTARY' FROM rate_plans WHERE property_id = $1 AND code = 'BAR'`, a.propID))
 	must(t, a.Exec(t, `UPDATE reservation_rooms SET rate_plan_id = (SELECT id FROM rate_plans WHERE property_id = $1 AND code = 'FREE') WHERE id = (SELECT reservation_room_id FROM stays WHERE id = $2)`, a.propID, a.stays["304"]))
-	r306 := a.Env.Room(t, a.admin, a.propID, a.std, "306")
+	r306 := a.Room(t, a.admin, a.propID, a.std, "306")
 	must(t, a.Exec(t, `UPDATE stay_rooms SET check_out_at = now(), end_business_date = $1::date WHERE stay_id = $2`, a.night, a.stays["305"]))
 	must(t, a.Exec(t, `INSERT INTO stay_rooms (tenant_id, property_id, stay_id, room_id, check_in_at, start_business_date) VALUES ($1, $2, $3, $4, now(), $5::date)`, a.tenantID, a.propID, a.stays["305"], r306.ID, a.night))
 	rooms, err := a.Front.NightOccupancy(a.admin, a.tenantID, a.propID, roomstest.BD)
@@ -477,7 +480,7 @@ func TestAHeldLineOfAnItemCountedAfterTheCloseLowersWhatTheCountExpects(t *testi
 			if !l.HeldBeforeQty.Equal(dec("-4")) || !l.ExpectedQty.Equal(dec("-1")) || !l.VarianceQty.Equal(dec("3")) {
 				t.Fatalf("preview: held %s expected %s variance %s", l.HeldBeforeQty, l.ExpectedQty, l.VarianceQty)
 			}
-			c = a.approveCount(t, c)
+			a.approveCount(t, c)
 			// the line is applied first (3 on the shelf, 1 at the estimate: -1), then the count finds 2: a gain of 3 that closes the shortfall; the balance is the quantity counted, at cost
 			a.wantBal(t, a.pair("HK", "SOAP"), "2", "5920")
 			if n := a.Count(t, `SELECT count(*) FROM inv_shortfalls WHERE warehouse_id = $1 AND status = 'CLOSED_BY_COUNT'`, a.hk); n != 1 {
