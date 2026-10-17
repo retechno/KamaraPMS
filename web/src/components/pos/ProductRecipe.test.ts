@@ -51,7 +51,7 @@ async function setup(component: unknown, permissions: string[], get: (path: stri
   PUT = vi.fn().mockResolvedValue({ data: {} })
   POST = vi.fn().mockResolvedValue({ data: {} })
   await router.push('/')
-  const w = mount(component as never, { attachTo: document.body, props, global: { plugins: [pinia, router] } })
+  const w = mount(component as never, { attachTo: document.body, props: props as never, global: { plugins: [pinia, router] } })
   mounted.push(w)
   await flushPromises()
   await flushPromises()
