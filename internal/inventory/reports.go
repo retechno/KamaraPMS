@@ -189,6 +189,51 @@ type FbPart struct {
 	Above   bool             `json:"above_target"`
 	// MtdPct is the percentage of the month so far, up to this day.
 	MtdPct *decimal.Decimal `json:"mtd_pct"`
+	// NoRecipeDays counts the days (of this part) with revenue but no cost from recipes: they have no percentage and are left out of Pct and MtdPct.
+	NoRecipeDays int `json:"no_recipe_days"`
+	// NoRecipeData is true when there is revenue and not one day of it has a cost from recipes: Pct is then empty.
+	NoRecipeData bool `json:"no_recipe_data"`
+}
+
+// fbCells fills the revenue, the cost and the percentage of the rows of the given classes. The rows are summed per day and class: a day with revenue and no cost of sales (the goods sold have no recipe) has no percentage and does not count in it.
+func fbCells(rows []FbDayRow, classes ...string) FbPart {
+	type cell struct{ rev, cost decimal.Decimal }
+	cells := map[string]*cell{}
+	days := map[civil.Date]bool{}
+	var out FbPart
+	for _, r := range rows {
+		ok := false
+		for _, c := range classes {
+			ok = ok || r.Class == c
+		}
+		if !ok {
+			continue
+		}
+		k := r.Date.String() + r.Class
+		c := cells[k]
+		if c == nil {
+			c = &cell{}
+			cells[k] = c
+		}
+		c.rev, c.cost = c.rev.Add(r.Revenue), c.cost.Add(r.SaleCost)
+		out.Revenue, out.Cost = out.Revenue.Add(r.Revenue), out.Cost.Add(r.SaleCost)
+	}
+	dataRev := decimal.Zero
+	for k, c := range cells {
+		switch {
+		case c.cost.IsPositive():
+			dataRev = dataRev.Add(c.rev)
+		case c.rev.IsPositive():
+			d, err := civil.ParseDate(k[:10])
+			if err == nil {
+				days[d] = true
+			}
+		}
+	}
+	out.NoRecipeDays = len(days)
+	out.Pct = pct(out.Cost, dataRev)
+	out.NoRecipeData = out.Revenue.IsPositive() && out.Pct == nil
+	return out
 }
 
 // DailyCostDay is one day of the report, and, with the zero date, the figures of a whole period.
@@ -244,13 +289,8 @@ func summarizeDays(in dayInput, tg targets) DailyCostDay {
 		out.Departments[key] = out.Departments[key].Add(c.Amount)
 	}
 	for _, class := range []string{"FOOD", "BEVERAGE"} {
-		part := FbPart{}
-		for _, r := range in.fb {
-			if r.Class == class {
-				part.Revenue, part.Cost = part.Revenue.Add(r.Revenue), part.Cost.Add(r.SaleCost)
-			}
-		}
-		part.Pct, part.Target = pct(part.Cost, part.Revenue), tg.weighted(in.fb, class)
+		part := fbCells(in.fb, class)
+		part.Target = tg.weighted(in.fb, class)
 		part.Above = part.Pct != nil && part.Target != nil && part.Pct.GreaterThan(*part.Target)
 		if class == "FOOD" {
 			out.Food = part
@@ -258,8 +298,7 @@ func summarizeDays(in dayInput, tg targets) DailyCostDay {
 			out.Beverage = part
 		}
 	}
-	out.Fb = FbPart{Revenue: out.Food.Revenue.Add(out.Beverage.Revenue), Cost: out.Food.Cost.Add(out.Beverage.Cost)}
-	out.Fb.Pct = pct(out.Fb.Cost, out.Fb.Revenue)
+	out.Fb = fbCells(in.fb, "FOOD", "BEVERAGE")
 	if in.rooms > 0 {
 		v := out.Kinds[CostAmenity].Div(decimal.NewFromInt(int64(in.rooms))).Round(2)
 		out.CostPerRoom = &v
@@ -437,7 +476,9 @@ func (s *Service) glCheck(ctx context.Context, tenantID, propertyID int64, from,
 
 // ReconColumn is one column of the reconciliation (12.1): the figures of food, of beverage, or of both.
 type ReconColumn struct {
-	Opening          decimal.Decimal  `json:"opening"`
+	Opening decimal.Decimal `json:"opening"`
+	// OpeningPosted is the opening stock (OPN) posted inside the period: it adds to the stock like a purchase but is not one.
+	OpeningPosted    decimal.Decimal  `json:"opening_posted"`
 	Purchases        decimal.Decimal  `json:"purchases"`
 	TransferIn       decimal.Decimal  `json:"transfer_in"`
 	TransferOut      decimal.Decimal  `json:"transfer_out"`
@@ -472,14 +513,14 @@ type Reconciliation struct {
 }
 
 func addCols(a, b ReconColumn) ReconColumn {
-	return ReconColumn{Opening: a.Opening.Add(b.Opening), Purchases: a.Purchases.Add(b.Purchases), TransferIn: a.TransferIn.Add(b.TransferIn), TransferOut: a.TransferOut.Add(b.TransferOut),
+	return ReconColumn{Opening: a.Opening.Add(b.Opening), OpeningPosted: a.OpeningPosted.Add(b.OpeningPosted), Purchases: a.Purchases.Add(b.Purchases), TransferIn: a.TransferIn.Add(b.TransferIn), TransferOut: a.TransferOut.Add(b.TransferOut),
 		Closing: a.Closing.Add(b.Closing), StaffMeal: a.StaffMeal.Add(b.StaffMeal), Entertainment: a.Entertainment.Add(b.Entertainment), Revenue: a.Revenue.Add(b.Revenue),
 		Theory: a.Theory.Add(b.Theory), Waste: a.Waste.Add(b.Waste), CountVariance: a.CountVariance.Add(b.CountVariance), NoRecipeEstimate: a.NoRecipeEstimate.Add(b.NoRecipeEstimate)}
 }
 
 // finish computes the lines that follow from the others.
 func (c *ReconColumn) finish() {
-	c.GoodsUsed = c.Opening.Add(c.Purchases).Add(c.TransferIn).Sub(c.TransferOut).Sub(c.Closing)
+	c.GoodsUsed = c.Opening.Add(c.OpeningPosted).Add(c.Purchases).Add(c.TransferIn).Sub(c.TransferOut).Sub(c.Closing)
 	c.NetCost = c.GoodsUsed.Sub(c.StaffMeal).Sub(c.Entertainment)
 	c.ActualPct, c.TheoryPct = pct(c.NetCost, c.Revenue), pct(c.Theory, c.Revenue)
 	c.Difference = c.NetCost.Sub(c.Theory)
@@ -516,7 +557,9 @@ func (s *Service) FbReconciliation(ctx context.Context, propertyID int64, from, 
 	for _, r := range flows {
 		item, cost := cols[r.ItemClass], cols[r.CostClass]
 		switch r.Kind {
-		case "OPENING", "RECEIPT", "RECEIPT_REVERSAL", "SUPPLIER_RETURN", "COST_ADJUST":
+		case "OPENING":
+			item.OpeningPosted = item.OpeningPosted.Add(r.ValueDelta)
+		case "RECEIPT", "RECEIPT_REVERSAL", "SUPPLIER_RETURN", "COST_ADJUST":
 			item.Purchases = item.Purchases.Add(r.ValueDelta)
 		case "STAFF_MEAL":
 			item.StaffMeal = item.StaffMeal.Sub(r.ValueDelta)
@@ -625,6 +668,9 @@ type OutletCostRow struct {
 	StaffMeal     decimal.Decimal  `json:"staff_meal"`
 	Entertainment decimal.Decimal  `json:"entertainment"`
 	TargetPct     *decimal.Decimal `json:"target_pct"`
+	// NoRecipeDays counts the days with revenue and no cost from recipes: they are left out of the percentages. NoRecipeData is true when no day has one.
+	NoRecipeDays int  `json:"no_recipe_days"`
+	NoRecipeData bool `json:"no_recipe_data"`
 }
 
 // OutletCostReport is the report of 12.4.
@@ -659,6 +705,7 @@ func (s *Service) OutletCost(ctx context.Context, propertyID int64, from, to *ci
 		byID[o.ID] = o
 	}
 	rows := map[fbKey]*OutletCostRow{}
+	dataRev := map[fbKey]decimal.Decimal{} // the revenue of the days that have a cost from recipes: the percentages are over these days only
 	for _, r := range fig.Fb {
 		id, has := idOrZero(r.OutletID)
 		k := fbKey{outlet: id, hasOut: has, class: r.Class}
@@ -668,6 +715,12 @@ func (s *Service) OutletCost(ctx context.Context, propertyID int64, from, to *ci
 			rows[k] = x
 		}
 		x.Revenue = x.Revenue.Add(r.Revenue)
+		switch {
+		case r.SaleCost.IsPositive():
+			dataRev[k] = dataRev[k].Add(r.Revenue)
+		case r.Revenue.IsPositive():
+			x.NoRecipeDays++
+		}
 		x.NoRecipeRevenue = x.NoRecipeRevenue.Add(r.NoRecipeRevenue)
 		x.Theory = x.Theory.Add(r.SaleCost)
 		x.Waste = x.Waste.Add(r.WasteCost)
@@ -722,7 +775,7 @@ func (s *Service) OutletCost(ctx context.Context, propertyID int64, from, to *ci
 	}
 	tg := targets{list: tl}
 	out := OutletCostReport{From: f, To: t, Rows: []OutletCostRow{}}
-	for _, r := range rows {
+	for k, r := range rows {
 		if r.OutletID != nil {
 			o := byID[*r.OutletID]
 			r.OutletCode, r.OutletName = o.Code, o.Name
@@ -736,7 +789,8 @@ func (s *Service) OutletCost(ctx context.Context, propertyID int64, from, to *ci
 		}
 		r.Actual = r.Theory.Add(r.CountVariance)
 		r.Difference = r.Actual.Sub(r.Theory)
-		r.TheoryPct, r.ActualPct = pct(r.Theory, r.Revenue), pct(r.Actual, r.Revenue)
+		r.TheoryPct, r.ActualPct = pct(r.Theory, dataRev[k]), pct(r.Actual, dataRev[k])
+		r.NoRecipeData = r.Revenue.IsPositive() && r.TheoryPct == nil
 		r.TargetPct = tg.of(r.OutletID, r.Class)
 		out.Rows = append(out.Rows, *r)
 	}

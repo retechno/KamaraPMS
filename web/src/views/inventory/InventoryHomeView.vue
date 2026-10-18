@@ -40,9 +40,14 @@ watch(pid, load, { immediate: true })
 const pct = (v: string | null | undefined): string => (v === null || v === undefined ? '–' : formatPercent(v))
 const tone = (p: InventoryFbPart | undefined): 'default' | 'success' | 'danger' => (!p?.pct || !p.target_pct ? 'default' : Number(p.pct) > Number(p.target_pct) ? 'danger' : 'success')
 const hint = (p: InventoryFbPart | undefined): string => {
-  if (!p?.pct || !p.target_pct) return t('inventory.reports.noTarget')
-  const diff = Number(p.pct) - Number(p.target_pct)
-  return t(diff > 0 ? 'inventory.reports.pointsAbove' : 'inventory.reports.pointsBelow', { target: formatPercent(p.target_pct), points: Math.abs(diff).toFixed(1) })
+  let text: string
+  if (p?.no_recipe_data) text = t('inventory.reports.noRecipe')
+  else if (!p?.pct || !p.target_pct) text = t('inventory.reports.noTarget')
+  else {
+    const diff = Number(p.pct) - Number(p.target_pct)
+    text = t(diff > 0 ? 'inventory.reports.pointsAbove' : 'inventory.reports.pointsBelow', { target: formatPercent(p.target_pct), points: Math.abs(diff).toFixed(1) })
+  }
+  return p && p.no_recipe_days > 0 ? `${text} · ${t('inventory.reports.noRecipeDays', { n: p.no_recipe_days })}` : text
 }
 
 interface Entry { id: string; to: string }

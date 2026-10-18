@@ -16,6 +16,8 @@ export interface CostPoint {
   /** The text of the tooltip. */
   title: string
   above: boolean
+  /** True for a day with revenue and no cost from recipes: no point and no line, only a cross on the axis and a word in the legend. */
+  noData?: boolean
 }
 const props = withDefaults(defineProps<{ points: CostPoint[]; target?: number | null; seriesLabel: string; testPrefix?: string }>(), { target: null, testPrefix: 'cost' })
 
@@ -56,6 +58,7 @@ const tip = computed(() => {
   const p = props.points[i]
   return p ? { text: p.title, left: `${(x(i) / W) * 100}%`, top: `${((p.value === null ? PAD.top : y(p.value)) / H) * 100}%` } : null
 })
+const hasNoData = computed(() => props.points.some((p) => p.noData))
 const labelEvery = computed(() => Math.max(1, Math.ceil(props.points.length / 10)))
 const summary = computed(() => t('inventory.reports.chartSummary', { series: props.seriesLabel, n: props.points.length }))
 </script>
@@ -80,6 +83,7 @@ const summary = computed(() => t('inventory.reports.chartSummary', { series: pro
             <rect v-if="p.above" :x="x(i) - 4.5" :y="y(p.value) - 4.5" width="9" height="9" class="text-destructive" fill="currentColor" stroke="white" stroke-width="1.5" :data-testid="`${testPrefix}-above`" />
             <circle v-else :cx="x(i)" :cy="y(p.value)" r="3.5" class="text-primary" fill="currentColor" />
           </template>
+          <path v-else-if="p.noData" :d="`M${x(i) - 4},${y(0) - 8} l8,8 m0,-8 l-8,8`" class="text-muted-foreground" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" :data-testid="`${testPrefix}-nodata`" />
           <!-- a wide invisible strip catches the pointer and the keyboard for each day -->
           <rect :x="x(i) - innerW / Math.max(points.length, 1) / 2" :y="PAD.top" :width="innerW / Math.max(points.length, 1)" :height="innerH" fill="transparent" tabindex="0" :aria-label="p.title"
             :data-testid="`${testPrefix}-hit`" @mouseenter="active = i" @focus="active = i" @blur="active = null" />
@@ -90,6 +94,7 @@ const summary = computed(() => t('inventory.reports.chartSummary', { series: pro
     <figcaption class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" :data-testid="`${testPrefix}-legend`">
       <span class="inline-flex items-center gap-1.5"><svg width="22" height="8" aria-hidden="true"><line x1="0" y1="4" x2="22" y2="4" class="text-primary" stroke="currentColor" stroke-width="2" /></svg>{{ seriesLabel }}</span>
       <span v-if="target !== null" class="inline-flex items-center gap-1.5"><svg width="22" height="8" aria-hidden="true"><line x1="0" y1="4" x2="22" y2="4" class="text-warning-text" stroke="currentColor" stroke-width="2" stroke-dasharray="6 4" /></svg>{{ t('inventory.reports.targetLine', { target }) }}</span>
+      <span v-if="hasNoData" class="inline-flex items-center gap-1.5" :data-testid="`${testPrefix}-nodata-legend`"><svg width="10" height="10" aria-hidden="true"><path d="M1,1 l8,8 m0,-8 l-8,8" class="text-muted-foreground" stroke="currentColor" stroke-width="2" fill="none" /></svg>{{ t('inventory.reports.noRecipeLegend') }}</span>
       <span class="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" class="text-destructive" fill="currentColor" stroke="white" /></svg>{{ t('inventory.reports.aboveTarget') }}</span>
     </figcaption>
   </figure>

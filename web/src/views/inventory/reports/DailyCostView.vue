@@ -43,17 +43,23 @@ const tabs: { id: View; label: string }[] = [
 
 const mtd = computed(() => r.data.value?.mtd ?? null)
 const targetTone = (p: InventoryFbPart | undefined): 'default' | 'success' | 'danger' => (!p?.pct || !p.target_pct ? 'default' : Number(p.pct) > Number(p.target_pct) ? 'danger' : 'success')
+const note = (p: InventoryFbPart | undefined): string => (p && p.no_recipe_days > 0 ? t('inventory.reports.noRecipeDays', { n: p.no_recipe_days }) : '')
 const gap = (p: InventoryFbPart | undefined): string => {
-  if (!p?.pct || !p.target_pct) return t('inventory.reports.noTarget')
-  const diff = Number(p.pct) - Number(p.target_pct)
-  return t(diff > 0 ? 'inventory.reports.pointsAbove' : 'inventory.reports.pointsBelow', { target: formatPercent(p.target_pct), points: Math.abs(diff).toFixed(1) })
+  let text: string
+  if (p?.no_recipe_data) text = t('inventory.reports.noRecipe')
+  else if (!p?.pct || !p.target_pct) text = t('inventory.reports.noTarget')
+  else {
+    const diff = Number(p.pct) - Number(p.target_pct)
+    text = t(diff > 0 ? 'inventory.reports.pointsAbove' : 'inventory.reports.pointsBelow', { target: formatPercent(p.target_pct), points: Math.abs(diff).toFixed(1) })
+  }
+  return [text, note(p)].filter(Boolean).join(' · ')
 }
 
 const points = computed<CostPoint[]>(() => rows.value.map((d) => {
   const p = chartClass.value === 'FOOD' ? d.food : d.beverage
   return {
-    key: d.date, label: String(Number(d.date.slice(8))), value: p.pct === null ? null : Number(p.pct), above: p.above_target,
-    title: `${formatDate(d.date)}: ${pct(p.pct)}${p.target_pct ? ` · ${t('inventory.reports.target')} ${formatPercent(p.target_pct)}` : ''}${p.above_target ? ` · ${t('inventory.reports.aboveTarget')}` : ''}`,
+    key: d.date, label: String(Number(d.date.slice(8))), value: p.pct === null ? null : Number(p.pct), above: p.above_target, noData: p.no_recipe_data,
+    title: `${formatDate(d.date)}: ${pct(p.pct)}${p.no_recipe_data ? ` (${t('inventory.reports.noRecipe')})` : ''}${p.target_pct ? ` · ${t('inventory.reports.target')} ${formatPercent(p.target_pct)}` : ''}${p.above_target ? ` · ${t('inventory.reports.aboveTarget')}` : ''}`,
   }
 }))
 const chartTarget = computed(() => {
@@ -74,7 +80,7 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
     <ReportPeriodBar v-model:from="r.period.from" v-model:to="r.period.to" :busy="r.busy.value" @show="r.load" @csv="r.csv()" />
 
     <div v-if="mtd" class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="daily-kpi">
-      <KpiCard :label="t('inventory.reports.daily.kpiFb')" :value="pct(mtd.fb.pct)" :hint="t('inventory.reports.daily.kpiMtd', { from: formatDate(r.data.value?.mtd_from ?? '') })" data-testid="kpi-fb" />
+      <KpiCard :label="t('inventory.reports.daily.kpiFb')" :value="pct(mtd.fb.pct)" :hint="[t('inventory.reports.daily.kpiMtd', { from: formatDate(r.data.value?.mtd_from ?? '') }), note(mtd.fb)].filter(Boolean).join(' · ')" data-testid="kpi-fb" />
       <KpiCard :label="t('inventory.reports.daily.kpiFood')" :value="pct(mtd.food.pct)" :tone="targetTone(mtd.food)" :hint="gap(mtd.food)" data-testid="kpi-food" />
       <KpiCard :label="t('inventory.reports.daily.kpiBeverage')" :value="pct(mtd.beverage.pct)" :tone="targetTone(mtd.beverage)" :hint="gap(mtd.beverage)" data-testid="kpi-beverage" />
       <KpiCard :label="t('inventory.reports.daily.kpiTotal')" :value="formatMoney(mtd.total)" :hint="t('inventory.reports.daily.kpiCostRoom', { amount: mtd.amenity_cost_per_room ? formatMoney(mtd.amenity_cost_per_room) : '–' })" data-testid="kpi-total" />
@@ -103,7 +109,7 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
           <tr v-for="d in rows" :key="d.date" class="border-t border-border" :data-testid="`daily-${d.date}`">
             <td class="py-2 pr-2">{{ dayLabel(d) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(fbCost(d)) }}</td>
-            <td class="py-2 pr-2 text-right">{{ pct(d.fb.pct) }}</td>
+            <td class="py-2 pr-2 text-right">{{ pct(d.fb.pct) }}<span v-if="d.fb.no_recipe_days > 0" class="block text-xs font-normal text-muted-foreground" :data-testid="`norecipe-${d.date}`">{{ t('inventory.reports.noRecipe') }}</span></td>
             <td class="py-2 pr-2 text-right">{{ money(kind(d, 'WASTE')) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(sum(d, 'STAFF_MEAL', 'ENTERTAINMENT')) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(kind(d, 'AMENITY')) }}</td>
@@ -117,7 +123,7 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
           </tr>
           <tr v-for="s in summaryRows" :key="s.id" class="border-t-2 border-border bg-muted/40 font-semibold" :data-testid="`daily-${s.id}`">
             <td class="py-2 pr-2">{{ s.label }}</td>
-            <td class="py-2 pr-2 text-right">{{ money(fbCost(s.d)) }}</td><td class="py-2 pr-2 text-right">{{ pct(s.d.fb.pct) }}</td>
+            <td class="py-2 pr-2 text-right">{{ money(fbCost(s.d)) }}</td><td class="py-2 pr-2 text-right">{{ pct(s.d.fb.pct) }}<span v-if="s.d.fb.no_recipe_days > 0" class="block text-xs font-normal text-muted-foreground" :data-testid="`norecipe-${s.id}`">{{ note(s.d.fb) }}</span></td>
             <td class="py-2 pr-2 text-right">{{ money(kind(s.d, 'WASTE')) }}</td><td class="py-2 pr-2 text-right">{{ money(sum(s.d, 'STAFF_MEAL', 'ENTERTAINMENT')) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(kind(s.d, 'AMENITY')) }}</td><td class="py-2 pr-2 text-right">{{ s.d.occupied_rooms || '–' }}</td><td class="py-2 pr-2 text-right">{{ s.d.amenity_cost_per_room ? formatMoney(s.d.amenity_cost_per_room) : '–' }}</td>
             <td class="py-2 pr-2 text-right">{{ money(kind(s.d, 'ENGINEERING')) }}</td><td class="py-2 pr-2 text-right">{{ money(kind(s.d, 'OTHER_USE')) }}</td>
@@ -153,7 +159,7 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
                 <td class="py-2 pr-2 text-right">{{ money(part(d, c).revenue) }}</td>
                 <td class="py-2 pr-2 text-right">{{ money(part(d, c).cost) }}</td>
                 <td class="py-2 pr-2 text-right" :class="part(d, c).above_target ? 'font-semibold text-destructive' : ''">
-                  <span v-if="part(d, c).above_target" :title="t('inventory.reports.aboveTarget')" :data-testid="`above-${c}-${d.date}`">▲ </span>{{ pct(part(d, c).pct) }}
+                  <span v-if="part(d, c).above_target" :title="t('inventory.reports.aboveTarget')" :data-testid="`above-${c}-${d.date}`">▲ </span>{{ pct(part(d, c).pct) }}<span v-if="part(d, c).no_recipe_data" class="block text-xs font-normal text-muted-foreground" :data-testid="`norecipe-${c}-${d.date}`">{{ t('inventory.reports.noRecipe') }}</span>
                 </td>
                 <td class="py-2 pr-2 text-right text-muted-foreground">{{ pct(part(d, c).target_pct) }}</td>
               </template>

@@ -62,7 +62,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-const part = (revenue: string, cost: string, pct: string | null, target: string | null, above = false, mtd: string | null = pct) => ({ revenue, cost, pct, target_pct: target, above_target: above, mtd_pct: mtd })
+const part = (revenue: string, cost: string, pct: string | null, target: string | null, above = false, mtd: string | null = pct) => ({ revenue, cost, pct, target_pct: target, above_target: above, mtd_pct: mtd, no_recipe_days: 0, no_recipe_data: false })
 const day = (date: string, over: Record<string, unknown> = {}) => ({
   date, live: false, kinds: { SALE_COST_FOOD: '300000', SALE_COST_BEVERAGE: '50000', WASTE: '20000', STAFF_MEAL: '10000', ENTERTAINMENT: '5000', AMENITY: '40000', ENGINEERING: '0', OTHER_USE: '15000', COUNT_VARIANCE: '0', PRICE_VARIANCE: '-2000' },
   total: '438000', food: part('1000000', '300000', '30', '32'), beverage: part('250000', '50000', '20', '22'), fb: part('1250000', '350000', '28', null), occupied_rooms: 20, amenity_cost_per_room: '2000',
@@ -99,6 +99,20 @@ describe('the chart of the cost percentage', () => {
     expect(document.body.querySelector('polyline')!.getAttribute('stroke-width')).toBe('2')
   })
 
+  it('draws a day without recipe data as a cross on the axis, with no point and no line, and says so in the legend', async () => {
+    const withGap = [
+      { key: 'a', label: '1', value: 30, title: '1 Sep: 30%', above: false },
+      { key: 'b', label: '2', value: null, title: '2 Sep: - (no recipe data)', above: false, noData: true },
+      { key: 'c', label: '3', value: 31, title: '3 Sep: 31%', above: false },
+    ]
+    const w = mount(CostLineChart, { attachTo: document.body, props: { points: withGap, target: 32, seriesLabel: 'Food cost %' } })
+    mounted.push(w)
+    expect(all('[data-testid=cost-nodata]')).toBe(1)
+    expect(all('[data-testid=cost-line]')).toBe(2)
+    expect(all('circle')).toBe(2)
+    expect(body('[data-testid=cost-nodata-legend]').text()).toContain('Day without recipe data')
+  })
+
   it('shows the figures of a day in a tooltip on hover and on focus', async () => {
     const w = mount(CostLineChart, { attachTo: document.body, props: { points, target: 32, seriesLabel: 'Food cost %' } })
     mounted.push(w)
@@ -132,6 +146,23 @@ describe('the daily cost', () => {
     expect(body('[data-testid=kpi-food]').text()).toContain('2.0 points below')
   })
 
+  it('shows a day with revenue and no cost from recipes as a dash with a note, not as 0%, and counts the days left out of the month to date', async () => {
+    const gap = { ...part('1385000', '0', null, '32'), no_recipe_days: 1, no_recipe_data: true }
+    const data = dailyCost()
+    data.days[1] = day('2026-09-29', { food: gap, fb: { ...part('1635000', '50000', '20', null), no_recipe_days: 1 } })
+    data.mtd = day('2026-09-30', { total: '9000000', food: { ...part('9000000', '2700000', '30', '32'), no_recipe_days: 1 } })
+    await setup(DailyCostView, ['inventory.view'], (path) => (path.endsWith('/daily-cost') ? { data } : { data: {} }))
+    expect(body('[data-testid=daily-2026-09-29]').text()).toContain('no recipe data')
+    expect(body('[data-testid=kpi-food]').text()).toContain('1 day(s) without recipe data not counted')
+    await click('[data-testid=tab-FB]')
+    const row = body('[data-testid=fb-2026-09-29]').text()
+    expect(row).toContain('1,385,000')
+    expect(row).toContain('no recipe data')
+    expect(row).toContain('1,385,000––no recipe data') // the cost and the percentage are dashes, not 0%
+    expect(has('[data-testid=cost-nodata]')).toBe(true)
+    expect(has('[data-testid=cost-nodata-legend]')).toBe(true)
+  })
+
   it('has three views over the same rows: all costs, food and beverage only with the chart and the days above the target, and by department', async () => {
     await setup(DailyCostView, ['inventory.view'], api)
     expect(has('[data-testid=daily-all]')).toBe(true)
@@ -163,7 +194,7 @@ describe('the daily cost', () => {
 
 describe('the other reports', () => {
   const column = (over: Record<string, unknown> = {}) => ({
-    opening: '1000000', purchases: '500000', transfer_in: '20000', transfer_out: '10000', closing: '1100000', goods_used: '410000', staff_meal: '10000', entertainment: '0', net_cost: '400000', revenue: '1250000',
+    opening: '1000000', opening_posted: '0', purchases: '500000', transfer_in: '20000', transfer_out: '10000', closing: '1100000', goods_used: '410000', staff_meal: '10000', entertainment: '0', net_cost: '400000', revenue: '1250000',
     actual_pct: '32', theory: '350000', theory_pct: '28', difference: '50000', difference_points: '4', waste: '20000', count_variance: '30000', no_recipe_estimate: '10000', other_outflows: '0', target_pct: '30', ...over,
   })
   const gl = (status: string, diff = '0') => ({ status, gl_through: '2026-09-29', lines: [{ key: 'INV_COGS_FOOD', stock: '350000', gl: '350000', difference: '0' }, { key: 'INV_WASTE', stock: '20000', gl: String(20000 - Number(diff)), difference: diff }], stock_total: '370000', gl_total: '370000', difference: diff })
@@ -177,6 +208,12 @@ describe('the other reports', () => {
     expect(body('[data-testid=recon-difference-food]').text()).toContain('+4%')
     expect(body('[data-testid=gl-status]').text()).toContain('Match')
     expect(body('[data-testid=gl-INV_WASTE]').text()).toContain('Waste')
+  })
+
+  it('puts the opening stock posted in the period on its own line, under the opening stock', async () => {
+    await setup(ReconciliationView, ['inventory.view'], () => ({ data: { from: '2026-09-01', to: '2026-09-30', food: column({ opening_posted: '10507131' }), beverage: column(), total: column({ opening_posted: '10507131' }), closing_basis: 'BOOK', gl: gl('MATCH') } }))
+    expect(body('[data-testid=recon-openingPosted-food]').text()).toBe('10,507,131')
+    expect(body('[data-testid=recon-openingPosted]').text()).toContain('Opening stock posted in the period (OPN)')
   })
 
   it('shows a difference with the general ledger in words and in a symbol, and a period that is not journaled yet as such', async () => {

@@ -272,3 +272,97 @@ func TestTheOutletCostIsTheTheoryPlusTheCountVarianceOfItsWarehouse(t *testing.T
 		t.Fatalf("theory and actual agree without a count: %v %v", row.TheoryPct, row.ActualPct)
 	}
 }
+
+func TestADayWithRevenueAndNoCostFromRecipesHasNoPercentageAndTheMonthToDateLeavesItOut(t *testing.T) {
+	s := newStockFx(t, inventory.MethodAverage)
+	d1 := func() civil.Date { // the steak has no recipe: revenue, but no cost of sales
+		s.sell(t, s.steak, "2")
+		s.work(t)
+		return s.closeStock(t)
+	}()
+	d2 := s.nextDay(t)
+	s.sell(t, s.nasgor, "3")
+	s.work(t)
+	s.closeStock(t)
+
+	r := s.costOf(t, d1, d2)
+	one, two := r.Days[0], r.Days[1]
+	if !one.Food.Revenue.IsPositive() || !one.Food.Cost.IsZero() {
+		t.Fatalf("the first day has revenue and no cost: %+v", one.Food)
+	}
+	if one.Food.Pct != nil || !one.Food.NoRecipeData || one.Food.NoRecipeDays != 1 || one.Food.MtdPct != nil {
+		t.Fatalf("the first day has no percentage and says why: %+v", one.Food)
+	}
+	if one.Fb.Pct != nil || !one.Fb.NoRecipeData {
+		t.Fatalf("nor has the day of food and beverage: %+v", one.Fb)
+	}
+	if two.Food.Pct == nil || two.Food.NoRecipeData || two.Food.NoRecipeDays != 0 {
+		t.Fatalf("the second day has its percentage: %+v", two.Food)
+	}
+	// the month to date is over the days that have a cost: the second day alone, and it counts the day it left out (when both days are in one month)
+	if d1.Month() == d2.Month() {
+		want := two.Food.Pct
+		if two.Food.MtdPct == nil || !two.Food.MtdPct.Equal(*want) {
+			t.Fatalf("the percentage to date is the second day's: %v, want %v", two.Food.MtdPct, want)
+		}
+		if r.Mtd.Food.NoRecipeDays != 1 || r.Mtd.Food.Pct == nil || !r.Mtd.Food.Pct.Equal(*want) || r.Period.Food.NoRecipeDays != 1 {
+			t.Fatalf("the month to date: %+v", r.Mtd.Food)
+		}
+		// the revenue of the day without a recipe still shows in the revenue of the month
+		if !r.Mtd.Food.Revenue.Equal(one.Food.Revenue.Add(two.Food.Revenue)) {
+			t.Fatalf("the revenue: %s", r.Mtd.Food.Revenue)
+		}
+	}
+	// the outlet report leaves the day out of its percentages too
+	o, err := s.inv.OutletCost(s.admin, s.propID, &d1, &d1)
+	must(t, err)
+	for _, row := range o.Rows {
+		if row.Class == "FOOD" && row.Revenue.IsPositive() && (row.TheoryPct != nil || row.ActualPct != nil || !row.NoRecipeData || row.NoRecipeDays != 1) {
+			t.Fatalf("the outlet row of the day without a recipe: %+v", row)
+		}
+	}
+	o, err = s.inv.OutletCost(s.admin, s.propID, &d1, &d2)
+	must(t, err)
+	for _, row := range o.Rows {
+		if row.Class == "FOOD" && row.Revenue.IsPositive() {
+			if row.TheoryPct == nil || row.NoRecipeData || row.NoRecipeDays != 1 {
+				t.Fatalf("the outlet row of both days: %+v", row)
+			}
+			// the percentage is the cost over the revenue of the second day only
+			if !row.TheoryPct.Equal(*pctOf(row.Theory, two.Food.Revenue)) {
+				t.Fatalf("the theory %% of the outlet: %v", row.TheoryPct)
+			}
+		}
+	}
+}
+
+func pctOf(num, den decimal.Decimal) *decimal.Decimal {
+	v := num.Mul(decimal.NewFromInt(100)).Div(den).Round(2)
+	return &v
+}
+
+func TestTheOpeningStockPostedInThePeriodIsItsOwnLineAndNotAPurchase(t *testing.T) {
+	bothMethods(t, func(t *testing.T, method string) {
+		s := newStockFx(t, method)
+		d := s.closeAfterSelling(t, "3")
+		rep, err := s.inv.FbReconciliation(s.admin, s.propID, &d, &d)
+		must(t, err)
+		var opening decimal.Decimal
+		must(t, s.Pool.QueryRow(context.Background(), `SELECT COALESCE(sum(value_delta), 0) FROM inv_movements WHERE property_id = $1 AND business_date BETWEEN $2 AND $2 AND kind = 'OPENING'`, s.propID, d).Scan(&opening))
+		if !opening.IsPositive() {
+			t.Skip("the opening stock of this fixture is not posted on the day of the sales")
+		}
+		posted := rep.Food.OpeningPosted.Add(rep.Beverage.OpeningPosted)
+		if !posted.Equal(opening) || !rep.Total.OpeningPosted.Equal(opening) {
+			t.Fatalf("opening posted %s / %s, movements %s", posted, rep.Total.OpeningPosted, opening)
+		}
+		if !rep.Total.Purchases.IsZero() {
+			t.Fatalf("no receipt was posted: purchases %s", rep.Total.Purchases)
+		}
+		// the goods used still balance: opening + opening posted + purchases + transfers - closing
+		c := rep.Total
+		if !c.GoodsUsed.Equal(c.Opening.Add(c.OpeningPosted).Add(c.Purchases).Add(c.TransferIn).Sub(c.TransferOut).Sub(c.Closing)) {
+			t.Fatalf("goods used %s", c.GoodsUsed)
+		}
+	})
+}

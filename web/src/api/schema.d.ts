@@ -20789,7 +20789,12 @@ export interface components {
             pct: string | null;
             target_pct: string | null;
             above_target: boolean;
+            /** @description Over the days that have a cost from recipes only. */
             mtd_pct: string | null;
+            /** @description Days with revenue and no cost from recipes: they have no percentage and are left out of pct and mtd_pct. */
+            no_recipe_days: number;
+            /** @description True when there is revenue and no day of it has a cost from recipes: pct is then null. */
+            no_recipe_data: boolean;
         };
         InventoryDailyCostDay: {
             date: components["schemas"]["Date"];
@@ -20844,6 +20849,8 @@ export interface components {
         };
         InventoryReconColumn: {
             opening: string;
+            /** @description The opening stock (OPN) posted inside the period; it is not a purchase. */
+            opening_posted: string;
             purchases: string;
             transfer_in: string;
             transfer_out: string;
@@ -20883,6 +20890,10 @@ export interface components {
             /** @enum {string} */
             class: "FOOD" | "BEVERAGE";
             revenue: string;
+            /** @description Days with revenue and no cost from recipes: left out of the percentages. */
+            no_recipe_days: number;
+            /** @description True when there is revenue and no day of it has a cost from recipes: the percentages are null. */
+            no_recipe_data: boolean;
             no_recipe_revenue: string;
             theory: string;
             theory_pct: string | null;

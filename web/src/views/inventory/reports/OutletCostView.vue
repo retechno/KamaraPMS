@@ -51,7 +51,7 @@ const over = (actual: string | null, target: string | null): boolean => actual !
             <td class="py-2 pr-2">{{ t(`inventory.reports.class.${x.class}`) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(x.revenue) }}<span v-if="Number(x.no_recipe_revenue)" class="block text-xs text-muted-foreground">{{ t('inventory.reports.outlet.noRecipe', { amount: formatMoney(x.no_recipe_revenue) }) }}</span></td>
             <td class="py-2 pr-2 text-right">{{ money(x.theory) }}</td>
-            <td class="py-2 pr-2 text-right">{{ pct(x.theory_pct) }}</td>
+            <td class="py-2 pr-2 text-right">{{ pct(x.theory_pct) }}<span v-if="x.no_recipe_days > 0" class="block text-xs font-normal text-muted-foreground" :data-testid="`norecipe-${x.outlet_code || 'none'}-${x.class}`">{{ x.no_recipe_data ? t('inventory.reports.noRecipe') : t('inventory.reports.noRecipeDays', { n: x.no_recipe_days }) }}</span></td>
             <td class="py-2 pr-2 text-right">{{ money(x.actual) }}<span v-if="x.basis === 'BOOK'" class="block text-xs text-muted-foreground" :data-testid="`book-${x.outlet_code}-${x.class}`">{{ t('inventory.reports.estimatedFromBook') }}</span></td>
             <td class="py-2 pr-2 text-right" :class="over(x.actual_pct, x.target_pct) ? 'font-semibold text-destructive' : ''"><span v-if="over(x.actual_pct, x.target_pct)" :title="t('inventory.reports.aboveTarget')">▲ </span>{{ pct(x.actual_pct) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(x.difference) }}</td>

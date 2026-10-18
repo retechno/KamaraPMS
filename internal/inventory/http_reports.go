@@ -143,7 +143,7 @@ func (h *Handler) reportDailyCost(w http.ResponseWriter, r *http.Request) error 
 	}
 	head := []string{"date", "live"}
 	head = append(head, costKinds...)
-	head = append(head, "total", "food_revenue", "food_cost", "food_pct", "beverage_revenue", "beverage_cost", "beverage_pct", "fb_pct", "occupied_rooms", "amenity_cost_per_room")
+	head = append(head, "total", "food_revenue", "food_cost", "food_pct", "beverage_revenue", "beverage_cost", "beverage_pct", "fb_pct", "occupied_rooms", "amenity_cost_per_room", "food_no_recipe_days", "beverage_no_recipe_days")
 	rows := [][]string{head}
 	line := func(label, live string, d DailyCostDay) []string {
 		row := []string{label, live}
@@ -151,7 +151,7 @@ func (h *Handler) reportDailyCost(w http.ResponseWriter, r *http.Request) error 
 			row = append(row, dec(d.Kinds[k]))
 		}
 		return append(row, dec(d.Total), dec(d.Food.Revenue), dec(d.Food.Cost), decp(d.Food.Pct), dec(d.Beverage.Revenue), dec(d.Beverage.Cost), decp(d.Beverage.Pct), decp(d.Fb.Pct),
-			strconv.Itoa(d.Rooms), decp(d.CostPerRoom))
+			strconv.Itoa(d.Rooms), decp(d.CostPerRoom), strconv.Itoa(d.Food.NoRecipeDays), strconv.Itoa(d.Beverage.NoRecipeDays))
 	}
 	for _, d := range rep.Days {
 		rows = append(rows, line(d.Date.String(), strconv.FormatBool(d.Live), d))
@@ -173,10 +173,10 @@ func (h *Handler) reportOutletCost(w http.ResponseWriter, r *http.Request) error
 	if !wantsCSV(r) {
 		return httpx.WriteJSON(w, http.StatusOK, rep)
 	}
-	rows := [][]string{{"outlet", "name", "class", "revenue", "theory", "theory_pct", "count_variance", "actual", "actual_pct", "difference", "basis", "waste", "staff_meal", "entertainment", "target_pct"}}
+	rows := [][]string{{"outlet", "name", "class", "revenue", "theory", "theory_pct", "count_variance", "actual", "actual_pct", "difference", "basis", "waste", "staff_meal", "entertainment", "target_pct", "no_recipe_days"}}
 	for _, x := range rep.Rows {
 		rows = append(rows, []string{x.OutletCode, x.OutletName, x.Class, dec(x.Revenue), dec(x.Theory), decp(x.TheoryPct), dec(x.CountVariance), dec(x.Actual), decp(x.ActualPct), dec(x.Difference),
-			x.Basis, dec(x.Waste), dec(x.StaffMeal), dec(x.Entertainment), decp(x.TargetPct)})
+			x.Basis, dec(x.Waste), dec(x.StaffMeal), dec(x.Entertainment), decp(x.TargetPct), strconv.Itoa(x.NoRecipeDays)})
 	}
 	return writeCSV(w, r, "fb-cost-per-outlet-"+rep.From.String()+"-"+rep.To.String()+".csv", rows)
 }
@@ -198,6 +198,7 @@ func (h *Handler) reportReconciliation(w http.ResponseWriter, r *http.Request) e
 		rows = append(rows, []string{name, get(rep.Food), get(rep.Beverage), get(rep.Total)})
 	}
 	add("opening", func(c ReconColumn) string { return dec(c.Opening) })
+	add("opening_posted", func(c ReconColumn) string { return dec(c.OpeningPosted) })
 	add("purchases", func(c ReconColumn) string { return dec(c.Purchases) })
 	add("transfer_in", func(c ReconColumn) string { return dec(c.TransferIn) })
 	add("transfer_out", func(c ReconColumn) string { return dec(c.TransferOut) })

@@ -68,7 +68,7 @@ func TestInventoryReportsAgreeWithTheGeneralLedgerForBothCostingMethodsAPI(t *te
 			// the reconciliation: the waste is the whole difference, and the cost accounts hold the same figure
 			rec := w.must(t, abc.do(http.MethodGet, w.base+"/reports/fb-reconciliation?from=2026-09-30&to=2026-10-01", nil), 200)
 			food := rec.body["food"].(map[string]any)
-			if food["purchases"] != "2083200" || food["closing"] != "2031120" || food["goods_used"] != "52080" || food["staff_meal"] != "17360" || food["net_cost"] != "34720" || food["waste"] != "34720" || food["other_outflows"] != "0" {
+			if food["opening_posted"] != "2083200" || food["purchases"] != "0" || food["closing"] != "2031120" || food["goods_used"] != "52080" || food["staff_meal"] != "17360" || food["net_cost"] != "34720" || food["waste"] != "34720" || food["other_outflows"] != "0" {
 				t.Fatalf("the food column: %v", food)
 			}
 			gl := rec.body["gl"].(map[string]any)

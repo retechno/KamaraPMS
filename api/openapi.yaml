@@ -22080,14 +22080,16 @@ components:
         target_pct: { type: string, description: "Above 0 and up to 100, two decimals." }
     InventoryFbPart:
       type: object
-      required: [revenue, cost, pct, target_pct, above_target, mtd_pct]
+      required: [revenue, cost, pct, target_pct, above_target, mtd_pct, no_recipe_days, no_recipe_data]
       properties:
         revenue: { type: string }
         cost: { type: string }
         pct: { type: [string, "null"] }
         target_pct: { type: [string, "null"] }
         above_target: { type: boolean }
-        mtd_pct: { type: [string, "null"] }
+        mtd_pct: { type: [string, "null"], description: "Over the days that have a cost from recipes only." }
+        no_recipe_days: { type: integer, description: "Days with revenue and no cost from recipes: they have no percentage and are left out of pct and mtd_pct." }
+        no_recipe_data: { type: boolean, description: "True when there is revenue and no day of it has a cost from recipes: pct is then null." }
     InventoryDailyCostDay:
       type: object
       required: [date, live, kinds, total, food, beverage, fb, occupied_rooms, amenity_cost_per_room, departments]
@@ -22142,9 +22144,10 @@ components:
         difference: { type: string }
     InventoryReconColumn:
       type: object
-      required: [opening, purchases, transfer_in, transfer_out, closing, goods_used, staff_meal, entertainment, net_cost, revenue, actual_pct, theory, theory_pct, difference, difference_points, waste, count_variance, no_recipe_estimate, other_outflows, target_pct]
+      required: [opening, opening_posted, purchases, transfer_in, transfer_out, closing, goods_used, staff_meal, entertainment, net_cost, revenue, actual_pct, theory, theory_pct, difference, difference_points, waste, count_variance, no_recipe_estimate, other_outflows, target_pct]
       properties:
         opening: { type: string }
+        opening_posted: { type: string, description: "The opening stock (OPN) posted inside the period; it is not a purchase." }
         purchases: { type: string }
         transfer_in: { type: string }
         transfer_out: { type: string }
@@ -22177,7 +22180,7 @@ components:
         gl: { $ref: "#/components/schemas/InventoryGlCheck" }
     InventoryOutletCostRow:
       type: object
-      required: [outlet_id, outlet_code, outlet_name, warehouse_name, class, revenue, no_recipe_revenue, theory, theory_pct, count_variance, actual, actual_pct, basis, difference, waste, staff_meal, entertainment, target_pct]
+      required: [outlet_id, outlet_code, outlet_name, warehouse_name, class, revenue, no_recipe_revenue, theory, theory_pct, count_variance, actual, actual_pct, basis, difference, waste, staff_meal, entertainment, target_pct, no_recipe_days, no_recipe_data]
       properties:
         outlet_id: { type: [integer, "null"], format: int64 }
         outlet_code: { type: string }
@@ -22185,6 +22188,8 @@ components:
         warehouse_name: { type: string }
         class: { type: string, enum: [FOOD, BEVERAGE] }
         revenue: { type: string }
+        no_recipe_days: { type: integer, description: "Days with revenue and no cost from recipes: left out of the percentages." }
+        no_recipe_data: { type: boolean, description: "True when there is revenue and no day of it has a cost from recipes: the percentages are null." }
         no_recipe_revenue: { type: string }
         theory: { type: string }
         theory_pct: { type: [string, "null"] }

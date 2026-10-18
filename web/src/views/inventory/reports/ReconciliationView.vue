@@ -36,6 +36,7 @@ const lines = computed<Line[]>(() => {
   const basis = r.data.value?.closing_basis ?? 'BOOK'
   return [
     { id: 'opening', label: t('inventory.reports.recon.opening'), cell: (c) => money(c.opening) },
+    { id: 'openingPosted', label: t('inventory.reports.recon.openingPosted'), cell: (c) => money(c.opening_posted) },
     { id: 'purchases', label: t('inventory.reports.recon.purchases'), sign: '+', cell: (c) => money(c.purchases) },
     { id: 'transferIn', label: t('inventory.reports.recon.transferIn'), sign: '+', cell: (c) => money(c.transfer_in) },
     { id: 'transferOut', label: t('inventory.reports.recon.transferOut'), sign: '−', cell: (c) => money(c.transfer_out) },
