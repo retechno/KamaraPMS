@@ -16,7 +16,7 @@ RETURNING *;
 -- name: UpdateSettings :one
 UPDATE inventory_settings
    SET costing_method = @costing_method, price_tolerance_pct = @price_tolerance_pct, qty_tolerance_pct = @qty_tolerance_pct, over_receipt_pct = @over_receipt_pct,
-       po_requires_pr = @po_requires_pr, direct_receipt_limit = sqlc.narg(direct_receipt_limit), count_blocks_night_audit = @count_blocks_night_audit, count_blind = @count_blind,
+       po_requires_pr = @po_requires_pr, direct_receipt_limit = sqlc.narg(direct_receipt_limit), count_blocks_night_audit = @count_blocks_night_audit, count_blind = @count_blind, engineering_department_id = sqlc.narg(engineering_department_id),
        version = version + 1, updated_by = sqlc.narg(actor_id)
  WHERE tenant_id = @tenant_id AND property_id = @property_id AND version = @version
 RETURNING *;

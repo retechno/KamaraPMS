@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import OutletCostTargets from '@/components/inventory/OutletCostTargets.vue'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 
@@ -296,6 +297,8 @@ watch(pid, load, { immediate: true })
             </FormField>
           </div>
         </fieldset>
+
+        <OutletCostTargets v-if="!isNew && form.id !== null && form.warehouse_id" :outlet-id="form.id" />
 
         <fieldset class="m-0 rounded-lg border border-border p-3" data-testid="comp-treatment">
           <legend class="px-1 text-sm font-semibold">{{ t('pos.outlets.compTreatment') }}</legend>

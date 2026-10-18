@@ -117,7 +117,9 @@ M84="$(ls "$ROOT"/migrations/00084_*.sql)"
 M85="$(ls "$ROOT"/migrations/00085_*.sql)"
 M86="$(ls "$ROOT"/migrations/00086_*.sql)"
 M87="$(ls "$ROOT"/migrations/00087_*.sql)"
-# 00087 stands on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
+M88="$(ls "$ROOT"/migrations/00088_*.sql)"
+# 00088 stands on 00087, 00087 on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
+section down "$M88" | psql_run
 section down "$M87" | psql_run
 section down "$M86" | psql_run
 section down "$M85" | psql_run
@@ -181,6 +183,19 @@ psql_run -c "DELETE FROM pos_categories WHERE code = 'M87'"
 section down "$M87" | psql_run >/dev/null
 psql_run < "$ROOT/db/tests/migration_00087_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M87" | psql_run >/dev/null
+
+echo "==> migration 00088 (reports and snapshots) on the properties that exist"
+section up "$M88" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00088_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# the Down is refused while a target is set, and changes nothing
+psql_run -c "INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) SELECT p.tenant_id, p.id, 'FOOD', 30 FROM properties p WHERE p.code = 'I1'"
+if section down "$M88" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m88-down.err"; then echo "FAIL: the Down of 00088 ran while the reports held data" >&2; exit 1; fi
+grep -q "cannot roll back 00088" "${TMPDIR:-/tmp}/m88-down.err" || { echo "FAIL: the Down of 00088 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m88-down.err" >&2; exit 1; }
+echo "    down refused while the reports hold data"
+psql_run -c "DELETE FROM inv_cost_targets"
+section down "$M88" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00088_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M88" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

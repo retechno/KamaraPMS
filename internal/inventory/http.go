@@ -7,6 +7,7 @@ import (
 
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/platform/csvlang"
 	"kamarapms/internal/platform/httpx"
 	"kamarapms/internal/tenancy"
 )
@@ -49,6 +50,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	h.registerPurchasing(mux)
 	h.registerMovements(mux)
 	h.registerPOS(mux)
+	h.registerReports(mux)
 }
 
 func pathID(r *http.Request) (int64, error) {
@@ -484,6 +486,15 @@ func (h *Handler) stockCard(w http.ResponseWriter, r *http.Request) error {
 	v, err := h.svc.StockCard(r.Context(), pid, wid, i, from, to)
 	if err != nil {
 		return err
+	}
+	if wantsCSV(r) {
+		rows := [][]string{{"date", "kind", "document", "qty", "value", "unit_cost", "balance_qty", "balance_value", "estimated"}}
+		rows = append(rows, []string{"", "Opening balance", "", "", "", "", dec(v.OpeningQty), dec(v.OpeningValue), ""})
+		rows[1][1] = csvlang.Word(r, "Opening balance")
+		for _, l := range v.Lines {
+			rows = append(rows, []string{l.BusinessDate.String(), l.Kind, l.DocumentNumber, dec(l.Qty), dec(l.Value), dec(l.UnitCost), dec(l.BalanceQty), dec(l.BalanceValue), strconv.FormatBool(l.Estimated)})
+		}
+		return writeCSV(w, r, "stock-card-"+v.Item.Code+"-"+v.Warehouse+".csv", rows)
 	}
 	return httpx.WriteJSON(w, http.StatusOK, v)
 }

@@ -10294,6 +10294,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/inventory/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The summary at the top of the inventory page */
+        get: operations["getInventoryDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/daily-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The daily cost of all costs (D31): per day, month to date, by kind and department, with the targets */
+        get: operations["reportInventoryDailyCost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/outlet-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Food and beverage cost per outlet: theory against actual */
+        get: operations["reportInventoryOutletCost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/fb-reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The reconciliation of the food and beverage cost, with the check against the general ledger */
+        get: operations["reportInventoryFbReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/stock-value": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The value of the stock by warehouse and category, against the control accounts */
+        get: operations["reportInventoryStockValue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/low-stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Items below their minimum */
+        get: operations["reportInventoryLowStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/negative-stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Stock sold before the goods came in, still open */
+        get: operations["reportInventoryNegativeStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/received-not-invoiced": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Receipts that nobody has billed, by age */
+        get: operations["reportInventoryReceivedNotInvoiced"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** What the departments took from the stock */
+        get: operations["reportInventoryUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/cost-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The target cost percentages of food and beverage, for the property and for the outlets */
+        get: operations["listInventoryCostTargets"];
+        /** Sets the target of a class for the property (no outlet_id) or for one outlet */
+        put: operations["setInventoryCostTarget"];
+        post?: never;
+        /** Removes a target; an outlet without its own takes the property's */
+        delete: operations["deleteInventoryCostTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -18802,6 +18994,11 @@ export interface components {
             direct_receipt_limit: string | null;
             count_blocks_night_audit: boolean;
             count_blind: boolean;
+            /**
+             * Format: int64
+             * @description The department whose manual issues are the engineering cost of the daily cost report; null: none.
+             */
+            engineering_department_id: number | null;
             version: number;
         };
         InventorySettingsInput: {
@@ -18814,6 +19011,8 @@ export interface components {
             direct_receipt_limit?: string | null;
             count_blocks_night_audit: boolean;
             count_blind: boolean;
+            /** Format: int64 */
+            engineering_department_id?: number | null;
             version: number;
         };
         InventorySetupReport: {
@@ -20572,6 +20771,297 @@ export interface components {
         InventoryQueueList: {
             summary: components["schemas"]["InventoryQueueSummary"];
             rows: components["schemas"]["InventoryQueueRow"][];
+        };
+        InventoryCostTarget: {
+            /**
+             * Format: int64
+             * @description null: the property's target, which an outlet without its own takes.
+             */
+            outlet_id: number | null;
+            /** @enum {string} */
+            class: "FOOD" | "BEVERAGE";
+            /** @description Above 0 and up to 100, two decimals. */
+            target_pct: string;
+        };
+        InventoryFbPart: {
+            revenue: string;
+            cost: string;
+            pct: string | null;
+            target_pct: string | null;
+            above_target: boolean;
+            /** @description Over the days that have a cost from recipes only. */
+            mtd_pct: string | null;
+            /** @description Days with revenue and no cost from recipes: they have no percentage and are left out of pct and mtd_pct. */
+            no_recipe_days: number;
+            /** @description True when there is revenue and no day of it has a cost from recipes: pct is then null. */
+            no_recipe_data: boolean;
+        };
+        InventoryDailyCostDay: {
+            date: components["schemas"]["Date"];
+            /** @description True for a day the close has not stored (the open day): computed from the ledger. */
+            live: boolean;
+            /** @description Amount by kind of cost (SALE_COST_FOOD, SALE_COST_BEVERAGE, WASTE, STAFF_MEAL, ENTERTAINMENT, AMENITY, ENGINEERING, OTHER_USE, COUNT_VARIANCE, PRICE_VARIANCE). */
+            kinds: {
+                [key: string]: string;
+            };
+            total: string;
+            food: components["schemas"]["InventoryFbPart"];
+            beverage: components["schemas"]["InventoryFbPart"];
+            fb: components["schemas"]["InventoryFbPart"];
+            occupied_rooms: number;
+            amenity_cost_per_room: string | null;
+            /** @description Amount by department id; 0 is the cost with no department. */
+            departments: {
+                [key: string]: string;
+            };
+        };
+        InventoryNamedRef: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+        };
+        InventoryDailyCost: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            business_date: components["schemas"]["Date"];
+            mtd_from: components["schemas"]["Date"];
+            days: components["schemas"]["InventoryDailyCostDay"][];
+            period: components["schemas"]["InventoryDailyCostDay"];
+            mtd: components["schemas"]["InventoryDailyCostDay"];
+            departments: components["schemas"]["InventoryNamedRef"][];
+            targets: components["schemas"]["InventoryCostTarget"][];
+        };
+        InventoryGlCheckLine: {
+            key: string;
+            stock: string;
+            gl: string;
+            difference: string;
+        };
+        InventoryGlCheck: {
+            /** @enum {string} */
+            status: "MATCH" | "DIFFERENCE" | "PENDING";
+            gl_through: components["schemas"]["Date"] | null;
+            lines: components["schemas"]["InventoryGlCheckLine"][];
+            stock_total: string;
+            gl_total: string;
+            difference: string;
+        };
+        InventoryReconColumn: {
+            opening: string;
+            /** @description The opening stock (OPN) posted inside the period; it is not a purchase. */
+            opening_posted: string;
+            purchases: string;
+            transfer_in: string;
+            transfer_out: string;
+            closing: string;
+            goods_used: string;
+            staff_meal: string;
+            entertainment: string;
+            net_cost: string;
+            revenue: string;
+            actual_pct: string | null;
+            theory: string;
+            theory_pct: string | null;
+            difference: string;
+            difference_points: string | null;
+            waste: string;
+            count_variance: string;
+            no_recipe_estimate: string;
+            other_outflows: string;
+            target_pct: string | null;
+        };
+        InventoryReconciliation: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            food: components["schemas"]["InventoryReconColumn"];
+            beverage: components["schemas"]["InventoryReconColumn"];
+            total: components["schemas"]["InventoryReconColumn"];
+            /** @enum {string} */
+            closing_basis: "COUNT" | "BOOK";
+            gl: components["schemas"]["InventoryGlCheck"];
+        };
+        InventoryOutletCostRow: {
+            /** Format: int64 */
+            outlet_id: number | null;
+            outlet_code: string;
+            outlet_name: string;
+            warehouse_name: string;
+            /** @enum {string} */
+            class: "FOOD" | "BEVERAGE";
+            revenue: string;
+            /** @description Days with revenue and no cost from recipes: left out of the percentages. */
+            no_recipe_days: number;
+            /** @description True when there is revenue and no day of it has a cost from recipes: the percentages are null. */
+            no_recipe_data: boolean;
+            no_recipe_revenue: string;
+            theory: string;
+            theory_pct: string | null;
+            count_variance: string;
+            actual: string;
+            actual_pct: string | null;
+            /** @enum {string} */
+            basis: "COUNT" | "BOOK";
+            difference: string;
+            waste: string;
+            staff_meal: string;
+            entertainment: string;
+            target_pct: string | null;
+        };
+        InventoryOutletCost: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rows: components["schemas"]["InventoryOutletCostRow"][];
+            gl: components["schemas"]["InventoryGlCheck"];
+        };
+        InventoryValueCell: {
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            /** Format: int64 */
+            account_id: number;
+            items: number;
+            value: string;
+        };
+        InventoryValueWarehouse: {
+            /** Format: int64 */
+            warehouse_id: number;
+            code: string;
+            name: string;
+            categories: components["schemas"]["InventoryValueCell"][];
+            total: string;
+        };
+        InventoryValueAccount: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            stock: string;
+            gl: string;
+            difference: string;
+        };
+        InventoryValueReport: {
+            as_of: components["schemas"]["Date"];
+            live: boolean;
+            gl_through: components["schemas"]["Date"] | null;
+            /** @enum {string} */
+            status: "MATCH" | "DIFFERENCE" | "PENDING";
+            warehouses: components["schemas"]["InventoryValueWarehouse"][];
+            categories: components["schemas"]["InventoryValueCell"][];
+            accounts: components["schemas"]["InventoryValueAccount"][];
+            total: string;
+        };
+        InventoryLowStockRow: {
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_code: string;
+            warehouse_name: string;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            qty: string;
+            min_qty: string;
+            reorder_qty: string;
+            missing: string;
+            value: string;
+        };
+        InventoryNegativeStockRow: {
+            /** Format: int64 */
+            shortfall_id: number;
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_code: string;
+            warehouse_name: string;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            qty_open: string;
+            est_unit_cost: string;
+            est_value: string;
+            balance_qty: string;
+            since: components["schemas"]["Date"];
+            age_days: number;
+            source: string;
+        };
+        InventoryNegativeStock: {
+            business_date: components["schemas"]["Date"];
+            rows: components["schemas"]["InventoryNegativeStockRow"][];
+            total: string;
+        };
+        InventoryGrniRow: {
+            /** Format: int64 */
+            draft_id: number;
+            /** Format: int64 */
+            receipt_id: number;
+            receipt_number: string;
+            received_on: components["schemas"]["Date"];
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_name: string;
+            warehouse_name: string;
+            status: string;
+            age_days: number;
+            /** @enum {string} */
+            bucket: "0-30" | "31-60" | "61-90" | "90+";
+            value: string;
+        };
+        InventoryGrniBucket: {
+            bucket: string;
+            count: number;
+            value: string;
+        };
+        InventoryGrni: {
+            as_of: components["schemas"]["Date"];
+            rows: components["schemas"]["InventoryGrniRow"][];
+            buckets: components["schemas"]["InventoryGrniBucket"][];
+            total: string;
+            /** @description What the account of goods received not invoiced holds according to the stock ledger and the bills, positive for a liability. */
+            ledger_balance: string;
+        };
+        InventoryUsageItem: {
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            category_name: string;
+            /** @enum {string} */
+            kind: "ISSUE" | "WASTE" | "STAFF_MEAL" | "ENTERTAINMENT";
+            qty: string;
+            value: string;
+        };
+        InventoryUsageDepartment: {
+            /** Format: int64 */
+            department_id: number | null;
+            name: string;
+            total: string;
+            by_kind: {
+                [key: string]: string;
+            };
+            items: components["schemas"]["InventoryUsageItem"][];
+        };
+        InventoryUsage: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            departments: components["schemas"]["InventoryUsageDepartment"][];
+            total: string;
+        };
+        InventoryDashboard: {
+            business_date: components["schemas"]["Date"];
+            mtd_from: components["schemas"]["Date"];
+            stock_value: string;
+            food: components["schemas"]["InventoryFbPart"];
+            beverage: components["schemas"]["InventoryFbPart"];
+            fb: components["schemas"]["InventoryFbPart"];
+            negative_items: number;
+            negative_value: string;
+            below_min: number;
+            waiting_approvals: number;
         };
         InventorySalesWithoutDeduction: {
             /** Format: int64 */
@@ -35038,6 +35528,10 @@ export interface operations {
                 from?: components["schemas"]["Date"];
                 /** @description End of the period */
                 to?: components["schemas"]["Date"];
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
             };
             header?: never;
             path: {
@@ -35047,7 +35541,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The card. */
+            /** @description The card (a CSV file with format=csv). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -37208,6 +37702,363 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getInventoryDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryDashboard"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryDailyCost: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryDailyCost"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryOutletCost: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryOutletCost"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryFbReconciliation: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryReconciliation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryStockValue: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the open day */
+                as_of?: string;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryValueReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryLowStock: {
+        parameters: {
+            query?: {
+                warehouse_id?: number;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryLowStockRow"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryNegativeStock: {
+        parameters: {
+            query?: {
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryNegativeStock"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryReceivedNotInvoiced: {
+        parameters: {
+            query?: {
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryGrni"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryUsage: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                department_id?: number;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryUsage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listInventoryCostTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryCostTarget"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    setInventoryCostTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryCostTarget"];
+            };
+        };
+        responses: {
+            /** @description The target. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryCostTarget"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteInventoryCostTarget: {
+        parameters: {
+            query: {
+                /** @description Absent: the property's target. */
+                outlet_id?: number;
+                class: "FOOD" | "BEVERAGE";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

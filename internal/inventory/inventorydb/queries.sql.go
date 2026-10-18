@@ -338,7 +338,7 @@ func (q *Queries) DriftLayers(ctx context.Context, arg DriftLayersParams) ([]Dri
 const ensureSettings = `-- name: EnsureSettings :one
 INSERT INTO inventory_settings (tenant_id, property_id, created_by, updated_by) VALUES ($1, $2, $3, $3)
 ON CONFLICT (property_id) DO UPDATE SET property_id = EXCLUDED.property_id
-RETURNING property_id, tenant_id, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version, created_at, created_by, updated_at, updated_by
+RETURNING property_id, tenant_id, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version, created_at, created_by, updated_at, updated_by, engineering_department_id
 `
 
 type EnsureSettingsParams struct {
@@ -367,6 +367,7 @@ func (q *Queries) EnsureSettings(ctx context.Context, arg EnsureSettingsParams) 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.EngineeringDepartmentID,
 	)
 	return i, err
 }
@@ -689,7 +690,7 @@ func (q *Queries) GetOpeningByClientUUID(ctx context.Context, arg GetOpeningByCl
 const getSettings = `-- name: GetSettings :one
 
 
-SELECT property_id, tenant_id, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version, created_at, created_by, updated_at, updated_by FROM inventory_settings WHERE tenant_id = $1 AND property_id = $2
+SELECT property_id, tenant_id, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version, created_at, created_by, updated_at, updated_by, engineering_department_id FROM inventory_settings WHERE tenant_id = $1 AND property_id = $2
 `
 
 type GetSettingsParams struct {
@@ -722,6 +723,7 @@ func (q *Queries) GetSettings(ctx context.Context, arg GetSettingsParams) (Inven
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.EngineeringDepartmentID,
 	)
 	return i, err
 }
@@ -3451,25 +3453,26 @@ func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) (int64, 
 const updateSettings = `-- name: UpdateSettings :one
 UPDATE inventory_settings
    SET costing_method = $1, price_tolerance_pct = $2, qty_tolerance_pct = $3, over_receipt_pct = $4,
-       po_requires_pr = $5, direct_receipt_limit = $6, count_blocks_night_audit = $7, count_blind = $8,
-       version = version + 1, updated_by = $9
- WHERE tenant_id = $10 AND property_id = $11 AND version = $12
-RETURNING property_id, tenant_id, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version, created_at, created_by, updated_at, updated_by
+       po_requires_pr = $5, direct_receipt_limit = $6, count_blocks_night_audit = $7, count_blind = $8, engineering_department_id = $9,
+       version = version + 1, updated_by = $10
+ WHERE tenant_id = $11 AND property_id = $12 AND version = $13
+RETURNING property_id, tenant_id, costing_method, costing_locked_on, price_tolerance_pct, qty_tolerance_pct, over_receipt_pct, po_requires_pr, direct_receipt_limit, count_blocks_night_audit, count_blind, version, created_at, created_by, updated_at, updated_by, engineering_department_id
 `
 
 type UpdateSettingsParams struct {
-	CostingMethod         string
-	PriceTolerancePct     decimal.Decimal
-	QtyTolerancePct       decimal.Decimal
-	OverReceiptPct        decimal.Decimal
-	PoRequiresPr          bool
-	DirectReceiptLimit    *decimal.Decimal
-	CountBlocksNightAudit bool
-	CountBlind            bool
-	ActorID               *int64
-	TenantID              int64
-	PropertyID            int64
-	Version               int32
+	CostingMethod           string
+	PriceTolerancePct       decimal.Decimal
+	QtyTolerancePct         decimal.Decimal
+	OverReceiptPct          decimal.Decimal
+	PoRequiresPr            bool
+	DirectReceiptLimit      *decimal.Decimal
+	CountBlocksNightAudit   bool
+	CountBlind              bool
+	EngineeringDepartmentID *int64
+	ActorID                 *int64
+	TenantID                int64
+	PropertyID              int64
+	Version                 int32
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (InventorySetting, error) {
@@ -3482,6 +3485,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.DirectReceiptLimit,
 		arg.CountBlocksNightAudit,
 		arg.CountBlind,
+		arg.EngineeringDepartmentID,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -3505,6 +3509,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.EngineeringDepartmentID,
 	)
 	return i, err
 }

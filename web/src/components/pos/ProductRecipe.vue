@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { InventoryItem, InventoryRecipe, InventoryRecipeLine } from '@/api/types'
+import type { InventoryCostTarget, InventoryItem, InventoryRecipe, InventoryRecipeLine } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import QuantityInput from '@/components/app/QuantityInput.vue'
 import { Badge } from '@/components/ui/badge'
@@ -43,6 +43,7 @@ const error = ref<ApiError | null>(null)
 const formError = ref<ApiError | null>(null)
 const notice = ref('')
 const original = ref('')
+const targets = ref<InventoryCostTarget[]>([])
 
 const fromLine = (l: InventoryRecipeLine, optionId: number | null): Row => ({ key: ++seq, option_id: optionId, item_id: l.item_id, unit_id: l.unit_id, quantity: trimZeros(l.quantity), saved: l })
 const trimZeros = (v: string): string => (v.includes('.') ? v.replace(/\.?0+$/, '') : v)
@@ -64,6 +65,7 @@ async function load(): Promise<void> {
     if (data2.outlet_id !== null) outletId.value = data2.outlet_id
     rows.value = [...data2.base.map((l) => fromLine(l, null)), ...data2.options.flatMap((o) => o.lines.map((l) => fromLine(l, o.option_id)))]
     original.value = signature()
+    await loadTargets()
     if (!itemsLoaded.value && data2.editable) {
       try {
         const r = await api.GET('/api/v1/properties/{propertyId}/inventory/items', { params: { path: { propertyId }, query: { limit: 200, active: true } } })
@@ -79,6 +81,24 @@ async function load(): Promise<void> {
     loaded.value = true
   }
 }
+/** The target cost % of the outlet and the class of the sale (docs/architecture/35-inventory.md 12.2): the outlet's own, else the property's. A person who may not read the inventory sees no target. */
+async function loadTargets(): Promise<void> {
+  const propertyId = pid.value
+  targets.value = []
+  if (propertyId === null) return
+  try {
+    targets.value = (await api.GET('/api/v1/properties/{propertyId}/inventory/cost-targets', { params: { path: { propertyId } } })).data?.data ?? []
+  } catch {
+    targets.value = []
+  }
+}
+const targetPct = computed<string | null>(() => {
+  const c = recipe.value?.sale_class
+  if (c !== 'FOOD' && c !== 'BEVERAGE') return null
+  const own = targets.value.find((x) => x.outlet_id === recipe.value?.outlet_id && x.class === c)
+  return (own ?? targets.value.find((x) => x.outlet_id === null && x.class === c))?.target_pct ?? null
+})
+const overTarget = computed(() => !dirty.value && targetPct.value !== null && recipe.value?.food_cost_pct != null && Number(recipe.value.food_cost_pct) > Number(targetPct.value))
 watch([pid, () => props.productId], () => { outletId.value = 0; itemsLoaded.value = false; void load() }, { immediate: true })
 
 const editable = computed(() => !!recipe.value?.editable && itemsLoaded.value)
@@ -250,6 +270,10 @@ const plus = (v: string): string => (Number(v) > 0 ? '+' : '') + formatMoney(v)
         <dt class="text-muted-foreground">{{ t('pos.recipe.netPrice') }}</dt><dd class="m-0 text-right" data-testid="recipe-price">{{ money(recipe.net_price) }}</dd>
         <dt class="text-muted-foreground">{{ t('pos.recipe.margin') }}</dt><dd class="m-0 text-right" data-testid="recipe-margin">{{ dirty ? '—' : money(recipe.margin) }}</dd>
         <dt class="text-muted-foreground">{{ t('pos.recipe.foodCost') }}</dt><dd class="m-0 text-right font-semibold" data-testid="recipe-foodcost">{{ dirty || recipe.food_cost_pct === null ? '—' : `${formatQty(recipe.food_cost_pct)}%` }}</dd>
+        <template v-if="targetPct !== null">
+          <dt class="text-muted-foreground">{{ t('inventory.targets.recipe') }}</dt>
+          <dd class="m-0 text-right" :class="overTarget ? 'font-semibold text-destructive' : ''" data-testid="recipe-target"><span v-if="overTarget" :title="t('inventory.targets.above')">▲ </span>{{ formatQty(targetPct) }}%</dd>
+        </template>
       </dl>
       <ul class="m-0 mt-3 list-none p-0 text-xs text-muted-foreground">
         <li v-if="recipe.warehouse_name">{{ t('pos.recipe.noteDeduct', { warehouse: recipe.warehouse_name }) }}</li>

@@ -5,6 +5,7 @@
 //	pms-seed rates -tenant DEMO -property BALI [-days 90] [-plan RO] [-dry-run]
 //	pms-seed pos   -tenant DEMO -property BALI [-dry-run]
 //	pms-seed inventory -tenant DEMO -property BALI [-dry-run]
+//	pms-seed inventory-days -tenant DEMO -property BALI [-days 10] [-dry-run]
 //
 // rooms: creates the room types Standard, Superior, Deluxe and Suite when the property lacks them and rooms numbered
 // floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states and a bed type each
@@ -19,6 +20,10 @@
 //
 // inventory: the demo of the inventory (docs/architecture/35-inventory.md): the units, four categories with their accounts, four warehouses (those of the restaurant and the bar tied to
 // the outlets of `pms-seed pos`), about forty items in Indonesian with their conversions, and the opening stock of each warehouse.
+//
+// inventory-days: ten business days of activity for the reports of the inventory (docs/architecture/35-inventory.md, PR 5): POS sales of the restaurant and the bar, waste, staff meals, entertainment and a use by engineering
+// and by the office, each day closed by the night audit through the running API of the development stack (password in PMS_SEED_PASSWORD). It moves the business date of the property forward; run again, it does
+// nothing once the last N closed days have a cost.
 //
 // All are safe to run again (rooms that exist are left alone; rates are written again with the same prices). They
 // refuse to run against a production configuration. They read PMS_DATABASE_URL from the environment or ./.env.
@@ -59,7 +64,8 @@ const usage = `usage:
   pms-seed rooms -tenant CODE -property CODE [-floors N] [-per-floor N] [-dry-run]
   pms-seed rates -tenant CODE -property CODE [-days N] [-plan CODE] [-dry-run]
   pms-seed pos   -tenant CODE -property CODE [-dry-run]
-  pms-seed inventory -tenant CODE -property CODE [-dry-run]`
+  pms-seed inventory -tenant CODE -property CODE [-dry-run]
+  pms-seed inventory-days -tenant CODE -property CODE [-days N] [-api URL] [-email ADDRESS] [-dry-run]   (password in PMS_SEED_PASSWORD)`
 
 // A room type the seed creates when the property has no type with that code, and the price of its nights.
 type typeSpec struct {
@@ -97,6 +103,9 @@ type env struct {
 }
 
 func run(args []string) error {
+	if len(args) > 0 && args[0] == "inventory-days" { // it talks to the running API and needs no database of its own
+		return runInventoryDays(args[1:])
+	}
 	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates" && args[0] != "pos" && args[0] != "inventory") {
 		return fmt.Errorf("%s", usage)
 	}

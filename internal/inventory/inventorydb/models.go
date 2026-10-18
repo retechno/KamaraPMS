@@ -215,20 +215,21 @@ type InvWarehouse struct {
 }
 
 type InventorySetting struct {
-	PropertyID            int64
-	TenantID              int64
-	CostingMethod         string
-	CostingLockedOn       *civil.Date
-	PriceTolerancePct     decimal.Decimal
-	QtyTolerancePct       decimal.Decimal
-	OverReceiptPct        decimal.Decimal
-	PoRequiresPr          bool
-	DirectReceiptLimit    *decimal.Decimal
-	CountBlocksNightAudit bool
-	CountBlind            bool
-	Version               int32
-	CreatedAt             time.Time
-	CreatedBy             *int64
-	UpdatedAt             time.Time
-	UpdatedBy             *int64
+	PropertyID              int64
+	TenantID                int64
+	CostingMethod           string
+	CostingLockedOn         *civil.Date
+	PriceTolerancePct       decimal.Decimal
+	QtyTolerancePct         decimal.Decimal
+	OverReceiptPct          decimal.Decimal
+	PoRequiresPr            bool
+	DirectReceiptLimit      *decimal.Decimal
+	CountBlocksNightAudit   bool
+	CountBlind              bool
+	Version                 int32
+	CreatedAt               time.Time
+	CreatedBy               *int64
+	UpdatedAt               time.Time
+	UpdatedBy               *int64
+	EngineeringDepartmentID *int64
 }

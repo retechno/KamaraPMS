@@ -305,6 +305,14 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 	if err != nil {
 		return RunResult{}, err
 	}
+	// the sales of the day that are still in the queue of the stock are applied first, outside the transaction of the close (the stock level has one lock order for a transaction)
+	if pc, ok := s.stock.(interface {
+		PrepareClose(ctx context.Context, p auth.Principal, propertyID int64) error
+	}); ok {
+		if err := pc.PrepareClose(ctx, p, propertyID); err != nil {
+			return RunResult{}, err
+		}
+	}
 	var out RunResult
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {
 		got, err := db.TryAdvisoryXactLock(ctx, "night_audit", propertyID) // L0

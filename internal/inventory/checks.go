@@ -303,6 +303,10 @@ func (s *Service) CloseStock(ctx context.Context, p auth.Principal, propertyID i
 	if err := s.RunAmenities(ctx, p, propertyID, bd); err != nil {
 		return err
 	}
+	// the snapshots of the day (5.7 step 3, 3.6): the stock is final now, the journal comes next; taking the day again writes the same rows
+	if err := s.TakeSnapshots(ctx, p, propertyID, bd); err != nil {
+		return err
+	}
 	q := s.q(ctx)
 	lock, err := q.CostingLockToAudit(ctx, inventorydb.CostingLockToAuditParams{TenantID: p.TenantID, PropertyID: propertyID})
 	if errors.Is(err, pgx.ErrNoRows) {

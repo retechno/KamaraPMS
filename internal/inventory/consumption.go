@@ -559,6 +559,14 @@ func (s *Service) RunQueue(ctx context.Context) (int, error) {
 	return total, nil
 }
 
+// PrepareClose applies what waits in the POS queue of a property before the night audit opens its transaction (each warehouse in batches, each batch in a transaction of its own, as the worker does), so that
+// the drain inside the close finds nothing to apply in the usual case. The stock level takes its locks in one order for a transaction; a close that applied the rows of two warehouses, or of one and then
+// posted the amenities, would take them out of that order (the second try finds the queue empty).
+func (s *Service) PrepareClose(ctx context.Context, p auth.Principal, propertyID int64) error {
+	_, err := s.drainProperty(ctx, p, propertyID)
+	return err
+}
+
 // drainProperty applies what waits for a property from outside a transaction: for each warehouse, batches of rows, each batch in its own transaction.
 func (s *Service) drainProperty(ctx context.Context, p auth.Principal, propertyID int64) (int, error) {
 	whs, err := s.q(ctx).ListWarehousesWithPending(ctx, inventorydb.ListWarehousesWithPendingParams{TenantID: p.TenantID, PropertyID: propertyID})

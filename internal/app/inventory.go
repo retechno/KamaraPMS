@@ -52,6 +52,10 @@ func (c stockClose) NightAuditStock(ctx context.Context, tenantID, propertyID in
 	return issues(b), issues(w), err
 }
 
+func (c stockClose) PrepareClose(ctx context.Context, p auth.Principal, propertyID int64) error {
+	return c.inv.PrepareClose(ctx, p, propertyID)
+}
+
 func (c stockClose) CloseStock(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
 	return c.inv.CloseStock(ctx, p, propertyID, bd)
 }
