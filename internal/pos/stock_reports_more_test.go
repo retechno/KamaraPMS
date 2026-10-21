@@ -6,6 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/inventory"
+	"kamarapms/internal/pos"
 )
 
 // The other reports that need a restaurant that sells (docs/architecture/35-inventory.md 12.5, section 22): the reconciliation on the days that have recipe data, the recipe cost list, and the dishes thrown
@@ -66,7 +67,7 @@ func TestTheReconciliationTheoryIsOverTheRevenueOfTheDaysWithRecipeDataAndTheDay
 
 func TestTheRecipeCostListGivesTheCostOfAPortionAndFlagsAProductWithoutARecipe(t *testing.T) {
 	s := newStockFx(t, inventory.MethodAverage)
-	list, err := s.inv.RecipeCosts(s.admin, s.propID, nil)
+	list, err := s.inv.RecipeCosts(s.admin, s.propID, nil, true)
 	must(t, err)
 	if list.WithoutRecipe < 1 {
 		t.Fatalf("the steak has no recipe: %+v", list)
@@ -107,11 +108,92 @@ func TestTheRecipeCostListGivesTheCostOfAPortionAndFlagsAProductWithoutARecipe(t
 		}
 	}
 	// narrowed to one outlet
-	only, err := s.inv.RecipeCosts(s.admin, s.propID, &s.resto.ID)
+	only, err := s.inv.RecipeCosts(s.admin, s.propID, &s.resto.ID, true)
 	must(t, err)
 	for _, r := range only.Rows {
 		if r.OutletID != s.resto.ID {
 			t.Fatalf("another outlet: %+v", r)
 		}
+	}
+}
+
+// A dish whose ingredient has no price at the warehouse of the outlet has no cost that can be trusted: its cost, margin and cost % are empty, it is counted apart and it stays out of the order by margin. The
+// products of an outlet that sells no food or drink (the class OTHER) are not in the list unless the person asks for them.
+func TestTheRecipeCostListSeparatesTheDishesWithoutAPriceAndLeavesOutTheProductsThatAreNotFoodOrDrink(t *testing.T) {
+	s := newStockFx(t, inventory.MethodAverage)
+	ctx, pid := s.admin, s.propID
+	// a sauce that was never bought: no stock, no last cost, no reference cost
+	saus, err := s.inv.CreateItem(ctx, pid, inventory.ItemInput{Code: "SAUS", Name: "Saus", CategoryID: s.food, StockUnitID: s.unit["kg"],
+		Units: []inventory.ItemUnit{{UnitID: s.unit["g"], StockNum: 1, StockDen: 1000, IsRecipe: true}}})
+	must(t, err)
+	sate, err := s.svc.CreateProduct(ctx, pid, pos.ProductInput{Code: "SATE", Name: "Sate", CategoryID: s.k.cat.ID, ChargeCodeID: s.chargeCode(t, "RESTAURANT"),
+		Prices: []pos.ProductPriceIn{{PriceListID: s.k.priceList.ID, Price: dec("60000"), IsSold: true}}})
+	must(t, err)
+	_, err = s.inv.SaveRecipe(ctx, pid, sate.ID, inventory.RecipeInput{Lines: []inventory.RecipeLineInput{{ItemID: saus.ID, UnitID: s.unit["g"], Quantity: dec("100")}}})
+	must(t, err)
+	// an outlet with no warehouse sells what is not food or drink
+	_, err = s.svc.CreateOutlet(ctx, pid, pos.OutletInput{Code: "LAUND", Name: "Laundry", OutletType: "LAUNDRY", OrderMode: "PRINT", DepartmentID: s.dept, RuleProfileID: s.k.profile.ID,
+		PriceListID: s.k.priceList.ID, CompTreatment: "PAYMENT_COMP"})
+	must(t, err)
+
+	list, err := s.inv.RecipeCosts(ctx, pid, nil, false)
+	must(t, err)
+	var nasgor, sateRow *inventory.RecipeCostRow
+	for i := range list.Rows {
+		r := &list.Rows[i]
+		if r.Class == "OTHER" || r.OutletCode == "LAUND" {
+			t.Fatalf("a product that is not food or drink is in the list: %+v", r)
+		}
+		switch r.ProductCode {
+		case "NASGOR":
+			nasgor = r
+		case "SATE":
+			sateRow = r
+		}
+	}
+	if nasgor == nil || sateRow == nil {
+		t.Fatalf("the dishes are not in the list: %+v", list.Rows)
+	}
+	if !sateRow.HasRecipe || !sateRow.NoPrice || sateRow.Cost != nil || sateRow.Margin != nil || sateRow.CostPct != nil || sateRow.NetPrice == nil || list.WithoutPrice != 1 {
+		t.Fatalf("the sate has no price for its sauce: %+v, without price %d", sateRow, list.WithoutPrice)
+	}
+	if nasgor.NoPrice || nasgor.CostPct == nil {
+		t.Fatalf("the nasi goreng is priced: %+v", nasgor)
+	}
+	// by margin first, then the dishes without a price, then the products without a recipe
+	stage := func(r inventory.RecipeCostRow) int {
+		switch {
+		case !r.HasRecipe:
+			return 2
+		case r.NoPrice:
+			return 1
+		}
+		return 0
+	}
+	last := 0
+	for _, r := range list.Rows {
+		if st := stage(r); st < last {
+			t.Fatalf("the order is by margin, then no price, then no recipe: %+v", list.Rows)
+		} else {
+			last = st
+		}
+	}
+	if stage(list.Rows[0]) != 0 || stage(list.Rows[len(list.Rows)-1]) != 2 {
+		t.Fatalf("the ends of the list: %+v", list.Rows)
+	}
+	// with the other products the laundry has its rows, all of the class OTHER
+	all, err := s.inv.RecipeCosts(ctx, pid, nil, true)
+	must(t, err)
+	n := 0
+	for _, r := range all.Rows {
+		if r.OutletCode == "LAUND" {
+			n++
+			if r.Class != "OTHER" {
+				t.Fatalf("the class of the laundry: %+v", r)
+			}
+		}
+	}
+	if n == 0 || len(all.Rows) <= len(list.Rows) {
+		t.Fatalf("the products that are not food or drink: %d rows of the laundry, %d against %d", n, len(all.Rows), len(list.Rows))
 	}
 }

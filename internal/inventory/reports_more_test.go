@@ -1,12 +1,14 @@
 package inventory_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/inventory"
+	"kamarapms/internal/inventory/inventorydb"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 )
@@ -397,7 +399,7 @@ func TestAPurchaseRequestIsMadeFromTheItemsBelowTheirMinimum(t *testing.T) {
 	c.open(t, "MAIN", "SIRUP", "botol", "3", "50000")
 	_, err := c.svc.SetLevels(c.admin, c.propID, c.wh["MAIN"], []inventory.Level{
 		{ItemID: c.item["BERAS"], MinQty: dec("10"), MaxQty: ptr(dec("30"))},     // up to the maximum: 26 kg
-		{ItemID: c.item["SIRUP"], MinQty: dec("12"), ReorderQty: ptr(dec("24"))}, // the reorder quantity: 24 bottles
+		{ItemID: c.item["SIRUP"], MinQty: dec("12"), ReorderQty: ptr(dec("30"))}, // the reorder quantity: 30 bottles
 	})
 	must(t, err)
 	rows, err := c.svc.LowStock(c.admin, c.propID, nil)
@@ -410,24 +412,37 @@ func TestAPurchaseRequestIsMadeFromTheItemsBelowTheirMinimum(t *testing.T) {
 		case "BERAS":
 			wantDec(t, "rice suggestion", r.SuggestQty, "26")
 		case "SIRUP":
-			wantDec(t, "syrup suggestion", r.SuggestQty, "24")
+			wantDec(t, "syrup suggestion", r.SuggestQty, "30")
 		}
 	}
 
-	in := inventory.LowStockRequestInput{ClientUUID: c.id(), WarehouseID: c.wh["MAIN"], ItemIDs: []int64{c.item["BERAS"], c.item["SIRUP"]}}
+	note := "Dibuat dari laporan stok di bawah minimum"
+	in := inventory.LowStockRequestInput{ClientUUID: c.id(), WarehouseID: c.wh["MAIN"], ItemIDs: []int64{c.item["BERAS"], c.item["SIRUP"]}, Note: &note}
 	req, err := c.svc.CreateRequestFromLowStock(c.req, c.propID, in)
 	must(t, err)
 	if req.Status != "DRAFT" || len(req.Lines) != 2 {
 		t.Fatalf("request: %+v", req)
 	}
+	// the note is the text of the person's language; without one the draft says it in English
+	if req.Note == nil || *req.Note != note {
+		t.Fatalf("the note: %v", req.Note)
+	}
+	plain, err := c.svc.CreateRequestFromLowStock(c.req, c.propID, inventory.LowStockRequestInput{ClientUUID: c.id(), WarehouseID: c.wh["MAIN"], ItemIDs: []int64{c.item["BERAS"]}})
+	must(t, err)
+	if plain.Note == nil || *plain.Note != "Created from the low stock report" {
+		t.Fatalf("the default note: %v", plain.Note)
+	}
+	long := strings.Repeat("x", 201)
+	_, err = c.svc.CreateRequestFromLowStock(c.req, c.propID, inventory.LowStockRequestInput{ClientUUID: c.id(), WarehouseID: c.wh["MAIN"], ItemIDs: []int64{c.item["BERAS"]}, Note: &long})
+	wantCode(t, err, "VALIDATION_FAILED")
 	for _, l := range req.Lines {
 		switch l.ItemID {
 		case c.item["BERAS"]:
-			// a sack holds 25 kg: 26 kg are 1.04 sacks
-			wantDec(t, "rice in sacks", l.Qty, "1.04")
+			// a sack holds 25 kg: 26 kg are 1.04 sacks, and a sack is bought whole: 2
+			wantDec(t, "rice in sacks", l.Qty, "2")
 		case c.item["SIRUP"]:
-			// a carton holds 12 bottles: 24 bottles are 2 cartons
-			wantDec(t, "syrup in cartons", l.Qty, "2")
+			// a carton holds 12 bottles: 30 bottles are 2.5 cartons, rounded up to 3
+			wantDec(t, "syrup in cartons", l.Qty, "3")
 		default:
 			t.Fatalf("line: %+v", l)
 		}
@@ -447,6 +462,32 @@ func TestAPurchaseRequestIsMadeFromTheItemsBelowTheirMinimum(t *testing.T) {
 	wantCode(t, err, "NOTHING_TO_ORDER")
 	_, err = c.svc.CreateRequestFromLowStock(c.req, c.propID, inventory.LowStockRequestInput{ClientUUID: c.id(), WarehouseID: c.wh["MAIN"]})
 	wantCode(t, err, "VALIDATION_FAILED")
+}
+
+// The quantity of a request is rounded UP: a unit that is counted is bought whole, a unit that is measured to the thousandth.
+func TestTheQuantityOfARequestIsRoundedUpToAWholeUnitOrToTheThousandthForAMeasure(t *testing.T) {
+	unit := func(code string, num, den int32) inventorydb.ListItemUnitsOfRow {
+		return inventorydb.ListItemUnitsOfRow{UnitCode: code, StockNum: num, StockDen: den}
+	}
+	for _, c := range []struct {
+		name, want string
+		stock      string
+		u          inventorydb.ListItemUnitsOfRow
+	}{
+		{"54 bottles in cartons of 24: 2.25 cartons", "3", "54", unit("karton", 24, 1)},
+		{"28 sachets in packs of 25: 1.12 packs", "2", "28", unit("pak", 25, 1)},
+		{"exactly 2 cartons stays 2", "2", "48", unit("karton", 24, 1)},
+		{"a tiny need is one whole unit", "1", "0.01", unit("karung", 25, 1)},
+		{"a measure in kg to the thousandth, up", "12.217", "12.2161", unit("kg", 1, 1)},
+		{"a measure that fits stays", "12.216", "12.216", unit("KG", 1, 1)},
+		{"litres by the same rule", "3.001", "3.0004", unit("l", 1, 1)},
+		{"a measure bought in a bigger unit (2.5 kg bags)", "5", "11", unit("bag", 5, 2)},
+	} {
+		got := inventory.RequestQty(dec(c.stock), c.u)
+		if !got.Equal(dec(c.want)) {
+			t.Errorf("%s: got %s, want %s", c.name, got, c.want)
+		}
+	}
 }
 
 // ---------------------------------------------------------------- amenities by month

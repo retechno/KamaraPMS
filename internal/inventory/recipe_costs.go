@@ -12,6 +12,9 @@ import (
 // The recipe cost list (35-inventory.md 12.5, A7): every product the outlets sell, with the cost of a portion from its base recipe, the net price, the margin and the cost percentage against the target of the
 // outlet. A product with no recipe is in the list and marked: its cost is not known. The cost of an ingredient is the one of the recipe editor (unitCosts): the average of the warehouse of the outlet, else the last
 // cost, else the reference cost of the item. The options (variants and modifiers) are not in it.
+//
+// Products of the class OTHER (laundry, shop, spa: what is not food or drink) are left out unless the person asks for them. A product whose recipe has an ingredient with no price at the warehouse of the
+// outlet (no stock, no last cost, no reference cost) has no cost that can be trusted: its cost, margin and cost % are empty and `no_price` is set, and it stays out of the order by margin.
 
 // RecipeCostRow is a product at an outlet.
 type RecipeCostRow struct {
@@ -24,6 +27,7 @@ type RecipeCostRow struct {
 	CategoryName string           `json:"category_name"`
 	Class        string           `json:"class"`
 	HasRecipe    bool             `json:"has_recipe"`
+	NoPrice      bool             `json:"no_price"`
 	Cost         *decimal.Decimal `json:"cost"`
 	NetPrice     *decimal.Decimal `json:"net_price"`
 	Margin       *decimal.Decimal `json:"margin"`
@@ -32,15 +36,16 @@ type RecipeCostRow struct {
 	AboveTarget  bool             `json:"above_target"`
 }
 
-// RecipeCostReport is the list, lowest margin first (in percent of the price), the products with no recipe last.
+// RecipeCostReport is the list, lowest margin first (in percent of the price), then the products whose ingredients have no price, then the products with no recipe.
 type RecipeCostReport struct {
 	Rows             []RecipeCostRow `json:"rows"`
 	WithoutRecipe    int             `json:"without_recipe"`
+	WithoutPrice     int             `json:"without_price"`
 	CurrencyDecimals int32           `json:"currency_decimals"`
 }
 
-// RecipeCosts answers the list (inventory.view, or the permission to read recipes). outletID narrows it to one outlet.
-func (s *Service) RecipeCosts(ctx context.Context, propertyID int64, outletID *int64) (RecipeCostReport, error) {
+// RecipeCosts answers the list (inventory.view, or the permission to read recipes). outletID narrows it to one outlet; includeOther adds the products that are not food or drink.
+func (s *Service) RecipeCosts(ctx context.Context, propertyID int64, outletID *int64, includeOther bool) (RecipeCostReport, error) {
 	p, err := s.canRecipeRead(ctx, propertyID)
 	if err != nil {
 		return RecipeCostReport{}, err
@@ -92,7 +97,7 @@ func (s *Service) RecipeCosts(ctx context.Context, propertyID int64, outletID *i
 				wclass = ow.WarehouseClass
 			}
 		}
-		costs, _, err := s.unitCosts(ctx, p.TenantID, propertyID, wid, itemIDs, refs)
+		costs, basis, err := s.unitCosts(ctx, p.TenantID, propertyID, wid, itemIDs, refs)
 		if err != nil {
 			return RecipeCostReport{}, err
 		}
@@ -112,6 +117,9 @@ func (s *Service) RecipeCosts(ctx context.Context, propertyID int64, outletID *i
 			if err != nil {
 				return RecipeCostReport{}, err
 			}
+			if class == "OTHER" && !includeOther {
+				continue
+			}
 			row := RecipeCostRow{OutletID: o.ID, OutletCode: o.Code, OutletName: o.Name, ProductID: pr.ID, ProductCode: pr.Code, ProductName: pr.Name, CategoryName: pr.CategoryName, Class: class, HasRecipe: pr.HasRecipe}
 			net := price
 			row.NetPrice = &net
@@ -125,9 +133,18 @@ func (s *Service) RecipeCosts(ctx context.Context, propertyID int64, outletID *i
 			}
 			cost := decimal.Zero
 			for _, l := range byProduct[pr.ID] {
+				if basis[l.ItemID] == "NONE" {
+					row.NoPrice = true
+				}
 				cost = cost.Add(stockQtyOf(l.Quantity, l.StockNum, l.StockDen).Mul(costs[l.ItemID]))
 			}
 			cost = cost.Round(prop.CurrencyDecimals)
+			if row.NoPrice || !cost.IsPositive() {
+				row.NoPrice = true
+				out.WithoutPrice++
+				out.Rows = append(out.Rows, row)
+				continue
+			}
 			row.Cost = &cost
 			if price.IsPositive() {
 				m := price.Sub(cost).Round(prop.CurrencyDecimals)
@@ -138,13 +155,25 @@ func (s *Service) RecipeCosts(ctx context.Context, propertyID int64, outletID *i
 			out.Rows = append(out.Rows, row)
 		}
 	}
-	// lowest margin first (the margin as a share of the price, so the highest cost percentage first); the products with no recipe, which have no margin, last
-	sort.SliceStable(out.Rows, func(i, j int) bool {
-		a, b := out.Rows[i].CostPct, out.Rows[j].CostPct
-		if a == nil || b == nil {
-			return a != nil && b == nil
+	// lowest margin first (the margin as a share of the price, so the highest cost percentage first); then the products whose ingredients have no price, then the products with no recipe
+	rank := func(x RecipeCostRow) int {
+		switch {
+		case !x.HasRecipe:
+			return 2
+		case x.CostPct == nil:
+			return 1
 		}
-		return a.GreaterThan(*b)
+		return 0
+	}
+	sort.SliceStable(out.Rows, func(i, j int) bool {
+		a, b := out.Rows[i], out.Rows[j]
+		if ra, rb := rank(a), rank(b); ra != rb {
+			return ra < rb
+		}
+		if a.CostPct == nil || b.CostPct == nil {
+			return false
+		}
+		return a.CostPct.GreaterThan(*b.CostPct)
 	})
 	return out, nil
 }

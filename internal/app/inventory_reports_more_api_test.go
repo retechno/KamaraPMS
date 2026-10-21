@@ -27,6 +27,7 @@ func TestTheOtherInventoryReportsAreCSVFilesAndForWhoMayReadTheStockInTheirOwnTe
 		"/reports/amenities-by-month?format=csv":                    "month,item,name,unit",
 		"/reports/pending-approvals?format=csv":                     "type,number,department,requester",
 		"/reports/recipe-costs?format=csv":                          "outlet,product,name,category",
+		"/reports/recipe-costs?format=csv&include_other=true":       "outlet,product,name,category",
 		"/reports/meals?format=csv":                                 "department,kind,documents,covers",
 		"/reports/cost-day?date=2026-09-30&format=csv":              "kind,source_type,document,department",
 		"/reports/waste?warehouse_id=" + idText(wh) + "&format=csv": "reason,warehouse",
@@ -111,10 +112,10 @@ func TestADraftPurchaseRequestIsMadeFromTheLowStockListAPI(t *testing.T) {
 	if len(rows) != 1 || rows[0].(map[string]any)["missing"] != "6" || rows[0].(map[string]any)["suggest_qty"] != "6" {
 		t.Fatalf("low stock: %v", low.body)
 	}
-	body := map[string]any{"client_uuid": "0b1c0f7a-9d4e-4f6b-8a2e-1c3d5e7f9c62", "warehouse_id": wh, "item_ids": []float64{item}}
+	body := map[string]any{"client_uuid": "0b1c0f7a-9d4e-4f6b-8a2e-1c3d5e7f9c62", "warehouse_id": wh, "item_ids": []float64{item}, "note": "Dibuat dari laporan stok di bawah minimum"}
 	req := w.must(t, abc.do(http.MethodPost, w.base+"/requests/from-low-stock", body), 201)
 	lines := req.body["lines"].([]any)
-	if req.body["status"] != "DRAFT" || len(lines) != 1 || lines[0].(map[string]any)["qty"] != "6" {
+	if req.body["status"] != "DRAFT" || len(lines) != 1 || lines[0].(map[string]any)["qty"] != "6" || req.body["note"] != "Dibuat dari laporan stok di bawah minimum" {
 		t.Fatalf("the request: %v", req.body)
 	}
 	again := w.must(t, abc.do(http.MethodPost, w.base+"/requests/from-low-stock", body), 201)

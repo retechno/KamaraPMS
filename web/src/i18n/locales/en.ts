@@ -4641,6 +4641,7 @@ export const en = {
       class: {
         FOOD: 'Food',
         BEVERAGE: 'Beverage',
+        OTHER: 'Other',
       },
       basis: {
         COUNT: 'From approved counts',
@@ -4932,6 +4933,9 @@ export const en = {
         costPct: 'Cost %',
         target: 'Target',
         noRecipe: 'No recipe',
+        showOther: 'Show products that are not food or drink',
+        noPrice: 'The ingredients have no price in the warehouse of this outlet',
+        noPriceCount: '{n} dish(es) have an ingredient with no price in the warehouse of the outlet: their cost is not known and they are left out of the order by margin.',
       },
       meals: {
         title: 'Staff meals and entertainment',
@@ -4973,6 +4977,7 @@ export const en = {
         selectAll: 'Select all',
         selected: '{n} selected',
         makePr: 'Create PR',
+        requestNote: 'Created from the low stock report',
         suggest: 'To order',
         max: 'Maximum',
         oneWarehouse: 'Choose items of one warehouse to create a request.',

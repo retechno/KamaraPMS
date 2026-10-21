@@ -3,7 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { resetDepartments } from '@/composables/useDepartments'
-import { setLocale } from '@/i18n'
+import type { InventoryRecipeCostRow } from '@/api/types'
+import { setLocale, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import ReportsIndexView from '../ReportsIndexView.vue'
@@ -196,6 +197,48 @@ describe('recipe costs', () => {
   })
 })
 
+describe('recipe costs: classes, dishes without a price, the products that are not food or drink', () => {
+  const row = (over: Record<string, unknown>) => ({ outlet_id: 2, outlet_code: 'REST', outlet_name: 'Restaurant', product_id: 1, product_code: 'NASI', product_name: 'Nasi goreng', category_name: 'Main', class: 'FOOD', has_recipe: true, no_price: false, cost: '20000', net_price: '50000', margin: '30000', cost_pct: '40', target_pct: '32', above_target: true, ...over })
+  it('has a translation, in English and in Indonesian, for every class of the report', async () => {
+    // a new class in the API makes this fail to compile until it is listed here, and then until it is translated
+    const classes = ['FOOD', 'BEVERAGE', 'OTHER'] as const satisfies readonly InventoryRecipeCostRow['class'][]
+    const missing: Exclude<InventoryRecipeCostRow['class'], (typeof classes)[number]> extends never ? true : never = true
+    expect(missing).toBe(true)
+    for (const locale of ['en', 'id'] as const) {
+      await setLocale(locale)
+      for (const c of classes) {
+        const key = `inventory.reports.class.${c}`
+        expect(t(key), `${locale} ${key}`).not.toBe(key)
+      }
+    }
+  })
+  it('shows a dish whose ingredients have no price with dashes and a note, apart from the margin order', async () => {
+    await setup(RecipeCostsView, view, () => ({ data: { currency_decimals: 0, without_recipe: 0, without_price: 1, rows: [row({}), row({ product_id: 4, product_code: 'SATE', product_name: 'Sate', no_price: true, cost: null, margin: null, cost_pct: null, above_target: false })] } }))
+    const sate = body('[data-testid=recipecost-REST-SATE]')
+    expect(sate.find('[data-testid=recipecost-noprice]').text()).toBe('The ingredients have no price in the warehouse of this outlet')
+    expect(sate.findAll('td').slice(2).map((c) => c.text()).filter((x) => x === '–').length).toBe(3)
+    expect(body('[data-testid=recipecost-noprice-count]').text()).toContain('1 dish')
+    expect(body('[data-testid=recipecost-REST-NASI]').find('[data-testid=recipecost-noprice]').exists()).toBe(false)
+  })
+  it('names the class of a product that is not food or drink instead of showing the key', async () => {
+    await setup(RecipeCostsView, view, () => ({ data: { currency_decimals: 0, without_recipe: 1, without_price: 0, rows: [row({ outlet_code: 'LND', product_code: 'WASH', product_name: 'Wash', class: 'OTHER', has_recipe: false, cost: null, margin: null, cost_pct: null })] } }))
+    const text = body('[data-testid=recipecost-LND-WASH]').text()
+    expect(text).toContain('Other')
+    expect(text).not.toContain('inventory.reports.class')
+  })
+  it('leaves the non-F&B products out and asks for them with the checkbox, also in the CSV', async () => {
+    await setup(RecipeCostsView, view, () => ({ data: { currency_decimals: 0, without_recipe: 0, without_price: 0, rows: [row({})] } }))
+    expect(GET.mock.calls[0]![1].params.query).toEqual({})
+    const box = document.body.querySelector('input[name=include_other]') as HTMLInputElement
+    box.checked = true
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    expect(GET.mock.calls.at(-1)![1].params.query).toEqual({ include_other: true })
+    await click('[data-testid=report-csv]')
+    expect(JSON.stringify(downloadCsv.mock.calls.at(-1))).toContain('include_other')
+  })
+})
+
 describe('staff meals and entertainment', () => {
   it('shows the value, the documents and the cost of a portion by department', async () => {
     await setup(MealsView, view, (path) => lookups(path) ?? ({ data: {
@@ -262,7 +305,15 @@ describe('items below the minimum, and the purchase request made from them', () 
     expect(arg.body.warehouse_id).toBe(1)
     expect(arg.body.item_ids).toEqual([4, 5])
     expect(typeof arg.body.client_uuid).toBe('string')
+    expect(arg.body.note).toBe('Created from the low stock report')
     expect(router.currentRoute.value.fullPath).toBe('/inventory/requests/91')
+  })
+  it('sends the note of the draft in the language of the screen', async () => {
+    await setLocale('id')
+    await setup(LowStockView, ['inventory.view', 'inventory.request'], get)
+    await click('[data-testid=low-check-KIT-BEEF]')
+    await click('[data-testid=low-make-pr]')
+    expect(POST.mock.calls[0]![1].body.note).toBe('Dibuat dari laporan stok di bawah minimum')
   })
   it('refuses items of two warehouses in one request', async () => {
     await setup(LowStockView, ['inventory.view', 'inventory.request'], get)

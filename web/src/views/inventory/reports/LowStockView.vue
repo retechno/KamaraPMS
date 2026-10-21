@@ -47,7 +47,7 @@ async function makeRequest(): Promise<void> {
   try {
     const { data } = await api.POST('/api/v1/properties/{propertyId}/inventory/requests/from-low-stock', {
       params: { path: { propertyId } },
-      body: { client_uuid: clientUuid.value, warehouse_id: chosen[0]!.warehouse_id, item_ids: chosen.map((x) => x.item_id), department_id: null },
+      body: { client_uuid: clientUuid.value, warehouse_id: chosen[0]!.warehouse_id, item_ids: chosen.map((x) => x.item_id), department_id: null, note: t('inventory.reports.lowStock.requestNote') },
     })
     clientUuid.value = crypto.randomUUID()
     if (data) await router.push(`/inventory/requests/${data.id}`)

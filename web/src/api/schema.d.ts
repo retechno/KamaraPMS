@@ -10588,7 +10588,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** The cost, price and margin of the products of the POS, lowest margin first */
+        /** The cost, price and margin of the products of the POS, lowest margin first; products whose ingredients have no price (no_price), then products with no recipe, last */
         get: operations["reportInventoryRecipeCosts"];
         put?: never;
         post?: never;
@@ -21476,8 +21476,11 @@ export interface components {
             product_code: string;
             product_name: string;
             category_name: string;
-            class: string;
+            /** @enum {string} */
+            class: "FOOD" | "BEVERAGE" | "OTHER";
             has_recipe: boolean;
+            /** @description An ingredient has no price at the warehouse of the outlet: cost, margin and cost_pct are null. */
+            no_price: boolean;
             cost: string | null;
             net_price: string | null;
             margin: string | null;
@@ -21488,6 +21491,7 @@ export interface components {
         InventoryRecipeCostReport: {
             rows: components["schemas"]["InventoryRecipeCostRow"][];
             without_recipe: number;
+            without_price: number;
             currency_decimals: number;
         };
         InventoryMealRow: {
@@ -21541,7 +21545,9 @@ export interface components {
             warehouse_id: number;
             item_ids: number[];
             /** Format: int64 */
-            department_id: number | null;
+            department_id?: number | null;
+            /** @description The note of the draft, in the language of the person; empty gives the English text. */
+            note?: string | null;
         };
         InventoryDashboard: {
             business_date: components["schemas"]["Date"];
@@ -38679,6 +38685,8 @@ export interface operations {
         parameters: {
             query?: {
                 outlet_id?: number;
+                /** @description true adds the products of the class OTHER (not food or drink), left out by default */
+                include_other?: boolean;
                 /** @description csv for a file */
                 format?: "json" | "csv";
                 /** @description id for the names of the columns in Indonesian */

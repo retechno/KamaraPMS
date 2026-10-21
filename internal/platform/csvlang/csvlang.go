@@ -63,6 +63,7 @@ var id = map[string]string{ //nolint:gosec // G101: column names, not credential
 	"gain":                  "Lebih",
 	"guests":                "Tamu",
 	"has_recipe":            "Punya resep",
+	"no_price":              "Bahan tanpa harga",
 	"item":                  "Barang",
 	"level":                 "Level",
 	"lines":                 "Baris",

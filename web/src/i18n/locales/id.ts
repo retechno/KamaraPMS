@@ -4639,6 +4639,7 @@ export const id: Messages = {
       class: {
         FOOD: 'Makanan',
         BEVERAGE: 'Minuman',
+        OTHER: 'Lainnya',
       },
       basis: {
         COUNT: 'Dari opname yang disetujui',
@@ -4930,6 +4931,9 @@ export const id: Messages = {
         costPct: 'Biaya %',
         target: 'Target',
         noRecipe: 'Tanpa resep',
+        showOther: 'Tampilkan produk non-F&B',
+        noPrice: 'Bahan belum punya harga di gudang outlet ini',
+        noPriceCount: '{n} hidangan punya bahan yang belum berharga di gudang outletnya: biayanya belum diketahui dan tidak ikut urutan margin terendah.',
       },
       meals: {
         title: 'Makan karyawan dan hiburan',
@@ -4971,6 +4975,7 @@ export const id: Messages = {
         selectAll: 'Pilih semua',
         selected: '{n} dipilih',
         makePr: 'Buat PR',
+        requestNote: 'Dibuat dari laporan stok di bawah minimum',
         suggest: 'Perlu dipesan',
         max: 'Maksimum',
         oneWarehouse: 'Pilih barang dari satu gudang untuk membuat permintaan.',

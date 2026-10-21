@@ -12,13 +12,16 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { t } from '@/i18n'
 import { formatMoney, formatPercent } from '@/utils/format'
 
-/** The recipe cost list (docs/architecture/35-inventory.md 12.5, 22): every product an outlet sells, with the cost of a portion, the net price, the margin and the cost percentage against the target of the outlet; the lowest margin first, the products with no recipe flagged. */
+const showOther = ref(false)
+
+/** The recipe cost list (docs/architecture/35-inventory.md 12.5, 22): every product an outlet sells, with the cost of a portion, the net price, the margin and the cost percentage against the target of the outlet; the lowest margin first, then the dishes whose ingredients have no price, then the products with no recipe. The products that are not food or drink (class OTHER) are left out unless asked for. */
 const r = useInventoryReport<InventoryRecipeCostReport>('/api/v1/properties/{propertyId}/inventory/reports/recipe-costs', 'recipe-costs.csv', async (propertyId) => {
-  const { data } = await api.GET('/api/v1/properties/{propertyId}/inventory/reports/recipe-costs', { params: { path: { propertyId } } })
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/inventory/reports/recipe-costs', { params: { path: { propertyId }, query: showOther.value ? { include_other: true } : {} } })
   return data ?? null
 }, { single: true })
 const print = (): void => window.print()
 watch(r.pid, r.load, { immediate: true })
+watch(showOther, r.load)
 const outlet = ref('')
 const outlets = computed(() => {
   const seen = new Map<number, string>()
@@ -38,15 +41,17 @@ const percent = (v: string | null | undefined): string => (v === null || v === u
   <template v-else>
     <div class="mb-4 flex flex-wrap items-end gap-3 print:hidden" data-testid="report-period">
       <ReportFilterSelect v-model="outlet" name="outlet_id" :label="t('inventory.reports.filter.outlet')" :all-label="t('inventory.reports.filter.allOutlets')" :options="outlets" />
+      <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="showOther" type="checkbox" name="include_other" data-testid="recipecost-other" />{{ t('inventory.reports.recipeCosts.showOther') }}</label>
       <Button type="button" variant="outline" :disabled="r.busy.value" data-testid="report-show" @click="r.load">{{ t('inventory.reports.show') }}</Button>
       <div class="ml-auto flex gap-2">
         <Button type="button" variant="outline" data-testid="report-print" @click="print">{{ t('inventory.reports.print') }}</Button>
-        <Button type="button" variant="outline" :disabled="r.busy.value" data-testid="report-csv" @click="r.csv(outlet ? { outlet_id: Number(outlet) } : {})">{{ t('inventory.reports.csv') }}</Button>
+        <Button type="button" variant="outline" :disabled="r.busy.value" data-testid="report-csv" @click="r.csv({ ...(outlet ? { outlet_id: Number(outlet) } : {}), ...(showOther ? { include_other: true } : {}) })">{{ t('inventory.reports.csv') }}</Button>
       </div>
     </div>
     <p v-if="r.loaded.value && !rows.length" class="m-0 text-sm text-muted-foreground" data-testid="recipecost-empty">{{ t('inventory.reports.empty') }}</p>
     <template v-else-if="r.data.value">
       <p v-if="r.data.value.without_recipe" class="m-0 mb-3 text-sm text-warning-text" data-testid="recipecost-missing">{{ t('inventory.reports.recipeCosts.missing', { n: r.data.value.without_recipe }) }}</p>
+      <p v-if="r.data.value.without_price" class="m-0 mb-3 text-sm text-warning-text" data-testid="recipecost-noprice-count">{{ t('inventory.reports.recipeCosts.noPriceCount', { n: r.data.value.without_price }) }}</p>
       <div class="overflow-x-auto">
         <table class="w-full min-w-[52rem] text-sm" data-testid="recipecost-table">
           <thead><tr class="text-left text-xs text-muted-foreground">
@@ -56,7 +61,7 @@ const percent = (v: string | null | undefined): string => (v === null || v === u
           </tr></thead>
           <tbody>
             <tr v-for="x in rows" :key="`${x.outlet_id}-${x.product_id}`" class="border-t border-border" :data-testid="`recipecost-${x.outlet_code}-${x.product_code}`">
-              <td class="py-1.5 pr-2">{{ x.product_name }}<span class="block text-xs text-muted-foreground">{{ x.product_code }} · {{ x.category_name }} · {{ t(`inventory.reports.class.${x.class}`) }}</span></td>
+              <td class="py-1.5 pr-2">{{ x.product_name }}<span class="block text-xs text-muted-foreground">{{ x.product_code }} · {{ x.category_name }} · {{ t(`inventory.reports.class.${x.class}`) }}</span><span v-if="x.has_recipe && x.no_price" class="block text-xs text-warning-text" data-testid="recipecost-noprice">{{ t('inventory.reports.recipeCosts.noPrice') }}</span></td>
               <td class="py-1.5 pr-2">{{ x.outlet_code }}</td>
               <template v-if="x.has_recipe">
                 <td class="py-1.5 pr-2 text-right">{{ money(x.cost) }}</td><td class="py-1.5 pr-2 text-right">{{ money(x.net_price) }}</td><td class="py-1.5 pr-2 text-right">{{ money(x.margin) }}</td>

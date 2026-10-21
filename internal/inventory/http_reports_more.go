@@ -191,16 +191,20 @@ func (h *Handler) reportRecipeCosts(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	rep, err := h.svc.RecipeCosts(r.Context(), pid, oid)
+	other, err := queryBool(r, "include_other")
+	if err != nil {
+		return err
+	}
+	rep, err := h.svc.RecipeCosts(r.Context(), pid, oid, other != nil && *other)
 	if err != nil {
 		return err
 	}
 	if !wantsCSV(r) {
 		return httpx.WriteJSON(w, http.StatusOK, rep)
 	}
-	rows := [][]string{{"outlet", "product", "name", "category", "class", "has_recipe", "cost", "net_price", "margin", "cost_pct", "target_pct", "above_target"}}
+	rows := [][]string{{"outlet", "product", "name", "category", "class", "has_recipe", "no_price", "cost", "net_price", "margin", "cost_pct", "target_pct", "above_target"}}
 	for _, x := range rep.Rows {
-		rows = append(rows, []string{x.OutletName, x.ProductCode, x.ProductName, x.CategoryName, x.Class, strconv.FormatBool(x.HasRecipe), decp(x.Cost), decp(x.NetPrice), decp(x.Margin), decp(x.CostPct), decp(x.TargetPct),
+		rows = append(rows, []string{x.OutletName, x.ProductCode, x.ProductName, x.CategoryName, x.Class, strconv.FormatBool(x.HasRecipe), strconv.FormatBool(x.NoPrice), decp(x.Cost), decp(x.NetPrice), decp(x.Margin), decp(x.CostPct), decp(x.TargetPct),
 			strconv.FormatBool(x.AboveTarget)})
 	}
 	return writeCSV(w, r, "recipe-costs.csv", rows)
