@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import type { InventoryOutletCost } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import GlCheckPanel from '@/components/inventory/GlCheckPanel.vue'
 import ReportPeriodBar from '@/components/inventory/ReportPeriodBar.vue'
 import { Badge } from '@/components/ui/badge'
@@ -28,6 +29,7 @@ const over = (actual: string | null, target: string | null): boolean => actual !
 
 <template>
   <PageHeader :title="t('inventory.reports.outlet.title')" :description="t('inventory.reports.outlet.intro')" />
+  <ReportPrintHeader :from="r.period.from" :to="r.period.to" />
   <ErrorNotice v-if="r.error.value" :error="r.error.value" inline />
   <p v-if="r.pid.value === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>

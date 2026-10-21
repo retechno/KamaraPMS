@@ -186,10 +186,26 @@ type LowStockRow struct {
 	UnitCode      string          `json:"unit_code"`
 	Qty           decimal.Decimal `json:"qty"`
 	MinQty        decimal.Decimal `json:"min_qty"`
+	MaxQty        decimal.Decimal `json:"max_qty"`
 	ReorderQty    decimal.Decimal `json:"reorder_qty"`
 	// Missing is how far the item is below its minimum.
 	Missing decimal.Decimal `json:"missing"`
-	Value   decimal.Decimal `json:"value"`
+	// SuggestQty is what a purchase request asks for (suggestedOrder): in stock units.
+	SuggestQty decimal.Decimal `json:"suggest_qty"`
+	Value      decimal.Decimal `json:"value"`
+}
+
+// suggestedOrder is the quantity to order for an item below its minimum, in stock units: up to the maximum level when there is one; else the reorder quantity (never less than what brings the item back to its
+// minimum); else the quantity that brings it back to the minimum.
+func suggestedOrder(qty, minQty decimal.Decimal, maxQty, reorderQty *decimal.Decimal) decimal.Decimal {
+	toMin := minQty.Sub(qty)
+	switch {
+	case maxQty != nil && maxQty.GreaterThan(qty):
+		return maxQty.Sub(qty)
+	case reorderQty != nil && reorderQty.IsPositive():
+		return decimal.Max(*reorderQty, toMin)
+	}
+	return decimal.Max(toMin, decimal.Zero)
 }
 
 // LowStock lists the items whose quantity is below the minimum of the warehouse (inventory.view).
@@ -205,7 +221,7 @@ func (s *Service) LowStock(ctx context.Context, propertyID int64, warehouseID *i
 	out := make([]LowStockRow, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, LowStockRow{WarehouseID: r.WarehouseID, WarehouseCode: r.WarehouseCode, WarehouseName: r.WarehouseName, ItemID: r.ItemID, ItemCode: r.ItemCode, ItemName: r.ItemName,
-			UnitCode: r.UnitCode, Qty: r.Qty, MinQty: r.MinQty, ReorderQty: derefDec(r.ReorderQty), Missing: r.MinQty.Sub(r.Qty), Value: r.Value})
+			UnitCode: r.UnitCode, Qty: r.Qty, MinQty: r.MinQty, MaxQty: derefDec(r.MaxQty), ReorderQty: derefDec(r.ReorderQty), Missing: r.MinQty.Sub(r.Qty), SuggestQty: suggestedOrder(r.Qty, r.MinQty, r.MaxQty, r.ReorderQty), Value: r.Value})
 	}
 	return out, nil
 }

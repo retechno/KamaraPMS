@@ -53,14 +53,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-background text-foreground">
+  <div class="flex min-h-screen bg-background text-foreground print:block">
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2">
       {{ t('shell.skipToContent') }}
     </a>
 
     <aside
       v-if="mode !== 'drawer'"
-      :class="['sticky top-0 flex h-screen shrink-0 flex-col overflow-y-auto border-r border-border bg-muted px-2 py-3', mode === 'rail' ? 'w-16' : 'w-64']"
+      :class="['sticky top-0 flex h-screen shrink-0 flex-col overflow-y-auto border-r border-border bg-muted px-2 py-3 print:hidden', mode === 'rail' ? 'w-16' : 'w-64']"
       :data-mode="mode"
       data-testid="sidebar"
     >
@@ -72,8 +72,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
-      <TopBar :mode="mode" :collapsed="collapsed" :can-collapse="canCollapse" @menu="drawer = true" @search="palette = true" @sign-out="emit('signOut')" @toggle-sidebar="toggleCollapsed" />
-      <main id="main" class="flex-1 p-4 md:p-6" tabindex="-1">
+      <TopBar class="print:hidden" :mode="mode" :collapsed="collapsed" :can-collapse="canCollapse" @menu="drawer = true" @search="palette = true" @sign-out="emit('signOut')" @toggle-sidebar="toggleCollapsed" />
+      <main id="main" class="flex-1 p-4 md:p-6 print:p-0" tabindex="-1">
         <p v-if="property.clock?.night_audit_overdue" class="alert warning" role="status" data-testid="overdue-banner">
           {{ t('shell.nightAuditBanner', { date: formatBusinessDate(property.clock.business_date) }) }}
         </p>

@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import type { InventoryValueReport } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import ReportPeriodBar from '@/components/inventory/ReportPeriodBar.vue'
 import { Badge } from '@/components/ui/badge'
 import { useInventoryReport } from '@/composables/useInventoryReport'
@@ -24,6 +25,7 @@ const money = (v: string): string => (Number(v) === 0 ? '0' : formatMoney(v))
 
 <template>
   <PageHeader :title="t('inventory.reports.value.title')" :description="t('inventory.reports.value.intro')" />
+  <ReportPrintHeader :to="r.period.to" />
   <ErrorNotice v-if="r.error.value" :error="r.error.value" inline />
   <p v-if="r.pid.value === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>

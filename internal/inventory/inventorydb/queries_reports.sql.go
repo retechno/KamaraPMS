@@ -848,7 +848,7 @@ func (q *Queries) ListSnapshotDays(ctx context.Context, arg ListSnapshotDaysPara
 const lowStock = `-- name: LowStock :many
 
 SELECT b.warehouse_id, w.code AS warehouse_code, w.name AS warehouse_name, i.id AS item_id, i.code AS item_code, i.name AS item_name, u.code AS unit_code,
-       b.qty, l.min_qty, l.reorder_qty, b.value
+       b.qty, l.min_qty, l.max_qty, l.reorder_qty, b.value
   FROM inv_balances b
   JOIN inv_levels l ON l.warehouse_id = b.warehouse_id AND l.item_id = b.item_id AND l.min_qty > 0
   JOIN inv_warehouses w ON w.property_id = b.property_id AND w.id = b.warehouse_id
@@ -875,6 +875,7 @@ type LowStockRow struct {
 	UnitCode      string
 	Qty           decimal.Decimal
 	MinQty        decimal.Decimal
+	MaxQty        *decimal.Decimal
 	ReorderQty    *decimal.Decimal
 	Value         decimal.Decimal
 }
@@ -900,6 +901,7 @@ func (q *Queries) LowStock(ctx context.Context, arg LowStockParams) ([]LowStockR
 			&i.UnitCode,
 			&i.Qty,
 			&i.MinQty,
+			&i.MaxQty,
 			&i.ReorderQty,
 			&i.Value,
 		); err != nil {

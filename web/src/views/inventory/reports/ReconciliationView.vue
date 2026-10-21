@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import type { InventoryReconciliation, InventoryReconColumn } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import GlCheckPanel from '@/components/inventory/GlCheckPanel.vue'
 import ReportPeriodBar from '@/components/inventory/ReportPeriodBar.vue'
 import { Badge } from '@/components/ui/badge'
@@ -62,6 +63,7 @@ const cols = computed(() => (r.data.value ? [{ id: 'food', c: r.data.value.food 
 
 <template>
   <PageHeader :title="t('inventory.reports.recon.title')" :description="t('inventory.reports.recon.intro')" />
+  <ReportPrintHeader :from="r.period.from" :to="r.period.to" />
   <ErrorNotice v-if="r.error.value" :error="r.error.value" inline />
   <p v-if="r.pid.value === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>
@@ -88,6 +90,10 @@ const cols = computed(() => (r.data.value ? [{ id: 'food', c: r.data.value.food 
         </table>
       </div>
       <p class="m-0 text-xs text-muted-foreground">{{ t('inventory.reports.recon.note') }}</p>
+      <p class="m-0 text-xs text-muted-foreground" data-testid="recon-recipe-basis">
+        {{ t('inventory.reports.reconNote') }}
+        <template v-if="r.data.value.total.no_recipe_days > 0"> · <strong data-testid="recon-no-recipe-days">{{ t('inventory.reports.reconNoRecipeDays', { n: r.data.value.total.no_recipe_days }) }}</strong></template>
+      </p>
       <GlCheckPanel :check="r.data.value.gl" />
     </div>
   </template>

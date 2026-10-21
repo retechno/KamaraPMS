@@ -7,6 +7,7 @@ import type { InventoryGrni } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import { Button } from '@/components/ui/button'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
@@ -33,6 +34,7 @@ async function load(): Promise<void> {
     loaded.value = true
   }
 }
+const print = (): void => window.print()
 async function csv(): Promise<void> {
   if (pid.value !== null) await downloadCsv('/api/v1/properties/{propertyId}/inventory/reports/received-not-invoiced', { path: { propertyId: pid.value } }, 'received-not-invoiced.csv')
 }
@@ -42,6 +44,7 @@ const old = (bucket: string): boolean => bucket === '61-90' || bucket === '90+'
 
 <template>
   <PageHeader :title="t('inventory.reports.grni.title')" :description="t('inventory.reports.grni.intro')" />
+  <ReportPrintHeader />
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else-if="data">
@@ -50,7 +53,7 @@ const old = (bucket: string): boolean => bucket === '61-90' || bucket === '90+'
         <KpiCard v-for="b in data.buckets" :key="b.bucket" :label="t('inventory.reports.grni.age', { bucket: b.bucket })" :value="formatMoney(b.value)" :tone="old(b.bucket) && Number(b.value) > 0 ? 'warning' : 'default'" :hint="t('inventory.reports.grni.receipts', { n: b.count })" :data-testid="`bucket-${b.bucket}`" />
         <KpiCard :label="t('inventory.reports.grni.ledger')" :value="formatMoney(data.ledger_balance)" :hint="t('inventory.reports.grni.ledgerHint')" data-testid="grni-ledger" />
       </div>
-      <Button type="button" variant="outline" size="sm" data-testid="report-csv" @click="csv">{{ t('inventory.reports.csv') }}</Button>
+      <span class="flex gap-2 print:hidden"><Button type="button" variant="outline" size="sm" data-testid="report-print" @click="print">{{ t('inventory.reports.print') }}</Button><Button type="button" variant="outline" size="sm" data-testid="report-csv" @click="csv">{{ t('inventory.reports.csv') }}</Button></span>
     </div>
     <p v-if="loaded && data.rows.length === 0" class="m-0 text-sm text-muted-foreground" data-testid="grni-empty">{{ t('inventory.reports.grni.empty') }}</p>
     <div v-else class="overflow-x-auto">

@@ -195,20 +195,12 @@ type FbPart struct {
 	NoRecipeData bool `json:"no_recipe_data"`
 }
 
-// fbCells fills the revenue, the cost and the percentage of the rows of the given classes. The rows are summed per day and class: a day with revenue and no cost of sales (the goods sold have no recipe) has no percentage and does not count in it.
-func fbCells(rows []FbDayRow, classes ...string) FbPart {
+// recipeBasis sums the revenue of the days that have a cost of sales from recipes (the basis of a theoretical percentage) and counts the days with revenue and no such cost. The rows are summed per day
+// and class: a day with revenue and no cost of sales (the goods sold have no recipe) has no percentage and does not count in it. A date counts once however many classes lack a cost.
+func recipeBasis(rows []FbDayRow) (decimal.Decimal, int) {
 	type cell struct{ rev, cost decimal.Decimal }
 	cells := map[string]*cell{}
-	days := map[civil.Date]bool{}
-	var out FbPart
 	for _, r := range rows {
-		ok := false
-		for _, c := range classes {
-			ok = ok || r.Class == c
-		}
-		if !ok {
-			continue
-		}
 		k := r.Date.String() + r.Class
 		c := cells[k]
 		if c == nil {
@@ -216,9 +208,9 @@ func fbCells(rows []FbDayRow, classes ...string) FbPart {
 			cells[k] = c
 		}
 		c.rev, c.cost = c.rev.Add(r.Revenue), c.cost.Add(r.SaleCost)
-		out.Revenue, out.Cost = out.Revenue.Add(r.Revenue), out.Cost.Add(r.SaleCost)
 	}
 	dataRev := decimal.Zero
+	days := map[civil.Date]bool{}
 	for k, c := range cells {
 		switch {
 		case c.cost.IsPositive():
@@ -230,7 +222,24 @@ func fbCells(rows []FbDayRow, classes ...string) FbPart {
 			}
 		}
 	}
-	out.NoRecipeDays = len(days)
+	return dataRev, len(days)
+}
+
+// fbCells fills the revenue, the cost and the percentage of the rows of the given classes.
+func fbCells(rows []FbDayRow, classes ...string) FbPart {
+	var out FbPart
+	var sel []FbDayRow
+	for _, r := range rows {
+		for _, c := range classes {
+			if r.Class == c {
+				sel = append(sel, r)
+				out.Revenue, out.Cost = out.Revenue.Add(r.Revenue), out.Cost.Add(r.SaleCost)
+				break
+			}
+		}
+	}
+	dataRev, days := recipeBasis(sel)
+	out.NoRecipeDays = days
 	out.Pct = pct(out.Cost, dataRev)
 	out.NoRecipeData = out.Revenue.IsPositive() && out.Pct == nil
 	return out
@@ -498,6 +507,10 @@ type ReconColumn struct {
 	NoRecipeEstimate decimal.Decimal  `json:"no_recipe_estimate"`
 	OtherOutflows    decimal.Decimal  `json:"other_outflows"`
 	TargetPct        *decimal.Decimal `json:"target_pct"`
+	// TheoryRevenue is the revenue of the days that have a cost of sales from recipes: the theoretical % is the theory over it, not over all the revenue (the days with no recipe data would pull it down).
+	TheoryRevenue decimal.Decimal `json:"theory_revenue"`
+	// NoRecipeDays counts the days with revenue and no cost from recipes; they are left out of the theoretical %.
+	NoRecipeDays int `json:"no_recipe_days"`
 }
 
 // Reconciliation is the report of 12.1 for a period.
@@ -515,20 +528,60 @@ type Reconciliation struct {
 func addCols(a, b ReconColumn) ReconColumn {
 	return ReconColumn{Opening: a.Opening.Add(b.Opening), OpeningPosted: a.OpeningPosted.Add(b.OpeningPosted), Purchases: a.Purchases.Add(b.Purchases), TransferIn: a.TransferIn.Add(b.TransferIn), TransferOut: a.TransferOut.Add(b.TransferOut),
 		Closing: a.Closing.Add(b.Closing), StaffMeal: a.StaffMeal.Add(b.StaffMeal), Entertainment: a.Entertainment.Add(b.Entertainment), Revenue: a.Revenue.Add(b.Revenue),
-		Theory: a.Theory.Add(b.Theory), Waste: a.Waste.Add(b.Waste), CountVariance: a.CountVariance.Add(b.CountVariance), NoRecipeEstimate: a.NoRecipeEstimate.Add(b.NoRecipeEstimate)}
+		Theory: a.Theory.Add(b.Theory), Waste: a.Waste.Add(b.Waste), CountVariance: a.CountVariance.Add(b.CountVariance), NoRecipeEstimate: a.NoRecipeEstimate.Add(b.NoRecipeEstimate),
+		TheoryRevenue: a.TheoryRevenue.Add(b.TheoryRevenue)}
 }
 
 // finish computes the lines that follow from the others.
 func (c *ReconColumn) finish() {
 	c.GoodsUsed = c.Opening.Add(c.OpeningPosted).Add(c.Purchases).Add(c.TransferIn).Sub(c.TransferOut).Sub(c.Closing)
 	c.NetCost = c.GoodsUsed.Sub(c.StaffMeal).Sub(c.Entertainment)
-	c.ActualPct, c.TheoryPct = pct(c.NetCost, c.Revenue), pct(c.Theory, c.Revenue)
+	c.ActualPct, c.TheoryPct = pct(c.NetCost, c.Revenue), pct(c.Theory, c.TheoryRevenue)
 	c.Difference = c.NetCost.Sub(c.Theory)
 	if c.ActualPct != nil && c.TheoryPct != nil {
 		v := c.ActualPct.Sub(*c.TheoryPct)
 		c.DifferencePoints = &v
 	}
 	c.OtherOutflows = c.Difference.Sub(c.Waste).Sub(c.CountVariance)
+}
+
+// noRecipeEstimates estimates, per class, the cost of the sales whose products have no recipe: their revenue at the theoretical percentage. A row that has a cost of sales uses its own percentage; a row
+// that has none (a day with no recipe data) uses the percentage of the same outlet and class over the days that have data, else the one of the class. A class with no day of data has no estimate.
+func noRecipeEstimates(rows []FbDayRow) map[string]decimal.Decimal {
+	type acc struct{ rev, cost decimal.Decimal }
+	byOutlet, byClass := map[string]*acc{}, map[string]*acc{}
+	add := func(m map[string]*acc, k string, r FbDayRow) {
+		a := m[k]
+		if a == nil {
+			a = &acc{}
+			m[k] = a
+		}
+		a.rev, a.cost = a.rev.Add(r.Revenue), a.cost.Add(r.SaleCost)
+	}
+	for _, r := range rows {
+		if r.SaleCost.IsPositive() {
+			add(byOutlet, strconv.FormatInt(idKey(r.OutletID), 10)+r.Class, r)
+			add(byClass, r.Class, r)
+		}
+	}
+	out := map[string]decimal.Decimal{}
+	for _, r := range rows {
+		if !r.NoRecipeRevenue.IsPositive() {
+			continue
+		}
+		var rate *decimal.Decimal
+		if r.SaleCost.IsPositive() {
+			rate = pct(r.SaleCost, r.Revenue)
+		} else if a := byOutlet[strconv.FormatInt(idKey(r.OutletID), 10)+r.Class]; a != nil {
+			rate = pct(a.cost, a.rev)
+		} else if a := byClass[r.Class]; a != nil {
+			rate = pct(a.cost, a.rev)
+		}
+		if rate != nil {
+			out[r.Class] = out[r.Class].Add(r.NoRecipeRevenue.Mul(*rate).Div(hundred))
+		}
+	}
+	return out
 }
 
 // FbReconciliation answers the report of 12.1 for the days from..to (inventory.view).
@@ -590,15 +643,14 @@ func (s *Service) FbReconciliation(ctx context.Context, propertyID int64, from, 
 	if err != nil {
 		return Reconciliation{}, err
 	}
-	sale := map[string]decimal.Decimal{}
-	norecipe := map[string]decimal.Decimal{}
+	norecipe := noRecipeEstimates(fig.Fb)
+	var byClass = map[string][]FbDayRow{}
 	for _, r := range fig.Fb {
 		cols[r.Class].Revenue = cols[r.Class].Revenue.Add(r.Revenue)
-		sale[r.Class] = sale[r.Class].Add(r.SaleCost)
-		// sales without a recipe: an estimate at the theoretical percentage of the same outlet and class
-		if rate := pct(r.SaleCost, r.Revenue); rate != nil && r.NoRecipeRevenue.IsPositive() {
-			norecipe[r.Class] = norecipe[r.Class].Add(r.NoRecipeRevenue.Mul(*rate).Div(hundred))
-		}
+		byClass[r.Class] = append(byClass[r.Class], r)
+	}
+	for class, rows := range byClass {
+		cols[class].TheoryRevenue, cols[class].NoRecipeDays = recipeBasis(rows)
 	}
 	tl, err := s.targetsOf(ctx, p.TenantID, propertyID)
 	if err != nil {
@@ -623,6 +675,7 @@ func (s *Service) FbReconciliation(ctx context.Context, propertyID int64, from, 
 	}
 	out.Food, out.Beverage = *cols["FOOD"], *cols["BEVERAGE"]
 	total := addCols(out.Food, out.Beverage)
+	_, total.NoRecipeDays = recipeBasis(fig.Fb)
 	total.finish()
 	total.TargetPct = nil
 	out.Total = total
