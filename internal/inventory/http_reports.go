@@ -30,6 +30,7 @@ func (h *Handler) registerReports(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/reports/received-not-invoiced", httpx.HandlerFunc(h.reportGrni))
 	mux.Handle("GET "+p+"/reports/usage", httpx.HandlerFunc(h.reportUsage))
 	h.registerMoreReports(mux)
+	h.registerReports6b(mux)
 }
 
 func wantsCSV(r *http.Request) bool { return r.URL.Query().Get("format") == "csv" }

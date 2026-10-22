@@ -31,6 +31,13 @@ func TestTheOtherInventoryReportsAreCSVFilesAndForWhoMayReadTheStockInTheirOwnTe
 		"/reports/meals?format=csv":                                 "department,kind,documents,covers",
 		"/reports/cost-day?date=2026-09-30&format=csv":              "kind,source_type,document,department",
 		"/reports/waste?warehouse_id=" + idText(wh) + "&format=csv": "reason,warehouse",
+		"/reports/item-movements?format=csv":                        "item,name,category,unit,opening_qty",
+		"/reports/item-movements?format=csv&lang=id":                "Barang,Nama,Kategori,Satuan,Jumlah awal",
+		"/reports/purchases?format=csv":                             "supplier,item,name,category",
+		"/reports/price-history?format=csv&item_id=" + idText(item): "date,receipt,supplier,item",
+		"/reports/slow-stock?format=csv&days=30":                    "warehouse,item,name,category",
+		"/reports/top-usage?format=csv&kinds=WASTE,ISSUE":           "rank,item,name,category",
+		"/reports/top-usage?format=csv&lang=id":                     "Peringkat,Barang",
 	} {
 		r := w.e.raw(abc, http.MethodGet, w.base+path)
 		if r.status != 200 || !strings.HasPrefix(r.contentType, "text/csv") || !strings.HasPrefix(r.body, head) {
@@ -39,6 +46,22 @@ func TestTheOtherInventoryReportsAreCSVFilesAndForWhoMayReadTheStockInTheirOwnTe
 	}
 	if r := w.e.raw(abc, http.MethodGet, w.base+"/reports/waste?format=csv"); !strings.Contains(r.body, "SPOILAGE,Gudang Utama") || !strings.Contains(r.body, ",2000,") {
 		t.Fatalf("the waste as a file: %q", r.body)
+	}
+	if r := w.e.raw(abc, http.MethodGet, w.base+"/reports/top-usage?format=csv&kinds=WASTE"); !strings.Contains(r.body, ",2000,") || !strings.Contains(r.body, "\n1,") || !strings.Contains(r.body, ",2000,100") {
+		t.Fatalf("the largest usage as a file: %q", r.body)
+	}
+	mv := w.must(t, abc.do(http.MethodGet, w.base+"/reports/item-movements", nil), 200)
+	if len(mv.body["rows"].([]any)) != 1 || mv.body["total"].(map[string]any)["closing"] != "8000" {
+		t.Fatalf("the movement: %v", mv.body)
+	}
+	// the choices the reports offer, and the item the price history is of
+	for _, q := range []string{"/reports/slow-stock?days=45", "/reports/top-usage?limit=10", "/reports/top-usage?kinds=RECEIPT", "/reports/price-history"} {
+		if r := abc.do(http.MethodGet, w.base+q, nil); r.status != 422 {
+			t.Fatalf("%s: %d %v", q, r.status, r.body)
+		}
+	}
+	if r := abc.do(http.MethodGet, w.base+"/reports/price-history?item_id=999999", nil); r.status != 404 || r.body["code"] != "ITEM_NOT_FOUND" {
+		t.Fatalf("an item that does not exist: %d %v", r.status, r.body)
 	}
 	rep := w.must(t, abc.do(http.MethodGet, w.base+"/reports/waste", nil), 200)
 	if rep.body["total"] != "2000" || rep.body["docs"] != float64(1) {
@@ -78,7 +101,8 @@ func TestTheOtherInventoryReportsAreCSVFilesAndForWhoMayReadTheStockInTheirOwnTe
 	v, a := login("viewer@hotel.com"), login("acct@hotel.com")
 	xyz := w.e.login("XYZ")
 	for _, p := range []string{"/reports/waste", "/reports/count-variances", "/reports/price-variances", "/reports/transfers-without-requisition", "/reports/amenities-by-month", "/reports/pending-approvals",
-		"/reports/recipe-costs", "/reports/meals", "/reports/cost-day?date=2026-09-30"} {
+		"/reports/recipe-costs", "/reports/meals", "/reports/cost-day?date=2026-09-30", "/reports/item-movements", "/reports/purchases", "/reports/price-history?item_id=" + idText(item),
+		"/reports/slow-stock", "/reports/top-usage"} {
 		if r := v.do(http.MethodGet, w.base+p, nil); r.status != 200 {
 			t.Fatalf("a viewer reads %s: %d %v", p, r.status, r.body)
 		}
