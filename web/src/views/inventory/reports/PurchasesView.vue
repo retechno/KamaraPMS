@@ -13,7 +13,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatMoney, formatPercent } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** Purchases by supplier and by item (docs/architecture/35-inventory.md 12.5, 22.5): the receipts that stand, with the bills matched to them; an item links to its price history. */
 const lookups = useReportLookups({ warehouses: true, categories: true, suppliers: true })
@@ -69,7 +69,7 @@ const pct = (v: string | null | undefined): string => (v === null || v === undef
             <tbody>
               <tr v-for="x in s.items" :key="x.item_id" class="border-t border-border" :data-testid="`purchase-${s.supplier_id}-${x.item_code}`">
                 <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ x.category_name }}</span></td>
-                <td class="py-1.5 pr-2 text-right">{{ formatQty(x.qty) }} {{ x.unit_code }}</td>
+                <td class="py-1.5 pr-2 text-right">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td>
                 <td class="py-1.5 pr-2 text-right">{{ formatMoney(x.value) }}</td>
                 <td class="py-1.5 pr-2 text-right">{{ x.avg_price === null ? '–' : formatMoney(x.avg_price) }}</td>
                 <td class="py-1.5 pr-2 text-right">{{ x.receipts }}</td>

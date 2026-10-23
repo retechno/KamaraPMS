@@ -11,7 +11,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /**
  * The stock movement per item (docs/architecture/35-inventory.md 12.5, 22.5): the opening, what came in and went out by kind, the count variance and the price adjustments, and the closing. In every row
@@ -65,12 +65,12 @@ const empty = (v: InventoryQtyValue | undefined): boolean => !v || (Number(v.qty
           <tbody>
             <tr v-for="x in r.data.value.rows" :key="x.item_id" class="border-t border-border align-top" :data-testid="`move-${x.item_code}`">
               <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ x.category_name }}</span></td>
-              <td class="py-1.5 pr-2 text-right" :data-testid="`move-${x.item_code}-opening`">{{ formatQty(x.opening.qty) }} {{ x.unit_code }}<span class="block text-xs text-muted-foreground">{{ formatMoney(x.opening.value) }}</span></td>
+              <td class="py-1.5 pr-2 text-right" :data-testid="`move-${x.item_code}-opening`">{{ formatReportQty(x.opening.qty) }} {{ x.unit_code }}<span class="block text-xs text-muted-foreground">{{ formatMoney(x.opening.value) }}</span></td>
               <td v-for="b in buckets" :key="b" class="py-1.5 pr-2 text-right" :data-testid="`move-${x.item_code}-${b}`">
                 <template v-if="empty(x.buckets[b])">–</template>
-                <template v-else>{{ formatQty(x.buckets[b]!.qty) }}<span class="block text-xs text-muted-foreground">{{ formatMoney(x.buckets[b]!.value) }}</span></template>
+                <template v-else>{{ formatReportQty(x.buckets[b]!.qty) }}<span class="block text-xs text-muted-foreground">{{ formatMoney(x.buckets[b]!.value) }}</span></template>
               </td>
-              <td class="py-1.5 text-right font-medium" :data-testid="`move-${x.item_code}-closing`">{{ formatQty(x.closing.qty) }} {{ x.unit_code }}<span class="block text-xs font-normal text-muted-foreground">{{ formatMoney(x.closing.value) }}</span></td>
+              <td class="py-1.5 text-right font-medium" :data-testid="`move-${x.item_code}-closing`">{{ formatReportQty(x.closing.qty) }} {{ x.unit_code }}<span class="block text-xs font-normal text-muted-foreground">{{ formatMoney(x.closing.value) }}</span></td>
             </tr>
           </tbody>
         </table>

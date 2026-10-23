@@ -14,7 +14,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** Slow and dead stock (docs/architecture/35-inventory.md 12.5, 22.5): the items with stock that nothing consumed for 30, 60, 90 or 180 days, as of the open day, with the age of the stock. */
 const lookups = useReportLookups({ warehouses: true, categories: true })
@@ -75,7 +75,7 @@ watch(r.pid, r.load, { immediate: true })
             <tr v-for="x in r.data.value.rows" :key="`${x.warehouse_id}-${x.item_id}`" class="border-t border-border" :data-testid="`slow-${x.warehouse_code}-${x.item_code}`">
               <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ x.category_name }}</span></td>
               <td class="py-1.5 pr-2">{{ x.warehouse_code }}</td>
-              <td class="py-1.5 pr-2 text-right">{{ formatQty(x.qty) }} {{ x.unit_code }}</td>
+              <td class="py-1.5 pr-2 text-right">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td>
               <td class="py-1.5 pr-2 text-right">{{ formatMoney(x.value) }}</td>
               <td class="py-1.5 pr-2">{{ x.last_out_on ?? '–' }}</td>
               <td class="py-1.5 pr-2 text-right"><span v-if="x.never_out" class="rounded-full bg-muted px-2 py-0.5 text-xs" data-testid="slow-never">{{ t('inventory.reports.slowStock.never') }}</span><template v-else>{{ x.days_since_out }}</template></td>

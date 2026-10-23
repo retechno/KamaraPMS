@@ -12,7 +12,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatDate, formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** The variances of the approved counts (docs/architecture/35-inventory.md 12.5, 22): by count (date, warehouse, who approved, the plus and the minus) and by item (book, found, difference, value). */
 type View = 'COUNTS' | 'LINES' | 'ITEMS'
@@ -79,8 +79,8 @@ const tabs: { id: View; label: string }[] = [
             <tr v-for="(l, n) in r.data.value.lines" :key="n" class="border-t border-border">
               <td class="py-1.5 pr-2">{{ l.item_name }}<span class="block text-xs text-muted-foreground">{{ l.item_code }} · {{ l.category_name }}</span></td>
               <td class="py-1.5 pr-2">{{ l.count_number }}<span class="block text-xs text-muted-foreground">{{ formatDate(l.approved_on) }} · {{ l.warehouse_code }}</span></td>
-              <td class="py-1.5 pr-2 text-right">{{ formatQty(l.book_qty) }} {{ l.unit_code }}</td><td class="py-1.5 pr-2 text-right">{{ formatQty(l.counted_qty) }}</td>
-              <td class="py-1.5 pr-2 text-right" :class="Number(l.variance_qty) < 0 ? 'text-destructive' : ''">{{ Number(l.variance_qty) > 0 ? '+' : '' }}{{ formatQty(l.variance_qty) }}</td><td class="py-1.5 text-right">{{ signed(l.variance_value) }}</td>
+              <td class="py-1.5 pr-2 text-right">{{ formatReportQty(l.book_qty) }} {{ l.unit_code }}</td><td class="py-1.5 pr-2 text-right">{{ formatReportQty(l.counted_qty) }}</td>
+              <td class="py-1.5 pr-2 text-right" :class="Number(l.variance_qty) < 0 ? 'text-destructive' : ''">{{ Number(l.variance_qty) > 0 ? '+' : '' }}{{ formatReportQty(l.variance_qty) }}</td><td class="py-1.5 text-right">{{ signed(l.variance_value) }}</td>
             </tr>
           </tbody>
         </table>
@@ -94,7 +94,7 @@ const tabs: { id: View; label: string }[] = [
           <tbody>
             <tr v-for="x in r.data.value.items" :key="`${x.warehouse_id}-${x.item_id}`" class="border-t border-border">
               <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }}</span></td><td class="py-1.5 pr-2">{{ x.warehouse_code }}</td><td class="py-1.5 pr-2 text-right">{{ x.counts }}</td>
-              <td class="py-1.5 pr-2 text-right">{{ Number(x.variance_qty) > 0 ? '+' : '' }}{{ formatQty(x.variance_qty) }} {{ x.unit_code }}</td><td class="py-1.5 text-right">{{ signed(x.variance_value) }}</td>
+              <td class="py-1.5 pr-2 text-right">{{ Number(x.variance_qty) > 0 ? '+' : '' }}{{ formatReportQty(x.variance_qty) }} {{ x.unit_code }}</td><td class="py-1.5 text-right">{{ signed(x.variance_value) }}</td>
             </tr>
           </tbody>
         </table>

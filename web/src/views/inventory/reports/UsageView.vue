@@ -9,7 +9,7 @@ import ReportPeriodBar from '@/components/inventory/ReportPeriodBar.vue'
 import { useInventoryReport } from '@/composables/useInventoryReport'
 import { t } from '@/i18n'
 import { formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** What each department took from the stock in a period (docs/architecture/35-inventory.md 12.5): by kind (a use, waste, staff meals, entertainment), and by item with the quantity and the cost. */
 const r = useInventoryReport<InventoryUsage>('/api/v1/properties/{propertyId}/inventory/reports/usage', 'usage.csv', async (propertyId, p) => {
@@ -46,7 +46,7 @@ const key = (id: number | null): string => String(id ?? 0)
               <tr v-for="(x, n) in d.items" :key="n" class="border-t border-border">
                 <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ x.category_name }}</span></td>
                 <td class="py-1.5 pr-2">{{ t(`inventory.reports.usage.kind.${x.kind}`) }}</td>
-                <td class="py-1.5 pr-2 text-right">{{ formatQty(x.qty) }} {{ x.unit_code }}</td><td class="py-1.5 text-right">{{ formatMoney(x.value) }}</td>
+                <td class="py-1.5 pr-2 text-right">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td><td class="py-1.5 text-right">{{ formatMoney(x.value) }}</td>
               </tr>
             </tbody>
           </table>

@@ -13,7 +13,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatMoney, formatPercent } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** The price paid for an item at each receipt, per unit of purchase and per unit of stock (docs/architecture/35-inventory.md 12.5, 22.5). The item comes from the list or from the link of the purchases report. */
 const route = useRoute()
@@ -72,7 +72,7 @@ const price = (v: string | null | undefined): string => (v === null || v === und
               <td class="py-1.5 pr-2">{{ x.received_on }}</td>
               <td class="py-1.5 pr-2">{{ x.receipt_number }}</td>
               <td class="py-1.5 pr-2">{{ x.supplier_name }}</td>
-              <td class="py-1.5 pr-2 text-right">{{ formatQty(x.qty_purchase) }} {{ x.purchase_unit_code }}</td>
+              <td class="py-1.5 pr-2 text-right">{{ formatReportQty(x.qty_purchase) }} {{ x.purchase_unit_code }}</td>
               <td class="py-1.5 pr-2 text-right">{{ formatMoney(x.unit_price) }}</td>
               <td class="py-1.5 pr-2 text-right">{{ formatMoney(x.price_per_stock) }}</td>
               <td class="py-1.5 text-right">{{ pct(x.change_pct) }}</td>

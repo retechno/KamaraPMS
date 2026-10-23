@@ -12,7 +12,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** Waste by reason (docs/architecture/35-inventory.md 12.5, 22): what was thrown away, by reason, warehouse, department and item, with the dishes thrown away after a POS void (POS_VOID). */
 const lookups = useReportLookups({ warehouses: true, categories: true, departments: true })
@@ -60,7 +60,7 @@ const reasonLabel = (reason: string): string => t(`inventory.reports.waste.reaso
             <tr v-for="(x, n) in r.data.value.rows" :key="n" class="border-t border-border">
               <td class="py-1.5 pr-2">{{ reasonLabel(x.reason) }}</td><td class="py-1.5 pr-2">{{ x.warehouse_code }}</td><td class="py-1.5 pr-2">{{ x.department_name || t('inventory.reports.noDepartment') }}</td>
               <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ x.category_name }}</span></td>
-              <td class="py-1.5 pr-2 text-right">{{ x.reason === 'POS_VOID' ? '–' : `${formatQty(x.qty)} ${x.unit_code}` }}</td><td class="py-1.5 pr-2 text-right">{{ formatMoney(x.value) }}</td><td class="py-1.5 text-right">{{ x.docs }}</td>
+              <td class="py-1.5 pr-2 text-right">{{ x.reason === 'POS_VOID' ? '–' : `${formatReportQty(x.qty)} ${x.unit_code}` }}</td><td class="py-1.5 pr-2 text-right">{{ formatMoney(x.value) }}</td><td class="py-1.5 text-right">{{ x.docs }}</td>
             </tr>
           </tbody>
         </table>

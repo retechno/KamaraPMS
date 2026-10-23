@@ -13,7 +13,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatMoney, formatPercent } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** The items with the largest value that left in the period (docs/architecture/35-inventory.md 12.5, 22.5), with the share of the total of every item and the running share; top 20 or 50, by kind of use and warehouse. */
 const kindList = ['POS_SALE', 'ISSUE', 'WASTE', 'STAFF_MEAL', 'ENTERTAINMENT', 'TRANSFER_OUT', 'SUPPLIER_RETURN']
@@ -69,7 +69,7 @@ const kindLabel = (k: string): string => t(`inventory.reports.topUsage.kind.${k}
             <tr v-for="x in r.data.value.rows" :key="x.item_id" class="border-t border-border" :data-testid="`top-${x.item_code}`">
               <td class="py-1.5 pr-2">{{ x.rank }}</td>
               <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ x.category_name }}</span></td>
-              <td class="py-1.5 pr-2 text-right">{{ formatQty(x.qty) }} {{ x.unit_code }}</td>
+              <td class="py-1.5 pr-2 text-right">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td>
               <td class="py-1.5 pr-2 text-right">{{ formatMoney(x.value) }}</td>
               <td class="py-1.5 pr-2 text-right">{{ formatPercent(x.share_pct) }}</td>
               <td class="py-1.5 text-right">{{ formatPercent(x.cumulative_pct) }}</td>

@@ -13,7 +13,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { useReportLookups } from '@/composables/useReportLookups'
 import { t } from '@/i18n'
 import { formatDate, formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** Transfers made without a requisition (docs/architecture/35-inventory.md 12.5, 22): free transfers by period, warehouse, item, value and who made them. A reversed transfer is listed and not counted. */
 const lookups = useReportLookups({ warehouses: true })
@@ -53,7 +53,7 @@ const options = () => lookups.warehouses.value.map((w) => ({ id: w.id, label: `$
               <td class="py-1.5 pr-2"><RouterLink :to="`/inventory/transfers/${x.transfer_id}`" class="underline">{{ x.number }}</RouterLink><Badge v-if="x.status === 'REVERSED'" variant="secondary" class="ml-1">{{ t('inventory.reports.trfNoSr.reversed') }}</Badge></td>
               <td class="py-1.5 pr-2">{{ x.from_warehouse }} → {{ x.to_warehouse }}</td>
               <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }}</span></td>
-              <td class="py-1.5 pr-2 text-right">{{ formatQty(x.qty) }} {{ x.unit_code }}</td><td class="py-1.5 pr-2 text-right">{{ formatMoney(x.value) }}</td><td class="py-1.5">{{ x.created_by_name }}</td>
+              <td class="py-1.5 pr-2 text-right">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td><td class="py-1.5 pr-2 text-right">{{ formatMoney(x.value) }}</td><td class="py-1.5">{{ x.created_by_name }}</td>
             </tr>
           </tbody>
         </table>
