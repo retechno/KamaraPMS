@@ -38,7 +38,7 @@ const pinned = computed(() => !!item.value && !!pins?.isPinned(item.value.id))
         <button
           v-if="item && pins"
           type="button"
-          :class="cn('grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent hover:bg-accent', pinned ? 'text-foreground' : 'text-muted-foreground')"
+          :class="cn('grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent hover:bg-accent print:hidden', pinned ? 'text-foreground' : 'text-muted-foreground')"
           :aria-pressed="pinned"
           :aria-label="pinned ? t('nav.unpinPage') : t('nav.pinPage')"
           :title="pinned ? t('nav.unpinPage') : t('nav.pinPage')"
@@ -52,7 +52,7 @@ const pinned = computed(() => !!item.value && !!pins?.isPinned(item.value.id))
       </div>
       <p v-if="description" class="m-0 mt-1 max-w-3xl text-sm text-muted-foreground">{{ description }}</p>
     </div>
-    <div v-if="$slots.actions" class="ml-auto flex flex-wrap items-center justify-end gap-2" data-slot="page-actions">
+    <div v-if="$slots.actions" class="ml-auto flex flex-wrap print:hidden items-center justify-end gap-2" data-slot="page-actions">
       <slot name="actions" />
     </div>
   </header>

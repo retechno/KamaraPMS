@@ -18,6 +18,10 @@ const emit = defineEmits<{ show: []; csv: [] }>()
 const property = usePropertyStore()
 const businessDate = computed(() => property.clock?.business_date ?? '')
 
+function print(): void {
+  window.print()
+}
+
 function pick(p: Period): void {
   from.value = p.from
   to.value = p.to
@@ -26,11 +30,16 @@ function pick(p: Period): void {
 </script>
 
 <template>
-  <form class="mb-4 flex flex-wrap items-end gap-3" novalidate data-testid="report-period" @submit.prevent="emit('show')">
+  <form class="mb-4 flex flex-wrap items-end gap-3 print:hidden" novalidate data-testid="report-period" @submit.prevent="emit('show')">
     <FormField v-if="!props.single" :label="t('inventory.reports.from')"><template #default="{ id }"><Input :id="id" v-model="from" type="date" name="from" class="w-40" /></template></FormField>
     <FormField :label="props.single ? t('inventory.reports.asOf') : t('inventory.reports.to')"><template #default="{ id }"><Input :id="id" v-model="to" type="date" name="to" class="w-40" /></template></FormField>
+    <slot />
     <Button type="submit" variant="outline" :disabled="props.busy" data-testid="report-show">{{ t('inventory.reports.show') }}</Button>
     <PeriodPicks v-if="!props.single" :business-date="businessDate" :years="[]" @pick="pick" />
-    <Button v-if="props.csv" type="button" variant="outline" class="ml-auto" :disabled="props.busy" data-testid="report-csv" @click="emit('csv')">{{ t('inventory.reports.csv') }}</Button>
+    <div class="ml-auto flex flex-wrap gap-2">
+      <slot name="actions" />
+      <Button type="button" variant="outline" data-testid="report-print" @click="print">{{ t('inventory.reports.print') }}</Button>
+      <Button v-if="props.csv" type="button" variant="outline" :disabled="props.busy" data-testid="report-csv" @click="emit('csv')">{{ t('inventory.reports.csv') }}</Button>
+    </div>
   </form>
 </template>

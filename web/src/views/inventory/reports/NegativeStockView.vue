@@ -5,6 +5,7 @@ import { ApiError } from '@/api/problem'
 import type { InventoryNegativeStock } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { t } from '@/i18n'
@@ -33,6 +34,7 @@ async function load(): Promise<void> {
     loaded.value = true
   }
 }
+const print = (): void => window.print()
 async function csv(): Promise<void> {
   if (pid.value !== null) await downloadCsv('/api/v1/properties/{propertyId}/inventory/reports/negative-stock', { path: { propertyId: pid.value } }, 'negative-stock.csv')
 }
@@ -42,13 +44,14 @@ const source = (s: string): string => (s === 'POS_SALE' || s === 'POS_QUEUE' ? t
 
 <template>
   <PageHeader :title="t('inventory.reports.neg.title')" :description="t('inventory.reports.neg.intro')" />
+  <ReportPrintHeader />
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>
     <div class="mb-4 flex items-center justify-between gap-2">
       <p v-if="data && data.rows.length" class="m-0 text-sm" data-testid="neg-total">{{ t('inventory.reports.neg.total', { n: data.rows.length, amount: formatMoney(data.total) }) }}</p>
       <span v-else />
-      <Button type="button" variant="outline" size="sm" data-testid="report-csv" @click="csv">{{ t('inventory.reports.csv') }}</Button>
+      <span class="flex gap-2 print:hidden"><Button type="button" variant="outline" size="sm" data-testid="report-print" @click="print">{{ t('inventory.reports.print') }}</Button><Button type="button" variant="outline" size="sm" data-testid="report-csv" @click="csv">{{ t('inventory.reports.csv') }}</Button></span>
     </div>
     <p v-if="loaded && !data?.rows.length" class="m-0 text-sm text-muted-foreground" data-testid="neg-empty">{{ t('inventory.reports.neg.empty') }}</p>
     <div v-else-if="data" class="overflow-x-auto">

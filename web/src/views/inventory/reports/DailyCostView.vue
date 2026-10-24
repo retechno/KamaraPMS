@@ -5,8 +5,10 @@ import type { InventoryDailyCost, InventoryDailyCostDay, InventoryFbPart } from 
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import CostDayPanel from '@/components/inventory/CostDayPanel.vue'
 import CostLineChart, { type CostPoint } from '@/components/inventory/CostLineChart.vue'
 import ReportPeriodBar from '@/components/inventory/ReportPeriodBar.vue'
+import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { useInventoryReport } from '@/composables/useInventoryReport'
 import { t } from '@/i18n'
@@ -32,6 +34,8 @@ const sum = (d: InventoryDailyCostDay, ...ks: string[]): string => String(ks.red
 const fbCost = (d: InventoryDailyCostDay): string => sum(d, 'SALE_COST_FOOD', 'SALE_COST_BEVERAGE')
 const pct = (v: string | null | undefined): string => (v === null || v === undefined ? '–' : formatPercent(v))
 const part = (d: InventoryDailyCostDay, c: 'food' | 'beverage'): InventoryFbPart => d[c]
+/** The day whose documents are open under the table (a click on its date in the table of all costs). */
+const openDay = ref<string | null>(null)
 const dayLabel = (d: InventoryDailyCostDay): string => `${formatDate(d.date)}${d.live ? ` · ${t('inventory.reports.running')}` : ''}`
 
 const rows = computed<InventoryDailyCostDay[]>(() => r.data.value?.days ?? [])
@@ -74,10 +78,13 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
 
 <template>
   <PageHeader :title="t('inventory.reports.daily.title')" :description="t('inventory.reports.daily.intro')" />
+  <ReportPrintHeader :from="r.period.from" :to="r.period.to" />
   <ErrorNotice v-if="r.error.value" :error="r.error.value" inline />
   <p v-if="r.pid.value === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>
     <ReportPeriodBar v-model:from="r.period.from" v-model:to="r.period.to" :busy="r.busy.value" @show="r.load" @csv="r.csv()" />
+
+    <CostDayPanel v-if="openDay" :date="openDay" @close="openDay = null" />
 
     <div v-if="mtd" class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="daily-kpi">
       <KpiCard :label="t('inventory.reports.daily.kpiFb')" :value="pct(mtd.fb.pct)" :hint="[t('inventory.reports.daily.kpiMtd', { from: formatDate(r.data.value?.mtd_from ?? '') }), note(mtd.fb)].filter(Boolean).join(' · ')" data-testid="kpi-fb" />
@@ -107,7 +114,7 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
         </thead>
         <tbody>
           <tr v-for="d in rows" :key="d.date" class="border-t border-border" :data-testid="`daily-${d.date}`">
-            <td class="py-2 pr-2">{{ dayLabel(d) }}</td>
+            <td class="py-2 pr-2"><button type="button" class="underline print:no-underline" :aria-expanded="openDay === d.date" :data-testid="`daily-open-${d.date}`" @click="openDay = openDay === d.date ? null : d.date">{{ dayLabel(d) }}</button></td>
             <td class="py-2 pr-2 text-right">{{ money(fbCost(d)) }}</td>
             <td class="py-2 pr-2 text-right">{{ pct(d.fb.pct) }}<span v-if="d.fb.no_recipe_days > 0" class="block text-xs font-normal text-muted-foreground" :data-testid="`norecipe-${d.date}`">{{ t('inventory.reports.noRecipe') }}</span></td>
             <td class="py-2 pr-2 text-right">{{ money(kind(d, 'WASTE')) }}</td>

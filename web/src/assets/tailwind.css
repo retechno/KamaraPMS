@@ -261,3 +261,31 @@
     font-size: 0.875rem;
   }
 }
+
+/*
+ * Printing a page (the reports of the inventory are saved as PDF from the browser): A4, no menu or top bar, nothing that only works on screen. A report adds its own title block
+ * (`ReportPrintHeader`) and hides its filters with `print:hidden`.
+ */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  html,
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+  main {
+    padding: 0;
+  }
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+}

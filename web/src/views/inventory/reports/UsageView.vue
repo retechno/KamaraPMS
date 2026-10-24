@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import type { InventoryUsage } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import ReportPeriodBar from '@/components/inventory/ReportPeriodBar.vue'
 import { useInventoryReport } from '@/composables/useInventoryReport'
 import { t } from '@/i18n'
@@ -22,6 +23,7 @@ const key = (id: number | null): string => String(id ?? 0)
 
 <template>
   <PageHeader :title="t('inventory.reports.usage.title')" :description="t('inventory.reports.usage.intro')" />
+  <ReportPrintHeader :from="r.period.from" :to="r.period.to" />
   <ErrorNotice v-if="r.error.value" :error="r.error.value" inline />
   <p v-if="r.pid.value === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>

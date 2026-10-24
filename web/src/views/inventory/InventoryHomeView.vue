@@ -7,6 +7,7 @@ import type { InventoryDashboard, InventoryFbPart } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import ReportIndex from '@/components/inventory/ReportIndex.vue'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney, formatPercent } from '@/utils/format'
@@ -49,17 +50,6 @@ const hint = (p: InventoryFbPart | undefined): string => {
   }
   return p && p.no_recipe_days > 0 ? `${text} · ${t('inventory.reports.noRecipeDays', { n: p.no_recipe_days })}` : text
 }
-
-interface Entry { id: string; to: string }
-const groups: { id: string; entries: Entry[] }[] = [
-  { id: 'cost', entries: [
-    { id: 'daily', to: '/inventory/reports/daily-cost' }, { id: 'outlet', to: '/inventory/reports/outlet-cost' }, { id: 'recon', to: '/inventory/reports/fb-reconciliation' },
-  ] },
-  { id: 'stock', entries: [
-    { id: 'card', to: '/inventory/costing' }, { id: 'value', to: '/inventory/reports/stock-value' }, { id: 'low', to: '/inventory/reports/low-stock' }, { id: 'neg', to: '/inventory/reports/negative-stock' },
-  ] },
-  { id: 'buy', entries: [{ id: 'grni', to: '/inventory/reports/received-not-invoiced' }, { id: 'usage', to: '/inventory/reports/usage' }, { id: 'gap', to: '/inventory/pos-gap' }] },
-]
 </script>
 
 <template>
@@ -90,19 +80,7 @@ const groups: { id: string; entries: Entry[] }[] = [
 
     <section aria-labelledby="reports-h" data-testid="reports-list">
       <h2 id="reports-h" class="m-0 mb-2 text-sm font-semibold">{{ t('inventory.home.reports') }}</h2>
-      <div class="flex flex-col gap-4">
-        <div v-for="g in groups" :key="g.id">
-          <h3 class="m-0 mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t(`inventory.home.group.${g.id}`) }}</h3>
-          <ul class="m-0 grid list-none gap-3 p-0 sm:grid-cols-2 xl:grid-cols-3">
-            <li v-for="e in g.entries" :key="e.id">
-              <RouterLink :to="e.to" class="flex h-full flex-col gap-0.5 rounded-xl border border-border bg-card p-3 hover:bg-muted/40" :data-testid="`report-${e.id}`">
-                <strong class="text-sm">{{ t(`inventory.home.report.${e.id}`) }}</strong>
-                <span class="text-xs text-muted-foreground">{{ t(`inventory.home.report.${e.id}Hint`) }}</span>
-              </RouterLink>
-            </li>
-          </ul>
-        </div>
-      </div>
+      <ReportIndex />
     </section>
   </template>
 </template>

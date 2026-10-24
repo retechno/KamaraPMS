@@ -49,6 +49,7 @@ type stockFx struct {
 	unit   map[string]int64
 	item   map[string]int64
 	wh     int64
+	food   int64 // the category of the stock items
 	nasgor pos.Product
 	opt    map[string]int64
 	cnt    context.Context
@@ -88,6 +89,7 @@ func newStockFx(t *testing.T, method string) *stockFx {
 	rows.Close()
 	food, err := s.inv.CreateCategory(ctx, pid, inventory.CategoryInput{Code: "FOOD", Name: "Food", Kind: "FOOD", InventoryAccountID: acc["1310"], CogsAccountID: ptr(acc["5210"])})
 	must(t, err)
+	s.food = food.ID
 	mk := func(code, unit string, extra ...inventory.ItemUnit) int64 {
 		it, err := s.inv.CreateItem(ctx, pid, inventory.ItemInput{Code: code, Name: code, CategoryID: food.ID, StockUnitID: s.unit[unit], Units: extra})
 		must(t, err)
