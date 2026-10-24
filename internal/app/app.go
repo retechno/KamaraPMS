@@ -15,6 +15,7 @@ import (
 	"kamarapms/internal/auditlog"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/bankrec"
+	"kamarapms/internal/banquet"
 	"kamarapms/internal/billingconfig"
 	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
@@ -168,7 +169,8 @@ func New(d Deps) *App {
 	if pool, ok := d.DB.(*pgxpool.Pool); ok {
 		posSvc.SetEventPool(pool) // the streams of events wake on NOTIFY (they also read on a timer)
 	}
-	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc})
+	banquetSvc := banquet.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
+	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})         // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
 	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc})        // and the close asks the stock whether its books agree
@@ -203,6 +205,7 @@ func New(d Deps) *App {
 	departments.NewHandler(departmentsSvc).Register(api)
 	pos.NewHandler(posSvc).Register(api)
 	inventory.NewHandler(inventorySvc).Register(api)
+	banquet.NewHandler(banquetSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)
 	notifications.NewHandler(notifierSvc).Register(api)
@@ -268,8 +271,9 @@ func (g posGate) CheckPOS(ctx context.Context, tenantID int64, write bool) error
 
 // outletClose is what the night audit asks of the point of sale: the findings of the open bills and the end of the locks of a day.
 type outletClose struct {
-	pos    *pos.Service
-	folios *folios.Service
+	pos     *pos.Service
+	folios  *folios.Service
+	banquet *banquet.Service
 }
 
 func (o outletClose) NightAuditOutlets(ctx context.Context, tenantID, propertyID int64) (blockers, warnings []nightaudit.OutletIssue, err error) {
@@ -288,6 +292,10 @@ func (o outletClose) ExpireOutletLocks(ctx context.Context, p auth.Principal, pr
 		return err
 	}
 	// the close of the day also removes the old documents of the print jobs of the property (a property with no agent never claims one)
-	_, err := o.pos.PurgePrintPayloadsOf(ctx, propertyID)
+	if _, err := o.pos.PurgePrintPayloadsOf(ctx, propertyID); err != nil {
+		return err
+	}
+	// and the reminders of the options whose date has come (36-banquet.md 4.3), in the transaction of the close
+	_, err := o.banquet.WriteDueNotices(ctx, p.TenantID, propertyID, bd)
 	return err
 }

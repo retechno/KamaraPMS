@@ -31,6 +31,8 @@ type txState struct {
 	level LockLevel // highest lock level taken so far (see locks.go)
 	// stockRank is the highest table of LevelStock taken so far (documents, warehouse, balances: see LockTable.stockRank)
 	stockRank int
+	// eventRank is the highest table of the events group of LevelGroups taken so far (groups, meeting rooms, events: see LockTable.eventRank)
+	eventRank int
 }
 
 func stateFrom(ctx context.Context) *txState {
