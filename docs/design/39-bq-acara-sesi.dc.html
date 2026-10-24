@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Acara · sesi</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:40px;padding:0 16px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.tab{padding:10px 2px;font-size:14px;text-decoration:none;color:#4a5361;border-bottom:2px solid transparent}
+.tabon{color:#1c2128;font-weight:600;border-bottom-color:#1f6f5c}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:9px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600}
+.p-def{background:#e3f2ee;color:#185a4a}
+.p-wait{background:#fdf1dc;color:#5c3608}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #eef0f2}
+.inp{height:38px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 8px}
+.lb{font-size:11px;font-weight:600;color:#626b77;display:flex;flex-direction:column;gap:4px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav">Laporan</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:12px">
+    <a href="37-bq-acara-daftar.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start">← Acara</a>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="flex:1">
+        <div class="sub" style="font-size:12px">BQ-000123 · Rapat · Definit sejak 2 Okt 2026 oleh Hendra</div>
+        <h1 style="margin:2px 0 0;font-size:24px">Rapat Tahunan PT Sinar Bali</h1>
+      </div>
+      <span class="pill p-def">Definit</span>
+      <button class="btn">Cetak proposal</button>
+      <a href="45-bq-batal.dc.html" class="btn">Batalkan</a>
+      <button class="btn" disabled style="color:#8a929c">Selesaikan acara</button>
+    </div>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <nav style="display:flex;gap:22px;border-bottom:1px solid #e3e6ea" aria-label="Bagian acara">
+          <a href="39-bq-acara-sesi.dc.html" class="tab tabon">Sesi</a>
+          <a href="40-bq-acara-item-paket.dc.html" class="tab">Item &amp; paket</a>
+          <a href="41-bq-acara-deposit.dc.html" class="tab">Deposit &amp; kebijakan</a>
+          <a href="42-bq-beo.dc.html" class="tab">BEO</a>
+          <a href="#" class="tab">Dokumen</a>
+          <a href="#" class="tab">Folio</a>
+        </nav>
+
+        <section class="card" style="overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">#</th><th class="th">Tanggal · jam</th><th class="th">Ruang · setup</th><th class="th thr">Perkiraan</th><th class="th thr">Garansi</th><th class="th thr">Aktual</th><th class="th">BEO</th><th class="th">Tagihan</th><th class="th"></th></tr></thead>
+            <tbody>
+              <tr><td class="td">1</td><td class="td">Jum 6 Nov 2026<div class="sub">08.00–17.00 · persiapan 60, bongkar 30 menit</div></td><td class="td">Ubud 1<div class="sub">classroom · kapasitas 100</div></td><td class="td num">110</td><td class="td num">100</td><td class="td num"><input class="inp" style="width:64px;text-align:right" value="96" aria-label="Pax aktual sesi 1"></td><td class="td"><a href="42-bq-beo.dc.html">Rev. 3</a></td><td class="td"><span class="pill p-wait">Belum diposting</span></td><td class="td"><a href="46-bq-posting-sesi.dc.html" class="btn" style="height:34px;font-size:13px">Posting sesi</a></td></tr>
+              <tr><td class="td">2</td><td class="td">Sab 7 Nov 2026<div class="sub">08.00–17.00</div></td><td class="td">Ubud 1<div class="sub">classroom · kapasitas 100</div></td><td class="td num">110</td><td class="td num">100</td><td class="td num"><input class="inp" style="width:64px;text-align:right" placeholder="–" aria-label="Pax aktual sesi 2"></td><td class="td"><a href="42-bq-beo.dc.html">Rev. 3</a></td><td class="td"><span class="sub">Hari depan</span></td><td class="td"></td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+          <strong style="font-size:15px">Tambah sesi</strong>
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;align-items:end">
+            <label class="lb">Tanggal<input class="inp" value="Min 8 Nov 2026"></label>
+            <label class="lb">Mulai<input class="inp" value="08.00"></label>
+            <label class="lb">Selesai<input class="inp" value="12.00"></label>
+            <label class="lb">Ruang<select class="inp"><option>Saraswati A</option></select></label>
+            <label class="lb">Setup<select class="inp"><option>Theater</option></select></label>
+            <label class="lb">Pax perkiraan<input class="inp" value="110"></label>
+            <button class="btnp" style="height:38px">Tambah</button>
+          </div>
+          <label style="font-size:13px;display:flex;gap:8px;align-items:center"><input type="checkbox" style="width:18px;height:18px;accent-color:#1f6f5c">Berakhir lewat tengah malam</label>
+          <div style="font-size:12px;color:#185a4a">Saraswati A tersedia Min 8 Nov 07.00–12.30 (termasuk persiapan dan bongkar). Kapasitas theater 200.</div>
+          <div class="sub">Acara ini Definit: menyimpan sesi baru membuat BEO revisi 4 dan memberi tahu departemen.</div>
+        </section>
+      </div>
+
+      <aside style="width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="padding:14px 16px">
+          <h2 style="margin:0 0 6px;font-size:15px">Pemesan</h2>
+          <div class="kv"><span>Perusahaan</span><span>PT Sinar Bali</span></div>
+          <div class="kv"><span>Contact person</span><span>Bu Ratna · 0812 3456 7890</span></div>
+          <div class="kv"><span>Sales</span><span>Dewi</span></div>
+          <div class="kv"><span>Grup kamar</span><a href="#">GRP-0042 · 24 kamar</a></div>
+          <div class="kv" style="border-bottom:0"><span>Posting tagihan</span><span>Ikut properti (otomatis)</span></div>
+        </section>
+        <section class="card" style="padding:14px 16px">
+          <h2 style="margin:0 0 6px;font-size:15px">Ringkasan uang</h2>
+          <div class="kv"><span>Estimasi neto</span><span>60.000.000</span></div>
+          <div class="kv"><span>Servis 10%</span><span>6.000.000</span></div>
+          <div class="kv"><span>Pajak 10%</span><span>6.600.000</span></div>
+          <div class="kv"><strong>Total kontrak</strong><strong>72.600.000</strong></div>
+          <div class="kv"><span>Deposit diterima</span><span>58.080.000</span></div>
+          <div class="kv" style="border-bottom:0;color:#9a3412"><span>Deposit terlambat (H-7)</span><span>14.520.000</span></div>
+          <a href="#" style="font-size:13px">Folio F-002311 · ditagihkan ke PT Sinar Bali</a>
+          <button class="btn" style="margin-top:10px;width:100%;justify-content:center">Transfer ke folio master GRP-0042</button>
+          <div class="sub" style="padding-top:6px">Per item atau saldo, dengan jejak dan pengembalian seperti transfer folio yang ada.</div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

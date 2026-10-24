@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Konfirmasi acara</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.sub{font-size:12px;color:#626b77}
+.ok{display:flex;gap:10px;align-items:flex-start;font-size:13px;padding:8px 0;border-bottom:1px solid #eef0f2}
+.ic{width:20px;height:20px;border-radius:10px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.ic-ok{background:#e3f2ee;color:#185a4a}
+.ic-w{background:#fdf1dc;color:#5c3608}
+.inp{height:40px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lb{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#5b6068;display:flex;align-items:center;justify-content:center;position:relative">
+  <div style="position:absolute;inset:0;background:#f6f7f9;opacity:.35"></div>
+  <section role="dialog" aria-labelledby="dlg-title" style="position:relative;width:640px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div style="padding:20px 24px 8px">
+      <div class="sub">BQ-000131 · Pernikahan Ayu &amp; Made · Tentative opsi 1</div>
+      <h1 id="dlg-title" style="margin:4px 0 0;font-size:22px">Konfirmasi menjadi Definit</h1>
+    </div>
+    <div style="padding:4px 24px 0">
+      <div class="ok"><span class="ic ic-ok" aria-hidden="true">✓</span><span>Semua sesi berada di opsi 1. Ballroom Saraswati (A + B) Sab 7 Nov 11.00–16.30 akan dikunci eksklusif.</span></div>
+      <div class="ok"><span class="ic ic-ok" aria-hidden="true">✓</span><span>Folio F-002330 sudah dibuka lewat "Terima DP"; DP 25.000.000 tercatat sebagai deposit. Konfirmasi memakai folio ini, tidak membuat folio baru.</span></div>
+      <div class="ok"><span class="ic ic-w" aria-hidden="true">!</span><span><strong>Seminar Asosiasi Dokter</strong> (BQ-000134, opsi 2 di Saraswati A 14.00–19.30) akan kehilangan ruang. Acara itu ditandai "ruang terpakai", tidak dibatalkan; sales Komang mendapat notifikasi.</span></div>
+    </div>
+    <div style="padding:14px 24px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <label class="lb">Kebijakan pembatalan<select class="inp"><option>Pernikahan · dasar total kontrak (gross)</option></select></label>
+      <label class="lb">Jadwal deposit<select class="inp"><option>Pernikahan · 30% / 50% H-60 / 20% H-14</option></select></label>
+      <label class="lb">Posting tagihan<select class="inp"><option>Ikut properti (otomatis saat tutup hari)</option><option>Otomatis</option><option>Manual</option></select></label>
+      <label class="lb">Catatan<input class="inp" placeholder="Opsional"></label>
+    </div>
+    <div style="padding:0 24px 6px" class="sub">Kebijakan dan jadwal disalin ke acara ini; perubahan template sesudahnya tidak mengubahnya. Konfirmasi tercatat di audit dan membuat BEO revisi 1.</div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #e3e6ea;margin-top:10px">
+      <a href="39-bq-acara-sesi.dc.html" class="btn">Batal</a>
+      <button class="btnp">Konfirmasi (Definit)</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Acara · deposit dan kebijakan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:36px;padding:0 12px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:13px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:36px;padding:0 14px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:13px;color:#fff}
+.tab{padding:10px 2px;font-size:14px;text-decoration:none;color:#4a5361;border-bottom:2px solid transparent}
+.tabon{color:#1c2128;font-weight:600;border-bottom-color:#1f6f5c}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:9px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600}
+.p-ok{background:#e3f2ee;color:#185a4a}
+.p-bad{background:#fde8e1;color:#8a2c0d}
+.p-def{background:#e3f2ee;color:#185a4a}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden}
+.ch{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e3e6ea}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #eef0f2}
+.cur td{background:#fffaf5;font-weight:600}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav">Laporan</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:12px">
+    <a href="37-bq-acara-daftar.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start">← Acara</a>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="flex:1">
+        <div class="sub" style="font-size:12px">BQ-000123 · Rapat</div>
+        <h1 style="margin:2px 0 0;font-size:24px">Rapat Tahunan PT Sinar Bali</h1>
+      </div>
+      <span class="pill p-def">Definit</span>
+    </div>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <nav style="display:flex;gap:22px;border-bottom:1px solid #e3e6ea" aria-label="Bagian acara">
+          <a href="39-bq-acara-sesi.dc.html" class="tab">Sesi</a>
+          <a href="40-bq-acara-item-paket.dc.html" class="tab">Item &amp; paket</a>
+          <a href="41-bq-acara-deposit.dc.html" class="tab tabon">Deposit &amp; kebijakan</a>
+          <a href="42-bq-beo.dc.html" class="tab">BEO</a>
+          <a href="#" class="tab">Dokumen</a>
+          <a href="#" class="tab">Folio</a>
+        </nav>
+
+        <section class="card">
+          <div class="ch"><strong style="font-size:15px;flex:1">Jadwal deposit</strong><span class="sub">dasar: total kontrak 72.600.000</span><button class="btn">Ubah jadwal</button><button class="btnp">Terima deposit</button></div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Tahap</th><th class="th">Jatuh tempo</th><th class="th thr">Persen</th><th class="th thr">Jumlah</th><th class="th thr">Kumulatif</th><th class="th">Status</th></tr></thead>
+            <tbody>
+              <tr><td class="td">Tanda tangan kontrak</td><td class="td">Jum 2 Okt 2026</td><td class="td num">30%</td><td class="td num">21.780.000</td><td class="td num">21.780.000</td><td class="td"><span class="pill p-ok">Lunas</span></td></tr>
+              <tr><td class="td">H-30</td><td class="td">Rab 7 Okt 2026</td><td class="td num">50%</td><td class="td num">36.300.000</td><td class="td num">58.080.000</td><td class="td"><span class="pill p-ok">Lunas</span></td></tr>
+              <tr><td class="td">H-7</td><td class="td">Jum 30 Okt 2026</td><td class="td num">20%</td><td class="td num">14.520.000</td><td class="td num">72.600.000</td><td class="td"><span class="pill p-bad">Terlambat 7 hari</span></td></tr>
+            </tbody>
+          </table>
+          <div style="padding:10px 16px;font-size:12px;color:#4a5361">Tahap dianggap lunas bila deposit yang diterima di folio mencapai jumlah kumulatifnya; pembayaran tidak ditautkan ke tahap tertentu. Pengingat jatuh tempo dikirim ke sales saat tutup hari.</div>
+        </section>
+
+        <section class="card">
+          <div class="ch"><strong style="font-size:15px;flex:1">Deposit diterima</strong><span class="sub">Folio F-002311</span></div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Tanggal bisnis</th><th class="th">Cara bayar</th><th class="th">Referensi</th><th class="th thr">Jumlah</th><th class="th">Dicatat sebagai</th></tr></thead>
+            <tbody>
+              <tr><td class="td">Jum 2 Okt 2026</td><td class="td">Transfer BCA</td><td class="td">RCP-008812</td><td class="td num">21.780.000</td><td class="td sub">Deposit (2310)</td></tr>
+              <tr><td class="td">Sel 6 Okt 2026</td><td class="td">Transfer BCA</td><td class="td">RCP-008840</td><td class="td num">36.300.000</td><td class="td sub">Deposit (2310)</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <aside style="width:380px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card">
+          <div class="ch"><strong style="font-size:15px;flex:1">Kebijakan pembatalan</strong><button class="btn">Ubah</button></div>
+          <div style="padding:10px 16px 0;font-size:12px;color:#4a5361">Dari template "Standar korporat" saat Definit · dasar <strong>neto</strong> (60.000.000)</div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Dibatalkan</th><th class="th thr">Biaya</th><th class="th thr">Jumlah</th></tr></thead>
+            <tbody>
+              <tr><td class="td">60 hari atau lebih</td><td class="td num">0%</td><td class="td num">0</td></tr>
+              <tr><td class="td">30–59 hari</td><td class="td num">25%</td><td class="td num">15.000.000</td></tr>
+              <tr><td class="td">7–29 hari</td><td class="td num">50%</td><td class="td num">30.000.000</td></tr>
+              <tr class="cur"><td class="td">Kurang dari 7 hari</td><td class="td num">100%</td><td class="td num">60.000.000</td></tr>
+            </tbody>
+          </table>
+          <div style="padding:10px 16px;font-size:12px;color:#4a5361">Tingkat yang berlaku hari ini disorot. Perubahan tingkat hanya untuk acara ini dan tercatat di audit.</div>
+        </section>
+        <section class="card" style="padding:14px 16px">
+          <div class="kv"><span>Deposit dipegang</span><span>58.080.000</span></div>
+          <div class="kv"><span>Sisa ke total kontrak</span><span>14.520.000</span></div>
+          <div class="kv" style="border-bottom:0"><span>Tagihan terposting</span><span>0</span></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Daftar acara</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:40px;padding:0 16px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-size:14px;padding:0 12px}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:10px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:10px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap;vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600}
+.p-def{background:#e3f2ee;color:#185a4a}
+.p-ten{background:#fdf1dc;color:#5c3608}
+.p-inq{background:#e8eefb;color:#23408e}
+.p-lost{background:#eef0f2;color:#4a5361}
+.p-done{background:#eef0f2;color:#1c2128}
+.warn{color:#9a3412;font-size:12px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav">Laporan</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0;font-size:24px;flex:1">Acara</h1>
+      <button class="btn">Unduh CSV</button>
+      <a href="39-bq-acara-sesi.dc.html" class="btnp">Acara baru</a>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="chip on">Aktif · 14</button>
+      <button class="chip">Inquiry · 3</button>
+      <button class="chip">Tentative · 5</button>
+      <button class="chip">Definit · 6</button>
+      <button class="chip">Selesai</button>
+      <button class="chip">Batal &amp; lost</button>
+      <span style="flex:1"></span>
+      <label style="font-size:13px;color:#4a5361;display:flex;align-items:center;gap:6px">Sales
+        <select class="inp" style="width:170px"><option>Semua sales</option></select></label>
+      <input class="inp" style="width:240px" placeholder="Cari nomor, acara, pemesan" aria-label="Cari acara">
+    </div>
+
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Acara</th><th class="th">Pemesan</th><th class="th">Sales</th><th class="th">Tanggal</th><th class="th thr">Sesi</th><th class="th thr">Pax</th><th class="th thr">Estimasi neto</th><th class="th">Status</th><th class="th">Perlu perhatian</th></tr></thead>
+        <tbody>
+          <tr><td class="td"><a href="39-bq-acara-sesi.dc.html" style="font-weight:600;text-decoration:none">Rapat Tahunan PT Sinar Bali</a><div class="sub">BQ-000123 · Rapat</div></td><td class="td">PT Sinar Bali<div class="sub">Bu Ratna</div></td><td class="td">Dewi</td><td class="td">Jum 6 – Sab 7 Nov</td><td class="td num">2</td><td class="td num">100</td><td class="td num">60.000.000</td><td class="td"><span class="pill p-def">Definit</span></td><td class="td warn">Deposit H-7 terlambat 7 hari: 14.520.000</td></tr>
+          <tr><td class="td"><a href="39-bq-acara-sesi.dc.html" style="font-weight:600;text-decoration:none">Gala dinner PT Wira Tour</a><div class="sub">BQ-000127 · Gala</div></td><td class="td">PT Wira Tour</td><td class="td">Komang</td><td class="td">Sab 7 Nov</td><td class="td num">1</td><td class="td num">250</td><td class="td num">112.500.000</td><td class="td"><span class="pill p-def">Definit</span></td><td class="td sub">BEO rev. 2 belum dibaca engineering</td></tr>
+          <tr><td class="td"><a href="39-bq-acara-sesi.dc.html" style="font-weight:600;text-decoration:none">Pernikahan Ayu &amp; Made</a><div class="sub">BQ-000131 · Pernikahan · DP diterima</div></td><td class="td">Ayu Lestari</td><td class="td">Dewi</td><td class="td">Sab 7 Nov</td><td class="td num">1</td><td class="td num">350</td><td class="td num">122.500.000</td><td class="td"><span class="pill p-ten">Tentative · opsi 1</span></td><td class="td warn">Tanggal opsi lewat (3 Nov)</td></tr>
+          <tr><td class="td"><a href="44-bq-pindah-sesi.dc.html" style="font-weight:600;text-decoration:none">Seminar Asosiasi Dokter</a><div class="sub">BQ-000134 · Seminar</div></td><td class="td">IDI Cabang Gianyar</td><td class="td">Komang</td><td class="td">Sab 7 Nov</td><td class="td num">1</td><td class="td num">150</td><td class="td num">27.000.000</td><td class="td"><span class="pill p-ten">Tentative · opsi 2</span></td><td class="td sub">Menunggu opsi 1 (BQ-000131)</td></tr>
+          <tr><td class="td"><a href="39-bq-acara-sesi.dc.html" style="font-weight:600;text-decoration:none">Workshop UMKM</a><div class="sub">BQ-000133 · Pelatihan</div></td><td class="td">Dinas Koperasi</td><td class="td">Dewi</td><td class="td">Sab 7 Nov</td><td class="td num">1</td><td class="td num">45</td><td class="td num">8.100.000</td><td class="td"><span class="pill p-ten">Tentative · opsi 1</span></td><td class="td sub">Opsi sampai 5 Nov</td></tr>
+          <tr><td class="td"><a href="39-bq-acara-sesi.dc.html" style="font-weight:600;text-decoration:none">Pelatihan Bank BPD</a><div class="sub">BQ-000126 · Pelatihan</div></td><td class="td">Bank BPD Bali</td><td class="td">Komang</td><td class="td">Sen 2 – Sab 7 Nov</td><td class="td num">5</td><td class="td num">40</td><td class="td num">30.000.000</td><td class="td"><span class="pill p-def">Definit</span></td><td class="td warn">Sesi 4 Nov belum diposting</td></tr>
+          <tr><td class="td"><a href="39-bq-acara-sesi.dc.html" style="font-weight:600;text-decoration:none">Ulang tahun perusahaan</a><div class="sub">BQ-000136 · Gala</div></td><td class="td">CV Bali Kreasi</td><td class="td">Dewi</td><td class="td">Des 2026</td><td class="td num">–</td><td class="td num">≈ 120</td><td class="td num">–</td><td class="td"><span class="pill p-inq">Inquiry</span></td><td class="td sub">Belum ada ruang</td></tr>
+          <tr><td class="td"><a href="39-bq-acara-sesi.dc.html" style="font-weight:600;text-decoration:none">Rapat direksi</a><div class="sub">BQ-000129 · Rapat</div></td><td class="td">PT Sinar Bali</td><td class="td">Dewi</td><td class="td">Sab 7 Nov</td><td class="td num">1</td><td class="td num">12</td><td class="td num">3.600.000</td><td class="td"><span class="pill p-def">Definit</span></td><td class="td sub"></td></tr>
+        </tbody>
+      </table>
+    </section>
+    <div style="font-size:12px;color:#626b77">Estimasi neto = baris acara dengan pax garansi (atau perkiraan bila garansi belum ada), sebelum servis dan pajak. Diurutkan menurut tanggal sesi pertama.</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

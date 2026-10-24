@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Batalkan acara Definit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnd{height:44px;padding:0 18px;border:0;border-radius:10px;background:#9a3412;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.sub{font-size:12px;color:#626b77}
+.inp{height:40px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lb{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px solid #eef0f2}
+.num{font-variant-numeric:tabular-nums}
+.td{padding:6px 10px;font-size:13px;border-bottom:1px solid #eef0f2}
+.cur td{background:#fffaf2;font-weight:600}
+.rad{display:flex;gap:8px;align-items:center;font-size:13px}
+.rad input{width:18px;height:18px;accent-color:#1f6f5c}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#5b6068;display:flex;align-items:center;justify-content:center;position:relative">
+  <div style="position:absolute;inset:0;background:#f6f7f9;opacity:.35"></div>
+  <section role="dialog" aria-labelledby="dlg-title" style="position:relative;width:760px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div style="padding:20px 24px 8px">
+      <div class="sub">BQ-000140 · Konferensi Asosiasi Hotel · Definit · sesi pertama Kam 26 Nov 2026</div>
+      <h1 id="dlg-title" style="margin:4px 0 0;font-size:22px">Batalkan acara</h1>
+    </div>
+    <div style="display:flex;gap:20px;padding:8px 24px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div class="sub">Dibatalkan <strong style="color:#1c2128">20 hari</strong> sebelum sesi pertama · dasar persen: <strong style="color:#1c2128">neto 30.000.000</strong> (dari template saat Definit)</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tbody>
+            <tr><td class="td">60 hari atau lebih</td><td class="td num" style="text-align:right">0%</td></tr>
+            <tr><td class="td">30–59 hari</td><td class="td num" style="text-align:right">25%</td></tr>
+            <tr class="cur"><td class="td">7–29 hari</td><td class="td num" style="text-align:right">50% · 15.000.000</td></tr>
+            <tr><td class="td">Kurang dari 7 hari</td><td class="td num" style="text-align:right">100%</td></tr>
+          </tbody>
+        </table>
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:6px">
+          <label class="rad"><input type="radio" name="act" checked>Biaya pembatalan (4510)</label>
+          <label class="rad"><input type="radio" name="act">Deposit hangus (4520), paling banyak sebesar deposit</label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px">
+          <label class="lb">Jumlah<input class="inp num" value="15.000.000" style="text-align:right"></label>
+          <label class="lb">Alasan bila lebih kecil dari kebijakan<input class="inp" placeholder="Wajib bila jumlah diturunkan"></label>
+        </div>
+        <label class="lb">Alasan pembatalan<select class="inp"><option>Acara ditunda pelanggan</option></select></label>
+      </div>
+      <div style="width:280px;flex-shrink:0;background:#f6f7f9;border-radius:12px;padding:12px 14px;align-self:flex-start">
+        <div class="kv"><span>Deposit dipegang</span><span class="num">29.040.000</span></div>
+        <div class="kv"><span>Dipakai untuk biaya</span><span class="num">15.000.000</span></div>
+        <div class="kv"><strong>Sisa deposit</strong><strong class="num">14.040.000</strong></div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:8px">
+          <label class="rad"><input type="radio" name="rest" checked>Kembalikan (perlu persetujuan refund)</label>
+          <label class="rad"><input type="radio" name="rest">Biarkan di folio</label>
+        </div>
+        <div class="sub" style="padding-top:8px">Sesi yang sudah diposting tetap. Ruang di 2 sesi dilepas, dan opsi yang menunggu di slot itu naik.</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #e3e6ea;margin-top:10px">
+      <a href="39-bq-acara-sesi.dc.html" class="btn">Kembali</a>
+      <button class="btnd">Batalkan acara dan posting 15.000.000</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

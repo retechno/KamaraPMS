@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Kalender ruang mingguan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128;display:inline-flex;align-items:center;text-decoration:none}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:40px;padding:0 16px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.g{display:grid;grid-template-columns:190px repeat(7,minmax(0,1fr))}
+.h{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;padding:9px 10px;border-bottom:1px solid #e3e6ea;background:#fbfbfc}
+.c{border-bottom:1px solid #eef0f2;border-left:1px solid #eef0f2;padding:6px;min-height:78px;display:flex;flex-direction:column;gap:4px;box-sizing:border-box}
+.r{border-bottom:1px solid #eef0f2;padding:10px;font-size:13px;display:flex;flex-direction:column;justify-content:center}
+.rs{font-size:11px;color:#626b77}
+.e{border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;text-decoration:none;display:block}
+.def{background:#1f6f5c;color:#fff}
+.opt1{background:#fdf1dc;border:1px solid #c9821a;color:#5c3608}
+.opt2{background:#fff;border:2px dashed #c9821a;color:#5c3608}
+.lock{background:repeating-linear-gradient(135deg,#eceef1 0 6px,#f6f7f9 6px 12px);border:1px solid #d6dade;color:#4a5361}
+.today{background:#f1f8f5}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav">Laporan</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0;font-size:24px;flex:1">Kalender ruang</h1>
+      <a href="35-bq-kalender-harian.dc.html" class="chip">Hari</a>
+      <button class="chip on">Minggu</button>
+      <button class="btn" aria-label="Minggu sebelumnya">‹</button>
+      <button class="btn">2–8 Nov 2026</button>
+      <button class="btn" aria-label="Minggu berikutnya">›</button>
+      <a href="39-bq-acara-sesi.dc.html" class="btnp">Acara baru</a>
+    </div>
+
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <div class="g">
+        <div class="h">Ruang</div><div class="h">Sen 2</div><div class="h">Sel 3</div><div class="h">Rab 4</div><div class="h">Kam 5</div><div class="h" style="color:#185a4a">Jum 6 · hari ini</div><div class="h">Sab 7</div><div class="h">Min 8</div>
+
+        <div class="r"><strong>Ballroom Saraswati</strong><span class="rs">A + B</span></div>
+        <div class="c"></div><div class="c"></div><div class="c"></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">18.00–23.00 · BQ-000120<br>Malam penghargaan</a></div>
+        <div class="c today"></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e opt1">12.00–16.00 · opsi 1<br>Pernikahan Ayu &amp; Made</a></div>
+        <div class="c"></div>
+
+        <div class="r"><strong>Saraswati A</strong></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">09.00–16.00 · BQ-000118<br>Sosialisasi pajak</a></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">09.00–16.00 · BQ-000118<br>hari 2</a></div>
+        <div class="c"></div>
+        <div class="c"><span class="e lock">Ballroom 17.00–23.30</span></div>
+        <div class="c today"></div>
+        <div class="c"><span class="e lock">Ballroom 11.00–16.30</span><a href="44-bq-pindah-sesi.dc.html" class="e opt2">15.00–19.00 · opsi 2<br>Seminar Asosiasi Dokter</a></div>
+        <div class="c"></div>
+
+        <div class="r"><strong>Saraswati B</strong></div>
+        <div class="c"></div><div class="c"></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e opt1">10.00–14.00 · opsi 1<br>Arisan Ikatan Alumni</a></div>
+        <div class="c"><span class="e lock">Ballroom 17.00–23.30</span></div>
+        <div class="c today"></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e opt1">08.00–10.00 · opsi 1<br>Sarapan rapat</a><span class="e lock">Ballroom 11.00–16.30</span></div>
+        <div class="c"></div>
+
+        <div class="r"><strong>Ubud 1</strong></div>
+        <div class="c"></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">13.00–17.00 · BQ-000121<br>Rapat koordinasi</a></div>
+        <div class="c"></div><div class="c"></div>
+        <div class="c today"><a href="39-bq-acara-sesi.dc.html" class="e def">08.00–17.00 · BQ-000123<br>Rapat Tahunan · hari 1</a></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">08.00–17.00 · BQ-000123<br>Rapat Tahunan · hari 2</a></div>
+        <div class="c"></div>
+
+        <div class="r"><strong>Ubud 2</strong></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">09.00–12.00 · BQ-000126</a></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">09.00–12.00 · BQ-000126</a></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">09.00–12.00 · BQ-000126</a></div>
+        <div class="c"></div>
+        <div class="c today"><a href="39-bq-acara-sesi.dc.html" class="e def">09.00–12.00 · BQ-000126</a></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">09.00–12.00 · BQ-000126</a><a href="39-bq-acara-sesi.dc.html" class="e opt1">13.00–16.00 · opsi 1<br>Workshop UMKM</a></div>
+        <div class="c"></div>
+
+        <div class="r"><strong>Boardroom Kenanga</strong></div>
+        <div class="c"></div><div class="c"></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">14.00–16.00 · BQ-000124</a></div>
+        <div class="c"></div>
+        <div class="c today"><a href="39-bq-acara-sesi.dc.html" class="e def">10.00–12.00 · BQ-000128</a></div>
+        <div class="c"><a href="39-bq-acara-sesi.dc.html" class="e def">10.00–12.00 · BQ-000129</a></div>
+        <div class="c"></div>
+
+        <div class="r" style="border-bottom:0"><strong>Taman Teratai</strong><span class="rs">luar ruang</span></div>
+        <div class="c" style="border-bottom:0"></div><div class="c" style="border-bottom:0"></div><div class="c" style="border-bottom:0"></div><div class="c" style="border-bottom:0"></div>
+        <div class="c today" style="border-bottom:0"></div>
+        <div class="c" style="border-bottom:0"><a href="39-bq-acara-sesi.dc.html" class="e def">18.00–01.00 · BQ-000127<br>Gala dinner → Min 01.00</a></div>
+        <div class="c" style="border-bottom:0"></div>
+      </div>
+    </section>
+    <div style="font-size:12px;color:#626b77">Inquiry tidak tampil di kalender karena tidak menahan ruang; lihat di Daftar acara. Klik sel kosong untuk membuat acara di ruang dan tanggal itu.</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

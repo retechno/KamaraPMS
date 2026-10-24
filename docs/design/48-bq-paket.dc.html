@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Item dan paket</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:40px;padding:0 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:8px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.mode{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font-size:11px;font-weight:700;background:#eef0f2}
+.sel td{background:#f1f8f5}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.inp{height:38px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lb{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px}
+.seg{display:inline-flex;border:1px solid #e3e6ea;border-radius:8px;overflow:hidden;height:38px}
+.seg button{border:0;background:#fff;font:inherit;font-size:13px;padding:0 14px}
+.seg .s{background:#1f6f5c;color:#fff;font-weight:600}
+.tot td{font-weight:700;background:#f6f7f9}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav">Laporan</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;gap:16px">
+    <div style="width:420px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h1 style="margin:0;font-size:24px;flex:1">Item &amp; paket</h1>
+        <button class="btn">Baru</button>
+      </div>
+      <div style="display:flex;gap:8px"><button class="chip">Item · 18</button><button class="chip on">Paket · 5</button></div>
+      <section class="card" style="overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th class="th">Paket</th><th class="th">Mode</th><th class="th thr">Per pax</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td class="td"><strong>Fullday Meeting</strong><div class="sub">4 komponen</div></td><td class="td"><span class="mode">NETT</span></td><td class="td num">363.000</td></tr>
+            <tr><td class="td"><strong>Halfday Meeting</strong><div class="sub">3 komponen</div></td><td class="td"><span class="mode">NETT</span></td><td class="td num">245.000</td></tr>
+            <tr><td class="td"><strong>Fullboard Meeting</strong><div class="sub">5 komponen</div></td><td class="td"><span class="mode">++</span></td><td class="td num">450.000</td></tr>
+            <tr><td class="td"><strong>Wedding Silver</strong><div class="sub">6 komponen</div></td><td class="td"><span class="mode">NETT</span></td><td class="td num">350.000</td></tr>
+            <tr><td class="td"><strong>Coffee break only</strong><div class="sub">1 komponen</div></td><td class="td"><span class="mode">++</span></td><td class="td num">55.000</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <section class="card" style="flex:1;min-width:0;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+      <h2 style="margin:0;font-size:18px">Fullday Meeting</h2>
+      <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:12px;align-items:end">
+        <label class="lb">Nama<input class="inp" value="Fullday Meeting"></label>
+        <label class="lb">Harga per pax<input class="inp" value="363.000" style="text-align:right"></label>
+        <div class="lb">Mode harga<div class="seg"><button class="s">Nett</button><button>++</button></div></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Komponen (item)</th><th class="th">Charge code · akun</th><th class="th thr">Jml / pax</th><th class="th thr">Harga daftar</th><th class="th thr">Bobot</th><th class="th thr">Bagian</th><th class="th">Resep</th></tr></thead>
+        <tbody>
+          <tr><td class="td">Makan siang buffet</td><td class="td">BQT_FB · 4240</td><td class="td num">1</td><td class="td num">150.000</td><td class="td num">150.000</td><td class="td num">50,0%</td><td class="td"><a href="#">Buffet lunch A · 14 bahan</a></td></tr>
+          <tr><td class="td">Coffee break</td><td class="td">BQT_FB · 4240</td><td class="td num">2</td><td class="td num">40.000</td><td class="td num">80.000</td><td class="td num">26,7%</td><td class="td"><a href="#">Coffee break set · 6 bahan</a></td></tr>
+          <tr><td class="td">Sewa ruang per pax</td><td class="td">BQT_ROOM · 4410</td><td class="td num">1</td><td class="td num">50.000</td><td class="td num">50.000</td><td class="td num">16,7%</td><td class="td sub">–</td></tr>
+          <tr><td class="td">Peralatan standar</td><td class="td">BQT_EQUIPMENT · 4410</td><td class="td num">1</td><td class="td num">20.000</td><td class="td num">20.000</td><td class="td num">6,7%</td><td class="td sub">–</td></tr>
+        </tbody>
+      </table>
+      <div style="background:#f6f7f9;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+        <strong style="font-size:13px">Contoh pemecahan untuk 100 pax (nett, servis 10%, pajak 10%)</strong>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th class="th">Komponen</th><th class="th thr">Bruto</th><th class="th thr">Neto</th><th class="th thr">Servis</th><th class="th thr">Pajak</th></tr></thead>
+          <tbody>
+            <tr><td class="td">Makan siang buffet</td><td class="td num">18.150.000</td><td class="td num">15.000.000</td><td class="td num">1.500.000</td><td class="td num">1.650.000</td></tr>
+            <tr><td class="td">Coffee break × 2</td><td class="td num">9.680.000</td><td class="td num">8.000.000</td><td class="td num">800.000</td><td class="td num">880.000</td></tr>
+            <tr><td class="td">Sewa ruang</td><td class="td num">6.050.000</td><td class="td num">5.000.000</td><td class="td num">500.000</td><td class="td num">550.000</td></tr>
+            <tr><td class="td">Peralatan</td><td class="td num">2.420.000</td><td class="td num">2.000.000</td><td class="td num">200.000</td><td class="td num">220.000</td></tr>
+            <tr class="tot"><td class="td">Total = 363.000 × 100</td><td class="td num">36.300.000</td><td class="td num">30.000.000</td><td class="td num">3.000.000</td><td class="td num">3.300.000</td></tr>
+          </tbody>
+        </table>
+        <span class="sub">Harga daftar komponen hanya menentukan bagiannya, tidak ditagih. Selisih pembulatan masuk ke komponen terbesar. Resep dibaca dari produk POS yang ditautkan (perlu modul POS dan Inventory).</span>
+      </div>
+      <div style="display:flex;justify-content:flex-end"><button class="btnp">Simpan paket</button></div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
