@@ -12370,6 +12370,732 @@ paths:
         "204": { description: Removed. }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/settings:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetSettings
+      summary: "The banquet settings (banquet.setup, manage or read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetSettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putBanquetSettings
+      summary: "Change the settings (banquet.setup)"
+      description: "The conflict mode applies to the bookings and moves that come after it, never to what exists. Every change is audited."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetSettingsInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetSettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/rooms:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetRooms
+      summary: "The meeting rooms with their parts and capacities"
+      tags: [banquet]
+      parameters:
+        - { name: active, in: query, description: "true for the ones in use, false for the others, none for all", schema: { type: boolean } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetRoom" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBanquetRoom
+      summary: "Add a meeting room (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetRoomInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetRoom" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/rooms/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetRoom
+      summary: "A meeting room"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetRoom" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateBanquetRoom
+      summary: "Change a meeting room (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetRoomInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetRoom" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/rooms/{id}/parts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: setBanquetRoomParts
+      summary: "Set the base rooms of a combined room (banquet.setup)"
+      description: "Two or more base rooms; one level only (422 ROOM_COMBINATION_INVALID). A room held by an event keeps its parts (409 BANQUET_ROOM_IN_USE)."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPartsInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetRoom" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/rooms/{id}/setups:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: setBanquetRoomSetups
+      summary: "Set the capacity of a room in each set-up (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetSetupsInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetRoom" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/event-types:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetEventTypes
+      summary: "The kinds of event"
+      tags: [banquet]
+      parameters:
+        - { name: active, in: query, description: "true for the ones in use, false for the others, none for all", schema: { type: boolean } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetEventType" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBanquetEventType
+      summary: "Add a kind of event (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetEventTypeInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEventType" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/event-types/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateBanquetEventType
+      summary: "Change a kind of event (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetEventTypeInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEventType" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reasons:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetReasons
+      summary: "The reasons for losing or cancelling an event"
+      tags: [banquet]
+      parameters:
+        - { name: active, in: query, description: "true for the ones in use, false for the others, none for all", schema: { type: boolean } }
+        - { name: kind, in: query, description: "LOST or CANCEL", schema: { type: string, enum: [LOST, CANCEL] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetReason" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBanquetReason
+      summary: "Add a reason (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetReasonInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetReason" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reasons/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateBanquetReason
+      summary: "Change a reason (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetReasonInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetReason" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/items:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetItems
+      summary: "The items that can be sold to an event"
+      tags: [banquet]
+      parameters:
+        - { name: active, in: query, description: "true for the ones in use, false for the others, none for all", schema: { type: boolean } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetItem" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBanquetItem
+      summary: "Add an item (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetItemInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/items/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateBanquetItem
+      summary: "Change an item (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetItemInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetItem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/packages:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetPackages
+      summary: "The packages with their components"
+      tags: [banquet]
+      parameters:
+        - { name: active, in: query, description: "true for the ones in use, false for the others, none for all", schema: { type: boolean } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetPackage" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBanquetPackage
+      summary: "Add a package (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPackageInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetPackage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/packages/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetPackage
+      summary: "A package"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetPackage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateBanquetPackage
+      summary: "Change a package; the components replace the ones it has (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPackageInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetPackage" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/calendar:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetCalendar
+      summary: "The rooms and the sessions of a period"
+      tags: [banquet]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the business date", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default six days after the start; up to 63 days", schema: { type: string } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetCalendar" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/today:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetToday
+      summary: "The sessions of the business date and the options whose date has passed"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetToday" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetEvents
+      summary: "The events of the property"
+      tags: [banquet]
+      parameters:
+        - { name: status, in: query, description: "A comma list of statuses", schema: { type: string } }
+        - { name: sales_user_id, in: query, description: "The salesperson", schema: { type: integer, format: int64 } }
+        - { name: event_type_id, in: query, description: "The kind of event", schema: { type: integer, format: int64 } }
+        - { name: from, in: query, description: "Events with a session on or after this date", schema: { type: string } }
+        - { name: to, in: query, description: "Events with a session on or before this date", schema: { type: string } }
+        - { name: option_overdue, in: query, description: "true for the tentative events whose option date has passed", schema: { type: boolean } }
+        - { name: q, in: query, description: "Part of the number or the name", schema: { type: string } }
+        - { name: limit, in: query, description: "Up to 500", schema: { type: integer } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetEventRow" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBanquetEvent
+      summary: "Open an inquiry (banquet.manage)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetEventInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetEvent
+      summary: "An event with its sessions and their place in the queue"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateBanquetEvent
+      summary: "Change an event that is not closed (banquet.manage)"
+      description: "A stale version is 409 VERSION_CONFLICT."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetEventInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: addBanquetSession
+      summary: "Add a session; the event as it is now (banquet.manage)"
+      description: "On a tentative or definite event the session takes its hold at once: 409 BANQUET_ROOM_NOT_AVAILABLE, 409 CAPACITY_EXCEEDED, 422 SETUP_NOT_OFFERED."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetSessionInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: sid, in: path, required: true, schema: { type: integer, format: int64 } }
+    patch:
+      operationId: updateBanquetSession
+      summary: "Change or move a session (banquet.manage)"
+      description: "A new room, day or hours on a tentative session makes new holds: it goes to the back of the queue of the new slot and the options queued behind its old slot are promoted."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetSessionInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: cancelBanquetSession
+      summary: "Cancel a session and release its holds (banquet.manage)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/availability:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: checkBanquetAvailability
+      summary: "The room check before a session is saved (banquet.manage)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetAvailabilityInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetAvailability" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/tentative:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: makeBanquetEventTentative
+      summary: "Hold the rooms of an inquiry as options (banquet.manage)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetTentativeInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/confirm:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: confirmBanquetEvent
+      summary: "Confirm a tentative event: the holds become exclusive (banquet.confirm)"
+      description: "409 BANQUET_OPTION_NOT_FIRST while an earlier option holds the room, with the holder in the context."
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/lost:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: loseBanquetEvent
+      summary: "Close an inquiry or a tentative event as lost; the reason is required (banquet.manage)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetCloseInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelBanquetEvent
+      summary: "Cancel an event; the reason is required (banquet.manage, banquet.confirm for a definite one)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetCloseInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/notices:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetNotices
+      summary: "The notices of the caller: option moved up, option date passed, option lost"
+      tags: [banquet]
+      parameters:
+        - { name: unseen, in: query, description: "true for the ones not seen", schema: { type: boolean } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetNotice" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/notices/seen:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: markBanquetNoticesSeen
+      summary: "Mark notices of the caller as seen"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetNoticesSeenInput" }
+      responses:
+        "200":
+          description: The number marked.
+          content:
+            application/json:
+              schema: { type: object, required: [marked], properties: { marked: { type: integer } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -23185,3 +23911,402 @@ components:
         quantity: { type: string }
         sent_on: { $ref: "#/components/schemas/Date" }
         voided: { type: boolean }
+    BanquetSettings:
+      type: object
+      description: "The banquet settings of the property; the defaults when it has none (36-banquet.md 3.2)."
+      required: [tentative_conflict_mode, operating_from, operating_to]
+      properties:
+        tentative_conflict_mode: { type: string, enum: [REJECT, QUEUE] }
+        operating_from: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        operating_to: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+    BanquetSettingsInput:
+      type: object
+      required: [tentative_conflict_mode]
+      properties:
+        tentative_conflict_mode: { type: string, enum: [REJECT, QUEUE] }
+        operating_from: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        operating_to: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+    BanquetRoomPart:
+      type: object
+      required: [room_id, code, name]
+      properties:
+        room_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+    BanquetRoomSetup:
+      type: object
+      required: [setup_style, capacity]
+      properties:
+        setup_style: { type: string, enum: [THEATER, CLASSROOM, U_SHAPE, ROUND_TABLE, COCKTAIL, BOARDROOM] }
+        capacity: { type: integer }
+    BanquetRoom:
+      type: object
+      required: [id, code, name, area_m2, setup_minutes, teardown_minutes, is_combo, is_active, sort_order, version, parts, setups]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        area_m2: { type: [string, "null"] }
+        setup_minutes: { type: integer }
+        teardown_minutes: { type: integer }
+        is_combo: { type: boolean }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        version: { type: integer }
+        parts: { type: array, items: { $ref: "#/components/schemas/BanquetRoomPart" } }
+        setups: { type: array, items: { $ref: "#/components/schemas/BanquetRoomSetup" } }
+    BanquetRoomInput:
+      type: object
+      description: "The code is given on creation and never changes; a change carries the version it was read at."
+      required: [name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        area_m2: { type: [string, "null"] }
+        setup_minutes: { type: integer }
+        teardown_minutes: { type: integer }
+        is_combo: { type: boolean }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        version: { type: integer }
+    BanquetPartsInput:
+      type: object
+      required: [room_ids]
+      properties:
+        room_ids: { type: array, items: { type: integer, format: int64 } }
+    BanquetSetupsInput:
+      type: object
+      required: [setups]
+      properties:
+        setups: { type: array, items: { $ref: "#/components/schemas/BanquetRoomSetup" } }
+    BanquetEventType:
+      type: object
+      required: [id, code, name, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+    BanquetEventTypeInput:
+      type: object
+      required: [name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+    BanquetReason:
+      type: object
+      required: [id, kind, code, name, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [LOST, CANCEL] }
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+    BanquetReasonInput:
+      type: object
+      required: [name]
+      properties:
+        kind: { type: string, enum: [LOST, CANCEL] }
+        code: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+    BanquetItem:
+      type: object
+      required: [id, code, name, kind, unit_basis, charge_code_id, charge_code, charge_code_name, list_price, fb_class, pos_product_id, description, is_active]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [MENU, DRINK_PACKAGE, ROOM_RENTAL, EQUIPMENT, DECOR, OTHER] }
+        unit_basis: { type: string, enum: [PER_PAX, PER_SESSION, PER_HOUR, PER_UNIT] }
+        charge_code_id: { type: integer, format: int64 }
+        charge_code: { type: string }
+        charge_code_name: { type: string }
+        list_price: { type: string }
+        fb_class: { type: [string, "null"], enum: [FOOD, BEVERAGE, OTHER, null] }
+        pos_product_id: { type: [integer, "null"], format: int64 }
+        description: { type: [string, "null"] }
+        is_active: { type: boolean }
+    BanquetItemInput:
+      type: object
+      required: [name, kind, unit_basis, charge_code_id, list_price]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [MENU, DRINK_PACKAGE, ROOM_RENTAL, EQUIPMENT, DECOR, OTHER] }
+        unit_basis: { type: string, enum: [PER_PAX, PER_SESSION, PER_HOUR, PER_UNIT] }
+        charge_code_id: { type: integer, format: int64 }
+        list_price: { type: string }
+        fb_class: { type: [string, "null"], enum: [FOOD, BEVERAGE, OTHER, null] }
+        pos_product_id: { type: [integer, "null"], format: int64 }
+        description: { type: [string, "null"] }
+        is_active: { type: boolean }
+    BanquetPackageComponent:
+      type: object
+      required: [item_id, item_code, item_name, item_kind, qty_per_pax, sort_order]
+      properties:
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        item_kind: { type: string }
+        qty_per_pax: { type: string }
+        sort_order: { type: integer }
+    BanquetPackage:
+      type: object
+      required: [id, code, name, price_per_pax, description, is_active, components]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        price_per_pax: { type: string }
+        description: { type: [string, "null"] }
+        is_active: { type: boolean }
+        components: { type: array, items: { $ref: "#/components/schemas/BanquetPackageComponent" } }
+    BanquetComponentInput:
+      type: object
+      required: [item_id, qty_per_pax]
+      properties:
+        item_id: { type: integer, format: int64 }
+        qty_per_pax: { type: string }
+    BanquetPackageInput:
+      type: object
+      required: [name, price_per_pax, components]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        price_per_pax: { type: string }
+        description: { type: [string, "null"] }
+        is_active: { type: boolean }
+        components: { type: array, items: { $ref: "#/components/schemas/BanquetComponentInput" } }
+    BanquetSession:
+      type: object
+      description: "rank is the place of a session of a tentative event in the queue of options (1 holds the room); room_taken says a definite event of someone else covers the slot; hold_from and hold_to are the local time held with the set-up and the tear-down."
+      required: [id, session_no, name, session_date, start_time, end_time, ends_next_day, room_id, room_code, room_name, setup_style, pax_estimated, pax_guaranteed, pax_actual, status, notes, rank, room_taken, hold_from, hold_to]
+      properties:
+        id: { type: integer, format: int64 }
+        session_no: { type: integer }
+        name: { type: string }
+        session_date: { $ref: "#/components/schemas/Date" }
+        start_time: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        end_time: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        ends_next_day: { type: boolean }
+        room_id: { type: [integer, "null"], format: int64 }
+        room_code: { type: [string, "null"] }
+        room_name: { type: [string, "null"] }
+        setup_style: { type: [string, "null"], enum: [THEATER, CLASSROOM, U_SHAPE, ROUND_TABLE, COCKTAIL, BOARDROOM, null] }
+        pax_estimated: { type: integer }
+        pax_guaranteed: { type: [integer, "null"] }
+        pax_actual: { type: [integer, "null"] }
+        status: { type: string, enum: [ACTIVE, CANCELLED] }
+        notes: { type: [string, "null"] }
+        rank: { type: [integer, "null"] }
+        room_taken: { type: boolean }
+        hold_from: { type: [string, "null"] }
+        hold_to: { type: [string, "null"] }
+    BanquetEvent:
+      type: object
+      required: [id, number, status, name, event_type_id, event_type_name, booker_guest_id, booker_company_id, booker_name, contact_name, contact_phone, contact_email, sales_user_id, sales_name, option_until, option_overdue, reason_id, reason_name, reason_note, booking_group_id, booking_group_name, notes, inquiry_at, definite_at, closed_at, version, sessions]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        status: { type: string, enum: [INQUIRY, TENTATIVE, DEFINITE, COMPLETED, CANCELLED, LOST] }
+        name: { type: string }
+        event_type_id: { type: [integer, "null"], format: int64 }
+        event_type_name: { type: [string, "null"] }
+        booker_guest_id: { type: [integer, "null"], format: int64 }
+        booker_company_id: { type: [integer, "null"], format: int64 }
+        booker_name: { type: string }
+        contact_name: { type: [string, "null"] }
+        contact_phone: { type: [string, "null"] }
+        contact_email: { type: [string, "null"] }
+        sales_user_id: { type: integer, format: int64 }
+        sales_name: { type: string }
+        option_until: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        option_overdue: { type: boolean }
+        reason_id: { type: [integer, "null"], format: int64 }
+        reason_name: { type: [string, "null"] }
+        reason_note: { type: [string, "null"] }
+        booking_group_id: { type: [integer, "null"], format: int64 }
+        booking_group_name: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        inquiry_at: { type: string, format: date-time }
+        definite_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        version: { type: integer }
+        sessions: { type: array, items: { $ref: "#/components/schemas/BanquetSession" } }
+    BanquetEventRow:
+      type: object
+      required: [id, number, status, name, event_type_id, event_type_name, booker_name, sales_user_id, sales_name, option_until, option_overdue, first_date, last_date, sessions, pax_estimated, version]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        status: { type: string, enum: [INQUIRY, TENTATIVE, DEFINITE, COMPLETED, CANCELLED, LOST] }
+        name: { type: string }
+        event_type_id: { type: [integer, "null"], format: int64 }
+        event_type_name: { type: [string, "null"] }
+        booker_name: { type: string }
+        sales_user_id: { type: integer, format: int64 }
+        sales_name: { type: string }
+        option_until: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        option_overdue: { type: boolean }
+        first_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        last_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        sessions: { type: integer }
+        pax_estimated: { type: integer }
+        version: { type: integer }
+    BanquetEventInput:
+      type: object
+      description: "Exactly one of booker_guest_id and booker_company_id. A change carries the version it was read at; option_until is read for a tentative event only."
+      required: [name]
+      properties:
+        name: { type: string }
+        event_type_id: { type: [integer, "null"], format: int64 }
+        booker_guest_id: { type: [integer, "null"], format: int64 }
+        booker_company_id: { type: [integer, "null"], format: int64 }
+        contact_name: { type: [string, "null"] }
+        contact_phone: { type: [string, "null"] }
+        contact_email: { type: [string, "null"] }
+        sales_user_id: { type: [integer, "null"], format: int64 }
+        booking_group_id: { type: [integer, "null"], format: int64 }
+        notes: { type: [string, "null"] }
+        option_until: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        version: { type: integer }
+    BanquetSessionInput:
+      type: object
+      description: "On a tentative or definite event the room and the hours are required. accept_capacity confirms guests above the capacity of the room in the set-up (409 CAPACITY_EXCEEDED without it)."
+      required: [name, session_date, pax_estimated]
+      properties:
+        name: { type: string }
+        session_date: { $ref: "#/components/schemas/Date" }
+        start_time: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        end_time: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        ends_next_day: { type: boolean }
+        room_id: { type: [integer, "null"], format: int64 }
+        setup_style: { type: [string, "null"], enum: [THEATER, CLASSROOM, U_SHAPE, ROUND_TABLE, COCKTAIL, BOARDROOM, null] }
+        pax_estimated: { type: integer }
+        pax_guaranteed: { type: [integer, "null"] }
+        notes: { type: [string, "null"] }
+        accept_capacity: { type: boolean }
+    BanquetTentativeInput:
+      type: object
+      required: [option_until]
+      properties:
+        option_until: { $ref: "#/components/schemas/Date" }
+    BanquetCloseInput:
+      type: object
+      required: [reason_id]
+      properties:
+        reason_id: { type: integer, format: int64 }
+        reason_note: { type: [string, "null"] }
+    BanquetAvailabilityInput:
+      type: object
+      required: [room_id, session_date, start_time, end_time]
+      properties:
+        session_id: { type: [integer, "null"], format: int64 }
+        room_id: { type: integer, format: int64 }
+        session_date: { $ref: "#/components/schemas/Date" }
+        start_time: { $ref: "#/components/schemas/TimeOfDay" }
+        end_time: { $ref: "#/components/schemas/TimeOfDay" }
+        ends_next_day: { type: boolean }
+        setup_style: { type: [string, "null"], enum: [THEATER, CLASSROOM, U_SHAPE, ROUND_TABLE, COCKTAIL, BOARDROOM, null] }
+        pax: { type: [integer, "null"] }
+    BanquetConflict:
+      type: object
+      required: [event_id, event_number, event_name, event_status, session_id, session_name, hold_kind, room_code, same_event]
+      properties:
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        event_status: { type: string }
+        session_id: { type: integer, format: int64 }
+        session_name: { type: string }
+        hold_kind: { type: string, enum: [OPTION, DEFINITE] }
+        room_code: { type: string }
+        same_event: { type: boolean }
+    BanquetAvailability:
+      type: object
+      description: "The room check before a session is saved. rank_in_new_slot is the place the session would have; rank_given_up is the one a tentative session gives up when it moves."
+      required: [mode, available, conflicts, rank_in_new_slot, rank_given_up, capacity, capacity_exceeds, setup_offered, hold_from, hold_to]
+      properties:
+        mode: { type: string, enum: [REJECT, QUEUE] }
+        available: { type: boolean }
+        conflicts: { type: array, items: { $ref: "#/components/schemas/BanquetConflict" } }
+        rank_in_new_slot: { type: integer }
+        rank_given_up: { type: [integer, "null"] }
+        capacity: { type: [integer, "null"] }
+        capacity_exceeds: { type: boolean }
+        setup_offered: { type: boolean }
+        hold_from: { type: string }
+        hold_to: { type: string }
+    BanquetCalendarSession:
+      type: object
+      required: [session_id, event_id, event_number, event_name, event_status, event_type_name, booker_name, sales_user_id, option_until, option_overdue, session_name, session_date, start_time, end_time, ends_next_day, room_id, room_code, room_name, setup_minutes, teardown_minutes, setup_style, pax_estimated, rank, room_taken]
+      properties:
+        session_id: { type: integer, format: int64 }
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        event_status: { type: string }
+        event_type_name: { type: string }
+        booker_name: { type: string }
+        sales_user_id: { type: integer, format: int64 }
+        option_until: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        option_overdue: { type: boolean }
+        session_name: { type: string }
+        session_date: { $ref: "#/components/schemas/Date" }
+        start_time: { $ref: "#/components/schemas/TimeOfDay" }
+        end_time: { $ref: "#/components/schemas/TimeOfDay" }
+        ends_next_day: { type: boolean }
+        room_id: { type: integer, format: int64 }
+        room_code: { type: string }
+        room_name: { type: string }
+        setup_minutes: { type: integer }
+        teardown_minutes: { type: integer }
+        setup_style: { type: [string, "null"] }
+        pax_estimated: { type: integer }
+        rank: { type: [integer, "null"] }
+        room_taken: { type: boolean }
+    BanquetCalendar:
+      type: object
+      required: [from, to, rooms, sessions]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        rooms: { type: array, items: { $ref: "#/components/schemas/BanquetRoom" } }
+        sessions: { type: array, items: { $ref: "#/components/schemas/BanquetCalendarSession" } }
+    BanquetOverdueOption:
+      type: object
+      required: [event_id, number, name, option_until, sales_user_id, sales_name]
+      properties:
+        event_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        option_until: { $ref: "#/components/schemas/Date" }
+        sales_user_id: { type: integer, format: int64 }
+        sales_name: { type: string }
+    BanquetToday:
+      type: object
+      required: [date, sessions, overdue_options]
+      properties:
+        date: { $ref: "#/components/schemas/Date" }
+        sessions: { type: array, items: { $ref: "#/components/schemas/BanquetCalendarSession" } }
+        overdue_options: { type: array, items: { $ref: "#/components/schemas/BanquetOverdueOption" } }
+    BanquetNotice:
+      type: object
+      required: [id, kind, event_id, event_number, event_name, session_id, notice_date, created_at, seen_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [OPTION_PROMOTED, OPTION_DUE, OPTION_LOST] }
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        session_id: { type: [integer, "null"], format: int64 }
+        notice_date: { $ref: "#/components/schemas/Date" }
+        created_at: { type: string, format: date-time }
+        seen_at: { type: [string, "null"], format: date-time }
+    BanquetNoticesSeenInput:
+      type: object
+      description: "The notices to mark; none marks them all."
+      properties:
+        ids: { type: array, items: { type: integer, format: int64 } }

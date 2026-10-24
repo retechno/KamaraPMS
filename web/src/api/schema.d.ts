@@ -10771,6 +10771,545 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/banquet/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The banquet settings (banquet.setup, manage or read) */
+        get: operations["getBanquetSettings"];
+        /**
+         * Change the settings (banquet.setup)
+         * @description The conflict mode applies to the bookings and moves that come after it, never to what exists. Every change is audited.
+         */
+        put: operations["putBanquetSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The meeting rooms with their parts and capacities */
+        get: operations["listBanquetRooms"];
+        put?: never;
+        /** Add a meeting room (banquet.setup) */
+        post: operations["createBanquetRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/rooms/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A meeting room */
+        get: operations["getBanquetRoom"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a meeting room (banquet.setup) */
+        patch: operations["updateBanquetRoom"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/rooms/{id}/parts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the base rooms of a combined room (banquet.setup)
+         * @description Two or more base rooms; one level only (422 ROOM_COMBINATION_INVALID). A room held by an event keeps its parts (409 BANQUET_ROOM_IN_USE).
+         */
+        put: operations["setBanquetRoomParts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/rooms/{id}/setups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the capacity of a room in each set-up (banquet.setup) */
+        put: operations["setBanquetRoomSetups"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/event-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The kinds of event */
+        get: operations["listBanquetEventTypes"];
+        put?: never;
+        /** Add a kind of event (banquet.setup) */
+        post: operations["createBanquetEventType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/event-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a kind of event (banquet.setup) */
+        patch: operations["updateBanquetEventType"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The reasons for losing or cancelling an event */
+        get: operations["listBanquetReasons"];
+        put?: never;
+        /** Add a reason (banquet.setup) */
+        post: operations["createBanquetReason"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reasons/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a reason (banquet.setup) */
+        patch: operations["updateBanquetReason"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The items that can be sold to an event */
+        get: operations["listBanquetItems"];
+        put?: never;
+        /** Add an item (banquet.setup) */
+        post: operations["createBanquetItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change an item (banquet.setup) */
+        patch: operations["updateBanquetItem"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The packages with their components */
+        get: operations["listBanquetPackages"];
+        put?: never;
+        /** Add a package (banquet.setup) */
+        post: operations["createBanquetPackage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/packages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A package */
+        get: operations["getBanquetPackage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a package; the components replace the ones it has (banquet.setup) */
+        patch: operations["updateBanquetPackage"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The rooms and the sessions of a period */
+        get: operations["getBanquetCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The sessions of the business date and the options whose date has passed */
+        get: operations["getBanquetToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The events of the property */
+        get: operations["listBanquetEvents"];
+        put?: never;
+        /** Open an inquiry (banquet.manage) */
+        post: operations["createBanquetEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** An event with its sessions and their place in the queue */
+        get: operations["getBanquetEvent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an event that is not closed (banquet.manage)
+         * @description A stale version is 409 VERSION_CONFLICT.
+         */
+        patch: operations["updateBanquetEvent"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a session; the event as it is now (banquet.manage)
+         * @description On a tentative or definite event the session takes its hold at once: 409 BANQUET_ROOM_NOT_AVAILABLE, 409 CAPACITY_EXCEEDED, 422 SETUP_NOT_OFFERED.
+         */
+        post: operations["addBanquetSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel a session and release its holds (banquet.manage) */
+        delete: operations["cancelBanquetSession"];
+        options?: never;
+        head?: never;
+        /**
+         * Change or move a session (banquet.manage)
+         * @description A new room, day or hours on a tentative session makes new holds: it goes to the back of the queue of the new slot and the options queued behind its old slot are promoted.
+         */
+        patch: operations["updateBanquetSession"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The room check before a session is saved (banquet.manage) */
+        post: operations["checkBanquetAvailability"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/tentative": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hold the rooms of an inquiry as options (banquet.manage) */
+        post: operations["makeBanquetEventTentative"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a tentative event: the holds become exclusive (banquet.confirm)
+         * @description 409 BANQUET_OPTION_NOT_FIRST while an earlier option holds the room, with the holder in the context.
+         */
+        post: operations["confirmBanquetEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/lost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close an inquiry or a tentative event as lost; the reason is required (banquet.manage) */
+        post: operations["loseBanquetEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an event; the reason is required (banquet.manage, banquet.confirm for a definite one) */
+        post: operations["cancelBanquetEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The notices of the caller: option moved up, option date passed, option lost */
+        get: operations["listBanquetNotices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/notices/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark notices of the caller as seen */
+        post: operations["markBanquetNoticesSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -21822,6 +22361,407 @@ export interface components {
             quantity: string;
             sent_on: components["schemas"]["Date"];
             voided: boolean;
+        };
+        /** @description The banquet settings of the property; the defaults when it has none (36-banquet.md 3.2). */
+        BanquetSettings: {
+            /** @enum {string} */
+            tentative_conflict_mode: "REJECT" | "QUEUE";
+            operating_from: components["schemas"]["TimeOfDay"] | null;
+            operating_to: components["schemas"]["TimeOfDay"] | null;
+        };
+        BanquetSettingsInput: {
+            /** @enum {string} */
+            tentative_conflict_mode: "REJECT" | "QUEUE";
+            operating_from?: components["schemas"]["TimeOfDay"] | null;
+            operating_to?: components["schemas"]["TimeOfDay"] | null;
+        };
+        BanquetRoomPart: {
+            /** Format: int64 */
+            room_id: number;
+            code: string;
+            name: string;
+        };
+        BanquetRoomSetup: {
+            /** @enum {string} */
+            setup_style: "THEATER" | "CLASSROOM" | "U_SHAPE" | "ROUND_TABLE" | "COCKTAIL" | "BOARDROOM";
+            capacity: number;
+        };
+        BanquetRoom: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            area_m2: string | null;
+            setup_minutes: number;
+            teardown_minutes: number;
+            is_combo: boolean;
+            is_active: boolean;
+            sort_order: number;
+            version: number;
+            parts: components["schemas"]["BanquetRoomPart"][];
+            setups: components["schemas"]["BanquetRoomSetup"][];
+        };
+        /** @description The code is given on creation and never changes; a change carries the version it was read at. */
+        BanquetRoomInput: {
+            code?: string;
+            name: string;
+            area_m2?: string | null;
+            setup_minutes?: number;
+            teardown_minutes?: number;
+            is_combo?: boolean;
+            is_active?: boolean;
+            sort_order?: number;
+            version?: number;
+        };
+        BanquetPartsInput: {
+            room_ids: number[];
+        };
+        BanquetSetupsInput: {
+            setups: components["schemas"]["BanquetRoomSetup"][];
+        };
+        BanquetEventType: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            is_active: boolean;
+        };
+        BanquetEventTypeInput: {
+            code?: string;
+            name: string;
+            is_active?: boolean;
+        };
+        BanquetReason: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "LOST" | "CANCEL";
+            code: string;
+            name: string;
+            is_active: boolean;
+        };
+        BanquetReasonInput: {
+            /** @enum {string} */
+            kind?: "LOST" | "CANCEL";
+            code?: string;
+            name: string;
+            is_active?: boolean;
+        };
+        BanquetItem: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            kind: "MENU" | "DRINK_PACKAGE" | "ROOM_RENTAL" | "EQUIPMENT" | "DECOR" | "OTHER";
+            /** @enum {string} */
+            unit_basis: "PER_PAX" | "PER_SESSION" | "PER_HOUR" | "PER_UNIT";
+            /** Format: int64 */
+            charge_code_id: number;
+            charge_code: string;
+            charge_code_name: string;
+            list_price: string;
+            /** @enum {string|null} */
+            fb_class: "FOOD" | "BEVERAGE" | "OTHER" | null;
+            /** Format: int64 */
+            pos_product_id: number | null;
+            description: string | null;
+            is_active: boolean;
+        };
+        BanquetItemInput: {
+            code?: string;
+            name: string;
+            /** @enum {string} */
+            kind: "MENU" | "DRINK_PACKAGE" | "ROOM_RENTAL" | "EQUIPMENT" | "DECOR" | "OTHER";
+            /** @enum {string} */
+            unit_basis: "PER_PAX" | "PER_SESSION" | "PER_HOUR" | "PER_UNIT";
+            /** Format: int64 */
+            charge_code_id: number;
+            list_price: string;
+            /** @enum {string|null} */
+            fb_class?: "FOOD" | "BEVERAGE" | "OTHER" | null;
+            /** Format: int64 */
+            pos_product_id?: number | null;
+            description?: string | null;
+            is_active?: boolean;
+        };
+        BanquetPackageComponent: {
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            item_kind: string;
+            qty_per_pax: string;
+            sort_order: number;
+        };
+        BanquetPackage: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            price_per_pax: string;
+            description: string | null;
+            is_active: boolean;
+            components: components["schemas"]["BanquetPackageComponent"][];
+        };
+        BanquetComponentInput: {
+            /** Format: int64 */
+            item_id: number;
+            qty_per_pax: string;
+        };
+        BanquetPackageInput: {
+            code?: string;
+            name: string;
+            price_per_pax: string;
+            description?: string | null;
+            is_active?: boolean;
+            components: components["schemas"]["BanquetComponentInput"][];
+        };
+        /** @description rank is the place of a session of a tentative event in the queue of options (1 holds the room); room_taken says a definite event of someone else covers the slot; hold_from and hold_to are the local time held with the set-up and the tear-down. */
+        BanquetSession: {
+            /** Format: int64 */
+            id: number;
+            session_no: number;
+            name: string;
+            session_date: components["schemas"]["Date"];
+            start_time: components["schemas"]["TimeOfDay"] | null;
+            end_time: components["schemas"]["TimeOfDay"] | null;
+            ends_next_day: boolean;
+            /** Format: int64 */
+            room_id: number | null;
+            room_code: string | null;
+            room_name: string | null;
+            /** @enum {string|null} */
+            setup_style: "THEATER" | "CLASSROOM" | "U_SHAPE" | "ROUND_TABLE" | "COCKTAIL" | "BOARDROOM" | null;
+            pax_estimated: number;
+            pax_guaranteed: number | null;
+            pax_actual: number | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "CANCELLED";
+            notes: string | null;
+            rank: number | null;
+            room_taken: boolean;
+            hold_from: string | null;
+            hold_to: string | null;
+        };
+        BanquetEvent: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** @enum {string} */
+            status: "INQUIRY" | "TENTATIVE" | "DEFINITE" | "COMPLETED" | "CANCELLED" | "LOST";
+            name: string;
+            /** Format: int64 */
+            event_type_id: number | null;
+            event_type_name: string | null;
+            /** Format: int64 */
+            booker_guest_id: number | null;
+            /** Format: int64 */
+            booker_company_id: number | null;
+            booker_name: string;
+            contact_name: string | null;
+            contact_phone: string | null;
+            contact_email: string | null;
+            /** Format: int64 */
+            sales_user_id: number;
+            sales_name: string;
+            option_until: components["schemas"]["Date"] | null;
+            option_overdue: boolean;
+            /** Format: int64 */
+            reason_id: number | null;
+            reason_name: string | null;
+            reason_note: string | null;
+            /** Format: int64 */
+            booking_group_id: number | null;
+            booking_group_name: string | null;
+            notes: string | null;
+            /** Format: date-time */
+            inquiry_at: string;
+            /** Format: date-time */
+            definite_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            version: number;
+            sessions: components["schemas"]["BanquetSession"][];
+        };
+        BanquetEventRow: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** @enum {string} */
+            status: "INQUIRY" | "TENTATIVE" | "DEFINITE" | "COMPLETED" | "CANCELLED" | "LOST";
+            name: string;
+            /** Format: int64 */
+            event_type_id: number | null;
+            event_type_name: string | null;
+            booker_name: string;
+            /** Format: int64 */
+            sales_user_id: number;
+            sales_name: string;
+            option_until: components["schemas"]["Date"] | null;
+            option_overdue: boolean;
+            first_date: components["schemas"]["Date"] | null;
+            last_date: components["schemas"]["Date"] | null;
+            sessions: number;
+            pax_estimated: number;
+            version: number;
+        };
+        /** @description Exactly one of booker_guest_id and booker_company_id. A change carries the version it was read at; option_until is read for a tentative event only. */
+        BanquetEventInput: {
+            name: string;
+            /** Format: int64 */
+            event_type_id?: number | null;
+            /** Format: int64 */
+            booker_guest_id?: number | null;
+            /** Format: int64 */
+            booker_company_id?: number | null;
+            contact_name?: string | null;
+            contact_phone?: string | null;
+            contact_email?: string | null;
+            /** Format: int64 */
+            sales_user_id?: number | null;
+            /** Format: int64 */
+            booking_group_id?: number | null;
+            notes?: string | null;
+            option_until?: components["schemas"]["Date"] | null;
+            version?: number;
+        };
+        /** @description On a tentative or definite event the room and the hours are required. accept_capacity confirms guests above the capacity of the room in the set-up (409 CAPACITY_EXCEEDED without it). */
+        BanquetSessionInput: {
+            name: string;
+            session_date: components["schemas"]["Date"];
+            start_time?: components["schemas"]["TimeOfDay"] | null;
+            end_time?: components["schemas"]["TimeOfDay"] | null;
+            ends_next_day?: boolean;
+            /** Format: int64 */
+            room_id?: number | null;
+            /** @enum {string|null} */
+            setup_style?: "THEATER" | "CLASSROOM" | "U_SHAPE" | "ROUND_TABLE" | "COCKTAIL" | "BOARDROOM" | null;
+            pax_estimated: number;
+            pax_guaranteed?: number | null;
+            notes?: string | null;
+            accept_capacity?: boolean;
+        };
+        BanquetTentativeInput: {
+            option_until: components["schemas"]["Date"];
+        };
+        BanquetCloseInput: {
+            /** Format: int64 */
+            reason_id: number;
+            reason_note?: string | null;
+        };
+        BanquetAvailabilityInput: {
+            /** Format: int64 */
+            session_id?: number | null;
+            /** Format: int64 */
+            room_id: number;
+            session_date: components["schemas"]["Date"];
+            start_time: components["schemas"]["TimeOfDay"];
+            end_time: components["schemas"]["TimeOfDay"];
+            ends_next_day?: boolean;
+            /** @enum {string|null} */
+            setup_style?: "THEATER" | "CLASSROOM" | "U_SHAPE" | "ROUND_TABLE" | "COCKTAIL" | "BOARDROOM" | null;
+            pax?: number | null;
+        };
+        BanquetConflict: {
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            event_status: string;
+            /** Format: int64 */
+            session_id: number;
+            session_name: string;
+            /** @enum {string} */
+            hold_kind: "OPTION" | "DEFINITE";
+            room_code: string;
+            same_event: boolean;
+        };
+        /** @description The room check before a session is saved. rank_in_new_slot is the place the session would have; rank_given_up is the one a tentative session gives up when it moves. */
+        BanquetAvailability: {
+            /** @enum {string} */
+            mode: "REJECT" | "QUEUE";
+            available: boolean;
+            conflicts: components["schemas"]["BanquetConflict"][];
+            rank_in_new_slot: number;
+            rank_given_up: number | null;
+            capacity: number | null;
+            capacity_exceeds: boolean;
+            setup_offered: boolean;
+            hold_from: string;
+            hold_to: string;
+        };
+        BanquetCalendarSession: {
+            /** Format: int64 */
+            session_id: number;
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            event_status: string;
+            event_type_name: string;
+            booker_name: string;
+            /** Format: int64 */
+            sales_user_id: number;
+            option_until: components["schemas"]["Date"] | null;
+            option_overdue: boolean;
+            session_name: string;
+            session_date: components["schemas"]["Date"];
+            start_time: components["schemas"]["TimeOfDay"];
+            end_time: components["schemas"]["TimeOfDay"];
+            ends_next_day: boolean;
+            /** Format: int64 */
+            room_id: number;
+            room_code: string;
+            room_name: string;
+            setup_minutes: number;
+            teardown_minutes: number;
+            setup_style: string | null;
+            pax_estimated: number;
+            rank: number | null;
+            room_taken: boolean;
+        };
+        BanquetCalendar: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rooms: components["schemas"]["BanquetRoom"][];
+            sessions: components["schemas"]["BanquetCalendarSession"][];
+        };
+        BanquetOverdueOption: {
+            /** Format: int64 */
+            event_id: number;
+            number: string;
+            name: string;
+            option_until: components["schemas"]["Date"];
+            /** Format: int64 */
+            sales_user_id: number;
+            sales_name: string;
+        };
+        BanquetToday: {
+            date: components["schemas"]["Date"];
+            sessions: components["schemas"]["BanquetCalendarSession"][];
+            overdue_options: components["schemas"]["BanquetOverdueOption"][];
+        };
+        BanquetNotice: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "OPTION_PROMOTED" | "OPTION_DUE" | "OPTION_LOST";
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            /** Format: int64 */
+            session_id: number | null;
+            notice_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            seen_at: string | null;
+        };
+        /** @description The notices to mark; none marks them all. */
+        BanquetNoticesSeenInput: {
+            ids?: number[];
         };
     };
     responses: {
@@ -39317,6 +40257,1108 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getBanquetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetSettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    putBanquetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetSettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBanquetRooms: {
+        parameters: {
+            query?: {
+                /** @description true for the ones in use, false for the others, none for all */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetRoom"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBanquetRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetRoomInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetRoom"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetRoom"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetRoomInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetRoom"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setBanquetRoomParts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetPartsInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetRoom"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setBanquetRoomSetups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetSetupsInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetRoom"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBanquetEventTypes: {
+        parameters: {
+            query?: {
+                /** @description true for the ones in use, false for the others, none for all */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetEventType"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBanquetEventType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetEventTypeInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEventType"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetEventType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetEventTypeInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEventType"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBanquetReasons: {
+        parameters: {
+            query?: {
+                /** @description true for the ones in use, false for the others, none for all */
+                active?: boolean;
+                /** @description LOST or CANCEL */
+                kind?: "LOST" | "CANCEL";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetReason"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBanquetReason: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetReasonInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetReason"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetReason: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetReasonInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetReason"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBanquetItems: {
+        parameters: {
+            query?: {
+                /** @description true for the ones in use, false for the others, none for all */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetItem"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBanquetItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetItemInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetItemInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetItem"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBanquetPackages: {
+        parameters: {
+            query?: {
+                /** @description true for the ones in use, false for the others, none for all */
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetPackage"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBanquetPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetPackageInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetPackage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetPackage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetPackage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetPackageInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetPackage"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetCalendar: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the business date */
+                from?: string;
+                /** @description YYYY-MM-DD, default six days after the start; up to 63 days */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetCalendar"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetToday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetToday"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBanquetEvents: {
+        parameters: {
+            query?: {
+                /** @description A comma list of statuses */
+                status?: string;
+                /** @description The salesperson */
+                sales_user_id?: number;
+                /** @description The kind of event */
+                event_type_id?: number;
+                /** @description Events with a session on or after this date */
+                from?: string;
+                /** @description Events with a session on or before this date */
+                to?: string;
+                /** @description true for the tentative events whose option date has passed */
+                option_overdue?: boolean;
+                /** @description Part of the number or the name */
+                q?: string;
+                /** @description Up to 500 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetEventRow"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    createBanquetEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetEventInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetEventInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    addBanquetSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetSessionInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelBanquetSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetSessionInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    checkBanquetAvailability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetAvailabilityInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetAvailability"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    makeBanquetEventTentative: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetTentativeInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    confirmBanquetEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    loseBanquetEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetCloseInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelBanquetEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetCloseInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBanquetNotices: {
+        parameters: {
+            query?: {
+                /** @description true for the ones not seen */
+                unseen?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetNotice"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    markBanquetNoticesSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetNoticesSeenInput"];
+            };
+        };
+        responses: {
+            /** @description The number marked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        marked: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

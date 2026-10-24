@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { BedDouble, BookOpen, Boxes, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Store, Truck } from 'lucide-vue-next'
+import { BedDouble, BookOpen, Boxes, CalendarRange, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Store, Truck } from 'lucide-vue-next'
 
 /**
  * Application navigation. Labels are translation keys (`nav.items.<id>`, `nav.sections.<id>`), so the menu follows the
@@ -118,6 +118,17 @@ export const navigation: NavSection[] = [
       { id: 'inventoryPosGap', to: '/inventory/pos-gap', permission: ['inventory.view', 'inventory.manage'], module: 'INVENTORY' },
       { id: 'inventoryApprovals', to: '/inventory/approvals', permission: ['inventory.approve', 'inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve'], module: 'INVENTORY' },
       { id: 'inventoryChains', to: '/inventory/approval-chains', permission: 'inventory.manage', module: 'INVENTORY' },
+    ],
+  },
+  {
+    id: 'banquet',
+    icon: CalendarRange,
+    items: [
+      { id: 'banquetCalendar', to: '/banquet', permission: ['banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
+      { id: 'banquetEvents', to: '/banquet/events', permission: ['banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
+      { id: 'banquetRooms', to: '/banquet/rooms', permission: ['banquet.setup', 'banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
+      { id: 'banquetCatalog', to: '/banquet/catalog', permission: ['banquet.setup', 'banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
+      { id: 'banquetSettings', to: '/banquet/settings', permission: 'banquet.setup', module: 'BANQUET' },
     ],
   },
   {

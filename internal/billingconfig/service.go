@@ -394,7 +394,7 @@ func (s *Service) attachRules(ctx context.Context, tenantID, propertyID int64, o
 
 // ListChargeCodes lists charge codes (with their rules) by id after afterID.
 func (s *Service) ListChargeCodes(ctx context.Context, propertyID, afterID int64, f ChargeCodeFilter, limit int) ([]ChargeCode, error) {
-	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage, auth.PermPOSManage)
+	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage, auth.PermPOSManage, auth.PermBanquetSetup)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func (s *Service) loadChargeCode(ctx context.Context, tenantID, propertyID, id i
 
 // GetChargeCode returns one charge code with its rules.
 func (s *Service) GetChargeCode(ctx context.Context, propertyID, id int64) (ChargeCode, error) {
-	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage, auth.PermPOSManage)
+	p, err := s.reader(ctx, propertyID, auth.PermFolioRead, auth.PermRateManage, auth.PermPOSManage, auth.PermBanquetSetup)
 	if err != nil {
 		return ChargeCode{}, err
 	}

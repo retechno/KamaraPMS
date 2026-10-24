@@ -28,7 +28,7 @@ const (
 	Housekeeping Module = "HOUSEKEEPING"
 	Accounting   Module = "ACCOUNTING"
 	Inventory    Module = "INVENTORY" // the outlets (docs/architecture/34-pos.md)
-	Banquet      Module = "BANQUET"   // the outlets (docs/architecture/34-pos.md)
+	Banquet      Module = "BANQUET"   // the meeting rooms, events and banquets (docs/architecture/36-banquet.md)
 	POS          Module = "POS"       // the outlets (docs/architecture/34-pos.md)
 )
 

@@ -37,6 +37,9 @@ var moduleRules = []struct {
 	// Inventory: stock, warehouses and the opening stock (docs/architecture/35-inventory.md). The recipe routes of the POS belong to the POS and ask the entitlement of INVENTORY themselves.
 	{"inventory", Inventory},
 
+	// Banquet: the meeting rooms, the events and their sessions (docs/architecture/36-banquet.md 7.3). The folio of an event belongs to CORE, as the folio of a POS bill does.
+	{"banquet", Banquet},
+
 	// Front office, billing, setup, end of day and reports: CORE.
 	{"housekeeping", Core},
 	{"rooms", Core},

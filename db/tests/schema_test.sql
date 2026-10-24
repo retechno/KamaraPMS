@@ -1950,7 +1950,7 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('pos_options', 'CONFIG', 'add-on and variant price differences'), ('pos_price_list_items', 'CONFIG', 'prices of an outlet'), ('folio_outlet_locks', 'CONFIG', 'the limit of outlet charges of a folio'),
     ('pos_room_charge_attempts', 'PLAN', 'a request of an outlet to charge a room, kept as a trail; the money is in the ledger'),
     ('pos_bill_lines', 'PLAN', 'the line of an order with its price snapshot; the money is the ledger row it posts when it is sent'),
-    ('inv_items', 'CONFIG', 'the reference cost of an item'), ('inv_levels', 'CONFIG', 'minimum and maximum quantities'), ('inventory_settings', 'CONFIG', 'tolerances and the receipt limit'),
+    ('banquet_items', 'CONFIG', 'the list price of an item'), ('banquet_packages', 'CONFIG', 'the price per guest of a package'), ('inv_items', 'CONFIG', 'the reference cost of an item'), ('inv_levels', 'CONFIG', 'minimum and maximum quantities'), ('inventory_settings', 'CONFIG', 'tolerances and the receipt limit'),
     ('inv_supplier_items', 'CONFIG', 'the last price of a supplier for an item'), ('inv_approval_levels', 'CONFIG', 'the amount a level of a chain applies above'),
     ('inv_requests', 'PLAN', 'a purchase request: an estimate of what will be bought'), ('inv_request_lines', 'PLAN', 'the estimate of a line'),
     ('inv_approval_steps', 'PLAN', 'the snapshot of a level and the total the approver saw'), ('inv_approval_edits', 'PLAN', 'what an approver changed: a quantity or an estimated price'),

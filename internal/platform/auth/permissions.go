@@ -140,6 +140,12 @@ const (
 	PermInventoryFinalApprove Permission = "inventory.final_approve"
 	// The final approval of a requisition (SR) is a level of the chain; the requisition itself comes with PR 3, the permission is here so that the chain can be set up.
 	PermInventorySRFinalApprove Permission = "inventory.sr_final_approve"
+
+	// Banquet (docs/architecture/36-banquet.md 7.1). Granted to no existing role: the tenant gives them to the roles it wants. The other permissions of the module come with the PRs that use them.
+	PermBanquetRead    Permission = "banquet.read"
+	PermBanquetManage  Permission = "banquet.manage"
+	PermBanquetConfirm Permission = "banquet.confirm"
+	PermBanquetSetup   Permission = "banquet.setup"
 )
 
 // Catalogue is the complete, ordered list of permissions (the only valid codes).
@@ -265,6 +271,11 @@ var Catalogue = []PermissionInfo{
 	{PermInventoryCostControl, "Inventory", "Approve the level of a request that is given to cost control", "S5"},
 	{PermInventoryFinalApprove, "Inventory", "Approve the final level of a request (financial controller, general manager)", "S5"},
 	{PermInventorySRFinalApprove, "Inventory", "Approve the final level of a store requisition (store manager, financial controller)", "S5"},
+
+	{PermBanquetRead, "Banquet", "See the calendar of the meeting rooms, the events and their sessions", "S6"},
+	{PermBanquetManage, "Banquet", "Create and change events (inquiry and tentative), their sessions and options, and mark an event lost", "S6"},
+	{PermBanquetConfirm, "Banquet", "Confirm an event (definite) and cancel a definite event", "S6"},
+	{PermBanquetSetup, "Banquet", "Set up the meeting rooms, their combinations and set-ups, the items, the packages, the event types, the reasons and the banquet settings", "S6"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }
