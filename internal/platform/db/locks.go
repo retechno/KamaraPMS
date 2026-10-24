@@ -29,7 +29,7 @@ const (
 	LevelFolios       LockLevel = 42 // L4
 	LevelPayments     LockLevel = 43 // L4
 	LevelCompanies    LockLevel = 44 // L4: a city ledger account (serialises its credit limit checks and receipts)
-	LevelGroups       LockLevel = 45 // L4: a booking group (its dates and company are stable while a reservation joins it)
+	LevelGroups       LockLevel = 45 // L4: a booking group (its dates and company are stable while a reservation joins it); the meeting rooms and the events of the banquet share it, groups first (eventRank, docs/architecture/36-banquet.md 6)
 	LevelStock        LockLevel = 45 // L4: stock, shared with the booking groups (a booking never touches stock; the lock-order test holds it): documents, then the warehouse, then the balances ascending (docs/architecture/35-inventory.md 5.1)
 	LevelAccounting   LockLevel = 46 // L4: a property's accounting settings row (the chart, the system accounts and the periods are edited under it)
 	LevelPayables     LockLevel = 47 // L4: a supplier (serialises its bills, payments and what they settle; taken after the accounting settings)
@@ -96,6 +96,20 @@ func (t LockTable) stockRank() int {
 	return 0
 }
 
+// eventRank is the order of the tables of the booking groups and the banquet inside LevelGroups: the group of the event first, then the meeting rooms (the base rooms, ascending in one call), then the
+// events (docs/architecture/36-banquet.md 6). 0 for every other table. A use case reaches the stock or the events at this level, never both (a test holds it).
+func (t LockTable) eventRank() int {
+	switch t.name {
+	case "booking_groups":
+		return 1
+	case "banquet_rooms":
+		return 2
+	case "banquet_events":
+		return 3
+	}
+	return 0
+}
+
 var (
 	RoomTypes        = LockTable{"room_types", LevelRoomTypes}
 	Rooms            = LockTable{"rooms", LevelRooms}
@@ -107,6 +121,9 @@ var (
 	CashierShifts    = LockTable{"cashier_shifts", LevelPayments} // taken after the payments of the same level: a payment is posted on a shift
 	Companies        = LockTable{"companies", LevelCompanies}
 	Groups           = LockTable{"booking_groups", LevelGroups}
+	// The banquet tables of LevelGroups, after the groups: the meeting rooms (every base room of the use case in one call), then the events (docs/architecture/36-banquet.md 6).
+	BanquetRooms  = LockTable{"banquet_rooms", LevelGroups}
+	BanquetEvents = LockTable{"banquet_events", LevelGroups}
 	// The stock tables, all of LevelStock. Inside the level the order is fixed: the documents of the use case, then the warehouse, then the balance rows, ascending id in one call.
 	StockOpenings   = LockTable{"inv_openings", LevelStock}        // the documents of stock: the opening stock now; the requests, orders, receipts and counts come with their PRs, in the same group
 	StockRequests   = LockTable{"inv_requests", LevelStock}        // the purchase request (PR 2): first of the documents
@@ -145,6 +162,7 @@ func EnterLockLevel(ctx context.Context, level LockLevel) error {
 	traceLock(ctx, "", level)
 	if level > st.level {
 		st.stockRank = 0 // a new level: the order inside LevelStock starts again if it is entered again
+		st.eventRank = 0
 	}
 	st.level = level
 	return nil
@@ -184,6 +202,13 @@ func LockRows(ctx context.Context, table LockTable, mode LockMode, propertyID in
 			return fmt.Errorf("%w: %s requested after a later table of the stock level", ErrLockOrder, table.name)
 		}
 		st.stockRank = rank
+	}
+	if rank := table.eventRank(); rank > 0 {
+		st := stateFrom(ctx)
+		if rank < st.eventRank {
+			return fmt.Errorf("%w: %s requested after a later table of the events level", ErrLockOrder, table.name)
+		}
+		st.eventRank = rank
 	}
 	traceLock(ctx, table.name, table.level)
 	ids = slices.Clone(ids)

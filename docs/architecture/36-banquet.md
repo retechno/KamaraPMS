@@ -490,3 +490,20 @@ The questions raised by the first draft and the owner's answers. **Approved as r
 | Q15 | A session of a future day is not posted early by hand. | **As recommended:** not later than the open business day. |
 
 **An addition of the owner to 4.3 (with Q2):** moving a Tentative session makes new holds, so the session goes to the back of the queue of its new slot, and the screen warns the sales before it saves.
+
+## 15. As built: PR 1, masters and schedule, no money (migration 00089)
+
+What exists: the tables of 3.2 up to the holds and the notices; the sequence `BANQUET_EVENT` (`BQ-000123`); the permissions `banquet.read/manage/confirm/setup` (granted to no role); the module `BANQUET` on every route (`TestEveryRouteHasAModule`); the use cases of the masters, of the events (Inquiry, Tentative, Definite, Lost, Cancelled), of the sessions and of the calendar; the screens (calendar by day and week, events, the event with its Sessions tab, the Confirm dialog, moving a session, rooms, items and packages, settings); `pms-seed banquet`.
+
+Where it differs from, or adds to, the text above:
+
+- **Lock order.** Groups and stock share the level 45, and the inner order of the events is groups, then the base rooms ascending, then the events ascending. It is kept by a second rank in the transaction state (`eventRank`: `booking_groups` 1, `banquet_rooms` 2, `banquet_events` 3), so the rule of the stock tables is unchanged. A use case of the banquet never locks stock (a test reads the sources). The room masters lock the rooms they change (`banquet_rooms` FOR UPDATE); the room set of a session is recomputed after the lock and a change since the read is a `VERSION_CONFLICT`.
+- **Idempotency-Key for creating an event** is not built: the schema of 3.2 has no column for it. A double click is stopped by the button; the number is the only identity.
+- **New codes.** `CAPACITY_EXCEEDED` (409; the guests are above the capacity of the room in that set-up; the request is sent again with `accept_capacity`), `BANQUET_ROOM_IN_USE` (the parts of a combined room cannot change while events hold it), `SESSION_CANCELLED`, `BOOKER_REQUIRED`, `OPTION_DATE_REQUIRED`, `REASON_NOT_FOUND`, `ROOM_COMBINATION_INVALID`, `SETUP_NOT_OFFERED`. The last five are refusals of the request (422) with a code of their own.
+- **Inquiry.** `start_time`, `end_time` and `room_id` of a session are nullable while the event is an Inquiry; the database requires them for Tentative and Definite (`BANQUET_HOLDS_MISSING` is the deferred guard of the holds).
+- **Notices.** `banquet_notices` has a `notice_date`, the key of the unique index of `OPTION_DUE` (once per event, user and day). The day close writes them (`WriteDueNotices`) in the transaction of the outlet close hook.
+- **Moving a Tentative session** deletes the old holds and inserts the new ones (back of the queue of the new slot); the two ranks of the dry run come from `POST .../availability`; the dialog asks for a yes when the place is worse, the server does not demand it.
+- **Complete** (Definite to Completed) is not in this PR: it belongs to the night audit with the bill.
+- **Routes.** The sessions are nested under `events/{id}/sessions/{sid}`.
+- **Charge codes.** `banquet.setup` reads `charge-codes` (33, section 7): an item has one, and whoever sets up the banquet need not hold a billing permission.
+- **Screens.** The calendar draws 06:00 to 24:00; the operating hours of the settings are stored but not yet used by the grid. On a phone the day is a list in time order.

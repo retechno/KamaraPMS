@@ -45,7 +45,9 @@ authorization matrix) and fails when one is not classified, so a new route has t
 | `CORE` (always) | auth, users, roles, permissions, properties, business days, audit logs, guests, rooms, room types, bed types, room blocks, the housekeeping board, one room's status and its log, rates and yield rules, availability, reservations, front desk, folios, payments, cashier, night audit, room charges, billing configuration, companies, groups, city ledger, documents of these, e-mails, reports and the dashboard except the ones below, `/api/v1/subscription*` |
 | `HOUSEKEEPING` | `P/housekeeping/bulk`, `P/housekeeping/tasks*` (the task workflow and "my tasks"), `P/maintenance-*`, `P/lost-found`, `P/reports/housekeeping-*`, `P/reports/maintenance` |
 | `ACCOUNTING` | `P/accounting/*`, `P/payables*`, `P/bank*`, `P/tax*` (filing and tax invoices), `P/budgets*`, `P/departments*`, and their PDFs |
-| `INVENTORY`, `BANQUET`, `POS` | Reserved: a plan may include them now; their routes join this table when they are built. |
+| `POS` | `P/pos/*`, `P/outlet-charges*`, `P/folios/{id}/outlet-lock`, the print agents (`/api/v1/device/*`) |
+| `INVENTORY` | `P/inventory/*` (the recipe routes of the POS belong to the POS and ask the entitlement of `INVENTORY` themselves) |
+| `BANQUET` | `P/banquet/*`: the meeting rooms, events and sessions, the calendar and the masters (`36-banquet.md`). The folio of an event, its payments and its invoice are `CORE`. |
 
 Rules:
 - A route of a module that is not in the plan answers **403 `MODULE_NOT_IN_PLAN`** (`context.module`). The check runs after authentication and before the handler.

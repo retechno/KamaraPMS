@@ -4,6 +4,28 @@
  * adds later still shows in the list (in readable words, see `labelOf`) but is not offered as a filter until it is added here.
  */
 export const AUDIT_ACTIONS = [
+  'banquet.event_cancelled',
+  'banquet.event_confirmed',
+  'banquet.event_created',
+  'banquet.event_lost',
+  'banquet.event_tentative',
+  'banquet.event_type_created',
+  'banquet.event_type_updated',
+  'banquet.event_updated',
+  'banquet.item_created',
+  'banquet.item_updated',
+  'banquet.package_created',
+  'banquet.package_updated',
+  'banquet.reason_created',
+  'banquet.reason_updated',
+  'banquet.room_created',
+  'banquet.room_parts_set',
+  'banquet.room_setups_set',
+  'banquet.room_updated',
+  'banquet.session_added',
+  'banquet.session_cancelled',
+  'banquet.session_updated',
+  'banquet.settings_changed',
   'accounting.account_created',
   'accounting.account_deleted',
   'accounting.account_updated',
@@ -318,6 +340,14 @@ export const AUDIT_ACTIONS = [
 ] as const
 
 export const AUDIT_ENTITIES = [
+  'banquet_event',
+  'banquet_event_type',
+  'banquet_item',
+  'banquet_package',
+  'banquet_reason',
+  'banquet_room',
+  'banquet_session',
+  'banquet_settings',
   'approval_rule',
   'bank_account',
   'bank_statement',

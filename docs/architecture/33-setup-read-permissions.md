@@ -59,3 +59,7 @@ A new permission to read the reference data (the any-of lists use the permission
 ## 7. Added with POS stage 1 (`34-pos.md`)
 
 `pos.manage` is one of the permissions that read the reference data an outlet needs: `taxes` and `service-charges` (with `billing_config.manage`, `cityledger.credit_note`, `tax.manage`), `charge-codes` (with `billing_config.manage`, `folio.read`, `rate.manage`) and `departments` (with `accounting.view`). The list of outlets is read by `pos.manage`, `pos.order`, `pos.cashier`, `pos.kds` and `folio.outlet_charge_open`; the rest of the catalogue by the first four.
+
+## 8. Added with the banquet, PR 1 (`36-banquet.md`)
+
+`banquet.setup` reads `charge-codes` (with `billing_config.manage`, `folio.read`, `rate.manage`, `pos.manage`): an item of the banquet has a charge code, and whoever sets up the banquet picks it without holding a billing permission.
