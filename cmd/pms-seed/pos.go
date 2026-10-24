@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -40,6 +43,56 @@ var posProducts = []posProduct{
 	{code: "JAS", name: "Cuci kering jas", category: "LAUNDRY", charge: "LAUNDRY", laundry: "75000"},
 	{code: "GAUN", name: "Cuci kering gaun", category: "LAUNDRY", charge: "LAUNDRY", laundry: "90000"},
 	{code: "EKSPRES", name: "Layanan ekspres (6 jam)", category: "LAUNDRY", charge: "LAUNDRY", laundry: "25000"},
+}
+
+// posCategories are the menu categories of the demo with the sale class of what they sell (35-inventory.md 4.9): the class follows the product in every outlet, not the warehouse of the outlet that sells it.
+var posCategories = []struct{ code, name, fbClass string }{
+	{"MAINS", "Makanan utama", "FOOD"},
+	{"DRINKS", "Minuman", "BEVERAGE"},
+	{"LAUNDRY", "Layanan laundry", "OTHER"},
+}
+
+// seedPosCategories creates the categories that are missing, with their class, and gives a class to one that exists without it (a database seeded before the class was part of the demo).
+// A class that is already set is left alone, the person may have chosen it, and a short warning says so when it differs. It goes through the service (audit included) and is safe to run again.
+func seedPosCategories(ctx context.Context, svc *pos.Service, pid int64, dryRun bool, out io.Writer) (map[string]int64, error) {
+	cats, err := svc.ListCategories(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
+	byCode := map[string]pos.Category{}
+	for _, c := range cats {
+		byCode[c.Code] = c
+	}
+	catID := map[string]int64{}
+	for i, spec := range posCategories {
+		class := spec.fbClass
+		c, ok := byCode[spec.code]
+		switch {
+		case !ok:
+			_, _ = fmt.Fprintf(out, "category %s: to create (class %s)\n", spec.code, class)
+			if dryRun {
+				continue
+			}
+			c, err = svc.CreateCategory(ctx, pid, pos.CategoryInput{Code: spec.code, Name: spec.name, SortOrder: i + 1, FbClass: &class})
+			if err != nil {
+				return nil, fmt.Errorf("category %s: %w", spec.code, err)
+			}
+		case c.FbClass == nil || *c.FbClass == "":
+			_, _ = fmt.Fprintf(out, "category %s exists: class %s to set\n", spec.code, class)
+			if !dryRun {
+				active := c.IsActive
+				if _, err := svc.UpdateCategory(ctx, pid, c.ID, pos.CategoryInput{Name: c.Name, SortOrder: c.SortOrder, IsActive: &active, FbClass: &class}); err != nil {
+					return nil, fmt.Errorf("category %s: %w", spec.code, err)
+				}
+			}
+		case *c.FbClass != class:
+			_, _ = fmt.Fprintf(out, "category %s exists: warning, class %s kept (the demo says %s)\n", spec.code, *c.FbClass, class)
+		default:
+			_, _ = fmt.Fprintf(out, "category %s exists\n", spec.code)
+		}
+		catID[spec.code] = c.ID
+	}
+	return catID, nil
 }
 
 func seedPos(e *env, dryRun bool) error {
@@ -156,26 +209,9 @@ func seedPos(e *env, dryRun bool) error {
 		listID[spec[0]] = l.ID
 	}
 
-	// categories
-	cats, err := svc.ListCategories(ctx, pid)
+	catID, err := seedPosCategories(ctx, svc, pid, dryRun, os.Stdout)
 	if err != nil {
 		return err
-	}
-	catID := map[string]int64{}
-	for _, c := range cats {
-		catID[c.Code] = c.ID
-	}
-	for i, spec := range [][2]string{{"MAINS", "Makanan utama"}, {"DRINKS", "Minuman"}, {"LAUNDRY", "Layanan laundry"}} {
-		_, ok := catID[spec[0]]
-		say("category", spec[0], ok)
-		if ok || dryRun {
-			continue
-		}
-		c, err := svc.CreateCategory(ctx, pid, pos.CategoryInput{Code: spec[0], Name: spec[1], SortOrder: i + 1})
-		if err != nil {
-			return fmt.Errorf("category %s: %w", spec[0], err)
-		}
-		catID[spec[0]] = c.ID
 	}
 
 	// printers and stations

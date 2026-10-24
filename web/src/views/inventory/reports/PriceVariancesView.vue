@@ -10,7 +10,7 @@ import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import { useInventoryReport } from '@/composables/useInventoryReport'
 import { t } from '@/i18n'
 import { formatMoney, formatPercent } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** The price on the invoice against the price of the goods received, by supplier and by item (docs/architecture/35-inventory.md 12.5, 22): the difference, its share of the value and how many bills went above the tolerance. */
 const r = useInventoryReport<InventoryPriceVarianceReport>('/api/v1/properties/{propertyId}/inventory/reports/price-variances', 'price-variances.csv', async (propertyId, p) => {
@@ -54,7 +54,7 @@ const signed = (v: string): string => (Number(v) > 0 ? `+${formatMoney(v)}` : fo
               </tr></thead>
               <tbody>
                 <tr v-for="x in s.items" :key="x.item_id" class="border-t border-border">
-                  <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ formatQty(x.qty) }} {{ x.unit_code }}</span></td>
+                  <td class="py-1.5 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }} · {{ formatReportQty(x.qty) }} {{ x.unit_code }}</span></td>
                   <td class="py-1.5 pr-2 text-right">{{ x.receipt_unit_price ? formatMoney(x.receipt_unit_price) : '–' }}</td><td class="py-1.5 pr-2 text-right">{{ x.bill_unit_price ? formatMoney(x.bill_unit_price) : '–' }}</td>
                   <td class="py-1.5 pr-2 text-right">{{ signed(x.variance) }}</td><td class="py-1.5 pr-2 text-right">{{ pct(x.pct) }}<span v-if="x.lines_above_tolerance" class="ml-1" :title="t('inventory.reports.priceVar.aboveMark')">▲</span></td><td class="py-1.5 text-right">{{ x.bills }}</td>
                 </tr>

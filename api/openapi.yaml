@@ -12047,6 +12047,124 @@ paths:
               schema: { $ref: "#/components/schemas/InventoryCountVarianceReport" }
         "403": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/item-movements:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryItemMovements
+      summary: "Stock movement per item: opening, what came in and went out, closing"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: warehouse_id, in: query, description: "", schema: { type: integer } }
+        - { name: category_id, in: query, description: "", schema: { type: integer } }
+        - { name: item_id, in: query, description: "", schema: { type: integer } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryItemMovementReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/purchases:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryPurchases
+      summary: "Purchases by supplier and item"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: supplier_id, in: query, description: "", schema: { type: integer } }
+        - { name: warehouse_id, in: query, description: "", schema: { type: integer } }
+        - { name: category_id, in: query, description: "", schema: { type: integer } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryPurchaseReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/price-history:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryPriceHistory
+      summary: "Price paid for an item over the receipts"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: item_id, in: query, description: "The item (required)", schema: { type: integer } }
+        - { name: supplier_id, in: query, description: "", schema: { type: integer } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryPriceHistoryReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/slow-stock:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventorySlowStock
+      summary: "Slow and dead stock"
+      tags: [inventory]
+      parameters:
+        - { name: days, in: query, description: "30, 60, 90 (default) or 180: not used for that many days", schema: { type: integer } }
+        - { name: warehouse_id, in: query, description: "", schema: { type: integer } }
+        - { name: category_id, in: query, description: "", schema: { type: integer } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventorySlowStockReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/reports/top-usage:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: reportInventoryTopUsage
+      summary: "Items that cost the most to use"
+      tags: [inventory]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD, default the first of the month of the open day", schema: { type: string } }
+        - { name: to, in: query, description: "YYYY-MM-DD, default the open day", schema: { type: string } }
+        - { name: limit, in: query, description: "20 (default) or 50", schema: { type: integer } }
+        - { name: kinds, in: query, description: "Comma list of POS_SALE, ISSUE, WASTE, STAFF_MEAL, ENTERTAINMENT, TRANSFER_OUT, SUPPLIER_RETURN; default the first five", schema: { type: string } }
+        - { name: warehouse_id, in: query, description: "", schema: { type: integer } }
+        - { name: category_id, in: query, description: "", schema: { type: integer } }
+        - { name: format, in: query, description: "csv for a file", schema: { type: string, enum: [json, csv] } }
+        - { name: lang, in: query, description: "id for the names of the columns in Indonesian", schema: { type: string } }
+      responses:
+        "200":
+          description: The result (a CSV file with format=csv).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryTopUsageReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/inventory/reports/price-variances:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -22660,6 +22778,167 @@ components:
         gain: { type: string }
         loss: { type: string }
         net: { type: string }
+    InventoryQtyValue:
+      type: object
+      required: [qty, value]
+      properties:
+        qty: { type: string }
+        value: { type: string }
+    InventoryItemMovementRow:
+      type: object
+      description: "buckets has OPENING_STOCK, RECEIPTS, TRANSFERS_IN, SALES_RETURNS (in), POS_SALES, USAGE, WASTE, STAFF_MEALS, ENTERTAINMENT, TRANSFERS_OUT, SUPPLIER_RETURNS (out, positive amounts), COUNT_VARIANCE and COST_ADJUST (signed): opening + in - out + count variance + cost adjust = closing."
+      required: [item_id, item_code, item_name, unit_code, category_id, category_name, opening, buckets, closing]
+      properties:
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        category_id: { type: integer, format: int64 }
+        category_name: { type: string }
+        opening: { $ref: "#/components/schemas/InventoryQtyValue" }
+        buckets: { type: object, additionalProperties: { $ref: "#/components/schemas/InventoryQtyValue" } }
+        closing: { $ref: "#/components/schemas/InventoryQtyValue" }
+    InventoryItemMovementTotal:
+      type: object
+      description: "The values (not the quantities, which have other units) of a category, or of everything (category_id null)."
+      required: [category_id, category_name, opening, buckets, closing]
+      properties:
+        category_id: { type: [integer, "null"], format: int64 }
+        category_name: { type: string }
+        opening: { type: string }
+        buckets: { type: object, additionalProperties: { type: string } }
+        closing: { type: string }
+    InventoryItemMovementReport:
+      type: object
+      required: [from, to, rows, categories, total]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventoryItemMovementRow" } }
+        categories: { type: array, items: { $ref: "#/components/schemas/InventoryItemMovementTotal" } }
+        total: { $ref: "#/components/schemas/InventoryItemMovementTotal" }
+    InventoryPurchaseItem:
+      type: object
+      required: [item_id, item_code, item_name, unit_code, category_name, qty, value, avg_price, receipts, bills, billed_value]
+      properties:
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        category_name: { type: string }
+        qty: { type: string }
+        value: { type: string }
+        avg_price: { type: [string, "null"] }
+        receipts: { type: integer }
+        bills: { type: integer }
+        billed_value: { type: string }
+    InventoryPurchaseSupplier:
+      type: object
+      required: [supplier_id, supplier_name, value, share_pct, receipts, bills, billed_value, items]
+      properties:
+        supplier_id: { type: integer, format: int64 }
+        supplier_name: { type: string }
+        value: { type: string }
+        share_pct: { type: [string, "null"] }
+        receipts: { type: integer }
+        bills: { type: integer }
+        billed_value: { type: string }
+        items: { type: array, items: { $ref: "#/components/schemas/InventoryPurchaseItem" } }
+    InventoryPurchaseReport:
+      type: object
+      required: [from, to, suppliers, value, billed_value, receipts, bills]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        suppliers: { type: array, items: { $ref: "#/components/schemas/InventoryPurchaseSupplier" } }
+        value: { type: string }
+        billed_value: { type: string }
+        receipts: { type: integer }
+        bills: { type: integer }
+    InventoryPriceHistoryRow:
+      type: object
+      required: [receipt_id, receipt_number, received_on, supplier_id, supplier_name, purchase_unit_code, qty_purchase, unit_price, price_per_stock, change_pct]
+      properties:
+        receipt_id: { type: integer, format: int64 }
+        receipt_number: { type: string }
+        received_on: { $ref: "#/components/schemas/Date" }
+        supplier_id: { type: integer, format: int64 }
+        supplier_name: { type: string }
+        purchase_unit_code: { type: string }
+        qty_purchase: { type: string }
+        unit_price: { type: string }
+        price_per_stock: { type: string }
+        change_pct: { type: [string, "null"] }
+    InventoryPriceHistoryReport:
+      type: object
+      required: [from, to, item_id, item_code, item_name, unit_code, rows, min_price, max_price, last_price, avg_price]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventoryPriceHistoryRow" } }
+        min_price: { type: [string, "null"] }
+        max_price: { type: [string, "null"] }
+        last_price: { type: [string, "null"] }
+        avg_price: { type: [string, "null"] }
+    InventorySlowStockRow:
+      type: object
+      required: [warehouse_id, warehouse_code, warehouse_name, item_id, item_code, item_name, unit_code, category_name, qty, value, last_out_on, days_since_out, never_out, age_days]
+      properties:
+        warehouse_id: { type: integer, format: int64 }
+        warehouse_code: { type: string }
+        warehouse_name: { type: string }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        category_name: { type: string }
+        qty: { type: string }
+        value: { type: string }
+        last_out_on: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        days_since_out: { type: [integer, "null"] }
+        never_out: { type: boolean }
+        age_days: { type: [integer, "null"] }
+    InventorySlowStockReport:
+      type: object
+      required: [as_of, days, costing_method, age_basis, rows, total, never_out]
+      properties:
+        as_of: { $ref: "#/components/schemas/Date" }
+        days: { type: integer }
+        costing_method: { type: string, enum: [AVERAGE, FIFO] }
+        age_basis: { type: string, enum: [LAST_ENTRY, OLDEST_LAYER] }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventorySlowStockRow" } }
+        total: { type: string }
+        never_out: { type: integer }
+    InventoryTopUsageRow:
+      type: object
+      required: [rank, item_id, item_code, item_name, unit_code, category_name, qty, value, share_pct, cumulative_pct]
+      properties:
+        rank: { type: integer }
+        item_id: { type: integer, format: int64 }
+        item_code: { type: string }
+        item_name: { type: string }
+        unit_code: { type: string }
+        category_name: { type: string }
+        qty: { type: string }
+        value: { type: string }
+        share_pct: { type: string }
+        cumulative_pct: { type: string }
+    InventoryTopUsageReport:
+      type: object
+      required: [from, to, limit, kinds, rows, items, shown, total]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        limit: { type: integer }
+        kinds: { type: array, items: { type: string } }
+        rows: { type: array, items: { $ref: "#/components/schemas/InventoryTopUsageRow" } }
+        items: { type: integer }
+        shown: { type: string }
+        total: { type: string }
     InventoryPriceVarianceItem:
       type: object
       required: [item_id, item_code, item_name, unit_code, qty, receipt_value, bill_cost, receipt_unit_price, bill_unit_price, variance, pct, bills, lines_above_tolerance, lines]

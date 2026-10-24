@@ -12,6 +12,28 @@ export function formatQty(value: string | null | undefined): string {
   return formatMoney(`${m[1]}${m[2]}${fraction ? '.' + fraction : ''}`)
 }
 
+/** The most decimals a report shows for a quantity; the CSV keeps the full value. */
+export const REPORT_QTY_PLACES = 3
+
+/**
+ * A quantity for a report: rounded half away from zero to `places` decimals (3 at most), without the zeros at the end ("1.153845" is "1,154", "12.000000" is "12").
+ * It works on the text of the decimal, never on a float. A negative that rounds to nothing is "0", not "-0".
+ */
+export function formatReportQty(value: string | null | undefined, places: number = REPORT_QTY_PLACES): string {
+  if (value === null || value === undefined || value === '') return ''
+  const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value).trim())
+  if (!m) return String(value)
+  const keep = Math.max(0, Math.min(places, REPORT_QTY_PLACES))
+  const frac = m[3] ?? ''
+  if (frac.length <= keep) return formatQty(value)
+  const scaled = BigInt((m[2] ?? '0') + frac.slice(0, keep)) + (frac.charCodeAt(keep) >= 53 ? BigInt(1) : BigInt(0)) // the digit after the last kept one: 5 or more rounds up
+  const digits = scaled.toString().padStart(keep + 1, '0')
+  const whole = digits.slice(0, digits.length - keep)
+  const rest = keep > 0 ? '.' + digits.slice(digits.length - keep) : ''
+  const sign = m[1] && scaled !== BigInt(0) ? '-' : ''
+  return formatQty(`${sign}${whole}${rest}`)
+}
+
 /** Whether a text is a plain decimal with at most `places` decimals (a quantity or a cost typed by a person). */
 export function isDecimal(value: string, places: number): boolean {
   const decimals = places > 0 ? `(\\.\\d{1,${places}})?` : ''

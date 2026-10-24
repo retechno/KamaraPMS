@@ -10503,6 +10503,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/inventory/reports/item-movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Stock movement per item: opening, what came in and went out, closing */
+        get: operations["reportInventoryItemMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Purchases by supplier and item */
+        get: operations["reportInventoryPurchases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/price-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Price paid for an item over the receipts */
+        get: operations["reportInventoryPriceHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/slow-stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Slow and dead stock */
+        get: operations["reportInventorySlowStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/inventory/reports/top-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Items that cost the most to use */
+        get: operations["reportInventoryTopUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/inventory/reports/price-variances": {
         parameters: {
             query?: never;
@@ -21340,6 +21435,158 @@ export interface components {
             gain: string;
             loss: string;
             net: string;
+        };
+        InventoryQtyValue: {
+            qty: string;
+            value: string;
+        };
+        /** @description buckets has OPENING_STOCK, RECEIPTS, TRANSFERS_IN, SALES_RETURNS (in), POS_SALES, USAGE, WASTE, STAFF_MEALS, ENTERTAINMENT, TRANSFERS_OUT, SUPPLIER_RETURNS (out, positive amounts), COUNT_VARIANCE and COST_ADJUST (signed): opening + in - out + count variance + cost adjust = closing. */
+        InventoryItemMovementRow: {
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            /** Format: int64 */
+            category_id: number;
+            category_name: string;
+            opening: components["schemas"]["InventoryQtyValue"];
+            buckets: {
+                [key: string]: components["schemas"]["InventoryQtyValue"];
+            };
+            closing: components["schemas"]["InventoryQtyValue"];
+        };
+        /** @description The values (not the quantities, which have other units) of a category, or of everything (category_id null). */
+        InventoryItemMovementTotal: {
+            /** Format: int64 */
+            category_id: number | null;
+            category_name: string;
+            opening: string;
+            buckets: {
+                [key: string]: string;
+            };
+            closing: string;
+        };
+        InventoryItemMovementReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rows: components["schemas"]["InventoryItemMovementRow"][];
+            categories: components["schemas"]["InventoryItemMovementTotal"][];
+            total: components["schemas"]["InventoryItemMovementTotal"];
+        };
+        InventoryPurchaseItem: {
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            category_name: string;
+            qty: string;
+            value: string;
+            avg_price: string | null;
+            receipts: number;
+            bills: number;
+            billed_value: string;
+        };
+        InventoryPurchaseSupplier: {
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_name: string;
+            value: string;
+            share_pct: string | null;
+            receipts: number;
+            bills: number;
+            billed_value: string;
+            items: components["schemas"]["InventoryPurchaseItem"][];
+        };
+        InventoryPurchaseReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            suppliers: components["schemas"]["InventoryPurchaseSupplier"][];
+            value: string;
+            billed_value: string;
+            receipts: number;
+            bills: number;
+        };
+        InventoryPriceHistoryRow: {
+            /** Format: int64 */
+            receipt_id: number;
+            receipt_number: string;
+            received_on: components["schemas"]["Date"];
+            /** Format: int64 */
+            supplier_id: number;
+            supplier_name: string;
+            purchase_unit_code: string;
+            qty_purchase: string;
+            unit_price: string;
+            price_per_stock: string;
+            change_pct: string | null;
+        };
+        InventoryPriceHistoryReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            rows: components["schemas"]["InventoryPriceHistoryRow"][];
+            min_price: string | null;
+            max_price: string | null;
+            last_price: string | null;
+            avg_price: string | null;
+        };
+        InventorySlowStockRow: {
+            /** Format: int64 */
+            warehouse_id: number;
+            warehouse_code: string;
+            warehouse_name: string;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            category_name: string;
+            qty: string;
+            value: string;
+            last_out_on: components["schemas"]["Date"] | null;
+            days_since_out: number | null;
+            never_out: boolean;
+            age_days: number | null;
+        };
+        InventorySlowStockReport: {
+            as_of: components["schemas"]["Date"];
+            days: number;
+            /** @enum {string} */
+            costing_method: "AVERAGE" | "FIFO";
+            /** @enum {string} */
+            age_basis: "LAST_ENTRY" | "OLDEST_LAYER";
+            rows: components["schemas"]["InventorySlowStockRow"][];
+            total: string;
+            never_out: number;
+        };
+        InventoryTopUsageRow: {
+            rank: number;
+            /** Format: int64 */
+            item_id: number;
+            item_code: string;
+            item_name: string;
+            unit_code: string;
+            category_name: string;
+            qty: string;
+            value: string;
+            share_pct: string;
+            cumulative_pct: string;
+        };
+        InventoryTopUsageReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            limit: number;
+            kinds: string[];
+            rows: components["schemas"]["InventoryTopUsageRow"][];
+            items: number;
+            shown: string;
+            total: string;
         };
         InventoryPriceVarianceItem: {
             /** Format: int64 */
@@ -38547,6 +38794,191 @@ export interface operations {
                 };
             };
             403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryItemMovements: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                warehouse_id?: number;
+                category_id?: number;
+                item_id?: number;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItemMovementReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryPurchases: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                supplier_id?: number;
+                warehouse_id?: number;
+                category_id?: number;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryPurchaseReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryPriceHistory: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                /** @description The item (required) */
+                item_id?: number;
+                supplier_id?: number;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryPriceHistoryReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventorySlowStock: {
+        parameters: {
+            query?: {
+                /** @description 30, 60, 90 (default) or 180: not used for that many days */
+                days?: number;
+                warehouse_id?: number;
+                category_id?: number;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventorySlowStockReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reportInventoryTopUsage: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, default the first of the month of the open day */
+                from?: string;
+                /** @description YYYY-MM-DD, default the open day */
+                to?: string;
+                /** @description 20 (default) or 50 */
+                limit?: number;
+                /** @description Comma list of POS_SALE, ISSUE, WASTE, STAFF_MEAL, ENTERTAINMENT, TRANSFER_OUT, SUPPLIER_RETURN; default the first five */
+                kinds?: string;
+                warehouse_id?: number;
+                category_id?: number;
+                /** @description csv for a file */
+                format?: "json" | "csv";
+                /** @description id for the names of the columns in Indonesian */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result (a CSV file with format=csv). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryTopUsageReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

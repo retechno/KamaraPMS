@@ -10,7 +10,7 @@ import { useInventoryReport } from '@/composables/useInventoryReport'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatMoney, formatPercent } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** The room amenities by month (docs/architecture/35-inventory.md 12.5, 22): occupied rooms, guests, the cost, the cost per occupied room, per month and per item, against the month before. The period opens on the last six months. */
 const property = usePropertyStore()
@@ -64,7 +64,7 @@ const change = (v: string | null | undefined): string => (v === null || v === un
                     <tbody>
                       <tr v-for="x in m.items" :key="x.item_id" class="border-t border-border">
                         <td class="py-1 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }}</span></td>
-                        <td class="py-1 pr-2 text-right">{{ formatQty(x.qty) }} {{ x.unit_code }}</td><td class="py-1 pr-2 text-right">{{ formatMoney(x.cost) }}</td><td class="py-1 text-right">{{ money(x.prev_cost) }}</td>
+                        <td class="py-1 pr-2 text-right">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td><td class="py-1 pr-2 text-right">{{ formatMoney(x.cost) }}</td><td class="py-1 text-right">{{ money(x.prev_cost) }}</td>
                       </tr>
                     </tbody>
                   </table>

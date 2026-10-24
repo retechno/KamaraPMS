@@ -414,6 +414,7 @@ sql:
       - internal/inventory/queries_pos.sql
       - internal/inventory/queries_reports.sql
       - internal/inventory/queries_reports_more.sql
+      - internal/inventory/queries_reports_6b.sql
     gen:
       go:
         package: inventorydb

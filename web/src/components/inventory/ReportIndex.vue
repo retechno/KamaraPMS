@@ -6,16 +6,16 @@ import { t } from '@/i18n'
 interface Entry { id: string; to: string }
 const groups: { id: string; entries: Entry[] }[] = [
   { id: 'stock', entries: [
-    { id: 'card', to: '/inventory/costing' }, { id: 'value', to: '/inventory/reports/stock-value' }, { id: 'low', to: '/inventory/reports/low-stock' }, { id: 'neg', to: '/inventory/reports/negative-stock' },
+    { id: 'card', to: '/inventory/costing' }, { id: 'value', to: '/inventory/reports/stock-value' }, { id: 'movements', to: '/inventory/reports/item-movements' }, { id: 'low', to: '/inventory/reports/low-stock' }, { id: 'neg', to: '/inventory/reports/negative-stock' }, { id: 'slowStock', to: '/inventory/reports/slow-stock' },
   ] },
   { id: 'purchasing', entries: [
-    { id: 'grni', to: '/inventory/reports/received-not-invoiced' }, { id: 'priceVar', to: '/inventory/reports/price-variances' },
+    { id: 'grni', to: '/inventory/reports/received-not-invoiced' }, { id: 'purchases', to: '/inventory/reports/purchases' }, { id: 'priceHistory', to: '/inventory/reports/price-history' }, { id: 'priceVar', to: '/inventory/reports/price-variances' },
   ] },
   { id: 'fb', entries: [
     { id: 'daily', to: '/inventory/reports/daily-cost' }, { id: 'outlet', to: '/inventory/reports/outlet-cost' }, { id: 'recon', to: '/inventory/reports/fb-reconciliation' }, { id: 'recipeCosts', to: '/inventory/reports/recipe-costs' },
   ] },
   { id: 'use', entries: [
-    { id: 'usage', to: '/inventory/reports/usage' }, { id: 'waste', to: '/inventory/reports/waste' }, { id: 'meals', to: '/inventory/reports/meals' }, { id: 'amenities', to: '/inventory/reports/amenities-by-month' },
+    { id: 'usage', to: '/inventory/reports/usage' }, { id: 'topUsage', to: '/inventory/reports/top-usage' }, { id: 'waste', to: '/inventory/reports/waste' }, { id: 'meals', to: '/inventory/reports/meals' }, { id: 'amenities', to: '/inventory/reports/amenities-by-month' },
   ] },
   { id: 'control', entries: [
     { id: 'countVar', to: '/inventory/reports/count-variances' }, { id: 'trfNoSr', to: '/inventory/reports/transfers-without-requisition' }, { id: 'pending', to: '/inventory/reports/pending-approvals' }, { id: 'gap', to: '/inventory/pos-gap' },

@@ -13,7 +13,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { downloadCsv } from '@/views/accounting/reportApi'
 import { formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** Items below the minimum of their warehouse (docs/architecture/35-inventory.md 12.5): how far below, and the quantity to reorder; a purchase request can be started from here. */
 const property = usePropertyStore()
@@ -110,9 +110,9 @@ watch(pid, load, { immediate: true })
           <tr v-for="x in rows" :key="keyOf(x)" class="border-t border-border" :data-testid="`low-${x.warehouse_code}-${x.item_code}`">
             <td v-if="canRequest" class="py-2 pr-2 print:hidden"><input v-model="selected" type="checkbox" :value="keyOf(x)" :aria-label="t('inventory.reports.lowStock.select', { name: x.item_name })" :data-testid="`low-check-${x.warehouse_code}-${x.item_code}`" /></td>
             <td class="py-2 pr-2">{{ x.warehouse_code }}</td><td class="py-2 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }}</span></td>
-            <td class="py-2 pr-2 text-right" :class="Number(x.qty) <= 0 ? 'font-semibold text-destructive' : ''">{{ formatQty(x.qty) }} {{ x.unit_code }}</td>
-            <td class="py-2 pr-2 text-right">{{ formatQty(x.min_qty) }}</td><td class="py-2 pr-2 text-right font-semibold">▼ {{ formatQty(x.missing) }}</td>
-            <td class="py-2 pr-2 text-right">{{ Number(x.reorder_qty) ? formatQty(x.reorder_qty) : '–' }}</td><td class="py-2 pr-2 text-right">{{ x.max_qty && Number(x.max_qty) ? formatQty(x.max_qty) : '–' }}</td><td class="py-2 pr-2 text-right font-semibold">{{ formatQty(x.suggest_qty) }} {{ x.unit_code }}</td><td class="py-2 text-right">{{ formatMoney(x.value) }}</td>
+            <td class="py-2 pr-2 text-right" :class="Number(x.qty) <= 0 ? 'font-semibold text-destructive' : ''">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td>
+            <td class="py-2 pr-2 text-right">{{ formatReportQty(x.min_qty) }}</td><td class="py-2 pr-2 text-right font-semibold">▼ {{ formatReportQty(x.missing) }}</td>
+            <td class="py-2 pr-2 text-right">{{ Number(x.reorder_qty) ? formatReportQty(x.reorder_qty) : '–' }}</td><td class="py-2 pr-2 text-right">{{ x.max_qty && Number(x.max_qty) ? formatReportQty(x.max_qty) : '–' }}</td><td class="py-2 pr-2 text-right font-semibold">{{ formatReportQty(x.suggest_qty) }} {{ x.unit_code }}</td><td class="py-2 text-right">{{ formatMoney(x.value) }}</td>
           </tr>
         </tbody>
       </table>

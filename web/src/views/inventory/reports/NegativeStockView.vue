@@ -12,7 +12,7 @@ import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { downloadCsv } from '@/views/accounting/reportApi'
 import { formatDate, formatMoney } from '@/utils/format'
-import { formatQty } from '@/utils/inventory'
+import { formatReportQty } from '@/utils/inventory'
 
 /** Stock sold before the goods came in (docs/architecture/35-inventory.md 4.4, 12.5): the shortfalls that are still open, at the estimated cost, with the age and where the sale came from. */
 const property = usePropertyStore()
@@ -66,7 +66,7 @@ const source = (s: string): string => (s === 'POS_SALE' || s === 'POS_QUEUE' ? t
         <tbody>
           <tr v-for="x in data.rows" :key="x.shortfall_id" class="border-t border-border" :data-testid="`neg-${x.shortfall_id}`">
             <td class="py-2 pr-2">{{ x.warehouse_code }}</td><td class="py-2 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }}</span></td>
-            <td class="py-2 pr-2 text-right font-semibold text-destructive">▼ {{ formatQty(x.qty_open) }} {{ x.unit_code }}</td>
+            <td class="py-2 pr-2 text-right font-semibold text-destructive">▼ {{ formatReportQty(x.qty_open) }} {{ x.unit_code }}</td>
             <td class="py-2 pr-2 text-right">{{ formatMoney(x.est_unit_cost) }}</td><td class="py-2 pr-2 text-right">{{ formatMoney(x.est_value) }}</td>
             <td class="py-2 pr-2">{{ formatDate(x.since) }}<span class="block text-xs text-muted-foreground">{{ t('inventory.reports.days', { n: x.age_days }) }}</span></td>
             <td class="py-2"><Badge variant="outline">{{ source(x.source) }}</Badge></td>
