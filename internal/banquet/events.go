@@ -60,7 +60,7 @@ func (s *Service) ListEvents(ctx context.Context, propertyID int64, f EventFilte
 	for i, r := range rows {
 		out[i] = EventRow{ID: r.ID, Number: r.Number, Status: r.Status, Name: r.Name, EventTypeID: r.EventTypeID, EventTypeName: r.EventTypeName, BookerName: r.BookerName,
 			SalesUserID: r.SalesUserID, SalesName: r.SalesName, OptionUntil: r.OptionUntil, OptionOverdue: s.overdue(r.Status, r.OptionUntil, today),
-			FirstDate: dateOrNil(r.FirstDate), LastDate: dateOrNil(r.LastDate), Sessions: int(r.Sessions), PaxEstimated: int(r.PaxEstimated), Version: r.Version}
+			FirstDate: dateOrNil(r.FirstDate), LastDate: dateOrNil(r.LastDate), Sessions: int(r.Sessions), PaxEstimated: int(r.PaxEstimated), Pax: int(r.Pax), PaxGuaranteed: r.PaxGuaranteed, Version: r.Version}
 	}
 	return out, nil
 }

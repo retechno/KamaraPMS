@@ -6156,14 +6156,20 @@ export const en = {
       weekOnWide: 'The week is shown on a wider screen; here is the day chosen.',
     },
     tone: {
-      definite: 'Confirmed',
+      definite: 'Definite',
       first: 'First option',
       queued: 'Option in the queue',
-      taken: 'Room taken by a confirmed event',
+      taken: 'Room taken by a definite event',
+    },
+    lock: {
+      definite: 'Locked: {room} · {number}',
+      option: 'Option: {room} · {number}',
+      legend: 'Locked by a booking in another room',
     },
     hold: {
       OPTION: 'option',
-      DEFINITE: 'confirmed',
+      optionRank: 'option #{n}',
+      DEFINITE: 'definite',
     },
     status: {
       INQUIRY: 'Inquiry',
@@ -6228,6 +6234,9 @@ export const en = {
       number: 'Number',
       booker: 'Booker',
       dates: 'Dates',
+      pax: 'Guests',
+      paxGuaranteed: '{n} (guaranteed)',
+      paxEstimated: '{n} (estimate)',
       status: 'Status',
       sales: 'Salesperson',
       tabSessions: 'Sessions',
@@ -6248,7 +6257,7 @@ export const en = {
     },
     events: {
       title: 'Events',
-      intro: 'Inquiries, tentative and confirmed events of the property.',
+      intro: 'Inquiries, tentative and definite events of the property.',
       allStatuses: 'All statuses',
       allTypes: 'All kinds',
       search: 'Number or name',
@@ -6279,7 +6288,7 @@ export const en = {
       paxCount: '{n} guests',
       first: 'First option',
       place: 'Place {n}',
-      held: 'Room held {from} – {to}',
+      held: 'Room held {range}',
       cancelled: 'Cancelled',
       cancelAction: 'Cancel',
       cancelTitle: 'Cancel {name}?',
@@ -6287,7 +6296,7 @@ export const en = {
       empty: 'No sessions yet',
     },
     check: {
-      free: 'The room is free ({from} – {to} with set-up and tear-down).',
+      free: 'The room is free ({range} with set-up and tear-down).',
       taken: 'The room is taken at that time:',
       queued: 'Another option holds the room. This one would be place {n} in the queue:',
       ranks: 'Gives up place {from}, takes place {to} in the new queue.',
@@ -6350,6 +6359,7 @@ export const en = {
       addComponent: 'Add an item',
       qtyPerPax: 'Quantity per guest',
       perPax: '{price} per guest',
+      mode: { INCLUSIVE: 'Nett', EXCLUSIVE: '++', MIXED: 'Mixed' },
       saved: 'Saved.',
     },
     settings: {

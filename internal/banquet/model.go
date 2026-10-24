@@ -184,19 +184,21 @@ type ReasonInput struct {
 
 // Item is something an event can be sold: a menu, a drink package, the rental of a room, equipment, decoration.
 type Item struct {
-	ID             int64           `json:"id"`
-	Code           string          `json:"code"`
-	Name           string          `json:"name"`
-	Kind           string          `json:"kind"`
-	UnitBasis      string          `json:"unit_basis"`
-	ChargeCodeID   int64           `json:"charge_code_id"`
-	ChargeCode     string          `json:"charge_code"`
-	ChargeCodeName string          `json:"charge_code_name"`
-	ListPrice      decimal.Decimal `json:"list_price"`
-	FbClass        *string         `json:"fb_class"`
-	PosProductID   *int64          `json:"pos_product_id"`
-	Description    *string         `json:"description"`
-	IsActive       bool            `json:"is_active"`
+	ID             int64  `json:"id"`
+	Code           string `json:"code"`
+	Name           string `json:"name"`
+	Kind           string `json:"kind"`
+	UnitBasis      string `json:"unit_basis"`
+	ChargeCodeID   int64  `json:"charge_code_id"`
+	ChargeCode     string `json:"charge_code"`
+	ChargeCodeName string `json:"charge_code_name"`
+	// PriceMode is the mode of the charge code, the mode a line of this item starts with: INCLUSIVE (nett) or EXCLUSIVE (++).
+	PriceMode    string          `json:"price_mode"`
+	ListPrice    decimal.Decimal `json:"list_price"`
+	FbClass      *string         `json:"fb_class"`
+	PosProductID *int64          `json:"pos_product_id"`
+	Description  *string         `json:"description"`
+	IsActive     bool            `json:"is_active"`
 }
 
 // ItemInput creates or changes an item.
@@ -215,20 +217,24 @@ type ItemInput struct {
 
 // PackageComponent is an item of a package, for each guest.
 type PackageComponent struct {
-	ItemID    int64           `json:"item_id"`
-	ItemCode  string          `json:"item_code"`
-	ItemName  string          `json:"item_name"`
-	ItemKind  string          `json:"item_kind"`
+	ItemID   int64  `json:"item_id"`
+	ItemCode string `json:"item_code"`
+	ItemName string `json:"item_name"`
+	ItemKind string `json:"item_kind"`
+	// PriceMode is the mode of the charge code of the item.
+	PriceMode string          `json:"price_mode"`
 	QtyPerPax decimal.Decimal `json:"qty_per_pax"`
 	SortOrder int             `json:"sort_order"`
 }
 
 // Package is a price for each guest made of items.
 type Package struct {
-	ID          int64              `json:"id"`
-	Code        string             `json:"code"`
-	Name        string             `json:"name"`
-	PricePerPax decimal.Decimal    `json:"price_per_pax"`
+	ID          int64           `json:"id"`
+	Code        string          `json:"code"`
+	Name        string          `json:"name"`
+	PricePerPax decimal.Decimal `json:"price_per_pax"`
+	// PriceMode is the mode all the components share (INCLUSIVE or EXCLUSIVE), MIXED when their charge codes differ, nothing for a package without components.
+	PriceMode   *string            `json:"price_mode"`
 	Description *string            `json:"description"`
 	IsActive    bool               `json:"is_active"`
 	Components  []PackageComponent `json:"components"`
@@ -326,7 +332,10 @@ type EventRow struct {
 	LastDate      *civil.Date `json:"last_date"`
 	Sessions      int         `json:"sessions"`
 	PaxEstimated  int         `json:"pax_estimated"`
-	Version       int32       `json:"version"`
+	// Pax is the number of guests counted for the event: the sum over its sessions of the guaranteed number where there is one, else the estimate; PaxGuaranteed says every session has a guarantee.
+	Pax           int   `json:"pax"`
+	PaxGuaranteed bool  `json:"pax_guaranteed"`
+	Version       int32 `json:"version"`
 }
 
 // EventFilter narrows the list of events.
@@ -404,7 +413,9 @@ type Conflict struct {
 	SessionName string `json:"session_name"`
 	HoldKind    string `json:"hold_kind"`
 	RoomCode    string `json:"room_code"`
-	SameEvent   bool   `json:"same_event"`
+	// Rank is the place of an option in the queue of its slot (1 is the first); empty for a confirmed event.
+	Rank      *int `json:"rank"`
+	SameEvent bool `json:"same_event"`
 }
 
 // Availability is the answer of the room check: the holds in the way, the mode, and the rank the session would have (and the one it gives up when it moves).
@@ -449,12 +460,30 @@ type CalendarSession struct {
 	RoomTaken     bool            `json:"room_taken"`
 }
 
+// CalendarLock is the room a hold locks without the session being booked in it: the parts of a combined room, the combined rooms of a part. HoldFrom and HoldTo are local, with the set-up and
+// the tear-down, "2026-11-07T11:00".
+type CalendarLock struct {
+	RoomID      int64  `json:"room_id"`
+	SessionID   int64  `json:"session_id"`
+	EventID     int64  `json:"event_id"`
+	EventNumber string `json:"event_number"`
+	EventName   string `json:"event_name"`
+	EventStatus string `json:"event_status"`
+	HoldKind    string `json:"hold_kind"`
+	ViaRoomID   int64  `json:"via_room_id"`
+	ViaRoomCode string `json:"via_room_code"`
+	ViaRoomName string `json:"via_room_name"`
+	HoldFrom    string `json:"hold_from"`
+	HoldTo      string `json:"hold_to"`
+}
+
 // Calendar is the rooms and the sessions of a period.
 type Calendar struct {
 	From     civil.Date        `json:"from"`
 	To       civil.Date        `json:"to"`
 	Rooms    []Room            `json:"rooms"`
 	Sessions []CalendarSession `json:"sessions"`
+	Locks    []CalendarLock    `json:"locks"`
 }
 
 // OverdueOption is a tentative event whose option date has passed.

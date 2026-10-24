@@ -23,6 +23,7 @@ import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatDateShort } from '@/utils/format'
+import { formatHoldRange } from '@/utils/banquet'
 
 /**
  * One event (docs/architecture/36-banquet.md 6.4): the header with what can be done to it, and the Sessions tab: each session with its room, hours, guests and place in the queue of options.
@@ -191,7 +192,7 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
               <p class="m-0 text-sm text-muted-foreground">
                 {{ formatDateShort(s.session_date) }} · {{ range(s) }} · {{ s.room_name ?? t('banquet.session.noRoom') }}<template v-if="s.setup_style"> · {{ t(`banquet.style.${s.setup_style}`) }}</template> · {{ t('banquet.session.paxCount', { n: s.pax_estimated }) }}
               </p>
-              <p v-if="s.hold_from" class="m-0 text-xs text-muted-foreground" data-testid="hold-range">{{ t('banquet.session.held', { from: s.hold_from, to: s.hold_to ?? '' }) }}</p>
+              <p v-if="s.hold_from" class="m-0 text-xs text-muted-foreground" data-testid="hold-range">{{ t('banquet.session.held', { range: formatHoldRange(s.hold_from, s.hold_to ?? s.hold_from) }) }}</p>
             </div>
             <Badge v-if="placeOf(s)" :variant="s.rank === 1 ? 'booked' : 'outline'" :data-testid="`rank-${s.id}`">{{ placeOf(s) }}</Badge>
             <div v-if="canManage && open && s.status === 'ACTIVE'" class="flex gap-2">

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import { formatHoldRange } from '@/utils/banquet'
 
 /**
  * Adds a session to an event, or changes / moves one (docs/architecture/36-banquet.md 6.5, 6.6). Once the room, the day and the hours are filled the room is checked against the schedule: what is
@@ -36,6 +37,8 @@ const acceptCapacity = ref(false)
 const acceptWorse = ref(false)
 const busy = ref(false)
 
+/** The room is named in full: the code is for the master. */
+const roomNameOf = (code: string): string => props.rooms.find((r) => r.code === code)?.name ?? code
 const moving = computed(() => !!props.session && props.event.status === 'TENTATIVE')
 const needsRoom = computed(() => props.event.status === 'TENTATIVE' || props.event.status === 'DEFINITE')
 const ready = computed(() => form.room_id > 0 && !!form.date && !!form.start && !!form.end)
@@ -169,11 +172,11 @@ const canSave = computed(() => !busy.value && !blocked.value && (!worse.value ||
         <div v-if="check || checkError" class="flex flex-col gap-1.5 rounded-md border border-border p-3 text-sm" data-testid="session-check" aria-live="polite">
           <ErrorNotice v-if="checkError" :error="checkError" inline />
           <template v-if="check">
-            <p v-if="!check.conflicts.some((c) => !c.same_event)" class="m-0 text-success-text" data-testid="check-free">{{ t('banquet.check.free', { from: check.hold_from, to: check.hold_to }) }}</p>
+            <p v-if="!check.conflicts.some((c) => !c.same_event)" class="m-0 text-success-text" data-testid="check-free">{{ t('banquet.check.free', { range: formatHoldRange(check.hold_from, check.hold_to) }) }}</p>
             <template v-else>
               <p class="m-0 font-medium" :class="blocked ? 'text-destructive' : ''" data-testid="check-conflict">{{ blocked ? t('banquet.check.taken') : t('banquet.check.queued', { n: check.rank_in_new_slot }) }}</p>
               <ul class="m-0 flex list-none flex-col gap-0.5 p-0 text-muted-foreground">
-                <li v-for="c in check.conflicts.filter((x) => !x.same_event)" :key="c.session_id">{{ c.event_number }} {{ c.event_name }} · {{ c.session_name }} · {{ t(`banquet.hold.${c.hold_kind}`) }} · {{ c.room_code }}</li>
+                <li v-for="c in check.conflicts.filter((x) => !x.same_event)" :key="c.session_id">{{ c.event_number }} {{ c.event_name }} · {{ c.session_name }} · {{ c.hold_kind === 'OPTION' && c.rank ? t('banquet.hold.optionRank', { n: c.rank }) : t(`banquet.hold.${c.hold_kind}`) }} · {{ roomNameOf(c.room_code) }}</li>
               </ul>
             </template>
             <p v-if="moving" class="m-0" data-testid="check-ranks">{{ t('banquet.check.ranks', { from: check.rank_given_up ?? 1, to: check.rank_in_new_slot }) }}</p>

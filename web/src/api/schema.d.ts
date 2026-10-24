@@ -22460,6 +22460,8 @@ export interface components {
             charge_code_id: number;
             charge_code: string;
             charge_code_name: string;
+            /** @description The mode of the charge code: INCLUSIVE is nett, EXCLUSIVE is ++. */
+            price_mode: components["schemas"]["PriceMode"];
             list_price: string;
             /** @enum {string|null} */
             fb_class: "FOOD" | "BEVERAGE" | "OTHER" | null;
@@ -22491,6 +22493,7 @@ export interface components {
             item_code: string;
             item_name: string;
             item_kind: string;
+            price_mode: components["schemas"]["PriceMode"];
             qty_per_pax: string;
             sort_order: number;
         };
@@ -22500,6 +22503,11 @@ export interface components {
             code: string;
             name: string;
             price_per_pax: string;
+            /**
+             * @description The mode the components share, MIXED when their charge codes differ, null without components.
+             * @enum {string|null}
+             */
+            price_mode: "EXCLUSIVE" | "INCLUSIVE" | "MIXED" | null;
             description: string | null;
             is_active: boolean;
             components: components["schemas"]["BanquetPackageComponent"][];
@@ -22604,6 +22612,10 @@ export interface components {
             last_date: components["schemas"]["Date"] | null;
             sessions: number;
             pax_estimated: number;
+            /** @description The guests counted for the event: the sum over its sessions of the guaranteed number where there is one, else the estimate. */
+            pax: number;
+            /** @description Every session of the event has a guaranteed number. */
+            pax_guaranteed: boolean;
             version: number;
         };
         /** @description Exactly one of booker_guest_id and booker_company_id. A change carries the version it was read at; option_until is read for a tentative event only. */
@@ -22675,6 +22687,8 @@ export interface components {
             /** @enum {string} */
             hold_kind: "OPTION" | "DEFINITE";
             room_code: string;
+            /** @description The place of an option in the queue of its slot, 1 is the first; null for a confirmed event. */
+            rank: number | null;
             same_event: boolean;
         };
         /** @description The room check before a session is saved. rank_in_new_slot is the place the session would have; rank_given_up is the one a tentative session gives up when it moves. */
@@ -22721,11 +22735,38 @@ export interface components {
             rank: number | null;
             room_taken: boolean;
         };
+        /** @description A room that a hold locks without the session being booked in it: the parts of a combined room, and the combined rooms of a part. hold_from and hold_to are local, with the set-up and the tear-down. */
+        BanquetCalendarLock: {
+            /**
+             * Format: int64
+             * @description The room that is locked.
+             */
+            room_id: number;
+            /** Format: int64 */
+            session_id: number;
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            event_status: string;
+            /** @enum {string} */
+            hold_kind: "OPTION" | "DEFINITE";
+            /**
+             * Format: int64
+             * @description The room the session is booked in.
+             */
+            via_room_id: number;
+            via_room_code: string;
+            via_room_name: string;
+            hold_from: string;
+            hold_to: string;
+        };
         BanquetCalendar: {
             from: components["schemas"]["Date"];
             to: components["schemas"]["Date"];
             rooms: components["schemas"]["BanquetRoom"][];
             sessions: components["schemas"]["BanquetCalendarSession"][];
+            locks: components["schemas"]["BanquetCalendarLock"][];
         };
         BanquetOverdueOption: {
             /** Format: int64 */

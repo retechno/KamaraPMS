@@ -143,7 +143,7 @@ async function savePackage(): Promise<void> {
             <p class="m-0 font-medium">{{ x.name }} <span class="text-muted-foreground">{{ x.code }}</span></p>
             <p class="m-0 text-sm text-muted-foreground">{{ t(`banquet.kind.${x.kind}`) }} · {{ t(`banquet.basis.${x.unit_basis}`) }} · {{ x.charge_code }}</p>
           </div>
-          <span class="tabular-nums">{{ formatMoney(x.list_price) }}</span>
+          <span class="tabular-nums" :data-testid="`item-price-${x.code}`">{{ formatMoney(x.list_price) }} <span class="text-xs text-muted-foreground">{{ t(`banquet.catalog.mode.${x.price_mode}`) }}</span></span>
           <Badge :variant="x.is_active ? 'success' : 'outline'">{{ x.is_active ? t('common.active') : t('common.inactive') }}</Badge>
           <Button v-if="canSetup" type="button" variant="outline" size="sm" :data-testid="`item-edit-${x.code}`" @click="editItem(x)">{{ t('common.edit') }}</Button>
         </li>
@@ -158,7 +158,7 @@ async function savePackage(): Promise<void> {
             <p class="m-0 font-medium">{{ x.name }} <span class="text-muted-foreground">{{ x.code }}</span></p>
             <p class="m-0 text-sm text-muted-foreground">{{ x.components.map((c) => c.item_name).join(', ') }}</p>
           </div>
-          <span class="tabular-nums">{{ t('banquet.catalog.perPax', { price: formatMoney(x.price_per_pax) }) }}</span>
+          <span class="tabular-nums" :data-testid="`package-price-${x.code}`">{{ t('banquet.catalog.perPax', { price: formatMoney(x.price_per_pax) }) }}<span v-if="x.price_mode" class="ml-1 text-xs text-muted-foreground">{{ t(`banquet.catalog.mode.${x.price_mode}`) }}</span></span>
           <Badge :variant="x.is_active ? 'success' : 'outline'">{{ x.is_active ? t('common.active') : t('common.inactive') }}</Badge>
           <Button v-if="canSetup" type="button" variant="outline" size="sm" :data-testid="`package-edit-${x.code}`" @click="editPackage(x)">{{ t('common.edit') }}</Button>
         </li>

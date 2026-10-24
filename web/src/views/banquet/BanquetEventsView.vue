@@ -64,6 +64,7 @@ const columns = computed<Column<BanquetEventRow>[]>(() => [
   { key: 'name', label: t('banquet.event.name') },
   { key: 'booker_name', label: t('banquet.event.booker') },
   { key: 'first_date', label: t('banquet.event.dates') },
+  { key: 'pax', label: t('banquet.event.pax'), class: 'text-right tabular-nums' },
   { key: 'status', label: t('banquet.event.status') },
   { key: 'sales_name', label: t('banquet.event.sales') },
 ])
@@ -104,6 +105,10 @@ async function onSaved(ev: BanquetEvent): Promise<void> {
       <template #cell-number="{ row }"><RouterLink :to="`/banquet/events/${row.id}`" class="text-primary hover:underline">{{ row.number }}</RouterLink></template>
       <template #cell-first_date="{ row }">
         <template v-if="row.first_date">{{ formatDateShort(row.first_date) }}<template v-if="row.last_date && row.last_date !== row.first_date"> – {{ formatDateShort(row.last_date) }}</template></template>
+        <template v-else>–</template>
+      </template>
+      <template #cell-pax="{ row }">
+        <span v-if="row.sessions" :data-testid="`pax-${row.number}`">{{ t(row.pax_guaranteed ? 'banquet.event.paxGuaranteed' : 'banquet.event.paxEstimated', { n: row.pax }) }}</span>
         <template v-else>–</template>
       </template>
       <template #cell-status="{ row }">

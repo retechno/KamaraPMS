@@ -471,7 +471,7 @@ func (s *Service) items(ctx context.Context, tenantID, propertyID int64, id *int
 	}
 	out := make([]Item, len(rows))
 	for i, r := range rows {
-		out[i] = Item{ID: r.ID, Code: r.Code, Name: r.Name, Kind: r.Kind, UnitBasis: r.UnitBasis, ChargeCodeID: r.ChargeCodeID, ChargeCode: r.ChargeCode, ChargeCodeName: r.ChargeCodeName,
+		out[i] = Item{ID: r.ID, Code: r.Code, Name: r.Name, Kind: r.Kind, UnitBasis: r.UnitBasis, ChargeCodeID: r.ChargeCodeID, ChargeCode: r.ChargeCode, ChargeCodeName: r.ChargeCodeName, PriceMode: r.PriceMode,
 			ListPrice: r.ListPrice, FbClass: r.FbClass, PosProductID: r.PosProductID, Description: r.Description, IsActive: r.IsActive}
 	}
 	return out, nil
@@ -625,9 +625,10 @@ func (s *Service) packages(ctx context.Context, tenantID, propertyID int64, id *
 		out[i] = Package{ID: r.ID, Code: r.Code, Name: r.Name, PricePerPax: r.PricePerPax, Description: r.Description, IsActive: r.IsActive, Components: []PackageComponent{}}
 		for _, c := range comps {
 			if c.PackageID == r.ID {
-				out[i].Components = append(out[i].Components, PackageComponent{ItemID: c.ItemID, ItemCode: c.ItemCode, ItemName: c.ItemName, ItemKind: c.ItemKind, QtyPerPax: c.QtyPerPax, SortOrder: int(c.SortOrder)})
+				out[i].Components = append(out[i].Components, PackageComponent{ItemID: c.ItemID, ItemCode: c.ItemCode, ItemName: c.ItemName, ItemKind: c.ItemKind, PriceMode: c.ItemPriceMode, QtyPerPax: c.QtyPerPax, SortOrder: int(c.SortOrder)})
 			}
 		}
+		out[i].PriceMode = commonMode(out[i].Components)
 	}
 	return out, nil
 }
@@ -767,4 +768,19 @@ func (s *Service) UpdatePackage(ctx context.Context, propertyID, id int64, in Pa
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.package_updated", "banquet_package", id, out.Code, old[0], out))
 	})
 	return out, err
+}
+
+// commonMode is the price mode the components of a package share, MIXED when they differ and nothing when there are none.
+func commonMode(list []PackageComponent) *string {
+	if len(list) == 0 {
+		return nil
+	}
+	mode := list[0].PriceMode
+	for _, c := range list[1:] {
+		if c.PriceMode != mode {
+			mode = "MIXED"
+			break
+		}
+	}
+	return &mode
 }

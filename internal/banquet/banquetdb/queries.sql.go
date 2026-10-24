@@ -61,6 +61,87 @@ func (q *Queries) BumpRoom(ctx context.Context, arg BumpRoomParams) error {
 	return err
 }
 
+const calendarLocks = `-- name: CalendarLocks :many
+WITH atoms AS (
+    SELECT r.id AS room_id, r.id AS atom_id FROM banquet_rooms r WHERE r.tenant_id = $4 AND r.property_id = $1 AND NOT r.is_combo
+    UNION ALL
+    SELECT p.combo_room_id, p.part_room_id FROM banquet_room_parts p WHERE p.property_id = $1
+)
+SELECT a.room_id, s.id AS session_id, e.id AS event_id, e.number AS event_number, e.name AS event_name, e.status AS event_status,
+       min(h.hold_kind)::text AS hold_kind, s.room_id AS via_room_id, vr.code AS via_room_code, vr.name AS via_room_name,
+       min(lower(h.during))::timestamp AS hold_from, max(upper(h.during))::timestamp AS hold_to
+FROM atoms a
+JOIN banquet_holds h ON h.property_id = $1 AND h.atom_room_id = a.atom_id
+JOIN banquet_sessions s ON s.property_id = h.property_id AND s.id = h.session_id AND s.room_id <> a.room_id
+JOIN banquet_events e ON e.property_id = h.property_id AND e.id = h.event_id
+JOIN banquet_rooms vr ON vr.property_id = s.property_id AND vr.id = s.room_id
+WHERE h.during && tsrange(($2::date - 1)::timestamp, ($3::date + 2)::timestamp)
+GROUP BY a.room_id, s.id, e.id, vr.id
+ORDER BY hold_from, s.id, a.room_id
+`
+
+type CalendarLocksParams struct {
+	PropertyID int64
+	DateFrom   civil.Date
+	DateTo     civil.Date
+	TenantID   int64
+}
+
+type CalendarLocksRow struct {
+	RoomID      int64
+	SessionID   int64
+	EventID     int64
+	EventNumber string
+	EventName   string
+	EventStatus string
+	HoldKind    string
+	ViaRoomID   *int64
+	ViaRoomCode string
+	ViaRoomName string
+	HoldFrom    pgtype.Timestamp
+	HoldTo      pgtype.Timestamp
+}
+
+// The holds that lock a room other than the one the session is booked in: a combined room's session holds its parts, and a part's session holds the combined rooms it belongs to (36 5).
+// One row for each room and session, the hold with its set-up and tear-down as local timestamps.
+func (q *Queries) CalendarLocks(ctx context.Context, arg CalendarLocksParams) ([]CalendarLocksRow, error) {
+	rows, err := q.db.Query(ctx, calendarLocks,
+		arg.PropertyID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.TenantID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CalendarLocksRow{}
+	for rows.Next() {
+		var i CalendarLocksRow
+		if err := rows.Scan(
+			&i.RoomID,
+			&i.SessionID,
+			&i.EventID,
+			&i.EventNumber,
+			&i.EventName,
+			&i.EventStatus,
+			&i.HoldKind,
+			&i.ViaRoomID,
+			&i.ViaRoomCode,
+			&i.ViaRoomName,
+			&i.HoldFrom,
+			&i.HoldTo,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const calendarSessions = `-- name: CalendarSessions :many
 SELECT s.id AS session_id, s.event_id, e.number AS event_number, e.name AS event_name, e.status AS event_status, e.sales_user_id, e.option_until,
        s.name AS session_name, s.session_date, s.start_time, s.end_time, s.ends_next_day, s.room_id, r.code AS room_code, r.name AS room_name,
@@ -1116,13 +1197,13 @@ SELECT e.id, e.number, e.status, e.name, e.event_type_id, t.name AS event_type_n
        COALESCE(c.name, NULLIF(trim(concat_ws(' ', g.first_name, g.last_name)), ''), '')::text AS booker_name,
        e.sales_user_id, u.full_name AS sales_name, e.option_until, e.version,
        COALESCE(sa.first_date, '1900-01-01'::date)::date AS first_date, COALESCE(sa.last_date, '1900-01-01'::date)::date AS last_date,
-       COALESCE(sa.sessions, 0)::int AS sessions, COALESCE(sa.pax, 0)::int AS pax_estimated
+       COALESCE(sa.sessions, 0)::int AS sessions, COALESCE(sa.pax, 0)::int AS pax_estimated, COALESCE(sa.pax_counted, 0)::int AS pax, COALESCE(sa.all_guaranteed, false)::boolean AS pax_guaranteed
 FROM banquet_events e
 LEFT JOIN banquet_event_types t ON t.property_id = e.property_id AND t.id = e.event_type_id
 LEFT JOIN companies c ON c.property_id = e.property_id AND c.id = e.booker_company_id
 LEFT JOIN guests g ON g.tenant_id = e.tenant_id AND g.id = e.booker_guest_id
 JOIN users u ON u.tenant_id = e.tenant_id AND u.id = e.sales_user_id
-LEFT JOIN LATERAL (SELECT min(s.session_date) AS first_date, max(s.session_date) AS last_date, count(*) AS sessions, sum(s.pax_estimated) AS pax
+LEFT JOIN LATERAL (SELECT min(s.session_date) AS first_date, max(s.session_date) AS last_date, count(*) AS sessions, sum(s.pax_estimated) AS pax, sum(COALESCE(s.pax_guaranteed, s.pax_estimated)) AS pax_counted, bool_and(s.pax_guaranteed IS NOT NULL) AS all_guaranteed
                      FROM banquet_sessions s WHERE s.property_id = e.property_id AND s.event_id = e.id AND s.status = 'ACTIVE') sa ON true
 WHERE e.tenant_id = $1 AND e.property_id = $2
   AND ($3::bigint IS NULL OR e.id = $3::bigint)
@@ -1170,6 +1251,8 @@ type ListEventsRow struct {
 	LastDate        civil.Date
 	Sessions        int32
 	PaxEstimated    int32
+	Pax             int32
+	PaxGuaranteed   bool
 }
 
 // ---------------------------------------------------------------- events
@@ -1213,6 +1296,8 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]ListE
 			&i.LastDate,
 			&i.Sessions,
 			&i.PaxEstimated,
+			&i.Pax,
+			&i.PaxGuaranteed,
 		); err != nil {
 			return nil, err
 		}
@@ -1225,7 +1310,7 @@ func (q *Queries) ListEvents(ctx context.Context, arg ListEventsParams) ([]ListE
 }
 
 const listItems = `-- name: ListItems :many
-SELECT i.id, i.code, i.name, i.kind, i.unit_basis, i.charge_code_id, c.code AS charge_code, c.name AS charge_code_name, i.list_price, i.fb_class, i.pos_product_id,
+SELECT i.id, i.code, i.name, i.kind, i.unit_basis, i.charge_code_id, c.code AS charge_code, c.name AS charge_code_name, c.price_mode, i.list_price, i.fb_class, i.pos_product_id,
        i.description, i.is_active
 FROM banquet_items i
 JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
@@ -1251,6 +1336,7 @@ type ListItemsRow struct {
 	ChargeCodeID   int64
 	ChargeCode     string
 	ChargeCodeName string
+	PriceMode      string
 	ListPrice      decimal.Decimal
 	FbClass        *string
 	PosProductID   *int64
@@ -1282,6 +1368,7 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 			&i.ChargeCodeID,
 			&i.ChargeCode,
 			&i.ChargeCodeName,
+			&i.PriceMode,
 			&i.ListPrice,
 			&i.FbClass,
 			&i.PosProductID,
@@ -1363,9 +1450,10 @@ func (q *Queries) ListNotices(ctx context.Context, arg ListNoticesParams) ([]Lis
 }
 
 const listPackageComponents = `-- name: ListPackageComponents :many
-SELECT c.package_id, c.item_id, i.code AS item_code, i.name AS item_name, i.kind AS item_kind, c.qty_per_pax, c.sort_order
+SELECT c.package_id, c.item_id, i.code AS item_code, i.name AS item_name, i.kind AS item_kind, cc.price_mode AS item_price_mode, c.qty_per_pax, c.sort_order
 FROM banquet_package_components c
 JOIN banquet_items i ON i.property_id = c.property_id AND i.id = c.item_id
+JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
 WHERE c.property_id = $1 AND ($2::bigint IS NULL OR c.package_id = $2::bigint)
 ORDER BY c.package_id, c.sort_order, c.item_id
 `
@@ -1376,13 +1464,14 @@ type ListPackageComponentsParams struct {
 }
 
 type ListPackageComponentsRow struct {
-	PackageID int64
-	ItemID    int64
-	ItemCode  string
-	ItemName  string
-	ItemKind  string
-	QtyPerPax decimal.Decimal
-	SortOrder int32
+	PackageID     int64
+	ItemID        int64
+	ItemCode      string
+	ItemName      string
+	ItemKind      string
+	ItemPriceMode string
+	QtyPerPax     decimal.Decimal
+	SortOrder     int32
 }
 
 func (q *Queries) ListPackageComponents(ctx context.Context, arg ListPackageComponentsParams) ([]ListPackageComponentsRow, error) {
@@ -1400,6 +1489,7 @@ func (q *Queries) ListPackageComponents(ctx context.Context, arg ListPackageComp
 			&i.ItemCode,
 			&i.ItemName,
 			&i.ItemKind,
+			&i.ItemPriceMode,
 			&i.QtyPerPax,
 			&i.SortOrder,
 		); err != nil {

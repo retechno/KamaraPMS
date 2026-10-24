@@ -807,3 +807,80 @@ func TestNoUseCaseTouchesStockAndEventLocks(t *testing.T) {
 		}
 	}
 }
+
+// The calendar says which other rooms a hold locks: the parts of a combined room, the combined rooms of a part. The screens draw it, they do not work it out.
+func TestTheCalendarShowsWhatAHoldLocksInTheOtherRooms(t *testing.T) {
+	f := setup(t)
+	gala := f.definite(t, "Gala", f.ballroom.ID, "2026-11-07", "12:00", "16:00") // holds A and B from 11:00 to 16:30
+	meet := f.tentative(t, "Meeting", f.c.ID, "2026-11-08", "09:00", "10:00")    // C is a part of the garden only
+	from, to := day("2026-11-07"), day("2026-11-08")
+	cal, err := f.svc.Calendar(f.mgr, f.propID, &from, &to)
+	must(t, err)
+
+	locked := map[int64]banquet.CalendarLock{}
+	for _, l := range cal.Locks {
+		if l.EventID == gala.ID {
+			locked[l.RoomID] = l
+		}
+	}
+	for name, room := range map[string]int64{"part A": f.a.ID, "part B": f.b.ID, "the garden (B + C)": f.garden.ID} {
+		l, ok := locked[room]
+		if !ok {
+			t.Fatalf("%s: the ballroom event does not lock it: %+v", name, cal.Locks)
+		}
+		if l.ViaRoomID != f.ballroom.ID || l.HoldKind != "DEFINITE" || l.HoldFrom != "2026-11-07T11:00" || l.HoldTo != "2026-11-07T16:30" || l.EventNumber != gala.Number {
+			t.Fatalf("%s: %+v", name, l)
+		}
+	}
+	if _, ok := locked[f.ballroom.ID]; ok {
+		t.Fatal("the room of the session is not locked by its own session")
+	}
+	if _, ok := locked[f.c.ID]; ok {
+		t.Fatal("C is not a part of the ballroom")
+	}
+
+	// a booking of the part shows in the combined rooms it belongs to, as an option
+	inGarden := false
+	for _, l := range cal.Locks {
+		if l.EventID == meet.ID {
+			inGarden = inGarden || (l.RoomID == f.garden.ID && l.ViaRoomID == f.c.ID && l.HoldKind == "OPTION")
+			if l.RoomID == f.c.ID || l.RoomID == f.ballroom.ID {
+				t.Fatalf("unexpected lock %+v", l)
+			}
+		}
+	}
+	if !inGarden {
+		t.Fatalf("the garden does not show the option on C: %+v", cal.Locks)
+	}
+}
+
+func TestTheEventListCountsTheGuaranteedGuestsWhereThereAreAndTheEstimateElse(t *testing.T) {
+	f := setup(t)
+	ev := f.event(t, "Seminar")
+	s1, err := f.svc.AddSession(f.office, f.propID, ev.ID, f.session(f.a.ID, "2026-11-07", "09:00", "12:00", false))
+	must(t, err)
+	_ = s1
+	two := f.session(f.a.ID, "2026-11-08", "09:00", "12:00", false)
+	_, err = f.svc.AddSession(f.office, f.propID, ev.ID, two)
+	must(t, err)
+	list, err := f.svc.ListEvents(f.mgr, f.propID, banquet.EventFilter{})
+	must(t, err)
+	if len(list) != 1 || list[0].Pax != 200 || list[0].PaxGuaranteed {
+		t.Fatalf("two estimates of 100: %+v", list)
+	}
+	full, err := f.svc.GetEvent(f.mgr, f.propID, ev.ID)
+	must(t, err)
+	for _, s := range full.Sessions {
+		in := f.session(f.a.ID, s.SessionDate.String(), "09:00", "12:00", false)
+		g := 80
+		in.PaxGuaranteed = &g
+		if _, err := f.svc.UpdateSession(f.office, f.propID, ev.ID, s.ID, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err = f.svc.ListEvents(f.mgr, f.propID, banquet.EventFilter{})
+	must(t, err)
+	if list[0].Pax != 160 || !list[0].PaxGuaranteed {
+		t.Fatalf("two guarantees of 80: %+v", list[0])
+	}
+}

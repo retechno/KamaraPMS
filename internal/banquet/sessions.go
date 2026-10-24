@@ -306,11 +306,27 @@ func (s *Service) CheckAvailability(ctx context.Context, propertyID, eventID int
 	}
 	from, to := HoldRange(in.SessionDate, in.StartTime, in.EndTime, in.EndsNextDay, room.SetupMinutes, room.TeardownMinutes)
 	out := Availability{Mode: st.TentativeConflictMode, Conflicts: []Conflict{}, Available: true, SetupOffered: true, HoldFrom: from.Format("2006-01-02T15:04"), HoldTo: to.Format("2006-01-02T15:04")}
+	var optionIDs []int64
+	for _, c := range cs {
+		if c.HoldKind == HoldOption {
+			optionIDs = append(optionIDs, c.SessionID)
+		}
+	}
+	places := map[int64]int{}
+	if len(optionIDs) > 0 {
+		rks, err := s.q(ctx).SessionRanks(ctx, banquetdb.SessionRanksParams{PropertyID: propertyID, Ids: optionIDs})
+		if err != nil {
+			return Availability{}, err
+		}
+		for _, rk := range rks {
+			places[rk.SessionID] = int(rk.Rank)
+		}
+	}
 	ahead := map[int64]bool{}
 	for _, c := range cs {
 		same := c.EventID == eventID
 		out.Conflicts = append(out.Conflicts, Conflict{EventID: c.EventID, EventNumber: c.EventNumber, EventName: c.EventName, EventStatus: c.EventStatus, SessionID: c.SessionID,
-			SessionName: c.SessionName, HoldKind: c.HoldKind, RoomCode: c.AtomRoomCode, SameEvent: same})
+			SessionName: c.SessionName, HoldKind: c.HoldKind, RoomCode: c.AtomRoomCode, Rank: rankOf(places, c.SessionID), SameEvent: same})
 		switch {
 		case same:
 			out.Available = false
@@ -618,7 +634,28 @@ func (s *Service) Calendar(ctx context.Context, propertyID int64, from, to *civi
 	if err != nil {
 		return Calendar{}, err
 	}
-	return Calendar{From: f, To: t, Rooms: rooms, Sessions: sessions}, nil
+	locks, err := s.calendarLocks(ctx, p.TenantID, propertyID, f, t)
+	if err != nil {
+		return Calendar{}, err
+	}
+	return Calendar{From: f, To: t, Rooms: rooms, Sessions: sessions, Locks: locks}, nil
+}
+
+// calendarLocks answers what the holds lock in the other rooms of the period, read from the holds as they are stored: the screens do not work it out again.
+func (s *Service) calendarLocks(ctx context.Context, tenantID, propertyID int64, from, to civil.Date) ([]CalendarLock, error) {
+	rows, err := s.q(ctx).CalendarLocks(ctx, banquetdb.CalendarLocksParams{TenantID: tenantID, PropertyID: propertyID, DateFrom: from, DateTo: to})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CalendarLock, 0, len(rows))
+	for _, r := range rows {
+		if r.EventStatus != StatusTentative && r.EventStatus != StatusDefinite {
+			continue
+		}
+		out = append(out, CalendarLock{RoomID: r.RoomID, SessionID: r.SessionID, EventID: r.EventID, EventNumber: r.EventNumber, EventName: r.EventName, EventStatus: r.EventStatus, HoldKind: r.HoldKind,
+			ViaRoomID: derefID(r.ViaRoomID), ViaRoomCode: r.ViaRoomCode, ViaRoomName: r.ViaRoomName, HoldFrom: r.HoldFrom.Time.Format("2006-01-02T15:04"), HoldTo: r.HoldTo.Time.Format("2006-01-02T15:04")})
+	}
+	return out, nil
 }
 
 func (s *Service) calendarSessions(ctx context.Context, tenantID, propertyID int64, from, to, today civil.Date) ([]CalendarSession, error) {
@@ -722,4 +759,19 @@ func (s *Service) MarkNoticesSeen(ctx context.Context, propertyID int64, ids []i
 func (s *Service) WriteDueNotices(ctx context.Context, tenantID, propertyID int64, day civil.Date) (int, error) {
 	ids, err := s.q(ctx).InsertDueNotices(ctx, banquetdb.InsertDueNoticesParams{TenantID: tenantID, PropertyID: propertyID, NoticeDate: day})
 	return len(ids), err
+}
+
+func derefID(id *int64) int64 {
+	if id == nil {
+		return 0
+	}
+	return *id
+}
+
+// rankOf is the place of a session in the map, or nothing for a session that is not an option.
+func rankOf(places map[int64]int, sessionID int64) *int {
+	if r, ok := places[sessionID]; ok {
+		return &r
+	}
+	return nil
 }

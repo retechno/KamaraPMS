@@ -104,7 +104,7 @@ SELECT kind, is_active FROM banquet_reasons WHERE tenant_id = @tenant_id AND pro
 
 -- ---------------------------------------------------------------- items and packages
 -- name: ListItems :many
-SELECT i.id, i.code, i.name, i.kind, i.unit_basis, i.charge_code_id, c.code AS charge_code, c.name AS charge_code_name, i.list_price, i.fb_class, i.pos_product_id,
+SELECT i.id, i.code, i.name, i.kind, i.unit_basis, i.charge_code_id, c.code AS charge_code, c.name AS charge_code_name, c.price_mode, i.list_price, i.fb_class, i.pos_product_id,
        i.description, i.is_active
 FROM banquet_items i
 JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
@@ -131,9 +131,10 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id
 ORDER BY name, id;
 
 -- name: ListPackageComponents :many
-SELECT c.package_id, c.item_id, i.code AS item_code, i.name AS item_name, i.kind AS item_kind, c.qty_per_pax, c.sort_order
+SELECT c.package_id, c.item_id, i.code AS item_code, i.name AS item_name, i.kind AS item_kind, cc.price_mode AS item_price_mode, c.qty_per_pax, c.sort_order
 FROM banquet_package_components c
 JOIN banquet_items i ON i.property_id = c.property_id AND i.id = c.item_id
+JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
 WHERE c.property_id = @property_id AND (sqlc.narg(package_id)::bigint IS NULL OR c.package_id = sqlc.narg(package_id)::bigint)
 ORDER BY c.package_id, c.sort_order, c.item_id;
 
@@ -160,13 +161,13 @@ SELECT e.id, e.number, e.status, e.name, e.event_type_id, t.name AS event_type_n
        COALESCE(c.name, NULLIF(trim(concat_ws(' ', g.first_name, g.last_name)), ''), '')::text AS booker_name,
        e.sales_user_id, u.full_name AS sales_name, e.option_until, e.version,
        COALESCE(sa.first_date, '1900-01-01'::date)::date AS first_date, COALESCE(sa.last_date, '1900-01-01'::date)::date AS last_date,
-       COALESCE(sa.sessions, 0)::int AS sessions, COALESCE(sa.pax, 0)::int AS pax_estimated
+       COALESCE(sa.sessions, 0)::int AS sessions, COALESCE(sa.pax, 0)::int AS pax_estimated, COALESCE(sa.pax_counted, 0)::int AS pax, COALESCE(sa.all_guaranteed, false)::boolean AS pax_guaranteed
 FROM banquet_events e
 LEFT JOIN banquet_event_types t ON t.property_id = e.property_id AND t.id = e.event_type_id
 LEFT JOIN companies c ON c.property_id = e.property_id AND c.id = e.booker_company_id
 LEFT JOIN guests g ON g.tenant_id = e.tenant_id AND g.id = e.booker_guest_id
 JOIN users u ON u.tenant_id = e.tenant_id AND u.id = e.sales_user_id
-LEFT JOIN LATERAL (SELECT min(s.session_date) AS first_date, max(s.session_date) AS last_date, count(*) AS sessions, sum(s.pax_estimated) AS pax
+LEFT JOIN LATERAL (SELECT min(s.session_date) AS first_date, max(s.session_date) AS last_date, count(*) AS sessions, sum(s.pax_estimated) AS pax, sum(COALESCE(s.pax_guaranteed, s.pax_estimated)) AS pax_counted, bool_and(s.pax_guaranteed IS NOT NULL) AS all_guaranteed
                      FROM banquet_sessions s WHERE s.property_id = e.property_id AND s.event_id = e.id AND s.status = 'ACTIVE') sa ON true
 WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id
   AND (sqlc.narg(id)::bigint IS NULL OR e.id = sqlc.narg(id)::bigint)
@@ -365,6 +366,26 @@ WHERE s.tenant_id = sqlc.arg(tenant_id) AND s.property_id = sqlc.arg(property_id
   AND e.status IN ('INQUIRY', 'TENTATIVE', 'DEFINITE', 'COMPLETED')
   AND s.session_date BETWEEN sqlc.arg(date_from)::date - 1 AND sqlc.arg(date_to)::date
 ORDER BY s.session_date, s.start_time, s.id;
+
+-- name: CalendarLocks :many
+-- The holds that lock a room other than the one the session is booked in: a combined room's session holds its parts, and a part's session holds the combined rooms it belongs to (36 5).
+-- One row for each room and session, the hold with its set-up and tear-down as local timestamps.
+WITH atoms AS (
+    SELECT r.id AS room_id, r.id AS atom_id FROM banquet_rooms r WHERE r.tenant_id = sqlc.arg(tenant_id) AND r.property_id = sqlc.arg(property_id) AND NOT r.is_combo
+    UNION ALL
+    SELECT p.combo_room_id, p.part_room_id FROM banquet_room_parts p WHERE p.property_id = sqlc.arg(property_id)
+)
+SELECT a.room_id, s.id AS session_id, e.id AS event_id, e.number AS event_number, e.name AS event_name, e.status AS event_status,
+       min(h.hold_kind)::text AS hold_kind, s.room_id AS via_room_id, vr.code AS via_room_code, vr.name AS via_room_name,
+       min(lower(h.during))::timestamp AS hold_from, max(upper(h.during))::timestamp AS hold_to
+FROM atoms a
+JOIN banquet_holds h ON h.property_id = sqlc.arg(property_id) AND h.atom_room_id = a.atom_id
+JOIN banquet_sessions s ON s.property_id = h.property_id AND s.id = h.session_id AND s.room_id <> a.room_id
+JOIN banquet_events e ON e.property_id = h.property_id AND e.id = h.event_id
+JOIN banquet_rooms vr ON vr.property_id = s.property_id AND vr.id = s.room_id
+WHERE h.during && tsrange((sqlc.arg(date_from)::date - 1)::timestamp, (sqlc.arg(date_to)::date + 2)::timestamp)
+GROUP BY a.room_id, s.id, e.id, vr.id
+ORDER BY hold_from, s.id, a.room_id;
 
 -- name: OverdueOptions :many
 SELECT e.id, e.number, e.name, e.option_until, e.sales_user_id, u.full_name AS sales_name

@@ -1,5 +1,6 @@
-import type { BanquetCalendarSession } from '@/api/types'
+import type { BanquetCalendarLock, BanquetCalendarSession } from '@/api/types'
 import { addDays } from '@/utils/dates'
+import { formatDateShort } from '@/utils/format'
 
 /** Pure rules of the banquet screens (docs/architecture/36-banquet.md 6): where a session sits on the time axis, how it is drawn, which day a week starts on. */
 
@@ -75,4 +76,79 @@ export function weekDays(date: string): string[] {
 /** The sessions of a room on a day, earliest first. */
 export function sessionsOf(list: BanquetCalendarSession[], roomId: number, date: string): BanquetCalendarSession[] {
   return list.filter((s) => s.room_id === roomId && s.session_date === date).sort((a, b) => minutesOf(a.start_time) - minutesOf(b.start_time) || a.session_id - b.session_id)
+}
+
+/** "2026-11-07T18:30" as its day and minutes; the day is "" for anything else. */
+function stamp(value: string): { date: string; minutes: number } {
+  const [date = '', time = ''] = value.split('T')
+  return { date, minutes: minutesOf(time) }
+}
+
+/**
+ * The part of a lock (a hold on the room from another booking: the parts of a combined room, the combined rooms of a part) that falls on a day, in minutes from the midnight of that day.
+ * The hold comes with its set-up and tear-down from the server; a hold that runs over midnight is cut at it and continues on the next day. Nothing when the hold does not touch the day.
+ */
+export function lockSpan(l: Pick<BanquetCalendarLock, 'hold_from' | 'hold_to'>, date: string): { start: number; end: number } | null {
+  const a = stamp(l.hold_from)
+  const b = stamp(l.hold_to)
+  const dayOf = (d: string): number => Date.parse(`${d}T00:00:00Z`) / 60000
+  const from = dayOf(a.date) + a.minutes - dayOf(date)
+  const to = dayOf(b.date) + b.minutes - dayOf(date)
+  const start = Math.max(from, 0)
+  const end = Math.min(to, 1440)
+  return end > start ? { start, end } : null
+}
+
+/** The locks of a room on a day, earliest first. */
+export function locksOf(list: BanquetCalendarLock[], roomId: number, date: string): BanquetCalendarLock[] {
+  return list.filter((l) => l.room_id === roomId && lockSpan(l, date) !== null).sort((a, b) => lockSpan(a, date)!.start - lockSpan(b, date)!.start || a.session_id - b.session_id)
+}
+
+export interface Lane {
+  lane: number
+  lanes: number
+}
+
+/**
+ * Items that overlap in time sit side by side: each overlapping run shares the width of the column between as many lanes as it needs, an item takes the first lane that is free when it starts.
+ * `end` is exclusive, so an item that starts when another ends does not share a lane count with it.
+ */
+export function layoutLanes(items: { id: number; start: number; end: number }[]): Map<number, Lane> {
+  const sorted = [...items].sort((a, b) => a.start - b.start || b.end - a.end || a.id - b.id)
+  const out = new Map<number, Lane>()
+  let run: { id: number; lane: number }[] = []
+  let laneEnds: number[] = []
+  let runEnd = -Infinity
+  const close = (): void => {
+    for (const r of run) out.set(r.id, { lane: r.lane, lanes: Math.max(1, laneEnds.length) })
+    run = []
+    laneEnds = []
+  }
+  for (const it of sorted) {
+    if (it.start >= runEnd) {
+      close()
+      runEnd = -Infinity
+    }
+    let lane = laneEnds.findIndex((e) => e <= it.start)
+    if (lane < 0) {
+      lane = laneEnds.length
+      laneEnds.push(it.end)
+    } else {
+      laneEnds[lane] = it.end
+    }
+    run.push({ id: it.id, lane })
+    runEnd = Math.max(runEnd, it.end)
+  }
+  close()
+  return out
+}
+
+/** "23 Okt 09:30–15:15", or with both days when the hold passes midnight: "23 Okt 22:00 – 24 Okt 02:00". */
+export function formatHoldRange(from: string, to: string): string {
+  const a = stamp(from)
+  const b = stamp(to)
+  if (!a.date || !b.date) return `${from} – ${to}`
+  const time = (m: number): string => hhmm(m)
+  if (a.date === b.date) return `${formatDateShort(a.date)} ${time(a.minutes)}–${time(b.minutes)}`
+  return `${formatDateShort(a.date)} ${time(a.minutes)} – ${formatDateShort(b.date)} ${time(b.minutes)}`
 }

@@ -24013,7 +24013,7 @@ components:
         is_active: { type: boolean }
     BanquetItem:
       type: object
-      required: [id, code, name, kind, unit_basis, charge_code_id, charge_code, charge_code_name, list_price, fb_class, pos_product_id, description, is_active]
+      required: [id, code, name, kind, unit_basis, charge_code_id, charge_code, charge_code_name, price_mode, list_price, fb_class, pos_product_id, description, is_active]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -24023,6 +24023,7 @@ components:
         charge_code_id: { type: integer, format: int64 }
         charge_code: { type: string }
         charge_code_name: { type: string }
+        price_mode: { $ref: "#/components/schemas/PriceMode", description: "The mode of the charge code: INCLUSIVE is nett, EXCLUSIVE is ++." }
         list_price: { type: string }
         fb_class: { type: [string, "null"], enum: [FOOD, BEVERAGE, OTHER, null] }
         pos_product_id: { type: [integer, "null"], format: int64 }
@@ -24044,22 +24045,24 @@ components:
         is_active: { type: boolean }
     BanquetPackageComponent:
       type: object
-      required: [item_id, item_code, item_name, item_kind, qty_per_pax, sort_order]
+      required: [item_id, item_code, item_name, item_kind, price_mode, qty_per_pax, sort_order]
       properties:
         item_id: { type: integer, format: int64 }
         item_code: { type: string }
         item_name: { type: string }
         item_kind: { type: string }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
         qty_per_pax: { type: string }
         sort_order: { type: integer }
     BanquetPackage:
       type: object
-      required: [id, code, name, price_per_pax, description, is_active, components]
+      required: [id, code, name, price_per_pax, price_mode, description, is_active, components]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
         name: { type: string }
         price_per_pax: { type: string }
+        price_mode: { type: [string, "null"], enum: [EXCLUSIVE, INCLUSIVE, MIXED, null], description: "The mode the components share, MIXED when their charge codes differ, null without components." }
         description: { type: [string, "null"] }
         is_active: { type: boolean }
         components: { type: array, items: { $ref: "#/components/schemas/BanquetPackageComponent" } }
@@ -24137,7 +24140,7 @@ components:
         sessions: { type: array, items: { $ref: "#/components/schemas/BanquetSession" } }
     BanquetEventRow:
       type: object
-      required: [id, number, status, name, event_type_id, event_type_name, booker_name, sales_user_id, sales_name, option_until, option_overdue, first_date, last_date, sessions, pax_estimated, version]
+      required: [id, number, status, name, event_type_id, event_type_name, booker_name, sales_user_id, sales_name, option_until, option_overdue, first_date, last_date, sessions, pax_estimated, pax, pax_guaranteed, version]
       properties:
         id: { type: integer, format: int64 }
         number: { type: string }
@@ -24154,6 +24157,8 @@ components:
         last_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
         sessions: { type: integer }
         pax_estimated: { type: integer }
+        pax: { type: integer, description: "The guests counted for the event: the sum over its sessions of the guaranteed number where there is one, else the estimate." }
+        pax_guaranteed: { type: boolean, description: "Every session of the event has a guaranteed number." }
         version: { type: integer }
     BanquetEventInput:
       type: object
@@ -24213,7 +24218,7 @@ components:
         pax: { type: [integer, "null"] }
     BanquetConflict:
       type: object
-      required: [event_id, event_number, event_name, event_status, session_id, session_name, hold_kind, room_code, same_event]
+      required: [event_id, event_number, event_name, event_status, session_id, session_name, hold_kind, room_code, rank, same_event]
       properties:
         event_id: { type: integer, format: int64 }
         event_number: { type: string }
@@ -24223,6 +24228,7 @@ components:
         session_name: { type: string }
         hold_kind: { type: string, enum: [OPTION, DEFINITE] }
         room_code: { type: string }
+        rank: { type: [integer, "null"], description: "The place of an option in the queue of its slot, 1 is the first; null for a confirmed event." }
         same_event: { type: boolean }
     BanquetAvailability:
       type: object
@@ -24267,14 +24273,32 @@ components:
         pax_estimated: { type: integer }
         rank: { type: [integer, "null"] }
         room_taken: { type: boolean }
+    BanquetCalendarLock:
+      type: object
+      description: "A room that a hold locks without the session being booked in it: the parts of a combined room, and the combined rooms of a part. hold_from and hold_to are local, with the set-up and the tear-down."
+      required: [room_id, session_id, event_id, event_number, event_name, event_status, hold_kind, via_room_id, via_room_code, via_room_name, hold_from, hold_to]
+      properties:
+        room_id: { type: integer, format: int64, description: "The room that is locked." }
+        session_id: { type: integer, format: int64 }
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        event_status: { type: string }
+        hold_kind: { type: string, enum: [OPTION, DEFINITE] }
+        via_room_id: { type: integer, format: int64, description: "The room the session is booked in." }
+        via_room_code: { type: string }
+        via_room_name: { type: string }
+        hold_from: { type: string }
+        hold_to: { type: string }
     BanquetCalendar:
       type: object
-      required: [from, to, rooms, sessions]
+      required: [from, to, rooms, sessions, locks]
       properties:
         from: { $ref: "#/components/schemas/Date" }
         to: { $ref: "#/components/schemas/Date" }
         rooms: { type: array, items: { $ref: "#/components/schemas/BanquetRoom" } }
         sessions: { type: array, items: { $ref: "#/components/schemas/BanquetCalendarSession" } }
+        locks: { type: array, items: { $ref: "#/components/schemas/BanquetCalendarLock" } }
     BanquetOverdueOption:
       type: object
       required: [event_id, number, name, option_until, sales_user_id, sales_name]
