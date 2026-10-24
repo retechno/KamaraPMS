@@ -549,7 +549,9 @@ func oneOK(t *testing.T, errs []error, wantCode string) {
 
 func TestTwoRequestsForTheSameRoomHaveOneWinner(t *testing.T) {
 	f := setup(t)
-	ctx, trace := db.WithLockTrace(f.office)
+	// one trace per transaction: two transactions in one trace would interleave their locks
+	ctxA, traceA := db.WithLockTrace(f.office)
+	ctxB, traceB := db.WithLockTrace(f.office)
 
 	// two inquiries become tentative on the same slot (REJECT): one wins
 	a, b := f.event(t, "A"), f.event(t, "B")
@@ -559,27 +561,30 @@ func TestTwoRequestsForTheSameRoomHaveOneWinner(t *testing.T) {
 	}
 	errs := race(t,
 		func() error {
-			_, err := f.svc.MakeTentative(ctx, f.propID, a.ID, banquet.TentativeInput{OptionUntil: day("2026-10-20")})
+			_, err := f.svc.MakeTentative(ctxA, f.propID, a.ID, banquet.TentativeInput{OptionUntil: day("2026-10-20")})
 			return err
 		},
 		func() error {
-			_, err := f.svc.MakeTentative(ctx, f.propID, b.ID, banquet.TentativeInput{OptionUntil: day("2026-10-20")})
+			_, err := f.svc.MakeTentative(ctxB, f.propID, b.ID, banquet.TentativeInput{OptionUntil: day("2026-10-20")})
 			return err
 		})
 	oneOK(t, errs, "BANQUET_ROOM_NOT_AVAILABLE")
-	assertLockOrder(t, trace)
+	assertLockOrder(t, traceA)
+	assertLockOrder(t, traceB)
 
 	// two options on a combined room and its part (QUEUE) are confirmed together: the queue lets one through
 	f2 := setup(t)
 	f2.mode(t, banquet.ModeQueue)
 	x := f2.tentative(t, "X", f2.ballroom.ID, "2026-11-07", "12:00", "16:00")
 	y := f2.tentative(t, "Y", f2.a.ID, "2026-11-07", "13:00", "15:00")
-	ctx2, trace2 := db.WithLockTrace(f2.mgr)
+	ctxX, traceX := db.WithLockTrace(f2.mgr)
+	ctxY, traceY := db.WithLockTrace(f2.mgr)
 	errs = race(t,
-		func() error { _, err := f2.svc.Confirm(ctx2, f2.propID, x.ID); return err },
-		func() error { _, err := f2.svc.Confirm(ctx2, f2.propID, y.ID); return err })
+		func() error { _, err := f2.svc.Confirm(ctxX, f2.propID, x.ID); return err },
+		func() error { _, err := f2.svc.Confirm(ctxY, f2.propID, y.ID); return err })
 	oneOK(t, errs, "BANQUET_OPTION_NOT_FIRST")
-	assertLockOrder(t, trace2)
+	assertLockOrder(t, traceX)
+	assertLockOrder(t, traceY)
 	if n := f2.Count(t, `SELECT count(*) FROM banquet_holds WHERE hold_kind = 'DEFINITE' AND atom_room_id = $1`, f2.a.ID); n != 1 {
 		t.Fatalf("%d definite holds on A, want 1", n)
 	}
