@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Posting sesi</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.sub{font-size:12px;color:#626b77}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:8px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.tot td{font-weight:700;background:#f6f7f9}
+.tile{flex:1;border:1px solid #e3e6ea;border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.tl{font-size:12px;color:#626b77}
+.tv{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#5b6068;display:flex;align-items:center;justify-content:center;position:relative">
+  <div style="position:absolute;inset:0;background:#f6f7f9;opacity:.35"></div>
+  <section role="dialog" aria-labelledby="dlg-title" style="position:relative;width:760px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div style="padding:20px 24px 8px">
+      <div class="sub">BQ-000123 · Rapat Tahunan PT Sinar Bali · sesi 1 · Jum 6 Nov 2026 · Ubud 1</div>
+      <h1 id="dlg-title" style="margin:4px 0 0;font-size:22px">Posting sesi ke folio F-002311</h1>
+    </div>
+    <div style="display:flex;gap:10px;padding:8px 24px">
+      <div class="tile"><span class="tl">Pax garansi</span><span class="tv">100</span></div>
+      <div class="tile"><span class="tl">Pax aktual</span><span class="tv">96</span></div>
+      <div class="tile" style="border-color:#1f6f5c;background:#f1f8f5"><span class="tl">Ditagih</span><span class="tv" style="color:#185a4a">100</span><span class="tl">yang lebih besar: garansi</span></div>
+      <div class="tile"><span class="tl">Tanggal posting</span><span class="tv" style="font-size:16px">Jum 6 Nov</span><span class="tl">hari bisnis terbuka</span></div>
+    </div>
+    <div style="padding:6px 24px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Baris folio</th><th class="th">Mode</th><th class="th thr">Neto</th><th class="th thr">Servis</th><th class="th thr">Pajak</th><th class="th thr">Total</th></tr></thead>
+        <tbody>
+          <tr><td class="td">Paket Fullday Meeting (100 pax) · makan siang</td><td class="td">NETT</td><td class="td num">15.000.000</td><td class="td num">1.500.000</td><td class="td num">1.650.000</td><td class="td num">18.150.000</td></tr>
+          <tr><td class="td">… · coffee break × 2</td><td class="td">NETT</td><td class="td num">8.000.000</td><td class="td num">800.000</td><td class="td num">880.000</td><td class="td num">9.680.000</td></tr>
+          <tr><td class="td">… · sewa ruang</td><td class="td">NETT</td><td class="td num">5.000.000</td><td class="td num">500.000</td><td class="td num">550.000</td><td class="td num">6.050.000</td></tr>
+          <tr><td class="td">… · peralatan</td><td class="td">NETT</td><td class="td num">2.000.000</td><td class="td num">200.000</td><td class="td num">220.000</td><td class="td num">2.420.000</td></tr>
+          <tr class="tot"><td class="td">Total</td><td class="td"></td><td class="td num">30.000.000</td><td class="td num">3.000.000</td><td class="td num">3.300.000</td><td class="td num">36.300.000</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:8px 24px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:#4a5361">
+      <span>Deposit di folio 58.080.000 membayar tagihan ini saat tutup hari (pelepasan deposit harian).</span>
+      <span>Makan siang dan coffee break bertaut resep: stok gudang Dapur banquet dipotong lewat antrean (100 pax × resep).</span>
+      <span class="sub">Satu sesi hanya bisa diposting sekali. Bila pax aktual berubah sesudahnya, koreksinya lewat penyesuaian folio dengan persetujuan.</span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #e3e6ea;margin-top:6px">
+      <a href="38-bq-acara-hari-ini.dc.html" class="btn">Batal</a>
+      <button class="btnp">Posting 36.300.000</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

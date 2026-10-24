@@ -57,6 +57,31 @@ Pola layar: halaman daftar selebar layar (tabel, chip filter, tombol "Baru") lal
 
 Contoh angka inventory saling cocok antarlayar: sirup di Bar 28,2 botol / 1.393.080 (rata-rata 49.400); F&B September food 31,1% aktual vs 28,3% teori, beverage 25,0% vs 22,0%; amenities 3 Sep 78 kamar, 142 tamu, 1.895.640.
 
+## Banquet (`docs/architecture/36-banquet.md`)
+
+Pola layar sama dengan Inventory: daftar selebar layar lalu halaman acara selebar layar dengan tab dan ringkasan di kanan. Dialog digambar di atas layar yang diredupkan.
+
+| File | Isi | PR banquet |
+|---|---|---|
+| `35-bq-kalender-harian.dc.html` | Kalender ruang harian: ruang × jam, Definit, opsi 1, opsi 2+ (garis putus), arsiran persiapan/bongkar, bagian yang terkunci oleh ruang gabungan, sesi lewat tengah malam | 1 |
+| `36-bq-kalender-mingguan.dc.html` | Kalender ruang mingguan: ruang × hari, hari ini disorot | 1 |
+| `37-bq-acara-daftar.dc.html` | Daftar acara: chip status dengan jumlah, sales, estimasi neto, kolom "perlu perhatian" (tanggal opsi lewat, deposit terlambat, sesi belum diposting) | 1 |
+| `38-bq-acara-hari-ini.dc.html` | Acara hari ini dan sesi belum diposting dari hari sebelumnya: garansi, aktual, ditagih, status BEO, tombol posting | 2 |
+| `39-bq-acara-sesi.dc.html` | Halaman acara, tab Sesi: pax perkiraan/garansi/aktual, tambah sesi dengan cek ketersediaan, ringkasan pemesan dan uang, transfer ke folio master grup | 1 (uang: 2) |
+| `40-bq-acara-item-paket.dc.html` | Tab Item & paket: paket nett dipecah ke komponen dan akun, tambah item ++ dengan diskon di atas batas (perlu persetujuan) | 2 |
+| `41-bq-acara-deposit.dc.html` | Tab Deposit & kebijakan: jadwal deposit kumulatif, deposit diterima, tingkat pembatalan dengan tingkat yang berlaku disorot | 2 |
+| `42-bq-beo.dc.html` | BEO revisi: bagian per departemen, "berubah sejak revisi X", tandai sudah dibaca, riwayat revisi | 3 |
+| `43-bq-konfirmasi.dc.html` | Dialog Konfirmasi (Definit): memakai folio dari "Terima DP", opsi lain yang kehilangan ruang, template kebijakan dan jadwal deposit, mode posting | 1 (uang: 2) |
+| `44-bq-pindah-sesi.dc.html` | Dialog Pindah sesi Tentative: peringkat di slot lama dan baru, siapa yang naik | 1 |
+| `45-bq-batal.dc.html` | Dialog Batalkan acara Definit: tingkat menurut hari, biaya (4510) atau hangus (4520), sisa deposit dikembalikan atau tetap | 2 |
+| `46-bq-posting-sesi.dc.html` | Dialog Posting sesi: pax ditagih = maks(garansi, aktual), baris folio per komponen, pelepasan deposit, potong stok | 2 (stok: 4) |
+| `47-bq-ruang.dc.html` | Master ruang acara dan ruang gabungan: kapasitas per setup, persiapan/bongkar, nonaktif | 1 |
+| `48-bq-paket.dc.html` | Master paket: harga per pax, mode Nett/++, komponen dengan bobot, contoh pemecahan 100 pax, resep dari produk POS | 1 (resep: 4) |
+| `49-bq-pengaturan.dc.html` | Pengaturan: Tentative bentrok (tolak/antrean), mode harga, posting otomatis/manual, batas diskon, gudang, jam operasi; template kebijakan (neto/gross) dan jadwal deposit; penerima BEO | 1 (uang: 2) |
+| `50-bq-laporan-forecast.dc.html` | Forecast pendapatan Definit vs Tentative per bulan dan jenis acara, konversi, sesi belum diposting | 4 |
+
+Contoh angka banquet saling cocok antarlayar dan dengan dokumen 36 bagian 10: paket Fullday Meeting 363.000 nett × 100 pax = 36.300.000 per sesi (neto 30.000.000, servis 3.000.000, pajak 3.300.000); BQ-000123 dua sesi, total kontrak 72.600.000, deposit 30/50/20 = 21.780.000 / 36.300.000 / 14.520.000; pembatalan 20 hari sebelum: 50% × 30.000.000 = 15.000.000, sisa deposit 14.040.000.
+
 Cara membaca:
 - Nilai warna, ukuran font, radius, jarak, dan tinggi tombol ada di atribut `style="…"`. Itu nilai yang dimaksud.
 - `<x-dc>`, `<helmet>`, `<sc-for>`, `<sc-if>` adalah format editor desain: `sc-for` = `v-for`, `sc-if` = `v-if`, dan `{{x}}` diisi dari `renderVals()` di bagian bawah file (data contoh).

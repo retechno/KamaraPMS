@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Pindah sesi Tentative</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.sub{font-size:12px;color:#626b77}
+.inp{height:40px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lb{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px}
+.box{border-radius:12px;padding:12px 14px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.slot{flex:1;border:1px solid #e3e6ea;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.big{font-size:20px;font-weight:700}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#5b6068;display:flex;align-items:center;justify-content:center;position:relative">
+  <div style="position:absolute;inset:0;background:#f6f7f9;opacity:.35"></div>
+  <section role="dialog" aria-labelledby="dlg-title" style="position:relative;width:680px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div style="padding:20px 24px 8px">
+      <div class="sub">BQ-000134 · Seminar Asosiasi Dokter · Tentative</div>
+      <h1 id="dlg-title" style="margin:4px 0 0;font-size:22px">Pindah sesi 1</h1>
+    </div>
+    <div style="padding:8px 24px;display:grid;grid-template-columns:1.3fr 1fr 1fr 1.3fr;gap:12px">
+      <label class="lb">Tanggal<input class="inp" value="Min 8 Nov 2026"></label>
+      <label class="lb">Mulai<input class="inp" value="15.00"></label>
+      <label class="lb">Selesai<input class="inp" value="19.00"></label>
+      <label class="lb">Ruang<select class="inp"><option>Saraswati A</option></select></label>
+    </div>
+    <div style="padding:8px 24px;display:flex;gap:12px">
+      <div class="slot">
+        <span class="sub">Slot lama · Sab 7 Nov 14.00–19.30</span>
+        <span class="big">Opsi 2 → dilepas</span>
+        <span>Rapat RT Perumahan Asri (BQ-000137) naik dari opsi 3 ke <strong>opsi 2</strong>; sales Dewi mendapat notifikasi.</span>
+      </div>
+      <div class="slot" style="border-color:#1f6f5c;background:#f1f8f5">
+        <span class="sub">Slot baru · Min 8 Nov 14.00–19.30</span>
+        <span class="big" style="color:#185a4a">Opsi 1</span>
+        <span>Tidak ada penahanan lain di Saraswati A pada jam ini (termasuk persiapan 60 dan bongkar 30 menit).</span>
+      </div>
+    </div>
+    <div style="padding:8px 24px">
+      <div class="box" style="background:#fffaf2;border:1px solid #e7b56a;color:#5c3608">
+        <strong>Anda akan menjadi opsi 1 di slot baru; posisi opsi 2 di slot lama dilepas.</strong>
+        <span>Memindah membuat penahanan baru. Bila slot baru sudah ditahan acara lain, sesi ini masuk antrean paling belakang di sana. Kembali ke slot lama nanti berarti antre dari belakang lagi.</span>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #e3e6ea;margin-top:10px">
+      <a href="35-bq-kalender-harian.dc.html" class="btn">Batal</a>
+      <button class="btnp">Pindahkan</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

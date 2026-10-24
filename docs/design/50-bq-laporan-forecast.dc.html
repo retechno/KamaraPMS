@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Laporan forecast banquet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.lk{font-size:13px;color:#4a5361;text-decoration:none;padding:4px 10px 4px 18px}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.tile{flex:1;background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+.tl{font-size:12px;color:#626b77}
+.tv{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 12px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:9px 12px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.bar{height:10px;border-radius:3px;display:inline-block;vertical-align:middle}
+.bd{background:#1f6f5c}
+.bt{background:#e0a24a}
+.tot td{font-weight:700;background:#f6f7f9}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Laporan</a>
+    <span class="lk" style="color:#1c2128;font-weight:600">Forecast pendapatan</span>
+    <a href="#" class="lk">Pendapatan &amp; okupansi ruang</a>
+    <a href="#" class="lk">Garansi vs aktual</a>
+    <a href="#" class="lk">Produksi per sales</a>
+    <a href="#" class="lk">Alasan lost</a>
+    <a href="#" class="lk">Jadwal acara harian</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="lk">Sesi belum diposting</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0;font-size:24px;flex:1">Forecast pendapatan banquet</h1>
+      <button class="chip on">Neto</button>
+      <button class="chip">Dengan servis &amp; pajak</button>
+      <button class="chip">Nov 2026 – Apr 2027</button>
+      <button class="btn">Cetak</button>
+      <button class="btn">Unduh CSV</button>
+    </div>
+    <div style="font-size:12px;color:#626b77">Per bulan tanggal sesi: estimasi neto acara Definit dan Tentative, dua baris yang tidak dijumlahkan. Inquiry tidak masuk forecast. Estimasi memakai pax garansi, atau pax perkiraan bila garansi belum ada.</div>
+
+    <div style="display:flex;gap:12px">
+      <div class="tile"><span class="tl">Definit, 6 bulan</span><span class="tv">612.400.000</span><span class="tl">38 acara</span></div>
+      <div class="tile"><span class="tl">Tentative, 6 bulan</span><span class="tv">287.900.000</span><span class="tl">17 acara · 4 lewat tanggal opsi</span></div>
+      <div class="tile"><span class="tl">Konversi 90 hari terakhir</span><span class="tv">64%</span><span class="tl">Definit ÷ (Definit + Lost)</span></div>
+      <div class="tile"><span class="tl">Sesi belum diposting</span><span class="tv" style="color:#9a3412">2</span><span class="tl">tertua 2 hari</span></div>
+    </div>
+
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Bulan</th><th class="th thr">Definit</th><th class="th thr">Tentative</th><th class="th" style="width:420px"></th><th class="th thr">Acara</th><th class="th thr">Rapat</th><th class="th thr">Pernikahan</th><th class="th thr">Gala &amp; lain</th></tr></thead>
+        <tbody>
+          <tr><td class="td">Nov 2026</td><td class="td num">198.600.000</td><td class="td num">61.500.000</td><td class="td"><span class="bar bd" style="width:280px"></span><br><span class="bar bt" style="width:87px"></span></td><td class="td num">14 + 5</td><td class="td num">96.100.000</td><td class="td num">0</td><td class="td num">102.500.000</td></tr>
+          <tr><td class="td">Des 2026</td><td class="td num">164.200.000</td><td class="td num">72.300.000</td><td class="td"><span class="bar bd" style="width:231px"></span><br><span class="bar bt" style="width:102px"></span></td><td class="td num">9 + 4</td><td class="td num">38.700.000</td><td class="td num">55.000.000</td><td class="td num">70.500.000</td></tr>
+          <tr><td class="td">Jan 2027</td><td class="td num">82.000.000</td><td class="td num">54.800.000</td><td class="td"><span class="bar bd" style="width:116px"></span><br><span class="bar bt" style="width:77px"></span></td><td class="td num">6 + 3</td><td class="td num">42.000.000</td><td class="td num">40.000.000</td><td class="td num">0</td></tr>
+          <tr><td class="td">Feb 2027</td><td class="td num">71.600.000</td><td class="td num">49.300.000</td><td class="td"><span class="bar bd" style="width:101px"></span><br><span class="bar bt" style="width:69px"></span></td><td class="td num">4 + 2</td><td class="td num">11.600.000</td><td class="td num">60.000.000</td><td class="td num">0</td></tr>
+          <tr><td class="td">Mar 2027</td><td class="td num">58.000.000</td><td class="td num">30.000.000</td><td class="td"><span class="bar bd" style="width:82px"></span><br><span class="bar bt" style="width:42px"></span></td><td class="td num">3 + 2</td><td class="td num">18.000.000</td><td class="td num">40.000.000</td><td class="td num">0</td></tr>
+          <tr><td class="td">Apr 2027</td><td class="td num">38.000.000</td><td class="td num">20.000.000</td><td class="td"><span class="bar bd" style="width:54px"></span><br><span class="bar bt" style="width:28px"></span></td><td class="td num">2 + 1</td><td class="td num">38.000.000</td><td class="td num">0</td><td class="td num">0</td></tr>
+          <tr class="tot"><td class="td">Total</td><td class="td num">612.400.000</td><td class="td num">287.900.000</td><td class="td"></td><td class="td num">38 + 17</td><td class="td num">244.400.000</td><td class="td num">195.000.000</td><td class="td num">173.000.000</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:10px 14px;font-size:12px;color:#626b77;display:flex;gap:16px"><span><span class="bar bd" style="width:14px"></span> Definit</span><span><span class="bar bt" style="width:14px"></span> Tentative</span><span>Kolom jenis acara memecah angka Definit. Klik bulan untuk daftar acaranya.</span></div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

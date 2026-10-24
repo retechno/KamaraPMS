@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Ruang acara</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:9px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.sel td{background:#f1f8f5}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.inp{height:38px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lb{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px}
+.chk input{width:18px;height:18px;accent-color:#1f6f5c}
+.cap{display:grid;grid-template-columns:1fr 90px;gap:6px 10px;align-items:center;font-size:13px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav">Laporan</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;gap:16px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h1 style="margin:0;font-size:24px;flex:1">Ruang acara</h1>
+        <button class="btn">Ruang gabungan baru</button>
+        <button class="btn">Ruang baru</button>
+      </div>
+      <section class="card" style="overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th class="th">Ruang</th><th class="th thr">Luas m²</th><th class="th thr">Theater</th><th class="th thr">Class</th><th class="th thr">U-shape</th><th class="th thr">Round</th><th class="th thr">Cocktail</th><th class="th thr">Board</th><th class="th">Persiapan / bongkar</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td class="td"><strong>Ballroom Saraswati</strong><div class="sub">Gabungan: Saraswati A + B</div></td><td class="td num">640</td><td class="td num">400</td><td class="td num">240</td><td class="td num">–</td><td class="td num">350</td><td class="td num">500</td><td class="td num">–</td><td class="td">60 / 30 menit</td></tr>
+            <tr><td class="td"><strong>Saraswati A</strong><div class="sub">Bagian dari Ballroom Saraswati</div></td><td class="td num">320</td><td class="td num">200</td><td class="td num">120</td><td class="td num">50</td><td class="td num">160</td><td class="td num">250</td><td class="td num">–</td><td class="td">60 / 30 menit</td></tr>
+            <tr><td class="td"><strong>Saraswati B</strong><div class="sub">Bagian dari Ballroom Saraswati</div></td><td class="td num">320</td><td class="td num">200</td><td class="td num">120</td><td class="td num">50</td><td class="td num">160</td><td class="td num">250</td><td class="td num">–</td><td class="td">60 / 30 menit</td></tr>
+            <tr><td class="td"><strong>Ubud 1</strong></td><td class="td num">180</td><td class="td num">150</td><td class="td num">100</td><td class="td num">40</td><td class="td num">80</td><td class="td num">150</td><td class="td num">–</td><td class="td">60 / 30 menit</td></tr>
+            <tr><td class="td"><strong>Ubud 2</strong></td><td class="td num">96</td><td class="td num">80</td><td class="td num">50</td><td class="td num">30</td><td class="td num">40</td><td class="td num">80</td><td class="td num">24</td><td class="td">30 / 30 menit</td></tr>
+            <tr><td class="td"><strong>Boardroom Kenanga</strong></td><td class="td num">42</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">14</td><td class="td">15 / 15 menit</td></tr>
+            <tr><td class="td"><strong>Taman Teratai</strong><div class="sub">Luar ruang</div></td><td class="td num">500</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">220</td><td class="td num">300</td><td class="td num">–</td><td class="td">120 / 60 menit</td></tr>
+            <tr><td class="td" style="color:#626b77">Ruang Jepun<div class="sub">Nonaktif sejak renovasi</div></td><td class="td num" style="color:#626b77">60</td><td class="td num" style="color:#626b77">40</td><td class="td num" style="color:#626b77">24</td><td class="td num" style="color:#626b77">–</td><td class="td num" style="color:#626b77">–</td><td class="td num" style="color:#626b77">–</td><td class="td num" style="color:#626b77">16</td><td class="td"><span class="pill">Nonaktif</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+      <div class="sub" style="font-size:12px">Ruang yang pernah dipakai sesi tidak bisa dihapus, hanya dinonaktifkan. Kapasitas kosong berarti setup itu tidak ditawarkan di ruang tersebut.</div>
+    </div>
+
+    <aside class="card" style="width:360px;flex-shrink:0;padding:16px 18px;display:flex;flex-direction:column;gap:12px;align-self:flex-start">
+      <h2 style="margin:0;font-size:16px">Ballroom Saraswati</h2>
+      <label class="lb">Nama<input class="inp" value="Ballroom Saraswati"></label>
+      <div class="lb">Gabungan dari ruang dasar
+        <label class="chk"><input type="checkbox" checked>Saraswati A</label>
+        <label class="chk"><input type="checkbox" checked>Saraswati B</label>
+        <label class="chk"><input type="checkbox">Ubud 1</label>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        <label class="lb">Persiapan (menit)<input class="inp" value="60"></label>
+        <label class="lb">Bongkar (menit)<input class="inp" value="30"></label>
+      </div>
+      <div class="lb">Kapasitas per setup
+        <div class="cap">
+          <span>Theater</span><input class="inp" value="400" aria-label="Kapasitas theater">
+          <span>Classroom</span><input class="inp" value="240" aria-label="Kapasitas classroom">
+          <span>Round table</span><input class="inp" value="350" aria-label="Kapasitas round table">
+          <span>Cocktail</span><input class="inp" value="500" aria-label="Kapasitas cocktail">
+        </div>
+      </div>
+      <div class="sub">Memesan Ballroom menahan Saraswati A dan B pada jam yang sama, dengan waktu persiapan dan bongkar Ballroom. Ruang dasar boleh ikut lebih dari satu gabungan; gabungan tidak bisa menjadi bagian gabungan lain.</div>
+      <button class="btnp">Simpan</button>
+    </aside>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

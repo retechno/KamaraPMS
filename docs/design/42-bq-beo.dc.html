@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>BEO sesi</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:36px;padding:0 12px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:13px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:36px;padding:0 14px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:13px;color:#fff}
+.tab{padding:10px 2px;font-size:14px;text-decoration:none;color:#4a5361;border-bottom:2px solid transparent}
+.tabon{color:#1c2128;font-weight:600;border-bottom-color:#1f6f5c}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600}
+.p-ok{background:#e3f2ee;color:#185a4a}
+.p-chg{background:#fdf1dc;color:#5c3608}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0}
+.dep{background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.chg{border-color:#e7b56a;background:#fffaf2}
+.dh{display:flex;align-items:center;gap:8px}
+.mark{background:#fdf1dc;border-radius:3px;padding:0 3px}
+.rev{padding:10px 0;border-bottom:1px solid #eef0f2;font-size:13px;display:flex;flex-direction:column;gap:2px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">BANQUET</div>
+    <a href="35-bq-kalender-harian.dc.html" class="nav">Kalender ruang</a>
+    <a href="37-bq-acara-daftar.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Acara</a>
+    <a href="38-bq-acara-hari-ini.dc.html" class="nav">Acara hari ini</a>
+    <a href="50-bq-laporan-forecast.dc.html" class="nav">Laporan</a>
+    <div class="sec">PENGATURAN BANQUET</div>
+    <a href="47-bq-ruang.dc.html" class="nav">Ruang acara</a>
+    <a href="48-bq-paket.dc.html" class="nav">Item &amp; paket</a>
+    <a href="49-bq-pengaturan.dc.html" class="nav">Kebijakan &amp; pengaturan</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:12px">
+    <a href="37-bq-acara-daftar.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start">← Acara</a>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="flex:1">
+        <div class="sub" style="font-size:12px">BQ-000123 · Rapat Tahunan PT Sinar Bali</div>
+        <h1 style="margin:2px 0 0;font-size:24px">BEO sesi 1 · revisi 3</h1>
+      </div>
+      <button class="btn">Sesi 1 · Jum 6 Nov ▾</button>
+      <button class="btn">Cetak PDF</button>
+    </div>
+    <nav style="display:flex;gap:22px;border-bottom:1px solid #e3e6ea" aria-label="Bagian acara">
+      <a href="39-bq-acara-sesi.dc.html" class="tab">Sesi</a>
+      <a href="40-bq-acara-item-paket.dc.html" class="tab">Item &amp; paket</a>
+      <a href="41-bq-acara-deposit.dc.html" class="tab">Deposit &amp; kebijakan</a>
+      <a href="42-bq-beo.dc.html" class="tab tabon">BEO</a>
+      <a href="#" class="tab">Dokumen</a>
+      <a href="#" class="tab">Folio</a>
+    </nav>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="padding:14px 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 24px">
+          <div class="kv"><span class="sub">Tanggal</span><span>Jum 6 Nov 2026</span></div>
+          <div class="kv"><span class="sub">Jam</span><span>08.00–17.00</span></div>
+          <div class="kv"><span class="sub">Ruang · setup</span><span>Ubud 1 · classroom</span></div>
+          <div class="kv"><span class="sub">Pax garansi</span><span class="mark">100 (sebelumnya 90)</span></div>
+          <div class="kv"><span class="sub">Contact</span><span>Bu Ratna</span></div>
+          <div class="kv"><span class="sub">Paket</span><span>Fullday Meeting, nett</span></div>
+        </section>
+
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+          <section class="dep chg">
+            <div class="dh"><strong style="flex:1">Dapur</strong><span class="pill p-chg">Berubah sejak rev. 2</span></div>
+            <span>Coffee break 10.00 dan 15.00: <span class="mark">100 pax</span>. Makan siang buffet 12.00, 2 menu vegetarian, 1 alergi kacang (meja depan).</span>
+            <div style="display:flex;gap:8px;align-items:center"><span class="sub" style="flex:1">Kepala: Chef Wayan · wakil: Putu</span><button class="btnp">Tandai sudah dibaca</button></div>
+          </section>
+          <section class="dep chg">
+            <div class="dh"><strong style="flex:1">F&amp;B service</strong><span class="pill p-chg">Berubah sejak rev. 2</span></div>
+            <span>6 pramusaji; air mineral di meja diganti tiap sesi; <span class="mark">tambah 2 meja classroom</span>.</span>
+            <span class="sub">Kepala: Komang Ari</span>
+          </section>
+          <section class="dep">
+            <div class="dh"><strong style="flex:1">Housekeeping</strong><span class="pill p-ok">Dibaca rev. 3</span></div>
+            <span>Toilet lantai 2 dicek tiap 2 jam; lobi ruang Ubud dibersihkan sebelum 07.30.</span>
+          </section>
+          <section class="dep">
+            <div class="dh"><strong style="flex:1">Engineering</strong><span class="pill p-ok">Dibaca rev. 3</span></div>
+            <span>LCD + layar 3 m, 2 mic wireless, 1 podium; AC 23 °C sejak 07.00.</span>
+          </section>
+          <section class="dep">
+            <div class="dh"><strong style="flex:1">Security</strong><span class="pill p-ok">Dibaca rev. 1</span></div>
+            <span>Parkir 30 mobil di area timur; tidak berubah sejak rev. 1.</span>
+          </section>
+          <section class="dep">
+            <div class="dh"><strong style="flex:1">Front office</strong><span class="pill p-ok">Dibaca rev. 3</span></div>
+            <span>Papan acara di lobi; 24 kamar grup GRP-0042 check-in sehari sebelumnya.</span>
+          </section>
+        </div>
+      </div>
+
+      <aside style="width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="padding:14px 16px">
+          <h2 style="margin:0 0 4px;font-size:15px">Riwayat revisi</h2>
+          <div class="rev"><strong>Revisi 3 · Rab 4 Nov, 14.20</strong><span>Dewi: pax garansi 90 → 100; catatan dapur dan F&amp;B service diubah.</span><span class="sub">Notifikasi ke 4 orang (dapur, F&amp;B service)</span></div>
+          <div class="rev"><strong>Revisi 2 · Sen 26 Okt, 10.05</strong><span>Dewi: engineering menambah 2 mic wireless.</span></div>
+          <div class="rev" style="border-bottom:0"><strong>Revisi 1 · Jum 2 Okt, 16.40</strong><span>Hendra: acara menjadi Definit.</span></div>
+          <a href="#" style="font-size:13px">Lihat BEO revisi 2</a>
+        </section>
+        <div class="sub" style="padding:0 4px">Setiap simpan setelah Definit membuat satu revisi. Bagian yang berubah sejak revisi terakhir yang dibaca departemen ditandai, dan kepala serta wakilnya mendapat notifikasi.</div>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
