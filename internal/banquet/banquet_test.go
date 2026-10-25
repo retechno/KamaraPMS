@@ -71,7 +71,7 @@ func setup(t *testing.T) *fx {
 	tn := e.Tenant(t, "ABC")
 	p := e.Property(t, tn.ID, "BALI")
 	f := &fx{Env: e, tenantID: tn.ID, propID: p.ID, admin: roomstest.Admin(tn.ID)}
-	f.svc = banquet.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy)
+	f.svc = banquet.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, e.Folios, e.Billing, e.IAM)
 	f.mgr = e.User(t, tn.ID, p.ID, auth.PermBanquetRead, auth.PermBanquetManage, auth.PermBanquetConfirm, auth.PermBanquetSetup)
 	f.office = e.User(t, tn.ID, p.ID, auth.PermBanquetManage)
 	f.reader = e.User(t, tn.ID, p.ID, auth.PermBanquetRead)
@@ -137,7 +137,7 @@ func (f *fx) tentative(t *testing.T, name string, roomID int64, date, start, end
 func (f *fx) definite(t *testing.T, name string, roomID int64, date, start, end string) banquet.Event {
 	t.Helper()
 	ev := f.tentative(t, name, roomID, date, start, end)
-	ev, err := f.svc.Confirm(f.mgr, f.propID, ev.ID)
+	ev, err := f.svc.Confirm(f.mgr, f.propID, ev.ID, banquet.ConfirmInput{})
 	must(t, err)
 	return ev
 }
@@ -199,7 +199,7 @@ func TestASecondDefiniteInTheSameRoomIsRefused(t *testing.T) {
 
 	// a QUEUE option takes its place behind; it cannot become definite
 	y := f.tentative(t, "Meeting", f.a.ID, "2026-11-07", "15:00", "19:00")
-	_, err := f.svc.Confirm(f.mgr, f.propID, y.ID)
+	_, err := f.svc.Confirm(f.mgr, f.propID, y.ID, banquet.ConfirmInput{})
 	_ = code(t, err, "BANQUET_OPTION_NOT_FIRST")
 
 	// by direct SQL the exclusion answers 23P01 and the error map names it
@@ -276,7 +276,7 @@ func TestASessionAfterMidnightAndAMultiDayEvent(t *testing.T) {
 	}
 	multi, err = f.svc.MakeTentative(f.office, f.propID, multi.ID, banquet.TentativeInput{OptionUntil: day("2026-10-20")})
 	must(t, err)
-	multi, err = f.svc.Confirm(f.mgr, f.propID, multi.ID)
+	multi, err = f.svc.Confirm(f.mgr, f.propID, multi.ID, banquet.ConfirmInput{})
 	must(t, err)
 	if multi.Status != banquet.StatusDefinite || len(multi.Sessions) != 3 {
 		t.Fatalf("event: %+v", multi)
@@ -330,14 +330,14 @@ func TestTheQueueOfOptions(t *testing.T) {
 		t.Fatalf("ranks %d %d %d, want 1 2 1", f.rank(t, x.ID), f.rank(t, y.ID), f.rank(t, z.ID))
 	}
 	// Y cannot become definite while X holds
-	e, err := f.svc.Confirm(f.mgr, f.propID, y.ID)
+	e, err := f.svc.Confirm(f.mgr, f.propID, y.ID, banquet.ConfirmInput{})
 	_ = e
 	ce := code(t, err, "BANQUET_OPTION_NOT_FIRST")
 	if ce.Context["holder_event_number"] != x.Number {
 		t.Fatalf("the holder is %v, want %s", ce.Context["holder_event_number"], x.Number)
 	}
 	// X is confirmed: Y loses its room and its salesperson is told, once
-	_, err = f.svc.Confirm(f.mgr, f.propID, x.ID)
+	_, err = f.svc.Confirm(f.mgr, f.propID, x.ID, banquet.ConfirmInput{})
 	must(t, err)
 	if n := f.notices(t, f.office, banquet.NoticeLost); n != 1 {
 		t.Fatalf("%d OPTION_LOST notices, want 1", n)
@@ -399,7 +399,7 @@ func TestLosingOptionOnePromotesOptionTwo(t *testing.T) {
 	if n := f.Count(t, `SELECT count(*) FROM banquet_holds WHERE event_id = $1`, x.ID); n != 0 {
 		t.Fatalf("%d holds left for a lost event", n)
 	}
-	_, err = f.svc.Confirm(f.mgr, f.propID, y.ID)
+	_, err = f.svc.Confirm(f.mgr, f.propID, y.ID, banquet.ConfirmInput{})
 	must(t, err)
 }
 
@@ -580,8 +580,8 @@ func TestTwoRequestsForTheSameRoomHaveOneWinner(t *testing.T) {
 	ctxX, traceX := db.WithLockTrace(f2.mgr)
 	ctxY, traceY := db.WithLockTrace(f2.mgr)
 	errs = race(t,
-		func() error { _, err := f2.svc.Confirm(ctxX, f2.propID, x.ID); return err },
-		func() error { _, err := f2.svc.Confirm(ctxY, f2.propID, y.ID); return err })
+		func() error { _, err := f2.svc.Confirm(ctxX, f2.propID, x.ID, banquet.ConfirmInput{}); return err },
+		func() error { _, err := f2.svc.Confirm(ctxY, f2.propID, y.ID, banquet.ConfirmInput{}); return err })
 	oneOK(t, errs, "BANQUET_OPTION_NOT_FIRST")
 	assertLockOrder(t, traceX)
 	assertLockOrder(t, traceY)
@@ -601,7 +601,7 @@ func TestAConfirmationAgainstACreationAndAMove(t *testing.T) {
 	ctxM, traceM := db.WithLockTrace(f.mgr)
 	ctxO, traceO := db.WithLockTrace(f.office)
 	errs := race(t,
-		func() error { _, err := f.svc.Confirm(ctxM, f.propID, x.ID); return err },
+		func() error { _, err := f.svc.Confirm(ctxM, f.propID, x.ID, banquet.ConfirmInput{}); return err },
 		func() error {
 			_, err := f.svc.MakeTentative(ctxO, f.propID, late.ID, banquet.TentativeInput{OptionUntil: day("2026-10-20")})
 			return err
@@ -625,7 +625,7 @@ func TestAConfirmationAgainstACreationAndAMove(t *testing.T) {
 	ctxM, traceM = db.WithLockTrace(g.mgr)
 	ctxO, traceO = db.WithLockTrace(g.office)
 	errs = race(t,
-		func() error { _, err := g.svc.Confirm(ctxM, g.propID, p.ID); return err },
+		func() error { _, err := g.svc.Confirm(ctxM, g.propID, p.ID, banquet.ConfirmInput{}); return err },
 		func() error { _, err := g.svc.UpdateSession(ctxO, g.propID, q.ID, q.Sessions[0].ID, in); return err })
 	for _, err := range errs {
 		must(t, err)

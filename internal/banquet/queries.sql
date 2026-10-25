@@ -2,14 +2,15 @@
 
 -- ---------------------------------------------------------------- settings
 -- name: GetSettings :one
-SELECT tentative_conflict_mode, operating_from, operating_to
+SELECT tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval
 FROM banquet_settings WHERE property_id = @property_id;
 
 -- name: UpsertSettings :exec
-INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, updated_by)
-VALUES (@property_id, @tenant_id, @tentative_conflict_mode, sqlc.narg(operating_from), sqlc.narg(operating_to), sqlc.narg(actor_id))
+INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval, updated_by)
+VALUES (@property_id, @tenant_id, @tentative_conflict_mode, sqlc.narg(operating_from), sqlc.narg(operating_to), @posting_mode, @default_price_mode, @max_discount_pct_no_approval, sqlc.narg(actor_id))
 ON CONFLICT (property_id) DO UPDATE
    SET tentative_conflict_mode = EXCLUDED.tentative_conflict_mode, operating_from = EXCLUDED.operating_from, operating_to = EXCLUDED.operating_to,
+       posting_mode = EXCLUDED.posting_mode, default_price_mode = EXCLUDED.default_price_mode, max_discount_pct_no_approval = EXCLUDED.max_discount_pct_no_approval,
        updated_by = EXCLUDED.updated_by, updated_at = now();
 
 -- ---------------------------------------------------------------- rooms

@@ -32,6 +32,7 @@ type Folio struct {
 	BillToCompanyID *int64
 	BookingGroupID  *int64
 	OutletID        *int64
+	BanquetEventID  *int64
 }
 
 type FolioItem struct {

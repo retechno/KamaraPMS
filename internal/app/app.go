@@ -169,7 +169,7 @@ func New(d Deps) *App {
 	if pool, ok := d.DB.(*pgxpool.Pool); ok {
 		posSvc.SetEventPool(pool) // the streams of events wake on NOTIFY (they also read on a timer)
 	}
-	banquetSvc := banquet.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc)
+	banquetSvc := banquet.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, foliosSvc, billingSvc, iamSvc)
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})         // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
@@ -284,10 +284,25 @@ func (o outletClose) NightAuditOutlets(ctx context.Context, tenantID, propertyID
 	for _, i := range w {
 		warnings = append(warnings, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref, Params: i.Params})
 	}
+	if err != nil {
+		return blockers, warnings, err
+	}
+	// the sessions of the banquet the close would not post, or could not
+	bb, bw, err := o.banquet.NightAuditChecks(ctx, tenantID, propertyID)
+	for _, i := range bb {
+		blockers = append(blockers, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref, Params: i.Params})
+	}
+	for _, i := range bw {
+		warnings = append(warnings, nightaudit.OutletIssue{Code: i.Code, Message: i.Message, Ref: i.Ref, Params: i.Params})
+	}
 	return blockers, warnings, err
 }
 
 func (o outletClose) ExpireOutletLocks(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date) error {
+	// the sessions of the banquet are posted after the room charges and before the locks of the outlets end (36 4.5): the folios of the events, then the events
+	if _, err := o.banquet.PostDueSessions(ctx, p, propertyID, bd); err != nil {
+		return err
+	}
 	if _, err := o.folios.ExpireOutletLocks(ctx, p, propertyID, bd); err != nil {
 		return err
 	}

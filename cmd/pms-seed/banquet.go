@@ -19,7 +19,8 @@ import (
 //	types       Pernikahan, Rapat, Gala dinner, Seminar
 //	reasons     why an event is lost or cancelled
 //	items       a few menus, a drink package, equipment, decoration and the rental of a room
-//	packages    "Fullday Meeting"
+//	packages    "Fullday Meeting" at 363,000 nett per guest, four components (PR 2)
+//	policy      the template STANDARD (default): deposits 30% at signature, 50% at H-30, 20% at H-7; cancellation tiers 0/25/50/100% of the net revenue (PR 2)
 
 type bqRoom struct {
 	code, name      string
@@ -55,18 +56,20 @@ type bqItem struct {
 }
 
 var bqItems = []bqItem{
-	{code: "COFFEEBRK", name: "Coffee break", kind: "MENU", basis: "PER_PAX", price: "45000", charge: billingconfig.TypeFoodBeverage, fb: "FOOD"},
-	{code: "LUNCH", name: "Makan siang prasmanan", kind: "MENU", basis: "PER_PAX", price: "135000", charge: billingconfig.TypeFoodBeverage, fb: "FOOD"},
+	{code: "COFFEEBRK", name: "Coffee break", kind: "MENU", basis: "PER_PAX", price: "40000", charge: billingconfig.TypeFoodBeverage, fb: "FOOD"},
+	{code: "LUNCH", name: "Makan siang prasmanan", kind: "MENU", basis: "PER_PAX", price: "150000", charge: billingconfig.TypeFoodBeverage, fb: "FOOD"},
 	{code: "DINNER", name: "Makan malam set menu", kind: "MENU", basis: "PER_PAX", price: "225000", charge: billingconfig.TypeFoodBeverage, fb: "FOOD"},
 	{code: "SOFTDRINK", name: "Paket minuman ringan", kind: "DRINK_PACKAGE", basis: "PER_PAX", price: "60000", charge: billingconfig.TypeFoodBeverage, fb: "BEVERAGE"},
 	{code: "PROJECTOR", name: "Proyektor dan layar", kind: "EQUIPMENT", basis: "PER_SESSION", price: "750000", charge: "SERVICE"},
 	{code: "SOUND", name: "Sound system", kind: "EQUIPMENT", basis: "PER_SESSION", price: "1500000", charge: "SERVICE"},
 	{code: "FLOWERS", name: "Dekorasi bunga meja", kind: "DECOR", basis: "PER_UNIT", price: "350000", charge: "SERVICE"},
+	{code: "ROOMPAX", name: "Sewa ruang per tamu", kind: "ROOM_RENTAL", basis: "PER_PAX", price: "50000", charge: billingconfig.TypeRoom},
+	{code: "EQUIPPAX", name: "Peralatan rapat per tamu", kind: "EQUIPMENT", basis: "PER_PAX", price: "20000", charge: "SERVICE"},
 	{code: "ROOMRENT", name: "Sewa ruang per jam", kind: "ROOM_RENTAL", basis: "PER_HOUR", price: "500000", charge: billingconfig.TypeRoom},
 }
 
 func seedBanquet(e *env, dryRun bool) error {
-	svc := banquet.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
+	svc := banquet.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, nil, e.bc, nil) // the seed makes masters and templates only: no folio, no approval
 	_, err := seedBanquetWith(e.ctx, svc, e.bc, e.propertyID, dryRun, os.Stdout)
 	return err
 }
@@ -227,7 +230,7 @@ func seedBanquetWith(ctx context.Context, svc *banquet.Service, bc *billingconfi
 	say("package", "FULLDAY", havePkg)
 	if !havePkg && !dryRun {
 		var comps []banquet.ComponentInput
-		for _, c := range []struct{ code, qty string }{{"COFFEEBRK", "2"}, {"LUNCH", "1"}, {"SOFTDRINK", "1"}} {
+		for _, c := range []struct{ code, qty string }{{"LUNCH", "1"}, {"COFFEEBRK", "2"}, {"ROOMPAX", "1"}, {"EQUIPPAX", "1"}} {
 			if id, ok := itemID[c.code]; ok {
 				comps = append(comps, banquet.ComponentInput{ItemID: id, QtyPerPax: decimal.RequireFromString(c.qty)})
 			}
@@ -235,8 +238,40 @@ func seedBanquetWith(ctx context.Context, svc *banquet.Service, bc *billingconfi
 		if len(comps) == 0 {
 			_, _ = fmt.Fprintln(out, "package FULLDAY: skipped, no item to put in it")
 			made--
-		} else if _, err := svc.CreatePackage(ctx, pid, banquet.PackageInput{Code: "FULLDAY", Name: "Fullday Meeting", PricePerPax: decimal.RequireFromString("285000"), Components: comps}); err != nil {
+		} else if _, err := svc.CreatePackage(ctx, pid, banquet.PackageInput{Code: "FULLDAY", Name: "Fullday Meeting", PricePerPax: decimal.RequireFromString("363000"), Components: comps}); err != nil {
 			return 0, fmt.Errorf("package FULLDAY: %w", err)
+		}
+	}
+
+	// the policy template: a starting point copied to an event when it is confirmed
+	templates, err := svc.ListPolicyTemplates(ctx, pid, nil)
+	if err != nil {
+		return 0, err
+	}
+	haveTemplate := false
+	for _, tpl := range templates {
+		haveTemplate = haveTemplate || tpl.Code == "STANDARD"
+	}
+	say("policy template", "STANDARD", haveTemplate)
+	if !haveTemplate && !dryRun {
+		days := func(n int) *int { return &n }
+		pct := decimal.RequireFromString
+		in := banquet.PolicyTemplateInput{
+			Code: "STANDARD", Name: "Standar", IsDefault: len(templates) == 0, Base: "NET",
+			Deposits: []banquet.TemplateDeposit{
+				{Seq: 1, Label: "Tanda tangan", Percent: pct("30")},
+				{Seq: 2, Label: "H-30", DaysBefore: days(30), Percent: pct("50")},
+				{Seq: 3, Label: "H-7", DaysBefore: days(7), Percent: pct("20")},
+			},
+			Tiers: []banquet.TierInput{
+				{DaysFrom: 60, Percent: pct("0"), Action: "FEE"},
+				{DaysFrom: 30, DaysTo: days(59), Percent: pct("25"), Action: "FEE"},
+				{DaysFrom: 7, DaysTo: days(29), Percent: pct("50"), Action: "FEE"},
+				{DaysFrom: 0, DaysTo: days(6), Percent: pct("100"), Action: "FEE"},
+			},
+		}
+		if _, err := svc.CreatePolicyTemplate(ctx, pid, in); err != nil {
+			return 0, fmt.Errorf("policy template STANDARD: %w", err)
 		}
 	}
 

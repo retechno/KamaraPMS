@@ -89,6 +89,10 @@ type Settings struct {
 	TentativeConflictMode string           `json:"tentative_conflict_mode"`
 	OperatingFrom         *civil.TimeOfDay `json:"operating_from"`
 	OperatingTo           *civil.TimeOfDay `json:"operating_to"`
+	// The money (PR 2): who posts the sessions (AUTO at the close, MANUAL by the office), the mode a new line starts with, and the discount (percent) that needs no approval.
+	PostingMode              string          `json:"posting_mode"`
+	DefaultPriceMode         string          `json:"default_price_mode"`
+	MaxDiscountPctNoApproval decimal.Decimal `json:"max_discount_pct_no_approval"`
 }
 
 // SettingsInput changes the settings.
@@ -96,6 +100,10 @@ type SettingsInput struct {
 	TentativeConflictMode string           `json:"tentative_conflict_mode"`
 	OperatingFrom         *civil.TimeOfDay `json:"operating_from"`
 	OperatingTo           *civil.TimeOfDay `json:"operating_to"`
+	// A money setting that is left out keeps its value.
+	PostingMode              string           `json:"posting_mode"`
+	DefaultPriceMode         string           `json:"default_price_mode"`
+	MaxDiscountPctNoApproval *decimal.Decimal `json:"max_discount_pct_no_approval"`
 }
 
 // RoomPart is a base room of a combined room.
@@ -385,10 +393,14 @@ type TentativeInput struct {
 	OptionUntil civil.Date `json:"option_until"`
 }
 
-// CloseInput loses or cancels an event: the reason is required.
+// CloseInput loses or cancels an event: the reason is required. The money of the close (PR 2) is optional: the amount of the fee or of the forfeit the person confirms (nothing: the fee of the policy
+// for a definite event, nothing for the others), the action (FEE, or FORFEIT of the deposits received) and, for an amount below the policy, why.
 type CloseInput struct {
-	ReasonID   int64   `json:"reason_id"`
-	ReasonNote *string `json:"reason_note"`
+	ReasonID   int64            `json:"reason_id"`
+	ReasonNote *string          `json:"reason_note"`
+	Amount     *decimal.Decimal `json:"amount"`
+	Action     string           `json:"action"`
+	FeeReason  *string          `json:"fee_reason"`
 }
 
 // AvailabilityInput asks for the room check of a session before it is saved (a dry run).

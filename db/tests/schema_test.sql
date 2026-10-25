@@ -266,13 +266,13 @@ INSERT INTO charge_codes (tenant_id, property_id, code, name, charge_type, price
     (tn('ABC'), pr('BALI'), 'NETT',        'Room nett',   'ROOM',    'INCLUSIVE'),
     (tn('ABC'), pr('BALI'), 'LAUNDRY',     'Laundry',     'SERVICE', 'EXCLUSIVE');
 
-SELECT expect_ok('seeding creates the twelve standard charge codes once (idempotent)',
-    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 12 THEN 1 ELSE 0 END)$q$,
+SELECT expect_ok('seeding creates the eighteen standard charge codes once (idempotent)',
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 18 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('XYZ'), pr('SG'), NULL) = 0 THEN 1 ELSE 0 END)$q$,
-    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_codes WHERE property_id = pr('SG') AND is_system AND price_mode = 'EXCLUSIVE') = 12 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_codes WHERE property_id = pr('SG') AND is_system AND price_mode = 'EXCLUSIVE') = 18 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN (SELECT count(*) FROM charge_code_taxes WHERE property_id = pr('SG')) = 0 THEN 1 ELSE 0 END)$q$);
 SELECT expect_ok('seeding only fills gaps and leaves existing codes alone',
-    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('ABC'), pr('BALI'), NULL) = 9 THEN 1 ELSE 0 END)$q$,
+    $q$SELECT 1 / (CASE WHEN seed_charge_codes(tn('ABC'), pr('BALI'), NULL) = 15 THEN 1 ELSE 0 END)$q$,
     $q$SELECT 1 / (CASE WHEN (SELECT NOT is_system FROM charge_codes WHERE id = cc('ROOM')) THEN 1 ELSE 0 END)$q$);
 
 INSERT INTO charge_code_taxes (tenant_id, property_id, charge_code_id, tax_id, sequence) VALUES
@@ -1956,7 +1956,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('inv_approval_steps', 'PLAN', 'the snapshot of a level and the total the approver saw'), ('inv_approval_edits', 'PLAN', 'what an approver changed: a quantity or an estimated price'),
     ('inv_purchase_orders', 'PLAN', 'an order to a supplier: money to be paid, not yet owed'), ('inv_po_lines', 'PLAN', 'the price and the quantity ordered'),
     ('inv_requisitions', 'PLAN', 'a store requisition: an estimate of the value asked'), ('inv_requisition_lines', 'PLAN', 'the quantity asked and sent'),
-    ('inv_amenity_plan_lines', 'CONFIG', 'the quantities of the amenities plan');
+    ('inv_amenity_plan_lines', 'CONFIG', 'the quantities of the amenities plan'),
+    ('banquet_events', 'PLAN', 'the contract value estimate of an event: an estimate kept for the list, the money is in the ledger'), ('banquet_event_lines', 'PLAN', 'what is sold in a session with its frozen price: money to be charged when the session is posted'),
+    ('banquet_line_components', 'PLAN', 'the split of a package line over its components, frozen with the line'), ('banquet_deposit_schedule', 'PLAN', 'the deposits asked of the customer: a schedule, the payments are in the ledger');
 DO $$
 DECLARE v_missing text;
 BEGIN

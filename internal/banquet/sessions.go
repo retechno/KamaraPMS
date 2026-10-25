@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/banquet/banquetdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -185,6 +187,11 @@ func (s *Service) UpdateSession(ctx context.Context, propertyID, eventID, sessio
 		if old.Status != "ACTIVE" {
 			return apperr.Conflict("SESSION_CANCELLED", "a cancelled session cannot be changed")
 		}
+		if posted, err := s.q(ctx).SessionHasPosting(ctx, banquetdb.SessionHasPostingParams{PropertyID: propertyID, SessionID: sessionID}); err != nil {
+			return err
+		} else if posted {
+			return apperr.Conflict("SESSION_POSTED", "the session is posted: correct it with an adjustment on the folio")
+		}
 		if hdr.Status != StatusInquiry && (in.RoomID == nil || in.StartTime == nil) {
 			return invalid("session", fieldErr("room_id", "REQUIRED", "a room and the hours are needed to hold a room"))
 		}
@@ -212,6 +219,9 @@ func (s *Service) UpdateSession(ctx context.Context, propertyID, eventID, sessio
 			if err := s.placeHolds(ctx, propertyID, sn, eventID, holdKindOf(hdr.Status), mode.TentativeConflictMode); err != nil {
 				return err
 			}
+		}
+		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
+			return err
 		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
 		if err != nil {
@@ -242,6 +252,11 @@ func (s *Service) CancelSession(ctx context.Context, propertyID, eventID, sessio
 			return err
 		}
 		q := s.q(ctx)
+		if posted, err := q.SessionHasPosting(ctx, banquetdb.SessionHasPostingParams{PropertyID: propertyID, SessionID: sessionID}); err != nil {
+			return err
+		} else if posted {
+			return apperr.Conflict("SESSION_POSTED", "the session is posted: correct it with an adjustment on the folio")
+		}
 		n, err := q.CancelSession(ctx, banquetdb.CancelSessionParams{TenantID: p.TenantID, PropertyID: propertyID, EventID: eventID, ID: sessionID})
 		if err != nil {
 			return err
@@ -250,6 +265,9 @@ func (s *Service) CancelSession(ctx context.Context, propertyID, eventID, sessio
 			return apperr.Conflict("SESSION_CANCELLED", "the session is cancelled already")
 		}
 		if err := s.releaseHolds(ctx, p.TenantID, propertyID, eventID, &sessionID, bd); err != nil {
+			return err
+		}
+		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
 			return err
 		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
@@ -439,15 +457,15 @@ func (s *Service) MakeTentative(ctx context.Context, propertyID, eventID int64, 
 }
 
 // Confirm turns a tentative event into a definite one (banquet.confirm): every session must be first in its queue, the holds become exclusive, and the options queued behind lose their room.
-// The folio, the cancellation policy and the deposit schedule of the event are made here in PR 2 (36 4.4); this PR has no money.
-func (s *Service) Confirm(ctx context.Context, propertyID, eventID int64) (Event, error) {
+// The folio (the one a deposit opened, or a new one), the cancellation policy and the deposit schedule of the event are made here (36 4.4).
+func (s *Service) Confirm(ctx context.Context, propertyID, eventID int64, in ConfirmInput) (Event, error) {
 	p, err := s.need(ctx, propertyID, auth.PermBanquetConfirm)
 	if err != nil {
 		return Event{}, err
 	}
 	var out Event
 	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
-		// PR 2: the EVENT folio of the event is locked here when it exists (level 42), before the rooms and the event (45)
+		// the folio is read, not written: a deposit may have opened it, and nothing here changes it, so it is not locked (the level 42 would come after the event)
 		hdr, err := s.lockSchedule(ctx, propertyID, eventID, nil)
 		if err != nil {
 			return err
@@ -520,83 +538,38 @@ func (s *Service) Confirm(ctx context.Context, propertyID, eventID int64) (Event
 				}
 			}
 		}
-		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
+		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
+			return err
+		}
+		tpl, err := s.copyPolicy(ctx, p, propertyID, bd, eventID, in.PolicyTemplateID)
 		if err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.event_confirmed", "banquet_event", eventID, out.Number, map[string]any{"status": old.Status}, map[string]any{"status": out.Status}))
-	})
-	return out, err
-}
-
-// MarkLost closes an inquiry or a tentative event that the customer did not take (banquet.manage); the reason is required and the holds are released.
-func (s *Service) MarkLost(ctx context.Context, propertyID, eventID int64, in CloseInput) (Event, error) {
-	return s.closeEvent(ctx, propertyID, eventID, in, StatusLost)
-}
-
-// CancelEvent cancels an event (banquet.manage for an inquiry or a tentative one, banquet.confirm for a definite one); the reason is required and the holds are released.
-func (s *Service) CancelEvent(ctx context.Context, propertyID, eventID int64, in CloseInput) (Event, error) {
-	return s.closeEvent(ctx, propertyID, eventID, in, StatusCancelled)
-}
-
-func (s *Service) closeEvent(ctx context.Context, propertyID, eventID int64, in CloseInput, target string) (Event, error) {
-	p, err := s.need(ctx, propertyID, auth.PermBanquetManage)
-	if err != nil {
-		return Event{}, err
-	}
-	if in.ReasonID < 1 {
-		return Event{}, invalidCode("REASON_REQUIRED", "reason_id", "a lost or cancelled event has a reason")
-	}
-	note := blankToNil(in.ReasonNote)
-	var out Event
-	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
-		hdr, err := s.lockSchedule(ctx, propertyID, eventID, nil)
+		mh, err := q.EventMoney(ctx, banquetdb.EventMoneyParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID})
 		if err != nil {
 			return err
 		}
-		allowed := hdr.Status == StatusInquiry || hdr.Status == StatusTentative || (target == StatusCancelled && hdr.Status == StatusDefinite)
-		if !allowed {
-			return apperr.Conflict("EVENT_STATUS_INVALID", "the event cannot be "+strings.ToLower(target)+" from its status").WithContext("status", hdr.Status)
+		f, err := s.folios.EventFolioOf(ctx, p.TenantID, propertyID, eventID)
+		if err != nil {
+			return err
 		}
-		if hdr.Status == StatusDefinite {
-			if err := s.authz.Require(ctx, propertyID, auth.PermBanquetConfirm); err != nil {
+		if f == nil {
+			if f0, err := s.folios.OpenEventFolio(ctx, p, propertyID, eventID, mh.BookerCompanyID); err != nil {
+				return err
+			} else if err := s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.folio_opened", "banquet_event", eventID, mh.Number, nil, map[string]any{"folio_id": f0.ID, "folio_number": f0.Number})); err != nil {
 				return err
 			}
 		}
-		q := s.q(ctx)
-		reason, err := q.GetReason(ctx, banquetdb.GetReasonParams{TenantID: p.TenantID, PropertyID: propertyID, ID: in.ReasonID})
-		if err != nil {
-			return orNotFound(err, invalidCode("REASON_NOT_FOUND", "reason_id", "no such reason in this property"))
-		}
-		want := ReasonLost
-		if target == StatusCancelled {
-			want = ReasonCancel
-		}
-		if reason.Kind != want || !reason.IsActive {
-			return invalidCode("REASON_NOT_FOUND", "reason_id", "an active reason of the kind "+want+" is needed")
-		}
-		old, err := s.event(ctx, p.TenantID, propertyID, eventID)
-		if err != nil {
-			return err
-		}
-		if err := s.releaseHolds(ctx, p.TenantID, propertyID, eventID, nil, bd); err != nil {
-			return err
-		}
-		now := s.clock.Now()
-		if err := q.SetEventStatus(ctx, banquetdb.SetEventStatusParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID, Status: target, ReasonID: &in.ReasonID, ReasonNote: note,
-			ClosedAt: &now, ActorID: p.ActorID()}); err != nil {
-			return err
-		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
 		if err != nil {
 			return err
 		}
-		action := "banquet.event_lost"
-		if target == StatusCancelled {
-			action = "banquet.event_cancelled"
+		after := map[string]any{"status": out.Status}
+		if tpl != nil {
+			after["policy_template"] = tpl.Code
+			after["policy_base"] = tpl.Base
 		}
-		return s.audit.Write(ctx, s.entry(p, propertyID, bd, action, "banquet_event", eventID, out.Number, map[string]any{"status": old.Status},
-			map[string]any{"status": out.Status, "reason_id": in.ReasonID, "reason_note": note}))
+		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.event_confirmed", "banquet_event", eventID, out.Number, map[string]any{"status": old.Status}, after))
 	})
 	return out, err
 }
@@ -757,9 +730,51 @@ func (s *Service) MarkNoticesSeen(ctx context.Context, propertyID int64, ids []i
 // WriteDueNotices is the day close (36 F9): a reminder for the salesperson of each tentative event whose option date has come, once for the event and the day. It writes in the transaction of the
 // close and returns the number of events reminded.
 func (s *Service) WriteDueNotices(ctx context.Context, tenantID, propertyID int64, day civil.Date) (int, error) {
-	ids, err := s.q(ctx).InsertDueNotices(ctx, banquetdb.InsertDueNoticesParams{TenantID: tenantID, PropertyID: propertyID, NoticeDate: day})
-	return len(ids), err
+	q := s.q(ctx)
+	ids, err := q.InsertDueNotices(ctx, banquetdb.InsertDueNoticesParams{TenantID: tenantID, PropertyID: propertyID, NoticeDate: day})
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.writeDepositNotices(ctx, tenantID, propertyID, day)
+	return len(ids) + n, err
 }
+
+// writeDepositNotices is the reminder of a deposit (36 4.7): for each tentative or definite event with a row of the schedule that is due and not covered by the deposits received, a notice for its
+// salesperson, once for the event and the day.
+func (s *Service) writeDepositNotices(ctx context.Context, tenantID, propertyID int64, day civil.Date) (int, error) {
+	q := s.q(ctx)
+	evs, err := q.ScheduledEventsDue(ctx, banquetdb.ScheduledEventsDueParams{TenantID: tenantID, PropertyID: propertyID, Day: day})
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, e := range evs {
+		rows, err := s.schedule(ctx, propertyID, e.EventID)
+		if err != nil {
+			return 0, err
+		}
+		received := zeroDec
+		if f, err := s.folios.EventFolioOf(ctx, tenantID, propertyID, e.EventID); err != nil {
+			return 0, err
+		} else if f != nil {
+			if received, err = s.folios.EventDeposits(ctx, propertyID, f.ID); err != nil {
+				return 0, err
+			}
+		}
+		for i, r := range rows {
+			if !r.DueDate.After(day) && RowStatus(rows, i, received, day) != "PAID" {
+				if err := q.InsertDepositNotice(ctx, banquetdb.InsertDepositNoticeParams{TenantID: tenantID, PropertyID: propertyID, UserID: e.SalesUserID, EventID: e.EventID, NoticeDate: day}); err != nil {
+					return 0, err
+				}
+				n++
+				break
+			}
+		}
+	}
+	return n, nil
+}
+
+var zeroDec = decimal.Zero
 
 func derefID(id *int64) int64 {
 	if id == nil {

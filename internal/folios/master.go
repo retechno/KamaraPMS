@@ -27,6 +27,8 @@ const (
 	FolioTypeMaster = "MASTER"
 	// FolioTypeOutlet is the type of the folio of a bill of an outlet (docs/architecture/34-pos.md): it has no reservation, stay, group or company.
 	FolioTypeOutlet = "OUTLET"
+	// FolioTypeEvent is the type of the folio of a banquet event (docs/architecture/36-banquet.md): it has no reservation, stay, group or outlet; it may be billed to a company.
+	FolioTypeEvent = "EVENT"
 	// maxLinesInContext is how many lines an error names (the screen shows them; the rest is counted).
 	maxLinesInContext = 20
 )

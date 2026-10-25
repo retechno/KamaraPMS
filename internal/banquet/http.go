@@ -62,6 +62,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 
 	mux.Handle("GET "+p+"/notices", httpx.HandlerFunc(h.listNotices))
 	mux.Handle("POST "+p+"/notices/seen", httpx.HandlerFunc(h.noticesSeen))
+
+	h.registerMoney(mux)
 }
 
 func pathInt(r *http.Request, name string) (int64, error) {
@@ -590,7 +592,11 @@ func (h *Handler) confirm(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	v, err := h.svc.Confirm(r.Context(), pid, id)
+	in, err := decodeOptional[ConfirmInput](w, r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.Confirm(r.Context(), pid, id, in)
 	return ok(w, v, err)
 }
 

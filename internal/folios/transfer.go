@@ -46,6 +46,9 @@ const (
 	// ScopeOutletBill is a split or a merge of the bills of an outlet; ScopeOutletCharge a bill charged to a room (docs/architecture/34-pos.md). Neither needs an approval: it is the cashier's own act.
 	ScopeOutletBill   = "OUTLET_BILL"
 	ScopeOutletCharge = "OUTLET_CHARGE"
+	// ScopeEventGroup is the bill of an event and the master folio of the group the event is linked to, or the folio of a member of that group (docs/architecture/36-banquet.md 4.8). It asks for the
+	// approval of every correction, never for folio.transfer_any.
+	ScopeEventGroup = "EVENT_GROUP"
 
 	KindItem    = "ITEM"
 	KindBalance = "BALANCE"
@@ -125,6 +128,9 @@ func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, 
 		}
 		return ScopeOutletBill, nil
 	}
+	if src.FolioType == FolioTypeEvent || tgt.FolioType == FolioTypeEvent {
+		return s.eventScope(ctx, tenantID, propertyID, src, tgt)
+	}
 	if src.FolioType == "MASTER" && tgt.FolioType == "MASTER" {
 		return "", errTransferInvalid("a master folio does not transfer to another master folio")
 	}
@@ -166,6 +172,50 @@ func (s *Service) scopeOf(ctx context.Context, tenantID, propertyID int64, src, 
 	}
 	if a, b := groups[*src.ReservationID], groups[*tgt.ReservationID]; a != nil && b != nil && *a == *b {
 		return ScopeGroupMember, nil
+	}
+	return ScopeAny, nil
+}
+
+// eventScope classifies a transfer that has the folio of an event on one side. The event is linked to a group and the other side is the master folio of that group or the folio of one of its
+// members: EVENT_GROUP. Anything else is ANY (two events, an event not linked, another group). The folio of a reservation that has no stay cannot receive a charge.
+func (s *Service) eventScope(ctx context.Context, tenantID, propertyID int64, src, tgt foliosdb.Folio) (string, error) {
+	event, other := src, tgt
+	if src.FolioType != FolioTypeEvent {
+		event, other = tgt, src
+	}
+	if other.FolioType == FolioTypeEvent {
+		return ScopeAny, nil
+	}
+	if other.StayID == nil && other.FolioType != FolioTypeMaster {
+		return "", errTransferInvalid("a charge cannot move to the deposit folio of a reservation, which has no stay")
+	}
+	if event.BanquetEventID == nil {
+		return ScopeAny, nil
+	}
+	group, err := s.q(ctx).GetEventGroup(ctx, foliosdb.GetEventGroupParams{PropertyID: propertyID, ID: *event.BanquetEventID})
+	if err != nil {
+		return "", err
+	}
+	if group == nil {
+		return ScopeAny, nil
+	}
+	if other.FolioType == FolioTypeMaster {
+		if other.BookingGroupID != nil && *other.BookingGroupID == *group {
+			return ScopeEventGroup, nil
+		}
+		return ScopeAny, nil
+	}
+	if other.ReservationID == nil {
+		return ScopeAny, nil
+	}
+	rows, err := s.q(ctx).ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: tenantID, PropertyID: propertyID, Ids: []int64{*other.ReservationID}})
+	if err != nil {
+		return "", err
+	}
+	for _, r := range rows {
+		if r.BookingGroupID != nil && *r.BookingGroupID == *group {
+			return ScopeEventGroup, nil
+		}
 	}
 	return ScopeAny, nil
 }

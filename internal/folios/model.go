@@ -279,6 +279,8 @@ type Folio struct {
 	OutletID   *int64 `json:"outlet_id"`
 	OutletCode string `json:"outlet_code,omitempty"`
 	OutletName string `json:"outlet_name,omitempty"`
+	// BanquetEventID is the event a folio of type EVENT is the bill of; nil on the others.
+	BanquetEventID *int64 `json:"banquet_event_id"`
 	// The contact of the group, for the master folio only: the party of its invoice when the group has no company.
 	BookingGroupContactName  string     `json:"booking_group_contact_name,omitempty"`
 	BookingGroupContactEmail string     `json:"booking_group_contact_email,omitempty"`
@@ -308,6 +310,8 @@ type FolioSummary struct {
 	OutletID   *int64 `json:"outlet_id"`
 	OutletCode string `json:"outlet_code,omitempty"`
 	OutletName string `json:"outlet_name,omitempty"`
+	// BanquetEventID is the event a folio of type EVENT is the bill of.
+	BanquetEventID *int64 `json:"banquet_event_id"`
 	// ConfirmationNumber is the number of that reservation ("RES000012"), so a list can name it instead of showing its id.
 	ConfirmationNumber string    `json:"confirmation_number"`
 	StayID             *int64    `json:"stay_id"`

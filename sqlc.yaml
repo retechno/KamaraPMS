@@ -430,7 +430,9 @@ sql:
 
   - engine: postgresql
     schema: migrations
-    queries: internal/banquet/queries.sql
+    queries:
+      - internal/banquet/queries.sql
+      - internal/banquet/queries_money.sql
     gen:
       go:
         package: banquetdb

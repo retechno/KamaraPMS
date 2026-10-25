@@ -30,11 +30,12 @@ func (s *Service) settings(ctx context.Context, propertyID int64) (Settings, err
 	r, err := s.q(ctx).GetSettings(ctx, propertyID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Settings{TentativeConflictMode: ModeReject}, nil
+			return Settings{TentativeConflictMode: ModeReject, PostingMode: PostingAuto, DefaultPriceMode: PriceExclusive}, nil
 		}
 		return Settings{}, err
 	}
-	return Settings{TentativeConflictMode: r.TentativeConflictMode, OperatingFrom: r.OperatingFrom, OperatingTo: r.OperatingTo}, nil
+	return Settings{TentativeConflictMode: r.TentativeConflictMode, OperatingFrom: r.OperatingFrom, OperatingTo: r.OperatingTo, PostingMode: r.PostingMode, DefaultPriceMode: r.DefaultPriceMode,
+		MaxDiscountPctNoApproval: r.MaxDiscountPctNoApproval}, nil
 }
 
 // PutSettings changes the settings (banquet.setup). The conflict mode applies to the bookings and moves that come after it, never to what exists; every change is audited.
@@ -52,6 +53,15 @@ func (s *Service) PutSettings(ctx context.Context, propertyID int64, in Settings
 	} else if in.OperatingFrom != nil && !in.OperatingFrom.Before(*in.OperatingTo) {
 		f = append(f, fieldErr("operating_to", "INVALID_VALUE", "the end is after the start"))
 	}
+	if in.PostingMode != "" && in.PostingMode != PostingAuto && in.PostingMode != PostingManual {
+		f = append(f, fieldErr("posting_mode", "INVALID_VALUE", "AUTO or MANUAL"))
+	}
+	if in.DefaultPriceMode != "" && in.DefaultPriceMode != PriceExclusive && in.DefaultPriceMode != PriceInclusive {
+		f = append(f, fieldErr("default_price_mode", "INVALID_VALUE", "EXCLUSIVE (++) or INCLUSIVE (nett)"))
+	}
+	if d := in.MaxDiscountPctNoApproval; d != nil && (d.IsNegative() || d.GreaterThan(decimal.NewFromInt(100)) || d.Round(2).Cmp(*d) != 0) {
+		f = append(f, fieldErr("max_discount_pct_no_approval", "INVALID_VALUE", "0 to 100, up to two decimals"))
+	}
 	if len(f) > 0 {
 		return Settings{}, invalid("settings", f...)
 	}
@@ -61,11 +71,22 @@ func (s *Service) PutSettings(ctx context.Context, propertyID int64, in Settings
 		if err != nil {
 			return err
 		}
-		if err := s.q(ctx).UpsertSettings(ctx, banquetdb.UpsertSettingsParams{PropertyID: propertyID, TenantID: p.TenantID, TentativeConflictMode: in.TentativeConflictMode,
-			OperatingFrom: in.OperatingFrom, OperatingTo: in.OperatingTo, ActorID: p.ActorID()}); err != nil {
+		out = Settings{TentativeConflictMode: in.TentativeConflictMode, OperatingFrom: in.OperatingFrom, OperatingTo: in.OperatingTo, PostingMode: old.PostingMode, DefaultPriceMode: old.DefaultPriceMode,
+			MaxDiscountPctNoApproval: old.MaxDiscountPctNoApproval}
+		if in.PostingMode != "" {
+			out.PostingMode = in.PostingMode
+		}
+		if in.DefaultPriceMode != "" {
+			out.DefaultPriceMode = in.DefaultPriceMode
+		}
+		if in.MaxDiscountPctNoApproval != nil {
+			out.MaxDiscountPctNoApproval = *in.MaxDiscountPctNoApproval
+		}
+		if err := s.q(ctx).UpsertSettings(ctx, banquetdb.UpsertSettingsParams{PropertyID: propertyID, TenantID: p.TenantID, TentativeConflictMode: out.TentativeConflictMode,
+			OperatingFrom: out.OperatingFrom, OperatingTo: out.OperatingTo, PostingMode: out.PostingMode, DefaultPriceMode: out.DefaultPriceMode,
+			MaxDiscountPctNoApproval: out.MaxDiscountPctNoApproval, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		out = Settings(in)
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.settings_changed", "banquet_settings", propertyID, "settings", old, out))
 	})
 	return out, err

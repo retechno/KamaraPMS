@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/audit"
 	"kamarapms/internal/banquet"
 	"kamarapms/internal/iam"
@@ -16,7 +18,7 @@ func TestSeedBanquet(t *testing.T) {
 	tn := e.Tenant(t, "ABC")
 	p := e.Property(t, tn.ID, "BALI")
 	ctx := roomstest.Admin(tn.ID)
-	svc := banquet.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy)
+	svc := banquet.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, nil, nil, nil)
 
 	run := func(dry bool) (int, string) {
 		var out bytes.Buffer
@@ -52,8 +54,13 @@ func TestSeedBanquet(t *testing.T) {
 		}
 	}
 	pk, err := svc.ListPackages(ctx, p.ID, nil)
-	if err != nil || len(pk) != 1 || pk[0].Name != "Fullday Meeting" || len(pk[0].Components) != 3 {
+	if err != nil || len(pk) != 1 || pk[0].Name != "Fullday Meeting" || len(pk[0].Components) != 4 || !pk[0].PricePerPax.Equal(decimal.RequireFromString("363000")) {
 		t.Fatalf("package: %+v %v", pk, err)
+	}
+
+	tpls, err := svc.ListPolicyTemplates(ctx, p.ID, nil)
+	if err != nil || len(tpls) != 1 || !tpls[0].IsDefault || len(tpls[0].Deposits) != 3 || len(tpls[0].Tiers) != 4 {
+		t.Fatalf("policy template: %+v %v", tpls, err)
 	}
 
 	again, out := run(false)

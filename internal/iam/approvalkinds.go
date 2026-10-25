@@ -37,6 +37,8 @@ const (
 	// with its own engine, not a kind; the result of a stock count (INV_COUNT) is a decision of the signed-in approver (ApprovalRequest.Decision).
 	KindInvBillVariance ApprovalKind = "INV_BILL_VARIANCE"
 	KindInvCount        ApprovalKind = "INV_COUNT"
+	// The kind of the banquet (docs/architecture/36-banquet.md 7.2): a discount of an event line above what the property lets the banquet office give without one.
+	KindBanquetDiscount ApprovalKind = "BANQUET_DISCOUNT"
 )
 
 // KindInfo describes a kind: whether it has an amount (a rule DISTINCT_ABOVE needs one) and the permission its approver
@@ -73,6 +75,7 @@ var approvalKinds = []KindInfo{
 	{KindPOSReopen, true, auth.PermPOSApprove},
 	{KindInvBillVariance, true, auth.PermInventoryApprove},
 	{KindInvCount, true, auth.PermInventoryApprove},
+	{KindBanquetDiscount, true, auth.PermBanquetConfirm},
 }
 
 // ApprovalKinds lists the kinds, in screen order.

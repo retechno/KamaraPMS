@@ -176,6 +176,7 @@ type chargeCmd struct {
 	key                        string
 	reason                     *string // what a fee is charged for (audit F-08); nil for a plain charge
 	referenceType, referenceID *string
+	source                     string // the source of the item when it is not a manual charge (BANQUET)
 	room                       *int64 // set only by RoomPoster: the stay segment of the night, which makes it a room charge
 	stayID                     *int64 // set with room: the stay of the night
 }
@@ -220,6 +221,7 @@ func (ps posting) postCharge(ctx context.Context, cmd chargeCmd) (foliosdb.Folio
 		key: nullable(cmd.key), components: componentsOf(b), reason: cmd.reason, referenceType: cmd.referenceType, referenceID: cmd.referenceID,
 	}
 	spec.stayID = cmd.stayID
+	spec.source = cmd.source
 	if cmd.room != nil {
 		spec.stayRoomID, spec.source = cmd.room, "ROOM_POSTING"
 	}

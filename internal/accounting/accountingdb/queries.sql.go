@@ -1915,6 +1915,25 @@ func (q *Queries) ReopenPeriod(ctx context.Context, arg ReopenPeriodParams) erro
 	return err
 }
 
+const seedBanquetAccounts = `-- name: SeedBanquetAccounts :exec
+UPDATE charge_codes c SET gl_account_code = d.code
+  FROM (VALUES ('BQT_FB', '4240'), ('BQT_ROOM', '4410'), ('BQT_EQUIPMENT', '4410'), ('BQT_DECOR', '4590'), ('BQT_OTHER', '4590'), ('BQT_FORFEIT', '4520')) AS d (charge_code, code)
+ WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.code = d.charge_code AND c.gl_account_code IS NULL
+   AND EXISTS (SELECT 1 FROM gl_accounts a WHERE a.property_id = c.property_id AND a.code = d.code)
+`
+
+type SeedBanquetAccountsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The revenue accounts of the banquet (36-banquet.md 5.3): the system codes BQT_* of a new property get their accounts once the chart exists (F&B 4240, rooms and equipment 4410, the rest 4590, a forfeited
+// deposit 4520). An account that does not exist leaves the code without one, as for POS_ROUNDING.
+func (q *Queries) SeedBanquetAccounts(ctx context.Context, arg SeedBanquetAccountsParams) error {
+	_, err := q.db.Exec(ctx, seedBanquetAccounts, arg.TenantID, arg.PropertyID)
+	return err
+}
+
 const seedChart = `-- name: SeedChart :one
 
 SELECT seed_chart_of_accounts($1, $2, $3, $4::date, $5::text)::int AS created

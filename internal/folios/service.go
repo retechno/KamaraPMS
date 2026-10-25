@@ -239,7 +239,7 @@ func (s *Service) loadFolio(ctx context.Context, tenantID, propertyID int64, f f
 	}
 	out := Folio{
 		ID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType, BillToCompanyID: f.BillToCompanyID, BillToCompanyName: company, Status: f.Status, ReservationID: f.ReservationID, StayID: f.StayID,
-		BookingGroupID: f.BookingGroupID, OutletID: f.OutletID, OpenedAt: f.OpenedAt, ClosedAt: f.ClosedAt, Version: f.Version, Balance: fixed(balance, decimals),
+		BookingGroupID: f.BookingGroupID, OutletID: f.OutletID, BanquetEventID: f.BanquetEventID, OpenedAt: f.OpenedAt, ClosedAt: f.ClosedAt, Version: f.Version, Balance: fixed(balance, decimals),
 		Totals: Totals{Debit: fixed(totals.Debit, decimals), Credit: fixed(totals.Credit, decimals)}, Items: items,
 	}
 	if f.BookingGroupID != nil {
@@ -342,7 +342,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 	}
 	out.Data = make([]FolioSummary, len(rows))
 	for i, r := range rows {
-		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, BookingGroupID: r.BookingGroupID, BookingGroupCode: r.GroupCode, BookingGroupName: r.GroupName, OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
+		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, BookingGroupID: r.BookingGroupID, BookingGroupCode: r.GroupCode, BookingGroupName: r.GroupName, OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName, BanquetEventID: r.BanquetEventID, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
 			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Balance, decimals)}
 	}
 	return out, nil
