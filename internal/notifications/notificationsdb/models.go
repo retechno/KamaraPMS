@@ -9,17 +9,20 @@ import (
 )
 
 type EmailOutbox struct {
-	ID            int64
-	TenantID      int64
-	PropertyID    int64
-	Kind          string
-	ReservationID int64
-	ToAddress     string
-	Status        string
-	Attempts      int16
-	NextAttemptAt time.Time
-	LastError     *string
-	SentAt        *time.Time
-	CreatedAt     time.Time
-	CreatedBy     *int64
+	ID             int64
+	TenantID       int64
+	PropertyID     int64
+	Kind           string
+	ReservationID  *int64
+	ToAddress      string
+	Status         string
+	Attempts       int16
+	NextAttemptAt  time.Time
+	LastError      *string
+	SentAt         *time.Time
+	CreatedAt      time.Time
+	CreatedBy      *int64
+	BanquetEventID *int64
+	DocumentID     *int64
+	Language       *string
 }

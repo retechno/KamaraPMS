@@ -8,6 +8,8 @@ package notificationsdb
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const bookerEmail = `-- name: BookerEmail :one
@@ -39,7 +41,7 @@ WHERE id IN (
     SELECT id FROM email_outbox WHERE status = 'QUEUED' AND next_attempt_at <= $2::timestamptz
     ORDER BY next_attempt_at, id LIMIT $3 FOR UPDATE SKIP LOCKED
 )
-RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by
+RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language
 `
 
 type ClaimDueParams struct {
@@ -73,6 +75,9 @@ func (q *Queries) ClaimDue(ctx context.Context, arg ClaimDueParams) ([]EmailOutb
 			&i.SentAt,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.BanquetEventID,
+			&i.DocumentID,
+			&i.Language,
 		); err != nil {
 			return nil, err
 		}
@@ -84,17 +89,93 @@ func (q *Queries) ClaimDue(ctx context.Context, arg ClaimDueParams) ([]EmailOutb
 	return items, nil
 }
 
+const eventEmailQueued = `-- name: EventEmailQueued :one
+SELECT EXISTS (SELECT 1 FROM email_outbox WHERE property_id = $1 AND banquet_event_id = $2 AND kind = $3 AND to_address = $4 AND status = 'QUEUED')
+`
+
+type EventEmailQueuedParams struct {
+	PropertyID int64
+	EventID    *int64
+	Kind       string
+	ToAddress  string
+}
+
+func (q *Queries) EventEmailQueued(ctx context.Context, arg EventEmailQueuedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, eventEmailQueued,
+		arg.PropertyID,
+		arg.EventID,
+		arg.Kind,
+		arg.ToAddress,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const insertEventEmail = `-- name: InsertEventEmail :one
+INSERT INTO email_outbox (tenant_id, property_id, kind, banquet_event_id, document_id, language, to_address, next_attempt_at, created_at, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $8::timestamptz, $9)
+RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language
+`
+
+type InsertEventEmailParams struct {
+	TenantID   int64
+	PropertyID int64
+	Kind       string
+	EventID    *int64
+	DocumentID *int64
+	Language   *string
+	ToAddress  string
+	Now        time.Time
+	ActorID    *int64
+}
+
+// The e-mails of the banquet (36 F8, B12): a proposal or a contract of an event, with the document it carries and the language it is printed in.
+func (q *Queries) InsertEventEmail(ctx context.Context, arg InsertEventEmailParams) (EmailOutbox, error) {
+	row := q.db.QueryRow(ctx, insertEventEmail,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Kind,
+		arg.EventID,
+		arg.DocumentID,
+		arg.Language,
+		arg.ToAddress,
+		arg.Now,
+		arg.ActorID,
+	)
+	var i EmailOutbox
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Kind,
+		&i.ReservationID,
+		&i.ToAddress,
+		&i.Status,
+		&i.Attempts,
+		&i.NextAttemptAt,
+		&i.LastError,
+		&i.SentAt,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.BanquetEventID,
+		&i.DocumentID,
+		&i.Language,
+	)
+	return i, err
+}
+
 const insertOutbox = `-- name: InsertOutbox :one
 INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address, next_attempt_at, created_at, created_by)
 VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $6::timestamptz, $7)
-RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by
+RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language
 `
 
 type InsertOutboxParams struct {
 	TenantID      int64
 	PropertyID    int64
 	Kind          string
-	ReservationID int64
+	ReservationID *int64
 	ToAddress     string
 	Now           time.Time
 	ActorID       *int64
@@ -125,12 +206,77 @@ func (q *Queries) InsertOutbox(ctx context.Context, arg InsertOutboxParams) (Ema
 		&i.SentAt,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.BanquetEventID,
+		&i.DocumentID,
+		&i.Language,
 	)
 	return i, err
 }
 
+const listEventEmails = `-- name: ListEventEmails :many
+SELECT o.id, o.kind, o.document_id, d.number AS document_number, d.revision_no, o.language, o.to_address, o.status, o.attempts, o.last_error, o.sent_at, o.created_at
+FROM email_outbox o JOIN banquet_documents d ON d.property_id = o.property_id AND d.id = o.document_id
+WHERE o.tenant_id = $1 AND o.property_id = $2 AND o.banquet_event_id = $3
+ORDER BY o.id DESC
+LIMIT 50
+`
+
+type ListEventEmailsParams struct {
+	TenantID   int64
+	PropertyID int64
+	EventID    *int64
+}
+
+type ListEventEmailsRow struct {
+	ID             int64
+	Kind           string
+	DocumentID     *int64
+	DocumentNumber *string
+	RevisionNo     pgtype.Int4
+	Language       *string
+	ToAddress      string
+	Status         string
+	Attempts       int16
+	LastError      *string
+	SentAt         *time.Time
+	CreatedAt      time.Time
+}
+
+func (q *Queries) ListEventEmails(ctx context.Context, arg ListEventEmailsParams) ([]ListEventEmailsRow, error) {
+	rows, err := q.db.Query(ctx, listEventEmails, arg.TenantID, arg.PropertyID, arg.EventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEventEmailsRow{}
+	for rows.Next() {
+		var i ListEventEmailsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.DocumentID,
+			&i.DocumentNumber,
+			&i.RevisionNo,
+			&i.Language,
+			&i.ToAddress,
+			&i.Status,
+			&i.Attempts,
+			&i.LastError,
+			&i.SentAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOutboxForReservation = `-- name: ListOutboxForReservation :many
-SELECT id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by FROM email_outbox
+SELECT id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language FROM email_outbox
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = $3
 ORDER BY id DESC
 LIMIT 20
@@ -139,7 +285,7 @@ LIMIT 20
 type ListOutboxForReservationParams struct {
 	TenantID      int64
 	PropertyID    int64
-	ReservationID int64
+	ReservationID *int64
 }
 
 func (q *Queries) ListOutboxForReservation(ctx context.Context, arg ListOutboxForReservationParams) ([]EmailOutbox, error) {
@@ -165,6 +311,9 @@ func (q *Queries) ListOutboxForReservation(ctx context.Context, arg ListOutboxFo
 			&i.SentAt,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.BanquetEventID,
+			&i.DocumentID,
+			&i.Language,
 		); err != nil {
 			return nil, err
 		}

@@ -2,6 +2,7 @@
 import { Menu, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import BanquetBell from '@/components/banquet/BanquetBell.vue'
 import ApprovalBell from '@/components/inventory/ApprovalBell.vue'
 import PropertySwitcher from '@/components/shell/PropertySwitcher.vue'
 import { Button } from '@/components/ui/button'
@@ -166,6 +167,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
         {{ t('shell.noPropertyYet') }}
       </RouterLink>
 
+      <BanquetBell />
       <ApprovalBell />
       <DropdownMenu>
         <DropdownMenuTrigger as-child>

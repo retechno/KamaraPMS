@@ -46,6 +46,7 @@ watch(() => props.open, async (open) => {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/folios/{id}', { params: { path: { propertyId: props.propertyId, id: props.folio.id } } })
     items.value = data?.items ?? []
+    if (movable.value.length === 0) form.value.mode = 'BALANCE' // nothing is posted yet to move by items
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -98,9 +99,9 @@ async function submit(approval: Approval): Promise<void> {
         </FormField>
         <p v-if="linked === null && form.group_id" class="m-0 text-xs text-muted-foreground" data-testid="transfer-link-note">{{ t('banquet.transfer.linkNote') }}</p>
         <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
-          <label class="flex cursor-pointer items-start gap-2 rounded-md border border-border p-3 text-sm" :class="form.mode === 'ITEMS' ? 'border-primary bg-primary/5' : ''">
-            <input v-model="form.mode" type="radio" name="mode" value="ITEMS" class="mt-0.5 size-4 accent-primary" data-testid="transfer-mode-items" />
-            <span><span class="block font-medium">{{ t('banquet.transfer.byItems') }}</span><span class="text-muted-foreground">{{ t('banquet.transfer.byItemsHint', { n: movable.length, total: formatMoney(String(movableTotal)) }) }}</span></span>
+          <label class="flex items-start gap-2 rounded-md border border-border p-3 text-sm" :class="[form.mode === 'ITEMS' ? 'border-primary bg-primary/5' : '', movable.length === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer']">
+            <input v-model="form.mode" type="radio" name="mode" value="ITEMS" class="mt-0.5 size-4 accent-primary" :disabled="movable.length === 0" data-testid="transfer-mode-items" />
+            <span><span class="block font-medium">{{ t('banquet.transfer.byItems') }}</span><span class="text-muted-foreground" data-testid="transfer-items-hint">{{ movable.length === 0 ? t('banquet.transfer.nothingPosted') : t('banquet.transfer.byItemsHint', { n: movable.length, total: formatMoney(String(movableTotal)) }) }}</span></span>
           </label>
           <label class="flex cursor-pointer items-start gap-2 rounded-md border border-border p-3 text-sm" :class="form.mode === 'BALANCE' ? 'border-primary bg-primary/5' : ''">
             <input v-model="form.mode" type="radio" name="mode" value="BALANCE" class="mt-0.5 size-4 accent-primary" data-testid="transfer-mode-balance" />

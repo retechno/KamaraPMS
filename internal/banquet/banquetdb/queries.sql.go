@@ -1396,7 +1396,7 @@ func (q *Queries) ListItems(ctx context.Context, arg ListItemsParams) ([]ListIte
 }
 
 const listNotices = `-- name: ListNotices :many
-SELECT n.id, n.kind, n.event_id, e.number AS event_number, e.name AS event_name, n.session_id, n.notice_date, n.created_at, n.seen_at
+SELECT n.id, n.kind, n.event_id, e.number AS event_number, e.name AS event_name, n.session_id, n.notice_date, n.revision_no, n.created_at, n.seen_at
 FROM banquet_notices n JOIN banquet_events e ON e.property_id = n.property_id AND e.id = n.event_id
 WHERE n.tenant_id = $1 AND n.property_id = $2 AND n.user_id = $3 AND (NOT $4::boolean OR n.seen_at IS NULL)
 ORDER BY n.id DESC
@@ -1419,6 +1419,7 @@ type ListNoticesRow struct {
 	EventName   string
 	SessionID   *int64
 	NoticeDate  civil.Date
+	RevisionNo  *int32
 	CreatedAt   time.Time
 	SeenAt      *time.Time
 }
@@ -1446,6 +1447,7 @@ func (q *Queries) ListNotices(ctx context.Context, arg ListNoticesParams) ([]Lis
 			&i.EventName,
 			&i.SessionID,
 			&i.NoticeDate,
+			&i.RevisionNo,
 			&i.CreatedAt,
 			&i.SeenAt,
 		); err != nil {

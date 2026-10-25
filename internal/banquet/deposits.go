@@ -290,6 +290,9 @@ func (s *Service) PutSchedule(ctx context.Context, propertyID, eventID int64, in
 				return err
 			}
 		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
+			return err
+		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.deposit_schedule_changed", "banquet_event", eventID, hdr.Number, old, rows))
 	})
 	if err != nil {
@@ -355,6 +358,9 @@ func (s *Service) PutPolicy(ctx context.Context, propertyID, eventID int64, in P
 			return err
 		}
 		if err := s.q(ctx).SetEventPolicyBase(ctx, banquetdb.SetEventPolicyBaseParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID, PolicyBase: &in.Base, ActorID: p.ActorID()}); err != nil {
+			return err
+		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
 			return err
 		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.policy_changed", "banquet_event", eventID, hdr.Number, map[string]any{"base": hdr.PolicyBase, "tiers": old},

@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { BanquetEventType, BanquetPolicyTemplate, BanquetReason, BanquetSettings } from '@/api/types'
+import BanquetRecipientsCard from '@/components/banquet/BanquetRecipientsCard.vue'
 import BanquetTemplateDialog from '@/components/banquet/BanquetTemplateDialog.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -125,6 +126,7 @@ async function saveSmall(): Promise<void> {
         <div><Button type="submit" :disabled="saving" data-testid="settings-save">{{ t('common.save') }}</Button></div>
       </form>
     </Card>
+    <BanquetRecipientsCard :property-id="pid" />
 
     <Card class="p-4" data-testid="money-section">
       <form novalidate class="flex flex-col gap-3" @submit.prevent="saveSettings">

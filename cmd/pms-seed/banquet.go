@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/banquet"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/departments"
 )
 
 // pms-seed banquet: demo data of the banquet (docs/architecture/36-banquet.md, PR 1) for a DEVELOPMENT database, through the service of the application. Safe to run again: what exists (by code)
@@ -21,6 +23,8 @@ import (
 //	items       a few menus, a drink package, equipment, decoration and the rental of a room
 //	packages    "Fullday Meeting" at 363,000 nett per guest, four components (PR 2)
 //	policy      the template STANDARD (default): deposits 30% at signature, 50% at H-30, 20% at H-7; cancellation tiers 0/25/50/100% of the net revenue (PR 2)
+//	beo         the department that reads each section of the BEO (kitchen and F&B service: FB; housekeeping and front office: ROOMS; engineering: POM; security: AG), where the section has none and the
+//	            department exists; and a sample text for each section of each session of a Definite event whose BEO is still empty (PR 3)
 
 type bqRoom struct {
 	code, name      string
@@ -76,12 +80,13 @@ var bqRuleCodes = []string{"BQT_FB", "BQT_ROOM", "BQT_EQUIPMENT", "BQT_DECOR", "
 
 func seedBanquet(e *env, dryRun bool) error {
 	svc := banquet.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, nil, e.bc, nil) // the seed makes masters and templates only: no folio, no approval
-	_, err := seedBanquetWith(e.ctx, svc, e.bc, e.propertyID, dryRun, os.Stdout)
+	deps := departments.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
+	_, err := seedBanquetWith(e.ctx, svc, deps, e.bc, e.propertyID, dryRun, os.Stdout)
 	return err
 }
 
 // seedBanquetWith does the work; the return value is the number of rows created (or that would be).
-func seedBanquetWith(ctx context.Context, svc *banquet.Service, bc *billingconfig.Service, pid int64, dryRun bool, out io.Writer) (int, error) {
+func seedBanquetWith(ctx context.Context, svc *banquet.Service, deps *departments.Service, bc *billingconfig.Service, pid int64, dryRun bool, out io.Writer) (int, error) {
 	made := 0
 	say := func(kind, code string, exists bool) {
 		if exists {
@@ -421,6 +426,12 @@ func seedBanquetWith(ctx context.Context, svc *banquet.Service, bc *billingconfi
 		}
 	}
 
+	n, err := seedBeo(ctx, svc, deps, pid, dryRun, out)
+	if err != nil {
+		return 0, err
+	}
+	made += n
+
 	verb := "created"
 	if dryRun {
 		verb = "would create"
@@ -439,4 +450,89 @@ func bqPackageIsTheFirstVersion(p banquet.Package) bool {
 		qty[c.ItemCode] = c.QtyPerPax.String()
 	}
 	return qty["COFFEEBRK"] == "2" && qty["LUNCH"] == "1" && qty["SOFTDRINK"] == "1"
+}
+
+// bqSectionDepartment is the department of the demo that reads each section of the BEO (the standard departments every property has).
+var bqSectionDepartment = map[string]string{
+	banquet.SectionKitchen: "FB", banquet.SectionFBService: "FB", banquet.SectionHousekeeping: "ROOMS", banquet.SectionFrontOffice: "ROOMS", banquet.SectionEngineering: "POM", banquet.SectionSecurity: "AG",
+}
+
+// bqBeoText is the sample text of a section of the BEO of a session.
+var bqBeoText = map[string]string{
+	banquet.SectionGeneral:      "Tamu undangan datang mulai satu jam sebelum acara. PIC acara: sales yang menangani.",
+	banquet.SectionKitchen:      "Menu sesuai paket. Siapkan 5% porsi cadangan. Tanpa kacang; sediakan menu vegetarian untuk 10 tamu.",
+	banquet.SectionFBService:    "Susunan meja sesuai set-up. Welcome drink saat tamu datang, coffee break 30 menit sebelum akhir sesi.",
+	banquet.SectionHousekeeping: "Ruang dan toilet terdekat siap satu jam sebelum acara; periksa lagi saat coffee break.",
+	banquet.SectionEngineering:  "Periksa AC, lampu, dan sound system sehari sebelumnya. Teknisi siaga selama acara.",
+	banquet.SectionSecurity:     "Dua petugas di pintu masuk ruang; parkir tamu diarahkan ke area barat.",
+	banquet.SectionFrontOffice:  "Papan petunjuk di lobi. Resepsionis tahu nama acara dan ruangnya.",
+}
+
+// seedBeo maps the sections of the BEO to departments and gives the Definite events that have no BEO yet a sample one. It returns how many rows it made (or would make).
+func seedBeo(ctx context.Context, svc *banquet.Service, deps *departments.Service, pid int64, dryRun bool, out io.Writer) (int, error) {
+	made := 0
+	if deps != nil {
+		list, err := deps.List(ctx, pid, departments.Filter{})
+		if err != nil {
+			return 0, err
+		}
+		byCode := map[string]int64{}
+		for _, d := range list {
+			byCode[d.Code] = d.ID
+		}
+		have, err := svc.ListRecipients(ctx, pid)
+		if err != nil {
+			return 0, err
+		}
+		var items []banquet.RecipientItem
+		for _, r := range have {
+			code := bqSectionDepartment[r.Section]
+			id, ok := byCode[code]
+			if r.DepartmentID != nil || !ok {
+				_, _ = fmt.Fprintf(out, "BEO recipient %s exists\n", r.Section)
+				continue
+			}
+			made++
+			_, _ = fmt.Fprintf(out, "BEO recipient %s: to create (%s)\n", r.Section, code)
+			items = append(items, banquet.RecipientItem{Section: r.Section, DepartmentID: &id})
+		}
+		if len(items) > 0 && !dryRun {
+			if _, err := svc.PutRecipients(ctx, pid, banquet.RecipientsInput{Items: items}); err != nil {
+				return 0, fmt.Errorf("BEO recipients: %w", err)
+			}
+		}
+	}
+
+	events, err := svc.ListEvents(ctx, pid, banquet.EventFilter{Statuses: []string{"DEFINITE"}, Limit: 200})
+	if err != nil {
+		return 0, err
+	}
+	for _, ev := range events {
+		view, err := svc.Beo(ctx, pid, ev.ID)
+		if err != nil {
+			return 0, err
+		}
+		for _, s := range view.Sessions {
+			empty := s.Status == "ACTIVE" && len(s.RunOfShow) == 0
+			for _, x := range s.Sections {
+				empty = empty && strings.TrimSpace(x.Body) == ""
+			}
+			if !empty {
+				continue
+			}
+			made++
+			_, _ = fmt.Fprintf(out, "BEO %s session %d: to create\n", ev.Number, s.No)
+			if dryRun {
+				continue
+			}
+			in := banquet.BeoInput{Sections: bqBeoText}
+			if s.Start != nil {
+				in.RunOfShow = []banquet.RunLineInput{{At: *s.Start, Text: "Tamu mulai datang dan registrasi"}}
+			}
+			if _, err := svc.SaveBeo(ctx, pid, ev.ID, s.ID, in); err != nil {
+				return 0, fmt.Errorf("BEO %s session %d: %w", ev.Number, s.No, err)
+			}
+		}
+	}
+	return made, nil
 }

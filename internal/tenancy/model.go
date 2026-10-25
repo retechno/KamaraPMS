@@ -317,6 +317,8 @@ const (
 	SeqInvCNT SequenceType = "INV_CNT"
 	// SeqBanquetEvent numbers the banquet events (BQ-000123).
 	SeqBanquetEvent SequenceType = "BANQUET_EVENT"
+	// SeqBanquetContract numbers the contracts of the banquet events (BQC-000012).
+	SeqBanquetContract SequenceType = "BANQUET_CONTRACT"
 )
 
 // defaultSequences are created with every property.
@@ -353,4 +355,5 @@ var defaultSequences = []struct {
 	{SeqInvISS, "ISS-"},
 	{SeqInvCNT, "CNT-"},
 	{SeqBanquetEvent, "BQ-"},
+	{SeqBanquetContract, "BQC-"},
 }

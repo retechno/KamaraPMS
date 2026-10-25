@@ -170,6 +170,8 @@ func New(d Deps) *App {
 		posSvc.SetEventPool(pool) // the streams of events wake on NOTIFY (they also read on a timer)
 	}
 	banquetSvc := banquet.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, foliosSvc, billingSvc, iamSvc)
+	documentsSvc.SetBanquet(banquetSvc) // the PDF of the banquet are drawn from it, and the e-mails send them
+	notifierSvc.SetBanquet(banquetSvc)
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})         // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own

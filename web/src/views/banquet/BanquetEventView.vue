@@ -5,6 +5,8 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { BanquetCancelResult, BanquetEvent, BanquetEventType, BanquetItem, BanquetLines, BanquetMoney, BanquetPackage, BanquetPolicyTemplate, BanquetReason, BanquetRoom, BanquetSession } from '@/api/types'
 import BanquetCloseDialog from '@/components/banquet/BanquetCloseDialog.vue'
+import BanquetBeoTab from '@/components/banquet/BanquetBeoTab.vue'
+import BanquetDocsTab from '@/components/banquet/BanquetDocsTab.vue'
 import BanquetConfirmDialog from '@/components/banquet/BanquetConfirmDialog.vue'
 import BanquetDepositTab from '@/components/banquet/BanquetDepositTab.vue'
 import BanquetFolioTab from '@/components/banquet/BanquetFolioTab.vue'
@@ -47,7 +49,7 @@ const types = ref<BanquetEventType[]>([])
 const reasons = ref<BanquetReason[]>([])
 const error = ref<ApiError | null>(null)
 const loaded = ref(false)
-const tab = ref('sessions')
+const tab = ref(['sessions', 'lines', 'deposit', 'folio', 'beo', 'docs', 'details'].includes(String(route.query.tab)) ? String(route.query.tab) : 'sessions')
 const money = ref<BanquetMoney | null>(null)
 const lines = ref<BanquetLines | null>(null)
 const items = ref<BanquetItem[]>([])
@@ -126,6 +128,20 @@ const open = computed(() => !!event.value && ['INQUIRY', 'TENTATIVE', 'DEFINITE'
 const sessions = computed(() => event.value?.sessions ?? [])
 const variant = (s: string): 'draft' | 'booked' | 'inhouse' | 'closed' | 'cancelled' | 'outline' =>
   ({ INQUIRY: 'draft', TENTATIVE: 'booked', DEFINITE: 'inhouse', COMPLETED: 'closed', CANCELLED: 'cancelled', LOST: 'cancelled' } as const)[s as 'INQUIRY'] ?? 'outline'
+const canComplete = computed(() => canManage.value && event.value?.status === 'DEFINITE')
+async function completeEvent(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null || !event.value) return
+  if (!(await confirm({ title: t('banquet.complete.title'), description: t('banquet.complete.body'), confirmLabel: t('banquet.complete.action') }))) return
+  error.value = null
+  try {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/banquet/events/{id}/complete', { params: { path: { propertyId, id: event.value.id } } })
+    if (data) event.value = data
+    toast.success(t('banquet.complete.done'))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
 const canClose = computed(() => !!event.value && (event.value.status === 'DEFINITE' ? canConfirm.value : canManage.value))
 const canTentative = computed(() => canManage.value && event.value?.status === 'INQUIRY' && sessions.value.some((s) => s.status === 'ACTIVE' && s.room_id))
 
@@ -203,6 +219,7 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
       <Button v-if="canTentative" type="button" variant="outline" data-testid="event-tentative" @click="tentOpen = true">{{ t('banquet.event.makeTentative') }}</Button>
       <Button v-if="canConfirm && event.status === 'TENTATIVE'" type="button" data-testid="event-confirm" @click="confirmOpen = true">{{ t('banquet.confirm.action') }}</Button>
       <Button v-if="canClose && event.status !== 'DEFINITE' && open" type="button" variant="outline" data-testid="event-lost" @click="startClose('lost')">{{ t('banquet.event.markLost') }}</Button>
+      <Button v-if="canComplete" type="button" variant="outline" data-testid="event-complete" @click="completeEvent">{{ t('banquet.complete.action') }}</Button>
       <Button v-if="canClose && event.status === 'DEFINITE'" type="button" variant="outline" data-testid="event-cancel" @click="startClose('cancel')">{{ t('banquet.event.cancel') }}</Button>
     </template>
   </PageHeader>
@@ -231,6 +248,8 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
         <TabsTrigger v-if="canSeeMoney" value="lines" data-testid="tab-lines">{{ t('banquet.event.tabLines') }}</TabsTrigger>
         <TabsTrigger v-if="canSeeMoney" value="deposit" data-testid="tab-deposit">{{ t('banquet.event.tabDeposit') }}</TabsTrigger>
         <TabsTrigger v-if="canSeeMoney" value="folio" data-testid="tab-folio">{{ t('banquet.event.tabFolio') }}</TabsTrigger>
+        <TabsTrigger value="beo" data-testid="tab-beo">{{ t('banquet.event.tabBeo') }}</TabsTrigger>
+        <TabsTrigger value="docs" data-testid="tab-docs">{{ t('banquet.event.tabDocs') }}</TabsTrigger>
         <TabsTrigger value="details" data-testid="tab-details">{{ t('banquet.event.tabDetails') }}</TabsTrigger>
       </TabsList>
       <TabsContent value="sessions">
@@ -261,6 +280,12 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
       </TabsContent>
       <TabsContent v-if="canSeeMoney && money" value="folio">
         <BanquetFolioTab :property-id="pid!" :event="event" :money="money" :business-date="businessDate" :can-manage="canManage" @changed="reloadMoney" />
+      </TabsContent>
+      <TabsContent value="beo">
+        <BanquetBeoTab :property-id="pid!" :event="event" :can-manage="canManage" @changed="reloadMoney" />
+      </TabsContent>
+      <TabsContent value="docs">
+        <BanquetDocsTab :property-id="pid!" :event="event" :can-manage="canManage" :can-confirm="canConfirm" @changed="reloadMoney" />
       </TabsContent>
       <TabsContent value="details">
         <dl class="m-0 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" data-testid="event-details">

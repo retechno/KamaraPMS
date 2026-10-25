@@ -12,6 +12,7 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlabel"
+	"kamarapms/internal/banquet"
 	"kamarapms/internal/documents"
 	"kamarapms/internal/notifications/notificationsdb"
 	"kamarapms/internal/platform/apperr"
@@ -44,6 +45,7 @@ type Service struct {
 	days   *tenancy.Service
 	docs   *documents.Service
 	res    *reservations.Service
+	banq   *banquet.Service
 	sender Sender
 }
 
@@ -51,6 +53,9 @@ type Service struct {
 func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, docs *documents.Service, res *reservations.Service, sender Sender) *Service {
 	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, docs: docs, res: res, sender: sender}
 }
+
+// SetBanquet gives the service the banquet whose proposals and contracts it sends (the banquet is built after the notifier).
+func (s *Service) SetBanquet(b *banquet.Service) { s.banq = b }
 
 // Enabled reports whether e-mail is configured.
 func (s *Service) Enabled() bool { return s.sender != nil }
@@ -91,7 +96,7 @@ func (s *Service) enqueue(ctx context.Context, tenantID, propertyID, reservation
 		}
 		return notificationsdb.EmailOutbox{}, nil
 	}
-	row, err := q.InsertOutbox(ctx, notificationsdb.InsertOutboxParams{TenantID: tenantID, PropertyID: propertyID, Kind: KindConfirmation, ReservationID: reservationID, ToAddress: to, Now: s.clock.Now(), ActorID: actorID})
+	row, err := q.InsertOutbox(ctx, notificationsdb.InsertOutboxParams{TenantID: tenantID, PropertyID: propertyID, Kind: KindConfirmation, ReservationID: &reservationID, ToAddress: to, Now: s.clock.Now(), ActorID: actorID})
 	if err != nil {
 		return notificationsdb.EmailOutbox{}, err
 	}
@@ -135,7 +140,7 @@ func (s *Service) List(ctx context.Context, propertyID, reservationID int64) (St
 	if err := s.authz.Require(ctx, propertyID, auth.PermReservationRead); err != nil {
 		return Status{}, err
 	}
-	rows, err := s.q(ctx).ListOutboxForReservation(ctx, notificationsdb.ListOutboxForReservationParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: reservationID})
+	rows, err := s.q(ctx).ListOutboxForReservation(ctx, notificationsdb.ListOutboxForReservationParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: &reservationID})
 	if err != nil {
 		return Status{}, err
 	}
@@ -173,7 +178,7 @@ func (s *Service) Resend(ctx context.Context, propertyID, reservationID int64) (
 		if res.Status != reservations.StatusConfirmed {
 			return apperr.Conflict("RESERVATION_NOT_CONFIRMED", "only a confirmed reservation has a confirmation to send")
 		}
-		rows, err := s.q(ctx).ListOutboxForReservation(ctx, notificationsdb.ListOutboxForReservationParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: reservationID})
+		rows, err := s.q(ctx).ListOutboxForReservation(ctx, notificationsdb.ListOutboxForReservationParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: &reservationID})
 		if err != nil {
 			return err
 		}
@@ -277,7 +282,13 @@ func truncate(s string, n int) string {
 // compose builds the message of an outbox row. skip is a reason to drop it without an error (the reservation is no
 // longer confirmed).
 func (s *Service) compose(ctx context.Context, row notificationsdb.EmailOutbox) (msg Message, skip string, err error) {
-	res, err := s.res.Get(ctx, row.PropertyID, row.ReservationID)
+	if row.Kind != KindConfirmation {
+		return s.composeBanquet(ctx, row)
+	}
+	if row.ReservationID == nil {
+		return Message{}, "the e-mail has no reservation", nil
+	}
+	res, err := s.res.Get(ctx, row.PropertyID, *row.ReservationID)
 	if err != nil {
 		return Message{}, "", err
 	}
@@ -288,7 +299,7 @@ func (s *Service) compose(ctx context.Context, row notificationsdb.EmailOutbox) 
 	if err != nil {
 		return Message{}, "", err
 	}
-	doc, err := s.docs.Confirmation(ctx, row.PropertyID, row.ReservationID)
+	doc, err := s.docs.Confirmation(ctx, row.PropertyID, *row.ReservationID)
 	if err != nil {
 		return Message{}, "", err
 	}

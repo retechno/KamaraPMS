@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/banquet"
 	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
 	"kamarapms/internal/companies"
@@ -47,6 +48,8 @@ type Service struct {
 	taxInv *taxinvoice.Service
 	budget *budget.Service
 	shifts *shifts.Service
+	// banquet is set by the application (SetBanquet): the banquet is built after the documents.
+	banquet *banquet.Service
 }
 
 // NewService wires the service.

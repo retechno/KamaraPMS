@@ -161,6 +161,9 @@ func (g *page) split(s string, w float64) []string {
 // paragraph prints wrapped text at the left margin.
 func (g *page) paragraph(s string, h float64) {
 	for _, l := range g.split(g.tr(s), bodyW-2) {
+		if g.p.GetY()+h > footerAt-8 { // a long text goes on to the next page, not over the footer
+			g.p.AddPage()
+		}
 		g.p.CellFormat(bodyW, h, l, "", 1, "L", false, 0, "")
 	}
 }

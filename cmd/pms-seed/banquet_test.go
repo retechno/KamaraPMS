@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -10,8 +11,11 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/banquet"
 	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
+	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/rooms/roomstest"
 )
 
@@ -22,14 +26,16 @@ func TestSeedBanquet(t *testing.T) {
 	ctx := roomstest.Admin(tn.ID)
 	svc := banquet.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, nil, nil, nil)
 
+	deps := departments.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy)
 	run := func(dry bool) (int, string) {
 		var out bytes.Buffer
-		n, err := seedBanquetWith(ctx, svc, e.Billing, p.ID, dry, &out)
+		n, err := seedBanquetWith(ctx, svc, deps, e.Billing, p.ID, dry, &out)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return n, out.String()
 	}
+	standardDepartments(t, e, tn.ID, p.ID)
 
 	n, out := run(true)
 	if n == 0 || !strings.Contains(out, "would create") {
@@ -63,6 +69,17 @@ func TestSeedBanquet(t *testing.T) {
 	tpls, err := svc.ListPolicyTemplates(ctx, p.ID, nil)
 	if err != nil || len(tpls) != 1 || !tpls[0].IsDefault || len(tpls[0].Deposits) != 3 || len(tpls[0].Tiers) != 4 {
 		t.Fatalf("policy template: %+v %v", tpls, err)
+	}
+
+	// the sections of the BEO are tied to the standard departments
+	rec, err := svc.ListRecipients(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rec {
+		if r.DepartmentID == nil || r.DepartmentCode == nil || *r.DepartmentCode != bqSectionDepartment[r.Section] {
+			t.Fatalf("BEO recipient %+v", r)
+		}
 	}
 
 	again, out := run(false)
@@ -149,4 +166,94 @@ func TestSeedBanquet(t *testing.T) {
 	if n, _ := run(false); n != 0 {
 		t.Fatalf("the repair is not idempotent: %d", n)
 	}
+}
+
+func TestSeedBanquetBeoFillsTheDefiniteEventsThatHaveNone(t *testing.T) {
+	e := roomstest.Setup(t)
+	tn := e.Tenant(t, "ABC")
+	p := e.Property(t, tn.ID, "BALI")
+	ctx := roomstest.Admin(tn.ID)
+	svc := banquet.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, e.Folios, e.Billing, e.IAM)
+	deps := departments.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy)
+	run := func(dry bool) (int, string) {
+		var out bytes.Buffer
+		n, err := seedBanquetWith(ctx, svc, deps, e.Billing, p.ID, dry, &out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n, out.String()
+	}
+	standardDepartments(t, e, tn.ID, p.ID)
+	run(false)
+
+	rooms, err := svc.ListRooms(ctx, p.ID, nil)
+	if err != nil || len(rooms) == 0 {
+		t.Fatalf("rooms: %v %v", rooms, err)
+	}
+	sales, err := auth.Require(e.User(t, tn.ID, p.ID, auth.PermBanquetManage))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := svc.CreateEvent(ctx, p.ID, banquet.EventInput{Name: "Gala", BookerGuestID: guestOf(t, e, tn.ID, p.ID), SalesUserID: &sales.UserID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, end := civil.MustParseTimeOfDay("12:00"), civil.MustParseTimeOfDay("16:00")
+	if _, err = svc.AddSession(ctx, p.ID, ev.ID, banquet.SessionInput{Name: "Dinner", SessionDate: civil.MustParseDate("2026-11-07"), StartTime: &start, EndTime: &end, RoomID: &rooms[0].ID, PaxEstimated: 50}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.MakeTentative(ctx, p.ID, ev.ID, banquet.TentativeInput{OptionUntil: civil.MustParseDate("2026-10-20")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Confirm(ctx, p.ID, ev.ID, banquet.ConfirmInput{}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, out := run(true)
+	if n != 1 || !strings.Contains(out, "session 1: to create") {
+		t.Fatalf("the dry run counts the session: %d %s", n, out)
+	}
+	if v, _ := svc.Beo(ctx, p.ID, ev.ID); v.Revision != 1 {
+		t.Fatalf("a dry run saved a BEO: revision %d", v.Revision)
+	}
+	if n, _ = run(false); n != 1 {
+		t.Fatalf("created %d, the dry run said 1", n)
+	}
+	v, err := svc.Beo(ctx, p.ID, ev.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Revision != 2 || len(v.Sessions[0].RunOfShow) != 1 {
+		t.Fatalf("the sample BEO is one revision: %+v", v.Revision)
+	}
+	for _, x := range v.Sessions[0].Sections {
+		if strings.TrimSpace(x.Body) == "" {
+			t.Fatalf("section %s has no text", x.Section)
+		}
+	}
+	if n, _ = run(false); n != 0 {
+		t.Fatalf("the seed is not idempotent: %d", n)
+	}
+	if v2, _ := svc.Beo(ctx, p.ID, ev.ID); v2.Revision != 2 {
+		t.Fatalf("a second run made a revision: %d", v2.Revision)
+	}
+}
+
+// standardDepartments are the departments every property has once it is set up (a property made by the tests starts without them).
+func standardDepartments(t *testing.T, e *roomstest.Env, tenantID, propertyID int64) {
+	t.Helper()
+	for _, code := range []string{"ROOMS", "FB", "POM", "AG"} {
+		if _, err := e.Pool.Exec(context.Background(), `INSERT INTO departments (tenant_id, property_id, code, name) VALUES ($1, $2, $3, $3) ON CONFLICT DO NOTHING`, tenantID, propertyID, code); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func guestOf(t *testing.T, e *roomstest.Env, tenantID, propertyID int64) *int64 {
+	t.Helper()
+	var id int64
+	if err := e.Pool.QueryRow(context.Background(), `INSERT INTO guests (tenant_id, code, last_name, origin_property_id) VALUES ($1, 'G1', 'Wijaya', $2) RETURNING id`, tenantID, propertyID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return &id
 }

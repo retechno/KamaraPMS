@@ -13103,6 +13103,291 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/beo:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetBeo
+      summary: "The BEO of an event: the sections of each session, where each stands for its department, and the history of the revisions (banquet.read)"
+      description: "Before Definite the BEO is a draft (`draft` true, no revisions). After it, every save of the event is one revision. A section is CHANGED when its text, or the date, time, room, set-up or number of guests of its session, changed since the last revision a person of its department read."
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetBeo" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}/beo:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: sid, in: path, required: true, schema: { type: integer, format: int64 } }
+    put:
+      operationId: saveBanquetBeo
+      summary: "Save the texts and the programme of a session (banquet.manage)"
+      description: "The sections named are replaced, the others stay; a programme given replaces the old one (an empty list clears it). After Definite the save is one revision and tells the head and the deputy of the department of each section that changed; a section with no department tells nobody. Saving what is already there is no revision."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetBeoInput" }
+      responses:
+        "200":
+          description: The BEO after the save.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetBeo" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/beo/ack:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: ackBanquetBeo
+      summary: "Mark a section of a session as read at the last revision (banquet.read)"
+      description: "Without `section`, every section of the session."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetBeoAckInput" }
+      responses:
+        "200":
+          description: The BEO after the mark.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetBeo" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/beo/revisions/{no}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: no, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getBanquetBeoRevision
+      summary: "The event as it was at a revision (banquet.read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetBeoRevision" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/beo-recipients:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetBeoRecipients
+      summary: "The department of each section of the BEO, with the head and the deputy who are told (banquet.read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetBeoRecipient" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: putBanquetBeoRecipients
+      summary: "Set the department of the sections of the BEO (banquet.setup)"
+      description: "A section with no department takes none: nobody is told when it changes. The head and the deputy are the ones of the department in the Departments settings."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetBeoRecipientsInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetBeoRecipient" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/documents:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listBanquetDocuments
+      summary: "The proposals that were recorded and the contracts that were issued for an event (banquet.read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetDocument" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/documents/contract:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: issueBanquetContract
+      summary: "Number the contract of the revision in force (banquet.confirm)"
+      description: "The contract is final for the revision it carries: asking again for the same revision gives the same number, and a later revision needs a new contract. Only a Definite event has one (409 EVENT_STATUS_INVALID)."
+      tags: [banquet]
+      responses:
+        "200":
+          description: The contract.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetDocument" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/documents/proposal.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lang, in: query, schema: { type: string, enum: [en, id] } }
+    get:
+      operationId: getBanquetProposalPdf
+      summary: "The proposal of an event as it is now, as PDF (banquet.read)"
+      tags: [banquet]
+      responses:
+        "200": { description: The PDF., content: { application/pdf: { schema: { type: string, format: binary } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/documents/contract.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lang, in: query, schema: { type: string, enum: [en, id] } }
+    get:
+      operationId: getBanquetContractPdf
+      summary: "The contract of the revision in force, as PDF (banquet.read); 404 CONTRACT_NOT_ISSUED when none was issued for it"
+      tags: [banquet]
+      responses:
+        "200": { description: The PDF., content: { application/pdf: { schema: { type: string, format: binary } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/documents/beo.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: session_id, in: query, description: "One session; left out: every active session", schema: { type: integer, format: int64 } }
+      - { name: revision, in: query, description: "The BEO as it was at a revision; left out: as it is now", schema: { type: integer } }
+      - { name: lang, in: query, schema: { type: string, enum: [en, id] } }
+    get:
+      operationId: getBanquetBeoPdf
+      summary: "The BEO of an event or of a session, as PDF (banquet.read)"
+      tags: [banquet]
+      responses:
+        "200": { description: The PDF., content: { application/pdf: { schema: { type: string, format: binary } } } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/documents/{id}/file.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lang, in: query, schema: { type: string, enum: [en, id] } }
+    get:
+      operationId: getBanquetDocumentPdf
+      summary: "A recorded proposal or contract, as PDF, from the snapshot it kept (banquet.read)"
+      tags: [banquet]
+      responses:
+        "200": { description: The PDF., content: { application/pdf: { schema: { type: string, format: binary } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/emails:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listBanquetEmails
+      summary: "The proposals and contracts sent by e-mail for an event, newest first, with their status (banquet.read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEmails" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/emails/proposal:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: sendBanquetProposal
+      summary: "Record the proposal as it is now and e-mail it (banquet.manage)"
+      description: "The e-mail goes through the outbox (QUEUED, then SENT, FAILED or SKIPPED). 409 EMAIL_NOT_CONFIGURED without a mail server, 409 EMAIL_ALREADY_QUEUED while the same message waits, 422 EVENT_HAS_NO_EMAIL when the event has no contact e-mail and none is given."
+      tags: [banquet]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetSendEmailInput" }
+      responses:
+        "202":
+          description: The e-mail that was queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEmail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/emails/contract:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: sendBanquetContract
+      summary: "Number the contract of the revision in force and e-mail it (banquet.confirm)"
+      description: "As sendBanquetProposal; the contract is the one of the revision in force, numbered once."
+      tags: [banquet]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetSendEmailInput" }
+      responses:
+        "202":
+          description: The e-mail that was queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEmail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: completeBanquetEvent
+      summary: "Complete a Definite event (banquet.manage)"
+      description: "Every active session must be posted (409 SESSIONS_NOT_POSTED, with the count of the ones that are not). The status becomes COMPLETED; the bill of the event is not closed."
+      tags: [banquet]
+      responses:
+        "200":
+          description: The event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/banquet/events/{id}/money:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -24706,10 +24991,11 @@ components:
         overdue_options: { type: array, items: { $ref: "#/components/schemas/BanquetOverdueOption" } }
     BanquetNotice:
       type: object
-      required: [id, kind, event_id, event_number, event_name, session_id, notice_date, created_at, seen_at]
+      required: [id, kind, revision_no, event_id, event_number, event_name, session_id, notice_date, created_at, seen_at]
       properties:
         id: { type: integer, format: int64 }
-        kind: { type: string, enum: [OPTION_PROMOTED, OPTION_DUE, OPTION_LOST] }
+        kind: { type: string, enum: [OPTION_PROMOTED, OPTION_DUE, OPTION_LOST, DEPOSIT_DUE, BEO_REVISED, FEE_PROPOSED] }
+        revision_no: { type: [integer, "null"], description: "For BEO_REVISED: the last revision that told the person." }
         event_id: { type: integer, format: int64 }
         event_number: { type: string }
         event_name: { type: string }
@@ -24722,6 +25008,234 @@ components:
       description: "The notices to mark; none marks them all."
       properties:
         ids: { type: array, items: { type: integer, format: int64 } }
+    BanquetBeoReader:
+      type: object
+      required: [user_name, revision, at]
+      properties:
+        user_name: { type: string }
+        revision: { type: integer }
+        at: { type: string, format: date-time }
+    BanquetBeoSection:
+      type: object
+      description: "state: DRAFT before Definite, UNREAD when nobody of the department read it, READ when it was read and nothing changed since, CHANGED when its text, or the shared data of its session, changed after the last revision that was read (`changed_since`). no_department: the property did not map this section to a department, so nobody is told when it changes."
+      required: [section, body, department_id, department_name, head, deputy, no_department, state, read_revision, changed_since, read_by]
+      properties:
+        section: { type: string, enum: [GENERAL, KITCHEN, FB_SERVICE, HOUSEKEEPING, ENGINEERING, SECURITY, FRONT_OFFICE] }
+        body: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_name: { type: [string, "null"] }
+        head: { type: [string, "null"] }
+        deputy: { type: [string, "null"] }
+        no_department: { type: boolean }
+        state: { type: string, enum: [DRAFT, UNREAD, READ, CHANGED] }
+        read_revision: { type: [integer, "null"] }
+        changed_since: { type: [integer, "null"] }
+        read_by: { type: array, items: { $ref: "#/components/schemas/BanquetBeoReader" } }
+    BanquetRunLine:
+      type: object
+      required: [seq, at_time, text]
+      properties:
+        seq: { type: integer }
+        at_time: { $ref: "#/components/schemas/TimeOfDay" }
+        text: { type: string }
+    BanquetBeoSession:
+      type: object
+      required: [id, no, name, date, start, end, ends_next_day, room, setup, pax_estimated, pax_guaranteed, status, sections, run_of_show]
+      properties:
+        id: { type: integer, format: int64 }
+        no: { type: integer }
+        name: { type: string }
+        date: { $ref: "#/components/schemas/Date" }
+        start: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        end: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        ends_next_day: { type: boolean }
+        room: { type: string }
+        setup: { type: string }
+        pax_estimated: { type: integer }
+        pax_guaranteed: { type: [integer, "null"] }
+        status: { type: string, enum: [ACTIVE, CANCELLED] }
+        sections: { type: array, items: { $ref: "#/components/schemas/BanquetBeoSection" } }
+        run_of_show: { type: array, items: { $ref: "#/components/schemas/BanquetRunLine" } }
+    BanquetBeoChange:
+      type: object
+      description: "One thing a save changed. The screen writes the sentence from the kind and the values."
+      required: [kind]
+      properties:
+        kind: { type: string }
+        session_id: { type: integer, format: int64 }
+        session_no: { type: integer }
+        field: { type: string }
+        section: { type: string }
+        old: { type: string }
+        new: { type: string }
+        text: { type: string }
+    BanquetBeoRevisionRow:
+      type: object
+      required: [revision_no, note, changes, notified, created_by_name, created_at]
+      properties:
+        revision_no: { type: integer }
+        note: { type: [string, "null"] }
+        changes: { type: array, items: { $ref: "#/components/schemas/BanquetBeoChange" } }
+        notified: { type: integer, description: "How many people were told by this revision." }
+        created_by_name: { type: string }
+        created_at: { type: string, format: date-time }
+    BanquetBeoRecipient:
+      type: object
+      required: [section, department_id, department_code, department_name, head, deputy]
+      properties:
+        section: { type: string, enum: [KITCHEN, FB_SERVICE, HOUSEKEEPING, ENGINEERING, SECURITY, FRONT_OFFICE] }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: [string, "null"] }
+        department_name: { type: [string, "null"] }
+        head: { type: [string, "null"] }
+        deputy: { type: [string, "null"] }
+    BanquetBeo:
+      type: object
+      required: [event_id, number, name, status, revision, draft, sessions, revisions, recipients]
+      properties:
+        event_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        status: { type: string }
+        revision: { type: integer, description: "The last revision; 0 while the event is a draft." }
+        draft: { type: boolean }
+        sessions: { type: array, items: { $ref: "#/components/schemas/BanquetBeoSession" } }
+        revisions: { type: array, items: { $ref: "#/components/schemas/BanquetBeoRevisionRow" } }
+        recipients: { type: array, items: { $ref: "#/components/schemas/BanquetBeoRecipient" } }
+    BanquetBeoRunLineInput:
+      type: object
+      required: [at_time, text]
+      properties:
+        at_time: { $ref: "#/components/schemas/TimeOfDay" }
+        text: { type: string, maxLength: 300 }
+    BanquetBeoInput:
+      type: object
+      properties:
+        sections: { type: object, additionalProperties: { type: string, maxLength: 4000 }, description: "The text of each section named; the others stay." }
+        run_of_show: { type: array, maxItems: 60, items: { $ref: "#/components/schemas/BanquetBeoRunLineInput" }, description: "Replaces the programme; an empty list clears it; left out: unchanged." }
+        note: { type: [string, "null"], maxLength: 300, description: "Why, for the history." }
+    BanquetBeoAckInput:
+      type: object
+      required: [session_id]
+      properties:
+        session_id: { type: integer, format: int64 }
+        section: { type: string, enum: [GENERAL, KITCHEN, FB_SERVICE, HOUSEKEEPING, ENGINEERING, SECURITY, FRONT_OFFICE] }
+    BanquetBeoRecipientItem:
+      type: object
+      required: [section, department_id]
+      properties:
+        section: { type: string, enum: [KITCHEN, FB_SERVICE, HOUSEKEEPING, ENGINEERING, SECURITY, FRONT_OFFICE] }
+        department_id: { type: [integer, "null"], format: int64 }
+    BanquetBeoRecipientsInput:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BanquetBeoRecipientItem" } }
+    BanquetSnapshotEvent:
+      type: object
+      required: [number, name, status, event_type, booker, contact_name, contact_phone, contact_email, sales_name, group_name, notes, option_until]
+      properties:
+        number: { type: string }
+        name: { type: string }
+        status: { type: string }
+        event_type: { type: string }
+        booker: { type: string }
+        contact_name: { type: string }
+        contact_phone: { type: string }
+        contact_email: { type: string }
+        sales_name: { type: string }
+        group_name: { type: string }
+        notes: { type: string }
+        option_until: { type: string }
+    BanquetSnapshotSession:
+      type: object
+      required: [id, no, name, date, start, end, ends_next_day, room, setup, pax_estimated, pax_guaranteed, status, notes, sections, run_of_show]
+      properties:
+        id: { type: integer, format: int64 }
+        no: { type: integer }
+        name: { type: string }
+        date: { $ref: "#/components/schemas/Date" }
+        start: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        end: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        ends_next_day: { type: boolean }
+        room: { type: string }
+        setup: { type: string }
+        pax_estimated: { type: integer }
+        pax_guaranteed: { type: [integer, "null"] }
+        status: { type: string }
+        notes: { type: string }
+        sections: { type: object, additionalProperties: { type: string } }
+        run_of_show: { type: array, items: { $ref: "#/components/schemas/BanquetRunLine" } }
+    BanquetSnapshotDeposit:
+      type: object
+      required: [label, due_date, percent, amount]
+      properties:
+        label: { type: string }
+        due_date: { $ref: "#/components/schemas/Date" }
+        percent: { type: [string, "null"] }
+        amount: { type: string }
+    BanquetSnapshot:
+      type: object
+      description: "The whole document of an event at one moment: what a revision keeps and what the PDFs are drawn from."
+      required: [version, event, sessions, lines, estimate, deposits, policy]
+      properties:
+        version: { type: integer }
+        event: { $ref: "#/components/schemas/BanquetSnapshotEvent" }
+        sessions: { type: array, items: { $ref: "#/components/schemas/BanquetSnapshotSession" } }
+        lines: { type: array, items: { $ref: "#/components/schemas/BanquetLine" } }
+        estimate: { $ref: "#/components/schemas/BanquetEstimate" }
+        deposits: { type: array, items: { $ref: "#/components/schemas/BanquetSnapshotDeposit" } }
+        policy:
+          type: object
+          required: [base, tiers]
+          properties:
+            base: { type: string }
+            tiers: { type: array, items: { $ref: "#/components/schemas/BanquetTier" } }
+    BanquetBeoRevision:
+      type: object
+      required: [revision_no, created_at, snapshot]
+      properties:
+        revision_no: { type: integer }
+        created_at: { type: string, format: date-time }
+        snapshot: { $ref: "#/components/schemas/BanquetSnapshot" }
+    BanquetDocument:
+      type: object
+      description: "A proposal that was recorded (no number, no revision) or a contract (BQC- number, final for the revision it carries)."
+      required: [id, kind, number, revision_no, created_at, created_by_name]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [PROPOSAL, CONTRACT] }
+        number: { type: [string, "null"] }
+        revision_no: { type: [integer, "null"] }
+        created_at: { type: string, format: date-time }
+        created_by_name: { type: string }
+    BanquetSendEmailInput:
+      type: object
+      properties:
+        to: { type: string, description: "Left out: the contact e-mail of the event." }
+        language: { type: string, enum: [en, id], description: "The language of the PDF; English when left out." }
+    BanquetEmail:
+      type: object
+      required: [id, kind, to, status, attempts, sent_at, created_at, document_id, document_number, revision_no, language]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [BANQUET_PROPOSAL, BANQUET_CONTRACT] }
+        to: { type: string }
+        status: { type: string, enum: [QUEUED, SENT, FAILED, SKIPPED] }
+        attempts: { type: integer }
+        last_error: { type: string }
+        sent_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        document_id: { type: integer, format: int64 }
+        document_number: { type: [string, "null"] }
+        revision_no: { type: [integer, "null"] }
+        language: { type: string, enum: [en, id] }
+    BanquetEmails:
+      type: object
+      required: [enabled, data]
+      properties:
+        enabled: { type: boolean, description: "False when the server has no mail server: nothing can be sent." }
+        data: { type: array, items: { $ref: "#/components/schemas/BanquetEmail" } }
     BanquetConfirmInput:
       type: object
       properties:
