@@ -68,6 +68,14 @@ func guestsText(l Lang, sn banquet.SnapSession) string {
 	return l.T(strconv.Itoa(sn.PaxEstimated) + " estimated")
 }
 
+// roomLabel names the room of the event: "Room", "Ruang"; the generic word for a room of the stay is "Kamar" in Indonesian, which is the guest room.
+func (d BanquetDoc) roomLabel() string {
+	if d.Lang == LangID {
+		return "Ruang"
+	}
+	return "Room"
+}
+
 func (d BanquetDoc) setup(sn banquet.SnapSession) string {
 	if sn.Setup == "" {
 		return "-"
@@ -299,7 +307,7 @@ func RenderBeo(d BanquetDoc) ([]byte, error) {
 		g.pairs([][2]string{
 			{"Event", e.Name}, {"Client", e.Booker},
 			{"Session", strconv.Itoa(sn.No) + " · " + sn.Name}, {"Date", d.Lang.Date(sn.Date)},
-			{"Time", timeSpan(sn)}, {"Room", d.room(sn)},
+			{"Time", timeSpan(sn)}, {d.roomLabel(), d.room(sn)},
 			{"Set-up", d.setup(sn)}, {"Guests", guestsText(d.Lang, sn)},
 			{"Contact", contact}, {"Sales", e.SalesName},
 		})

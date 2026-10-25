@@ -63,6 +63,11 @@ const people = (s: string): string => {
   const r = recipients.value.find((x) => x.section === s)
   return r?.department_id ? t('banquet.recipients.people', { head: r.head ?? '–', deputy: r.deputy ?? '–' }) : t('banquet.recipients.nobody')
 }
+// a department with neither a head nor a deputy tells nobody, as a section with no department
+const noHead = (s: string): boolean => {
+  const r = recipients.value.find((x) => x.section === s)
+  return !!r?.department_id && !r.head && !r.deputy
+}
 </script>
 
 <template>
@@ -78,7 +83,7 @@ const people = (s: string): string => {
             <option :value="0">{{ t('banquet.recipients.none') }}</option>
             <option v-for="d in byDepartment" :key="d.id" :value="d.id">{{ d.level === 2 ? '– ' : '' }}{{ d.code }} · {{ d.name }}</option>
           </NativeSelect>
-          <p class="m-0 mt-1 text-xs text-muted-foreground" :data-testid="`recipient-people-${s}`">{{ people(s) }}</p>
+          <p class="m-0 mt-1 text-xs" :class="noHead(s) ? 'text-destructive' : 'text-muted-foreground'" :data-testid="`recipient-people-${s}`">{{ noHead(s) ? t('banquet.recipients.noHead') : people(s) }}</p>
         </div>
       </div>
       <div class="flex justify-end"><Button type="submit" :disabled="busy" data-testid="recipients-save">{{ t('common.save') }}</Button></div>

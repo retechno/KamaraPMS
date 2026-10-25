@@ -6171,6 +6171,7 @@ export const en = {
       generalHint: 'For everybody. This section has no department: nobody is told when it changes.',
       noDepartment: 'This section has no department in the settings: nobody is told when it changes.',
       told: 'Told when it changes: {department} (head {head}, deputy {deputy}).',
+      noHead: 'The department {department} has no head or deputy in the settings: nobody is told when it changes.',
       readBy: 'Read by {names}',
       markRead: 'Mark as read',
       runOfShow: 'Run of the day',
@@ -6258,6 +6259,7 @@ export const en = {
       none: 'No department',
       people: 'Head: {head} · Deputy: {deputy}',
       nobody: 'Nobody is told.',
+      noHead: 'This department has no head or deputy in the Departments settings: nobody is told when it changes.',
       saved: 'BEO recipients saved',
     },
     complete: {

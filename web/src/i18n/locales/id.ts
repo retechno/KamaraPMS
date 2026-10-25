@@ -6169,6 +6169,7 @@ export const id: Messages = {
       generalHint: 'Untuk semua pihak. Bagian ini tidak punya departemen: tidak ada yang diberi tahu saat berubah.',
       noDepartment: 'Bagian ini belum punya departemen di pengaturan: tidak ada yang diberi tahu saat berubah.',
       told: 'Diberi tahu saat berubah: {department} (kepala {head}, wakil {deputy}).',
+      noHead: 'Departemen {department} belum punya kepala maupun wakil di pengaturan: tidak ada yang diberi tahu saat berubah.',
       readBy: 'Dibaca oleh {names}',
       markRead: 'Tandai sudah dibaca',
       runOfShow: 'Susunan acara',
@@ -6256,6 +6257,7 @@ export const id: Messages = {
       none: 'Tanpa departemen',
       people: 'Kepala: {head} · Wakil: {deputy}',
       nobody: 'Tidak ada yang diberi tahu.',
+      noHead: 'Departemen ini belum punya kepala maupun wakil di pengaturan Departemen: tidak ada yang diberi tahu saat berubah.',
       saved: 'Penerima BEO tersimpan',
     },
     complete: {

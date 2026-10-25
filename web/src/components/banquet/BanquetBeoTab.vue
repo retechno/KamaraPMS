@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { documentPath, openPdf } from '@/utils/documents'
-import { formatDateShort } from '@/utils/format'
+import { formatDateShort, formatDateTime } from '@/utils/format'
 
 /**
  * The tab "BEO" (docs/architecture/36-banquet.md 4.6, mockup 42): for each session the text of each department (kitchen, F&B service, housekeeping, engineering, security, front office), the run of the day, and
@@ -127,8 +127,19 @@ async function showRevision(no: number): Promise<void> {
     error.value = e instanceof ApiError ? e : null
   }
 }
+// a set-up is named as the rest of the app names it, never by its code
+const styleName = (code: string): string => (code ? t(`banquet.style.${code}`) : '')
+// one entry for each person: the last revision that person read
+function readers(x: BanquetBeoSection): string {
+  const last = new Map<string, number>()
+  for (const r of x.read_by) last.set(r.user_name, Math.max(last.get(r.user_name) ?? 0, r.revision))
+  return [...last].map(([name, revision]) => `${name} (r${revision})`).join(', ')
+}
+// a section that is told to nobody: no department, or a department that has neither a head nor a deputy
+const nobodyTold = (x: BanquetBeoSection): boolean => x.no_department || (!x.head && !x.deputy)
 function sentence(c: BanquetBeoChange): string {
-  const p = { no: c.session_no ?? '', field: c.field ? t(`banquet.beo.field.${c.field}`) : '', section: c.section ? t(`banquet.beo.section.${c.section}`) : '', old: c.old || '–', new: c.new || '–', text: c.text ?? '' }
+  const shown = (v: string): string => (c.field === 'setup' && v ? styleName(v) : v || '–')
+  const p = { no: c.session_no ?? '', field: c.field ? t(`banquet.beo.field.${c.field}`) : '', section: c.section ? t(`banquet.beo.section.${c.section}`) : '', old: shown(c.old ?? ''), new: shown(c.new ?? ''), text: c.text ?? '' }
   return t(`banquet.beo.change.${c.kind}`, p)
 }
 async function pdf(path: string): Promise<void> {
@@ -159,7 +170,7 @@ async function pdf(path: string): Promise<void> {
         <div class="min-w-0">
           <h3 class="m-0 text-base font-semibold">{{ s.no }}. {{ s.name }}</h3>
           <p class="m-0 text-sm text-muted-foreground">
-            {{ formatDateShort(s.date) }} · {{ range(s) }} · {{ s.room || t('banquet.session.noRoom') }}<template v-if="s.setup"> · {{ s.setup }}</template> · {{ t('banquet.session.paxCount', { n: s.pax_guaranteed ?? s.pax_estimated }) }}
+            {{ formatDateShort(s.date) }} · {{ range(s) }} · {{ s.room || t('banquet.session.noRoom') }}<template v-if="s.setup"> · {{ styleName(s.setup) }}</template> · {{ t('banquet.session.paxCount', { n: s.pax_guaranteed ?? s.pax_estimated }) }}
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" :data-testid="`beo-pdf-${s.id}`" @click="pdf(documentPath.banquetBeo(propertyId, event.id, s.id))">{{ t('banquet.beo.pdfSession') }}</Button>
@@ -175,7 +186,7 @@ async function pdf(path: string): Promise<void> {
             </div>
           </div>
           <p v-if="x.section === 'GENERAL'" class="m-0 mb-1 text-xs text-muted-foreground">{{ t('banquet.beo.generalHint') }}</p>
-          <p v-else-if="x.no_department" class="m-0 mb-1 text-xs text-destructive" :data-testid="`beo-nodept-${s.id}-${x.section}`">{{ t('banquet.beo.noDepartment') }}</p>
+          <p v-else-if="nobodyTold(x)" class="m-0 mb-1 text-xs text-destructive" :data-testid="`beo-nodept-${s.id}-${x.section}`">{{ x.no_department ? t('banquet.beo.noDepartment') : t('banquet.beo.noHead', { department: x.department_name ?? '' }) }}</p>
           <p v-else class="m-0 mb-1 text-xs text-muted-foreground">
             {{ t('banquet.beo.told', { department: x.department_name ?? '', head: x.head ?? '–', deputy: x.deputy ?? '–' }) }}
           </p>
@@ -190,7 +201,7 @@ async function pdf(path: string): Promise<void> {
             @input="dirty[s.id] = true"
           />
           <p v-else class="m-0 whitespace-pre-wrap text-sm">{{ x.body || '–' }}</p>
-          <p v-if="x.read_by.length" class="m-0 mt-1 text-xs text-muted-foreground">{{ t('banquet.beo.readBy', { names: x.read_by.map((r) => `${r.user_name} (r${r.revision})`).join(', ') }) }}</p>
+          <p v-if="x.read_by.length" class="m-0 mt-1 text-xs text-muted-foreground">{{ t('banquet.beo.readBy', { names: readers(x) }) }}</p>
         </section>
 
         <section class="rounded-md border border-border p-3" :data-testid="`beo-run-${s.id}`">
@@ -223,7 +234,7 @@ async function pdf(path: string): Promise<void> {
         <li v-for="r in beo.revisions" :key="r.revision_no" class="rounded-md border border-border p-3 text-sm" :data-testid="`revision-${r.revision_no}`">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <strong>{{ t('banquet.beo.revision', { n: r.revision_no }) }}</strong>
-            <span class="text-muted-foreground">{{ r.created_at.slice(0, 16).replace('T', ' ') }} · {{ r.created_by_name }}</span>
+            <span class="text-muted-foreground">{{ formatDateTime(r.created_at) }} · {{ r.created_by_name }}</span>
           </div>
           <p v-if="r.note" class="m-0 mt-1">{{ r.note }}</p>
           <ul class="m-0 mt-1 list-disc pl-5 text-muted-foreground">
@@ -244,7 +255,7 @@ async function pdf(path: string): Promise<void> {
         <DialogTitle>{{ t('banquet.beo.revisionOf', { n: view?.revision_no ?? 0 }) }}</DialogTitle>
         <DialogDescription>{{ t('banquet.beo.revisionOfHint') }}</DialogDescription>
         <div v-for="s in view?.snapshot.sessions ?? []" :key="s.id" class="mt-2 text-sm">
-          <h4 class="m-0 font-semibold">{{ s.no }}. {{ s.name }} · {{ formatDateShort(s.date) }} · {{ s.room || '–' }} · {{ s.pax_guaranteed ?? s.pax_estimated }} pax</h4>
+          <h4 class="m-0 font-semibold">{{ s.no }}. {{ s.name }} · {{ formatDateShort(s.date) }} · {{ s.room || '–' }}<template v-if="s.setup"> · {{ styleName(s.setup) }}</template> · {{ t('banquet.session.paxCount', { n: s.pax_guaranteed ?? s.pax_estimated }) }}</h4>
           <template v-for="(body, section) in s.sections" :key="section">
             <p v-if="body" class="m-0 mt-1 whitespace-pre-wrap"><strong>{{ t(`banquet.beo.section.${section}`) }}:</strong> {{ body }}</p>
           </template>

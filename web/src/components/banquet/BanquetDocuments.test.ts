@@ -9,6 +9,7 @@ import { useSubscriptionStore } from '@/stores/subscription'
 import BanquetBeoTab from './BanquetBeoTab.vue'
 import BanquetBell from './BanquetBell.vue'
 import BanquetDocsTab from './BanquetDocsTab.vue'
+import BanquetRecipientsCard from './BanquetRecipientsCard.vue'
 import BanquetTransferDialog from './BanquetTransferDialog.vue'
 
 // The BEO, the documents and the bell of the banquet (docs/architecture/36-banquet.md 4.6, mockup 42).
@@ -68,6 +69,37 @@ describe('the BEO tab', () => {
     expect((w.get('[data-testid=beo-text-11-KITCHEN]').element as HTMLTextAreaElement).value).toBe('Tanpa kacang')
     expect(w.get('[data-testid=revision-3]').text()).toContain('Tamu bertambah')
     expect(w.get('[data-testid=revision-3]').text()).toContain('perkiraan tamu berubah dari 100 menjadi 120')
+  })
+
+  it('names the set-up as the app does, one reader once with the last revision, the time as elsewhere, and a department without a head tells nobody', async () => {
+    const reader = (user_name: string, revision: number) => ({ user_name, revision, at: '2026-10-25T10:00:00Z' })
+    GET = vi.fn(async () => ({
+      data: beo({
+        sessions: [beoSession({
+          setup: 'CLASSROOM',
+          sections: [
+            section('KITCHEN', { state: 'READ', read_revision: 5, read_by: [reader('Chef Wayan', 3), reader('Pak Made', 4), reader('Chef Wayan', 5), reader('Pak Made', 5), reader('Chef Wayan', 4)] }),
+            section('HOUSEKEEPING', { department_name: 'Kamar', head: null, deputy: null }),
+            section('SECURITY', { department_id: null, no_department: true, department_name: null }),
+          ],
+        })],
+        revisions: [{ revision_no: 3, note: '', changes: [{ kind: 'session_field', session_no: 1, field: 'setup', old: 'CLASSROOM', new: 'THEATER' }], notified: 1, created_by_name: 'Dewi', created_at: '2026-10-25T10:00:00Z' }],
+      }),
+    }))
+    setLocale('id')
+    const w = await mountIt(BanquetBeoTab, { propertyId: 7, event: event(), canManage: true })
+    const head = w.get('[data-testid=beo-session-11]').text()
+    expect(head).toContain('Kelas')
+    expect(head).not.toContain('CLASSROOM')
+    const rev = w.get('[data-testid=revision-3]').text()
+    expect(rev).toContain('Teater')
+    expect(rev).not.toContain('THEATER')
+    expect(rev).toMatch(/25 Okt 2026 \d\d:\d\d/)
+    expect(rev).not.toContain('2026-10-25')
+    expect(w.get('[data-testid=beo-session-11]').text()).toContain('Dibaca oleh Chef Wayan (r5), Pak Made (r5)')
+    expect(w.get('[data-testid=beo-session-11]').text()).not.toContain('(r3)')
+    expect(w.get('[data-testid=beo-nodept-11-HOUSEKEEPING]').text()).toContain('tidak ada yang diberi tahu saat berubah')
+    expect(w.find('[data-testid=beo-nodept-11-KITCHEN]').exists()).toBe(false)
   })
 
   it('marks a section as read with the session and the section, and reloads the marks', async () => {
@@ -200,5 +232,22 @@ describe('the transfer dialog when nothing is posted yet', () => {
     expect(body('[data-testid=transfer-items-hint]').text()).not.toContain('0 tagihan')
     expect((document.body.querySelector('[data-testid=transfer-mode-items]') as HTMLInputElement).disabled).toBe(true)
     expect((document.body.querySelector('[data-testid=transfer-mode-balance]') as HTMLInputElement).checked).toBe(true)
+  })
+})
+
+describe('the recipients of the BEO', () => {
+  it('marks a department that has neither a head nor a deputy', async () => {
+    const recipient = (sec: string, over: Record<string, unknown>) => ({ section: sec, department_id: 1, department_name: 'Dapur', head: 'Budi', deputy: null, ...over })
+    GET = vi.fn(async (path: string) => ({
+      data: path.endsWith('/beo-recipients')
+        ? { data: [recipient('KITCHEN', {}), recipient('HOUSEKEEPING', { department_id: 2, department_name: 'Kamar', head: null, deputy: null }), recipient('SECURITY', { department_id: null, department_name: null, head: null, deputy: null })] }
+        : { data: [{ id: 1, code: 'FB', name: 'F&B', level: 1, is_active: true }, { id: 2, code: 'ROOMS', name: 'Rooms', level: 1, is_active: true }] },
+    }))
+    setLocale('id')
+    const w = await mountIt(BanquetRecipientsCard, { propertyId: 7 })
+    expect(w.get('[data-testid=recipient-people-HOUSEKEEPING]').text()).toContain('belum punya kepala maupun wakil')
+    expect(w.get('[data-testid=recipient-people-HOUSEKEEPING]').classes()).toContain('text-destructive')
+    expect(w.get('[data-testid=recipient-people-KITCHEN]').text()).toContain('Kepala: Budi')
+    expect(w.get('[data-testid=recipient-people-SECURITY]').text()).toBe('Tidak ada yang diberi tahu.')
   })
 })

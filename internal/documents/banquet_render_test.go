@@ -127,16 +127,22 @@ func TestBeoPrintsEachSectionAndTheRunOfTheDay(t *testing.T) {
 	if strings.Contains(s, "363000") || strings.Contains(s, "55660000") {
 		t.Error("the BEO prints prices")
 	}
+	if !strings.Contains(s, "Room") || strings.Contains(s, "Kamar") {
+		t.Error("the English BEO calls the room of the event Room")
+	}
 	d.Lang, d.SessionID = LangID, 11
 	b, err = RenderBeo(d)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s = text(t, b)
-	for _, want := range []string{"PERINTAH ACARA BANQUET", "DAPUR", "SUSUNAN ACARA", "Halal only, no nuts"} {
+	for _, want := range []string{"PERINTAH ACARA BANQUET", "DAPUR", "SUSUNAN ACARA", "Halal only, no nuts", "Ruang"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("Indonesian BEO lacks %q", want)
 		}
+	}
+	if strings.Contains(s, "Kamar") {
+		t.Error("the Indonesian BEO calls the room of the event Kamar, the guest room")
 	}
 	// a session that is not in the event is not printed
 	d.SessionID = 999
