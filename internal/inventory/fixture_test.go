@@ -3,6 +3,7 @@ package inventory_test
 import (
 	"context"
 	"os"
+	"sync/atomic"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -53,7 +54,7 @@ type fx struct {
 	cat              map[string]int64
 	wh               map[string]int64
 	item             map[string]int64
-	seq              int64
+	seq              atomic.Int64 // tests that race two movements take their references at once
 }
 
 // newFx makes a property of the given currency precision whose costing method is method (chosen before any movement, as the module asks).
@@ -126,8 +127,7 @@ func (f *fx) pair(w, i string) inventory.Pair {
 
 // ref is a new document line for a movement made by a test.
 func (f *fx) ref() inventory.Ref {
-	f.seq++
-	return inventory.Ref{Type: "TEST", ID: f.seq, Line: 1}
+	return inventory.Ref{Type: "TEST", ID: f.seq.Add(1), Line: 1}
 }
 
 // tx runs fn in a transaction the way a use case does: the open day in share mode, then the stock of the pairs locked, then fn.
