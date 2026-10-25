@@ -49,7 +49,7 @@ func TestTheNamesOfEveryLanguageAreOfTheSameCodes(t *testing.T) {
 	for _, c := range []struct {
 		fn    string
 		count int
-	}{{"usali_chart_names", 207}, {"department_names", 8}, {"charge_code_names", 12}} {
+	}{{"usali_chart_names", 207}, {"department_names", 8}, {"charge_code_names", 18}} {
 		en, id := f.names(t, c.fn, "en"), f.names(t, c.fn, "id")
 		if len(en) != c.count || len(id) != c.count {
 			t.Fatalf("%s: %d English and %d Indonesian names, want %d", c.fn, len(en), len(id), c.count)

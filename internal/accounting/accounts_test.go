@@ -123,7 +123,7 @@ func TestANewPropertyGetsTheStandardChart(t *testing.T) {
 		t.Fatalf("charge codes: %s %s", room, rest)
 	}
 	rep, err := f.Accounting.UnmappedCodes(f.admin, f.propID)
-	if err != nil || rep.Checked != 11 || len(rep.Issues) != 0 {
+	if err != nil || rep.Checked != 17 || len(rep.Issues) != 0 {
 		t.Fatalf("every standard charge code is mapped: %+v %v", rep, err)
 	}
 	// filters
@@ -353,7 +353,7 @@ func TestUnmappedCodesAreFoundAndSaySeWhereTheyGo(t *testing.T) {
 		got[i.Kind+"/"+i.Code] = i
 	}
 	// the inactive tax is not checked; the mapped tax is fine
-	if rep.Checked != 14 || len(got) != 4 {
+	if rep.Checked != 20 || len(got) != 4 {
 		t.Fatalf("report: %+v", rep)
 	}
 	for key, want := range map[string]struct{ problem, posted string }{

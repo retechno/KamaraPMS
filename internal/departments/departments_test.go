@@ -86,7 +86,7 @@ func TestEveryPropertyGetsTheStandardDepartmentsAndTheChargeCodesTheirDefaults(t
 		}
 	}
 	var none int
-	must(t, f.Pool.QueryRow(context.Background(), `SELECT count(*) FROM charge_codes WHERE property_id = $1 AND charge_type IN ('FEE', 'OTHER') AND department_id IS NOT NULL`, f.propID).Scan(&none))
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT count(*) FROM charge_codes WHERE property_id = $1 AND charge_type IN ('FEE', 'OTHER') AND code NOT LIKE 'BQT_%' AND department_id IS NOT NULL`, f.propID).Scan(&none))
 	if none != 0 {
 		t.Fatalf("fees and others have no default: %d", none)
 	}
