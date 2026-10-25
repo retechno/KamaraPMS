@@ -54,6 +54,12 @@ func (s *Service) EventEmails(ctx context.Context, propertyID, eventID int64) (E
 	if err := s.authz.Require(ctx, propertyID, auth.PermBanquetRead); err != nil {
 		return EventStatus{}, err
 	}
+	if s.banq == nil {
+		return EventStatus{}, apperr.Conflict("MODULE_NOT_IN_PLAN", "the banquet is not available")
+	}
+	if _, err := s.banq.GetEvent(ctx, propertyID, eventID); err != nil { // an event of another property is not found
+		return EventStatus{}, err
+	}
 	rows, err := s.q(ctx).ListEventEmails(ctx, notificationsdb.ListEventEmailsParams{TenantID: p.TenantID, PropertyID: propertyID, EventID: &eventID})
 	if err != nil {
 		return EventStatus{}, err
@@ -92,6 +98,13 @@ func (s *Service) sendEvent(ctx context.Context, propertyID, eventID int64, in S
 	}
 	if s.banq == nil {
 		return EventEntry{}, apperr.Conflict("MODULE_NOT_IN_PLAN", "the banquet is not available")
+	}
+	perm := auth.PermBanquetManage
+	if kind == KindBanquetContract {
+		perm = auth.PermBanquetConfirm
+	}
+	if err := s.authz.Require(ctx, propertyID, perm); err != nil { // the permission is asked before anything about the server is told
+		return EventEntry{}, err
 	}
 	if s.sender == nil {
 		return EventEntry{}, apperr.Conflict("EMAIL_NOT_CONFIGURED", "e-mail is not configured on this server")

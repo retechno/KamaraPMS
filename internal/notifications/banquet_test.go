@@ -134,10 +134,15 @@ func TestSendingNeedsAnAddressAPermissionAndAMailServer(t *testing.T) {
 	if _, err = b.svc.EventEmails(b.nobodyCtx(t), b.propID, b.event.ID); err == nil {
 		t.Fatal("listing the e-mails of an event needs banquet.read")
 	}
+	if _, err = b.svc.EventEmails(b.reader, b.propID, b.event.ID+1000); err == nil {
+		t.Fatal("the e-mails of an event that is not in the property are not listed")
+	}
 	off := b.build(nil)
 	off.SetBanquet(b.banq)
 	_, err = off.SendProposal(b.office, b.propID, b.event.ID, notifications.SendInput{To: "a@example.test"})
 	wantCode(t, err, "EMAIL_NOT_CONFIGURED")
+	_, err = off.SendProposal(b.reader, b.propID, b.event.ID, notifications.SendInput{To: "a@example.test"})
+	wantCode(t, err, "PERMISSION_DENIED")
 }
 
 func (b *bfx) nobodyCtx(t *testing.T) context.Context {
