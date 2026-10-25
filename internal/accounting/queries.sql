@@ -492,3 +492,11 @@ SELECT EXISTS (SELECT 1 FROM audit_logs a WHERE a.tenant_id = @tenant_id AND a.p
 
 -- name: FirstFolioItemOf :one
 SELECT i.id, i.business_date FROM folio_items i WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id ORDER BY i.id LIMIT 1;
+
+-- The revenue accounts of the banquet (36-banquet.md 5.3): the system codes BQT_* of a new property get their accounts once the chart exists (F&B 4240, rooms and equipment 4410, the rest 4590, a forfeited
+-- deposit 4520). An account that does not exist leaves the code without one, as for POS_ROUNDING.
+-- name: SeedBanquetAccounts :exec
+UPDATE charge_codes c SET gl_account_code = d.code
+  FROM (VALUES ('BQT_FB', '4240'), ('BQT_ROOM', '4410'), ('BQT_EQUIPMENT', '4410'), ('BQT_DECOR', '4590'), ('BQT_OTHER', '4590'), ('BQT_FORFEIT', '4520')) AS d (charge_code, code)
+ WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.code = d.charge_code AND c.gl_account_code IS NULL
+   AND EXISTS (SELECT 1 FROM gl_accounts a WHERE a.property_id = c.property_id AND a.code = d.code);

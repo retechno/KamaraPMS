@@ -721,14 +721,17 @@ func (q *Queries) GetReason(ctx context.Context, arg GetReasonParams) (GetReason
 
 const getSettings = `-- name: GetSettings :one
 
-SELECT tentative_conflict_mode, operating_from, operating_to
+SELECT tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval
 FROM banquet_settings WHERE property_id = $1
 `
 
 type GetSettingsRow struct {
-	TentativeConflictMode string
-	OperatingFrom         *civil.TimeOfDay
-	OperatingTo           *civil.TimeOfDay
+	TentativeConflictMode    string
+	OperatingFrom            *civil.TimeOfDay
+	OperatingTo              *civil.TimeOfDay
+	PostingMode              string
+	DefaultPriceMode         string
+	MaxDiscountPctNoApproval decimal.Decimal
 }
 
 // Banquet, PR 1 (docs/architecture/36-banquet.md): masters, events, sessions, holds, notices. Every query is scoped by tenant and property.
@@ -736,7 +739,14 @@ type GetSettingsRow struct {
 func (q *Queries) GetSettings(ctx context.Context, propertyID int64) (GetSettingsRow, error) {
 	row := q.db.QueryRow(ctx, getSettings, propertyID)
 	var i GetSettingsRow
-	err := row.Scan(&i.TentativeConflictMode, &i.OperatingFrom, &i.OperatingTo)
+	err := row.Scan(
+		&i.TentativeConflictMode,
+		&i.OperatingFrom,
+		&i.OperatingTo,
+		&i.PostingMode,
+		&i.DefaultPriceMode,
+		&i.MaxDiscountPctNoApproval,
+	)
 	return i, err
 }
 
@@ -2419,20 +2429,24 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (i
 }
 
 const upsertSettings = `-- name: UpsertSettings :exec
-INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (property_id) DO UPDATE
    SET tentative_conflict_mode = EXCLUDED.tentative_conflict_mode, operating_from = EXCLUDED.operating_from, operating_to = EXCLUDED.operating_to,
+       posting_mode = EXCLUDED.posting_mode, default_price_mode = EXCLUDED.default_price_mode, max_discount_pct_no_approval = EXCLUDED.max_discount_pct_no_approval,
        updated_by = EXCLUDED.updated_by, updated_at = now()
 `
 
 type UpsertSettingsParams struct {
-	PropertyID            int64
-	TenantID              int64
-	TentativeConflictMode string
-	OperatingFrom         *civil.TimeOfDay
-	OperatingTo           *civil.TimeOfDay
-	ActorID               *int64
+	PropertyID               int64
+	TenantID                 int64
+	TentativeConflictMode    string
+	OperatingFrom            *civil.TimeOfDay
+	OperatingTo              *civil.TimeOfDay
+	PostingMode              string
+	DefaultPriceMode         string
+	MaxDiscountPctNoApproval decimal.Decimal
+	ActorID                  *int64
 }
 
 func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) error {
@@ -2442,6 +2456,9 @@ func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) 
 		arg.TentativeConflictMode,
 		arg.OperatingFrom,
 		arg.OperatingTo,
+		arg.PostingMode,
+		arg.DefaultPriceMode,
+		arg.MaxDiscountPctNoApproval,
 		arg.ActorID,
 	)
 	return err

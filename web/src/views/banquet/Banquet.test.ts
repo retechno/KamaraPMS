@@ -32,6 +32,12 @@ const session = (n: number, over: Record<string, unknown> = {}) => ({
   setup_style: 'THEATER', pax_estimated: 100, rank: null, room_taken: false, ...over,
 })
 
+const estimate = (over: Record<string, unknown> = {}) => ({ lines: [], by_code: [], net: '0', service: '0', tax: '0', total: '0', ...over })
+const money = (over: Record<string, unknown> = {}) => ({
+  posting_mode: 'AUTO', posting_mode_own: false, estimate: estimate(), folio: null, deposit_received: '0', schedule: [], schedule_total: '0', overdue: false,
+  policy: { base: '', tiers: [], current: null, days_left: 0 }, postings: [], cancelled_fee_item_id: null, groups: [], ...over,
+})
+
 const mounted: VueWrapper[] = []
 async function setup(component: unknown, permissions: string[], routes = '/banquet') {
   const pinia = createPinia()
@@ -58,7 +64,9 @@ function api(sessions: unknown[] = [], extra: (path: string) => unknown = () => 
     if (path.endsWith('/banquet/notices')) return { data: { data: [] } }
     if (path.endsWith('/banquet/rooms')) return { data: { data: [A, B] } }
     if (path.endsWith('/banquet/reasons')) return { data: { data: [{ id: 1, kind: 'LOST', code: 'PRICE', name: 'Price', is_active: true }, { id: 2, kind: 'CANCEL', code: 'ILL', name: 'Illness', is_active: true }] } }
-    if (path.endsWith('/banquet/settings')) return { data: { tentative_conflict_mode: 'REJECT', operating_from: null, operating_to: null } }
+    if (path.endsWith('/banquet/settings')) return { data: { tentative_conflict_mode: 'REJECT', operating_from: null, operating_to: null, posting_mode: 'AUTO', default_price_mode: 'EXCLUSIVE', max_discount_pct_no_approval: '0' } }
+    if (path.endsWith('/events/{id}/money')) return { data: money() }
+    if (path.endsWith('/events/{id}/lines')) return { data: { lines: [], estimate: estimate() } }
     if (path.endsWith('/companies')) return { data: { data: [{ id: 3, name: 'PT Maju' }] } }
     return { data: { data: [] } }
   })
@@ -185,10 +193,10 @@ describe('an event', () => {
     expect(has('[data-testid=banquet-confirm-dialog]')).toBe(true)
     expect(has('[data-testid=confirm-blocked]')).toBe(true)
     expect((document.body.querySelector('[data-testid=confirm-event]') as HTMLButtonElement).disabled).toBe(true)
-    expect(document.body.textContent).not.toMatch(/Rp|IDR|price|deposit/i)
+    expect(body('[data-testid=banquet-confirm-dialog]').text()).not.toMatch(/Rp|IDR|price|deposit/i)
   })
 
-  it('confirms when every session is the first option, and shows no money', async () => {
+  it('confirms when every session is the first option', async () => {
     const first = { ...tentative, sessions: tentative.sessions.map((s) => ({ ...s, rank: 1 })) }
     POST = vi.fn()
     const { w } = await open(first, ['banquet.confirm'])
@@ -198,7 +206,7 @@ describe('an event', () => {
     expect(has('[data-testid=confirm-effect]')).toBe(true)
     await body('[data-testid=confirm-event]').trigger('click')
     await flushPromises()
-    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/banquet/events/{id}/confirm', { params: { path: { propertyId: 7, id: 20 } } })
+    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/banquet/events/{id}/confirm', { params: { path: { propertyId: 7, id: 20 } }, body: { policy_template_id: null } })
     expect(w.find('[data-testid=event-status]').text()).toBe('Definite')
   })
 

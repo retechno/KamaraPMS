@@ -74,7 +74,7 @@ func (f fixture) codeByName(t *testing.T, name string) billingconfig.ChargeCode 
 func TestNewPropertiesGetTheStandardChargeCodes(t *testing.T) {
 	f := newFixture(t)
 	list, err := f.Billing.ListChargeCodes(f.admin, f.bali, 0, billingconfig.ChargeCodeFilter{}, 200)
-	if err != nil || len(list) != 12 {
+	if err != nil || len(list) != 18 {
 		t.Fatalf("seeded codes: %v %d", err, len(list))
 	}
 	types := map[string]string{}
@@ -94,7 +94,7 @@ func TestNewPropertiesGetTheStandardChargeCodes(t *testing.T) {
 	}
 	// A second property gets its own codes; nothing is shared.
 	jkt := f.Property(t, f.tenantID, "JKT")
-	if n := f.Count(t, `SELECT count(*) FROM charge_codes WHERE property_id = $1`, jkt.ID); n != 12 {
+	if n := f.Count(t, `SELECT count(*) FROM charge_codes WHERE property_id = $1`, jkt.ID); n != 18 {
 		t.Fatalf("second property: %d", n)
 	}
 }

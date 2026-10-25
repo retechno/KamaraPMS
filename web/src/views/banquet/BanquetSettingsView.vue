@@ -2,7 +2,8 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { BanquetEventType, BanquetReason, BanquetSettings } from '@/api/types'
+import type { BanquetEventType, BanquetPolicyTemplate, BanquetReason, BanquetSettings } from '@/api/types'
+import BanquetTemplateDialog from '@/components/banquet/BanquetTemplateDialog.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -22,7 +23,14 @@ import { usePropertyStore } from '@/stores/property'
  */
 const property = usePropertyStore()
 const pid = computed(() => property.currentId)
-const settings = reactive<{ mode: 'REJECT' | 'QUEUE'; from: string | null; to: string | null }>({ mode: 'REJECT', from: null, to: null })
+const settings = reactive<{ mode: 'REJECT' | 'QUEUE'; from: string | null; to: string | null; posting: 'AUTO' | 'MANUAL'; priceMode: 'EXCLUSIVE' | 'INCLUSIVE'; maxDiscount: string }>({ mode: 'REJECT', from: null, to: null, posting: 'AUTO', priceMode: 'EXCLUSIVE', maxDiscount: '0' })
+const templates = ref<BanquetPolicyTemplate[]>([])
+const templateOpen = ref(false)
+const editingTemplate = ref<BanquetPolicyTemplate | null>(null)
+function editTemplate(x: BanquetPolicyTemplate | null): void {
+  editingTemplate.value = x
+  templateOpen.value = true
+}
 const types = ref<BanquetEventType[]>([])
 const reasons = ref<BanquetReason[]>([])
 const error = ref<ApiError | null>(null)
@@ -34,15 +42,17 @@ async function load(): Promise<void> {
   if (propertyId === null) return
   try {
     const path = { params: { path: { propertyId } } }
-    const [s, ty, re] = await Promise.all([
+    const [s, ty, re, tp] = await Promise.all([
       api.GET('/api/v1/properties/{propertyId}/banquet/settings', path),
       api.GET('/api/v1/properties/{propertyId}/banquet/event-types', path),
       api.GET('/api/v1/properties/{propertyId}/banquet/reasons', path),
+      api.GET('/api/v1/properties/{propertyId}/banquet/policy-templates', path),
     ])
     const d: BanquetSettings | undefined = s.data
-    if (d) Object.assign(settings, { mode: d.tentative_conflict_mode, from: d.operating_from ?? null, to: d.operating_to ?? null })
+    if (d) Object.assign(settings, { mode: d.tentative_conflict_mode, from: d.operating_from ?? null, to: d.operating_to ?? null, posting: d.posting_mode, priceMode: d.default_price_mode, maxDiscount: d.max_discount_pct_no_approval })
     types.value = ty.data?.data ?? []
     reasons.value = re.data?.data ?? []
+    templates.value = tp.data?.data ?? []
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -55,7 +65,7 @@ async function saveSettings(): Promise<void> {
   saving.value = true
   error.value = null
   try {
-    await api.PUT('/api/v1/properties/{propertyId}/banquet/settings', { params: { path: { propertyId } }, body: { tentative_conflict_mode: settings.mode, operating_from: settings.from || null, operating_to: settings.to || null } })
+    await api.PUT('/api/v1/properties/{propertyId}/banquet/settings', { params: { path: { propertyId } }, body: { tentative_conflict_mode: settings.mode, operating_from: settings.from || null, operating_to: settings.to || null, posting_mode: settings.posting, default_price_mode: settings.priceMode, max_discount_pct_no_approval: settings.maxDiscount.trim() || '0' } })
     toast.success(t('banquet.settings.saved'))
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
@@ -116,6 +126,42 @@ async function saveSmall(): Promise<void> {
       </form>
     </Card>
 
+    <Card class="p-4" data-testid="money-section">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="saveSettings">
+        <h2 class="m-0 text-base font-semibold">{{ t('banquet.settings.money') }}</h2>
+        <FormField :label="t('banquet.settings.priceMode')">
+          <template #default="{ id }"><NativeSelect :id="id" v-model="settings.priceMode" name="default_price_mode"><option value="INCLUSIVE">{{ t('banquet.settings.price_INCLUSIVE') }}</option><option value="EXCLUSIVE">{{ t('banquet.settings.price_EXCLUSIVE') }}</option></NativeSelect></template>
+        </FormField>
+        <FormField :label="t('banquet.settings.postingMode')">
+          <template #default="{ id }"><NativeSelect :id="id" v-model="settings.posting" name="posting_mode"><option value="AUTO">{{ t('banquet.settings.posting_AUTO_hint') }}</option><option value="MANUAL">{{ t('banquet.settings.posting_MANUAL_hint') }}</option></NativeSelect></template>
+        </FormField>
+        <p class="m-0 text-xs text-muted-foreground">{{ t('banquet.settings.postingHint') }}</p>
+        <FormField :label="t('banquet.settings.maxDiscount')">
+          <template #default="{ id }"><Input :id="id" v-model="settings.maxDiscount" name="max_discount_pct_no_approval" inputmode="decimal" class="max-w-32" /></template>
+        </FormField>
+        <p class="m-0 text-xs text-muted-foreground">{{ t('banquet.settings.maxDiscountHint') }}</p>
+        <div><Button type="submit" :disabled="saving" data-testid="money-save">{{ t('common.save') }}</Button></div>
+      </form>
+    </Card>
+
+    <Card class="p-4" data-testid="templates-section">
+      <div class="mb-2 flex items-center justify-between gap-2"><h2 class="m-0 text-base font-semibold">{{ t('banquet.settings.templates') }}</h2><Button type="button" variant="outline" size="sm" data-testid="template-new" @click="editTemplate(null)">{{ t('banquet.template.new') }}</Button></div>
+      <p class="m-0 mb-2 text-sm text-muted-foreground">{{ t('banquet.settings.templatesHint') }}</p>
+      <ul class="m-0 flex list-none flex-col gap-2 p-0">
+        <li v-for="x in templates" :key="x.id" class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2 text-sm" :data-testid="`template-${x.code}`">
+          <span>
+            <span class="font-medium">{{ x.name }}</span> <span class="text-muted-foreground">{{ x.code }} · {{ t(`banquet.policy.base${x.base}` as never) }}</span>
+            <span class="block text-xs text-muted-foreground">{{ t('banquet.template.summary', { deposits: x.deposits.map((d) => `${d.percent}%`).join(' / '), tiers: x.tiers.length }) }}</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <Badge v-if="x.is_default" variant="booked">{{ t('banquet.template.isDefault') }}</Badge>
+            <Badge :variant="x.is_active ? 'success' : 'outline'">{{ x.is_active ? t('common.active') : t('common.inactive') }}</Badge>
+            <Button type="button" variant="outline" size="sm" :data-testid="`template-edit-${x.code}`" @click="editTemplate(x)">{{ t('common.edit') }}</Button>
+          </span>
+        </li>
+      </ul>
+    </Card>
+
     <Card class="p-4" data-testid="types-section">
       <div class="mb-2 flex items-center justify-between gap-2"><h2 class="m-0 text-base font-semibold">{{ t('banquet.settings.types') }}</h2><Button type="button" variant="outline" size="sm" data-testid="type-new" @click="edit('type')">{{ t('common.add') }}</Button></div>
       <ul class="m-0 flex list-none flex-col gap-1 p-0">
@@ -137,6 +183,7 @@ async function saveSmall(): Promise<void> {
     </Card>
   </div>
 
+  <BanquetTemplateDialog v-if="pid !== null" v-model:open="templateOpen" :property-id="pid" :template="editingTemplate" @saved="load" />
   <Dialog :open="dialog" @update:open="(v) => (dialog = v)">
     <DialogContent class="max-w-md p-5" data-testid="small-dialog" @interact-outside.prevent>
       <form novalidate class="flex flex-col gap-3" @submit.prevent="saveSmall">

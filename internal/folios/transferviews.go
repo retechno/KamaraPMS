@@ -220,6 +220,10 @@ func (s *Service) TransferTargets(ctx context.Context, propertyID, fromID int64,
 	var group *int64
 	if from.FolioType == "MASTER" {
 		group = from.BookingGroupID
+	} else if from.FolioType == FolioTypeEvent && from.BanquetEventID != nil {
+		if group, err = db.GetEventGroup(ctx, foliosdb.GetEventGroupParams{PropertyID: propertyID, ID: *from.BanquetEventID}); err != nil {
+			return nil, err
+		}
 	} else if from.ReservationID != nil {
 		groups, err := db.ListReservationGroups(ctx, foliosdb.ListReservationGroupsParams{TenantID: p.TenantID, PropertyID: propertyID, Ids: []int64{*from.ReservationID}})
 		if err != nil {
@@ -246,6 +250,8 @@ func (s *Service) TransferTargets(ctx context.Context, propertyID, fromID int64,
 	for i, r := range rows {
 		scope := ScopeAny
 		switch {
+		case from.FolioType == FolioTypeEvent && (r.GroupMaster || r.SameGroup):
+			scope = ScopeEventGroup
 		case r.SameReservation:
 			scope = ScopeReservation
 		case r.GroupMaster:

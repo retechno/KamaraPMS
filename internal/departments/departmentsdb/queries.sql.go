@@ -215,6 +215,24 @@ func (q *Queries) ListHeadCandidates(ctx context.Context, arg ListHeadCandidates
 	return items, nil
 }
 
+const seedBanquetDepartments = `-- name: SeedBanquetDepartments :exec
+UPDATE charge_codes c SET department_id = dp.id
+  FROM (VALUES ('BQT_FB', 'FB'), ('BQT_ROOM', 'OOD'), ('BQT_EQUIPMENT', 'OOD'), ('BQT_DECOR', 'OOD'), ('BQT_OTHER', 'OOD')) AS m (charge_code, department_code)
+  JOIN departments dp ON dp.property_id = $2 AND dp.code = m.department_code
+ WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.code = m.charge_code AND c.department_id IS NULL
+`
+
+type SeedBanquetDepartmentsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The department of the banquet codes of a new property (36-banquet.md 5.3): food and beverage for BQT_FB, the other departments for the rest, none for a forfeited deposit.
+func (q *Queries) SeedBanquetDepartments(ctx context.Context, arg SeedBanquetDepartmentsParams) error {
+	_, err := q.db.Exec(ctx, seedBanquetDepartments, arg.TenantID, arg.PropertyID)
+	return err
+}
+
 const seedDepartments = `-- name: SeedDepartments :one
 SELECT seed_departments($1, $2, $3, $4::text)::int AS created
 `

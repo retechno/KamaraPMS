@@ -11223,7 +11223,7 @@ export interface paths {
         put?: never;
         /**
          * Confirm a tentative event: the holds become exclusive (banquet.confirm)
-         * @description 409 BANQUET_OPTION_NOT_FIRST while an earlier option holds the room, with the holder in the context.
+         * @description 409 BANQUET_OPTION_NOT_FIRST while an earlier option holds the room, with the holder in the context. The policy template given (else the default one) is copied to the event: the base, the tiers and the deposit schedule; the EVENT folio is opened when the event has none.
          */
         post: operations["confirmBanquetEvent"];
         delete?: never;
@@ -11244,7 +11244,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Close an inquiry or a tentative event as lost; the reason is required (banquet.manage) */
+        /**
+         * Close an inquiry or a tentative event as lost; the reason is required (banquet.manage)
+         * @description A deposit on the folio can be forfeited (action FORFEIT, an amount up to the deposits received: 409 FORFEIT_EXCEEDS_DEPOSITS). The answer says what is left to refund; the refund itself is the common one of the folios (approval REFUND).
+         */
         post: operations["loseBanquetEvent"];
         delete?: never;
         options?: never;
@@ -11264,7 +11267,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel an event; the reason is required (banquet.manage, banquet.confirm for a definite one) */
+        /**
+         * Cancel an event; the reason is required (banquet.manage, banquet.confirm for a definite one)
+         * @description A definite event pays the fee of its policy tier (posted once on the EVENT folio) unless an amount is given; an amount below the policy needs fee_reason (422 FEE_REASON_REQUIRED). The answer says what is left to refund; the refund is the common one of the folios.
+         */
         post: operations["cancelBanquetEvent"];
         delete?: never;
         options?: never;
@@ -11308,6 +11314,329 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/money": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The money of an event: estimate, folio, deposits, policy, postings (banquet.manage, confirm or read) */
+        get: operations["getBanquetMoney"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/folio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The EVENT folio of an event (banquet.manage, confirm or read) */
+        get: operations["getBanquetEventFolio"];
+        put?: never;
+        /**
+         * Receive a down payment: open the EVENT folio of an inquiry or a tentative event (banquet.manage)
+         * @description Asking again returns the folio that is open. A payment made on it before the first charge is a deposit; the payment itself is the common one of the folios.
+         */
+        post: operations["openBanquetEventFolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The lines of an event with their estimate (banquet.manage, confirm or read) */
+        get: operations["listBanquetLines"];
+        put?: never;
+        /**
+         * Sell an item or a package in a session (banquet.manage)
+         * @description The price and the mode start from the master and the setting and are frozen on the line. A discount above max_discount_pct_no_approval needs the approval of the rule BANQUET_DISCOUNT (428 APPROVAL_REQUIRED). 409 SESSION_POSTED when the session is posted.
+         */
+        post: operations["addBanquetLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/lines/{lid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lid: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a line that is not posted (banquet.manage) */
+        delete: operations["removeBanquetLine"];
+        options?: never;
+        head?: never;
+        /** Change the quantity, price, mode or discount of a line that is not posted (banquet.manage) */
+        patch: operations["updateBanquetLine"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The estimate of the event by the charge engine (banquet.manage, confirm or read) */
+        get: operations["getBanquetEstimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/deposit-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the deposit schedule of an event (banquet.confirm)
+         * @description Each row is a percent of the contract total or an amount, due on a date. A row is paid when the deposits received reach the cumulative due.
+         */
+        put: operations["putBanquetDepositSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the cancellation policy of an event: the base and the tiers (banquet.confirm)
+         * @description 409 TIER_OVERLAP when two tiers cover the same days.
+         */
+        put: operations["putBanquetPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/posting-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Post the sessions of this event at the close (AUTO) or by hand (MANUAL); empty goes back to the property setting (banquet.manage) */
+        put: operations["setBanquetPostingMode"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/cancellation-quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** What cancelling the event would cost today (banquet.manage or confirm) */
+        get: operations["getBanquetCancellationQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}/actual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Enter the guests that came (banquet.manage) */
+        put: operations["setBanquetSessionActual"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}/post": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post a session to the EVENT folio by hand (banquet.manage)
+         * @description The guests billed are the larger of the guaranteed and the actual number. 409 SESSION_ALREADY_POSTED, SESSION_NOT_DUE (dated after the open business day), SESSION_CANCELLED, NO_GUARANTEED_GUESTS (unless use_estimate). A late posting is dated the open business day.
+         */
+        post: operations["postBanquetSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/transfer-to-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer the bill of an event to the master folio of a group (banquet.manage and folio.reverse, needs approval)
+         * @description An event that is not linked to the group is linked first, then transferred, in one use case (scope EVENT_GROUP; it never needs folio.transfer_any). 409 EVENT_GROUP_MISMATCH when it is linked to another group; 404 GROUP_MASTER_NOT_FOUND when the group has no open master folio. Mode BALANCE is idempotent by Idempotency-Key.
+         */
+        post: operations["transferBanquetBillToGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reports/unposted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Sessions of definite events dated the business date or earlier that are not posted (banquet.manage or confirm) */
+        get: operations["getBanquetUnpostedReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/policy-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The policy templates: deposits and cancellation tiers (banquet.setup, confirm, manage or read) */
+        get: operations["listBanquetPolicyTemplates"];
+        put?: never;
+        /** Add a policy template (banquet.setup) */
+        post: operations["createBanquetPolicyTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/policy-templates/{tid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                tid: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a policy template; the deposits and tiers replace the ones it has; no event changes (banquet.setup) */
+        patch: operations["updateBanquetPolicyTemplate"];
         trace?: never;
     };
 }
@@ -12308,7 +12637,7 @@ export interface components {
          * @description A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
          * @enum {string}
          */
-        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "INV_BILL_VARIANCE";
+        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "INV_BILL_VARIANCE" | "BANQUET_DISCOUNT";
         /** @enum {string} */
         ApprovalRuleType: "FREE" | "DISTINCT" | "DISTINCT_ABOVE";
         ApprovalRuleInForce: {
@@ -13522,7 +13851,7 @@ export interface components {
             /** @enum {string} */
             kind: "ITEM" | "BALANCE";
             /** @enum {string} */
-            scope: "RESERVATION" | "GROUP_MEMBER" | "GROUP_MASTER" | "ANY" | "RETURN";
+            scope: "RESERVATION" | "GROUP_MEMBER" | "GROUP_MASTER" | "EVENT_GROUP" | "ANY" | "RETURN";
             transfers: components["schemas"]["TransferredItem"][];
             balances: {
                 /** Format: int64 */
@@ -13540,7 +13869,7 @@ export interface components {
             kind: "ITEM" | "BALANCE";
             is_return: boolean;
             /** @enum {string} */
-            scope: "RESERVATION" | "GROUP_MEMBER" | "GROUP_MASTER" | "ANY" | "RETURN";
+            scope: "RESERVATION" | "GROUP_MEMBER" | "GROUP_MASTER" | "EVENT_GROUP" | "ANY" | "RETURN";
             reason: string;
             business_date: components["schemas"]["Date"];
             /** Format: date-time */
@@ -13721,10 +14050,15 @@ export interface components {
             id: number;
             folio_number: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company. EVENT is the bill of a banquet event (`banquet_event_id`): it has no reservation, stay, group or outlet; it may be billed to a company.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET" | "EVENT";
+            /**
+             * Format: int64
+             * @description The event an EVENT folio is the bill of; null on the others.
+             */
+            banquet_event_id?: number | null;
             /**
              * Format: int64
              * @description The outlet of an OUTLET folio; null on the others.
@@ -13776,10 +14110,12 @@ export interface components {
             /** @description The confirmation number of the reservation of the folio (`RES000012`) */
             confirmation_number?: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet. EVENT is the bill of a banquet event.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET" | "EVENT";
+            /** Format: int64 */
+            banquet_event_id?: number | null;
             /** Format: int64 */
             outlet_id?: number | null;
             outlet_code?: string;
@@ -22368,10 +22704,34 @@ export interface components {
             tentative_conflict_mode: "REJECT" | "QUEUE";
             operating_from: components["schemas"]["TimeOfDay"] | null;
             operating_to: components["schemas"]["TimeOfDay"] | null;
+            /**
+             * @description AUTO posts the sessions at the day close; MANUAL leaves them to the office.
+             * @enum {string}
+             */
+            posting_mode: "AUTO" | "MANUAL";
+            /**
+             * @description The mode a new line starts with: ++ or nett.
+             * @enum {string}
+             */
+            default_price_mode: "EXCLUSIVE" | "INCLUSIVE";
+            /** @description A discount up to this percent needs no approval (0: every discount needs it). */
+            max_discount_pct_no_approval: string;
         };
         BanquetSettingsInput: {
             /** @enum {string} */
             tentative_conflict_mode: "REJECT" | "QUEUE";
+            /**
+             * @description Left out: unchanged.
+             * @enum {string}
+             */
+            posting_mode?: "AUTO" | "MANUAL";
+            /**
+             * @description Left out: unchanged.
+             * @enum {string}
+             */
+            default_price_mode?: "EXCLUSIVE" | "INCLUSIVE";
+            /** @description Left out: unchanged. */
+            max_discount_pct_no_approval?: string | null;
             operating_from?: components["schemas"]["TimeOfDay"] | null;
             operating_to?: components["schemas"]["TimeOfDay"] | null;
         };
@@ -22661,6 +23021,15 @@ export interface components {
             /** Format: int64 */
             reason_id: number;
             reason_note?: string | null;
+            /** @description The fee or the forfeit the person confirms; left out: the fee of the policy for a definite event, nothing for the others. */
+            amount?: string | null;
+            /**
+             * @description FORFEIT keeps up to the deposits received.
+             * @enum {string}
+             */
+            action?: "FEE" | "FORFEIT" | "";
+            /** @description Required when the amount is below the policy. */
+            fee_reason?: string | null;
         };
         BanquetAvailabilityInput: {
             /** Format: int64 */
@@ -22803,6 +23172,357 @@ export interface components {
         /** @description The notices to mark; none marks them all. */
         BanquetNoticesSeenInput: {
             ids?: number[];
+        };
+        BanquetConfirmInput: {
+            /**
+             * Format: int64
+             * @description The template to copy; left out: the default one, none at all when the property has no default.
+             */
+            policy_template_id?: number | null;
+        };
+        BanquetLineComponent: {
+            /** Format: int64 */
+            item_id: number;
+            name: string;
+            /** Format: int64 */
+            charge_code_id: number;
+            charge_code: string;
+            qty_per_pax: string;
+            list_price: string;
+            sort_order: number;
+        };
+        BanquetLine: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            session_id: number;
+            line_no: number;
+            /** Format: int64 */
+            item_id: number | null;
+            /** Format: int64 */
+            package_id: number | null;
+            description: string;
+            /** @enum {string} */
+            basis: "PER_PAX" | "PER_SESSION" | "PER_HOUR" | "PER_UNIT";
+            quantity: string;
+            /** @description The price of one guest for a package. */
+            unit_price: string;
+            price_mode: components["schemas"]["PriceMode"];
+            discount_pct: string | null;
+            discount_amount: string | null;
+            /** Format: int64 */
+            discount_by: number | null;
+            /** Format: int64 */
+            discount_approved_by: number | null;
+            /** Format: int64 */
+            charge_code_id: number | null;
+            charge_code: string | null;
+            fb_class: string | null;
+            components: components["schemas"]["BanquetLineComponent"][];
+        };
+        /** @description An item or a package; the price and the mode start from the master and the setting of the property. */
+        BanquetLineInput: {
+            /** Format: int64 */
+            session_id: number;
+            /** Format: int64 */
+            item_id?: number | null;
+            /** Format: int64 */
+            package_id?: number | null;
+            quantity?: string | null;
+            unit_price?: string | null;
+            /** @enum {string} */
+            price_mode?: "EXCLUSIVE" | "INCLUSIVE" | "";
+            description?: string | null;
+            discount_pct?: string | null;
+            /** @description Not together with discount_pct. */
+            discount_amount?: string | null;
+            /** @description Of the rule BANQUET_DISCOUNT, for a discount above the limit. */
+            approval?: components["schemas"]["Approval"] | null;
+        };
+        BanquetLineUpdate: {
+            quantity?: string | null;
+            unit_price?: string | null;
+            /** @enum {string} */
+            price_mode?: "EXCLUSIVE" | "INCLUSIVE" | "";
+            description?: string | null;
+            discount_pct?: string | null;
+            discount_amount?: string | null;
+            clear_discount?: boolean;
+            approval?: components["schemas"]["Approval"] | null;
+        };
+        BanquetEstimateLine: {
+            /** Format: int64 */
+            line_id: number;
+            pax: number;
+            net: string;
+            service: string;
+            tax: string;
+            total: string;
+        };
+        BanquetEstimateCode: {
+            /** Format: int64 */
+            charge_code_id: number;
+            charge_code: string;
+            /** @description The account of the general ledger the charge code posts its revenue to. */
+            gl_account_code: string | null;
+            gl_account_name: string | null;
+            net: string;
+        };
+        /** @description The money of the event by the charge engine; posting follows the same plan. */
+        BanquetEstimate: {
+            lines: components["schemas"]["BanquetEstimateLine"][];
+            by_code: components["schemas"]["BanquetEstimateCode"][];
+            net: string;
+            service: string;
+            tax: string;
+            total: string;
+        };
+        BanquetLines: {
+            lines: components["schemas"]["BanquetLine"][];
+            estimate: components["schemas"]["BanquetEstimate"];
+        };
+        BanquetDeposit: {
+            seq: number;
+            label: string;
+            due_date: components["schemas"]["Date"];
+            percent: string | null;
+            amount: string;
+            cumulative: string;
+            /** @enum {string} */
+            status: "PAID" | "OVERDUE" | "DUE_SOON" | "PENDING";
+        };
+        BanquetDepositRowInput: {
+            label: string;
+            due_date: components["schemas"]["Date"];
+            /** @description A percent of the contract total, or an amount. */
+            percent?: string | null;
+            amount?: string | null;
+        };
+        BanquetScheduleInput: {
+            rows: components["schemas"]["BanquetDepositRowInput"][];
+        };
+        BanquetTier: {
+            /** Format: int64 */
+            id: number;
+            days_from: number;
+            /** @description Empty: no upper limit. */
+            days_to: number | null;
+            percent: string;
+            /** @enum {string} */
+            action: "FEE" | "FORFEIT";
+        };
+        BanquetTierInput: {
+            days_from: number;
+            days_to?: number | null;
+            percent: string;
+            /** @enum {string} */
+            action: "FEE" | "FORFEIT";
+        };
+        BanquetPolicyInput: {
+            /**
+             * @description NET: the percent applies to the net of the estimate; GROSS: to the total with service and tax.
+             * @enum {string}
+             */
+            base: "NET" | "GROSS";
+            tiers: components["schemas"]["BanquetTierInput"][];
+        };
+        BanquetPolicy: {
+            /** @enum {string} */
+            base: "NET" | "GROSS" | "";
+            tiers: components["schemas"]["BanquetTier"][];
+            /** @description The tier in force today. */
+            current: components["schemas"]["BanquetTier"] | null;
+            /** @description Days from the business date to the first session. */
+            days_left: number;
+        };
+        BanquetFolioRef: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            status: string;
+            debit: string;
+            credit: string;
+            balance: string;
+        };
+        BanquetPosting: {
+            /** Format: int64 */
+            session_id: number;
+            business_date: components["schemas"]["Date"];
+            pax_billed: number;
+            /** @enum {string} */
+            pax_basis: "ACTUAL" | "GUARANTEED" | "ESTIMATED";
+            auto: boolean;
+            on_guarantee: boolean;
+            /** Format: date-time */
+            posted_at: string;
+        };
+        BanquetGroupTarget: {
+            /** Format: int64 */
+            group_id: number;
+            code: string;
+            name: string;
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+        };
+        BanquetMoney: {
+            /** @enum {string} */
+            posting_mode: "AUTO" | "MANUAL";
+            /** @description True when the event overrides the setting of the property. */
+            posting_mode_own: boolean;
+            estimate: components["schemas"]["BanquetEstimate"];
+            folio: components["schemas"]["BanquetFolioRef"] | null;
+            deposit_received: string;
+            schedule: components["schemas"]["BanquetDeposit"][];
+            schedule_total: string;
+            overdue: boolean;
+            policy: components["schemas"]["BanquetPolicy"];
+            postings: components["schemas"]["BanquetPosting"][];
+            /** Format: int64 */
+            cancelled_fee_item_id: number | null;
+            /** @description Groups with an open master folio: where the bill can be transferred. */
+            groups: components["schemas"]["BanquetGroupTarget"][];
+        };
+        BanquetPostInput: {
+            /** @description The guests that came, entered with the posting. */
+            pax_actual?: number | null;
+            /** @description Allows a session with no guaranteed and no actual number to be billed on the estimated guests. */
+            use_estimate?: boolean;
+        };
+        BanquetActualInput: {
+            /** @description Empty clears the number. */
+            pax_actual: number | null;
+        };
+        BanquetPostedCharge: {
+            /** Format: int64 */
+            line_id: number;
+            /** Format: int64 */
+            component_item_id: number;
+            /** Format: int64 */
+            folio_item_id: number;
+            description: string;
+            net: string;
+            service: string;
+            tax: string;
+            total: string;
+            /** Format: int64 */
+            charge_code_id: number;
+        };
+        BanquetPostResult: {
+            posting: components["schemas"]["BanquetPosting"];
+            charges: components["schemas"]["BanquetPostedCharge"][];
+            total: string;
+        };
+        BanquetUnposted: {
+            /** Format: int64 */
+            session_id: number;
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            session_no: number;
+            session_name: string;
+            session_date: components["schemas"]["Date"];
+            room_name: string | null;
+            pax_estimated: number;
+            pax_guaranteed: number | null;
+            pax_actual: number | null;
+            /** @enum {string} */
+            posting_mode: "AUTO" | "MANUAL";
+            sales_name: string;
+            days_late: number;
+            /** @description The close cannot post it: no guests. */
+            blocked: boolean;
+            has_lines: boolean;
+            /** @description A charge code of a line of the session that is inactive: the close does not post the session until it is active again or the line is changed. */
+            inactive_code: string | null;
+        };
+        BanquetTemplateDeposit: {
+            seq?: number;
+            label: string;
+            /** @description Days before the first session; empty: due at the signature (the confirmation). */
+            days_before?: number | null;
+            percent: string;
+        };
+        BanquetPolicyTemplate: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            is_default: boolean;
+            /** @enum {string} */
+            base: "NET" | "GROSS";
+            is_active: boolean;
+            deposits: components["schemas"]["BanquetTemplateDeposit"][];
+            tiers: components["schemas"]["BanquetTier"][];
+        };
+        BanquetPolicyTemplateInput: {
+            code: string;
+            name: string;
+            is_default?: boolean;
+            /** @enum {string} */
+            base: "NET" | "GROSS";
+            is_active?: boolean | null;
+            deposits?: components["schemas"]["BanquetTemplateDeposit"][];
+            tiers?: components["schemas"]["BanquetTierInput"][];
+        };
+        BanquetCancelQuote: {
+            status: string;
+            /** @enum {string} */
+            base: "NET" | "GROSS" | "";
+            base_amount: string;
+            days_before: number;
+            tier: components["schemas"]["BanquetTier"] | null;
+            fee: string;
+            /** @enum {string} */
+            action: "FEE" | "FORFEIT" | "";
+            deposits_held: string;
+            /** @description The deposit that pays the fee. */
+            applied: string;
+            /** @description The deposit left after the fee. */
+            refundable: string;
+            still_owed: string;
+            /** Format: int64 */
+            folio_id: number | null;
+            /** Format: int64 */
+            fee_item_id: number | null;
+            policy_defined: boolean;
+        };
+        BanquetCancelResult: {
+            event: components["schemas"]["BanquetEvent"];
+            quote: components["schemas"]["BanquetCancelQuote"];
+            /** @description The fee or the forfeit posted on the EVENT folio. */
+            posted: string;
+            /** Format: int64 */
+            folio_item_id: number | null;
+            /** @description The deposit left on the folio; it is refunded with the refund of the folios (approval REFUND), a separate step. */
+            refundable: string;
+            /** Format: int64 */
+            folio_id: number | null;
+        };
+        BanquetTransferInput: {
+            /** Format: int64 */
+            group_id: number;
+            /** @enum {string} */
+            mode: "ITEMS" | "BALANCE";
+            /** @description Mode ITEMS: the charges to move. */
+            item_ids?: number[] | null;
+            /** @description Mode BALANCE: a positive amount, at most the balance. */
+            amount?: string;
+            reason: string;
+            /**
+             * Format: int64
+             * @description Mode ITEMS: every charge of this code that can still move.
+             */
+            charge_code_id?: number | null;
+            approval?: components["schemas"]["Approval"] | null;
+        };
+        BanquetPostingModeInput: {
+            /**
+             * @description Empty goes back to the setting of the property.
+             * @enum {string}
+             */
+            posting_mode?: "AUTO" | "MANUAL" | "";
         };
     };
     responses: {
@@ -25927,8 +26647,8 @@ export interface operations {
                 reservation_id?: number;
                 /** @description The master folio of that group. */
                 booking_group_id?: number;
-                /** @description Without it the bills of the outlets (OUTLET) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills. */
-                folio_type?: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+                /** @description Without it the bills of the outlets (OUTLET) and of the events (EVENT) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills; EVENT lists the bills of the banquet events. */
+                folio_type?: "GUEST" | "COMPANY" | "MASTER" | "OUTLET" | "EVENT";
                 /** @description The bills of one outlet. */
                 outlet_id?: number;
                 stay_id?: number;
@@ -41264,7 +41984,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BanquetConfirmInput"];
+            };
+        };
         responses: {
             /** @description The answer. */
             200: {
@@ -41302,7 +42026,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BanquetEvent"];
+                    "application/json": components["schemas"]["BanquetCancelResult"];
                 };
             };
             403: components["responses"]["Problem"];
@@ -41333,7 +42057,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BanquetEvent"];
+                    "application/json": components["schemas"]["BanquetCancelResult"];
                 };
             };
             403: components["responses"]["Problem"];
@@ -41399,6 +42123,554 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetMoney: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetMoney"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getBanquetEventFolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetFolioRef"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    openBanquetEventFolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetFolioRef"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listBanquetLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetLines"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    addBanquetLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetLineInput"];
+            };
+        };
+        responses: {
+            /** @description The lines and the estimate. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetLines"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    removeBanquetLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetLines"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                lid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetLineUpdate"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetLines"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetEstimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEstimate"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    putBanquetDepositSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetDeposit"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    putBanquetPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetPolicy"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    setBanquetPostingMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetPostingModeInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetCancellationQuote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetCancelQuote"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setBanquetSessionActual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetActualInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    postBanquetSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BanquetPostInput"];
+            };
+        };
+        responses: {
+            /** @description What was posted. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetPostResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    transferBanquetBillToGroup: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required for a transfer by BALANCE: the same key and request returns the transfer (replayed). */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetTransferInput"];
+            };
+        };
+        responses: {
+            /** @description The transfer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetUnpostedReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetUnposted"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBanquetPolicyTemplates: {
+        parameters: {
+            query?: {
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetPolicyTemplate"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createBanquetPolicyTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetPolicyTemplateInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetPolicyTemplate"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateBanquetPolicyTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                tid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetPolicyTemplateInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetPolicyTemplate"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };

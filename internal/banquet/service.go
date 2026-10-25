@@ -9,6 +9,9 @@ import (
 
 	"kamarapms/internal/audit"
 	"kamarapms/internal/banquet/banquetdb"
+	"kamarapms/internal/billingconfig"
+	"kamarapms/internal/folios"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
@@ -25,11 +28,15 @@ type Service struct {
 	audit *audit.Writer
 	authz auth.Authorizer
 	days  *tenancy.Service
+	// The money (PR 2): the ledger of the EVENT folio is the one folio service, the charges come from the one charge engine, and the approvals are those of iam.
+	folios  *folios.Service
+	billing *billingconfig.Service
+	iam     *iam.Service
 }
 
 // NewService wires the service.
-func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days}
+func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, f *folios.Service, b *billingconfig.Service, i *iam.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, folios: f, billing: b, iam: i}
 }
 
 func (s *Service) q(ctx context.Context) *banquetdb.Queries { return banquetdb.New(s.txm.DB(ctx)) }

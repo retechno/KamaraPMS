@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { BanquetEvent, BanquetEventType, BanquetReason, BanquetRoom, BanquetSession } from '@/api/types'
+import type { BanquetCancelResult, BanquetEvent, BanquetEventType, BanquetItem, BanquetLines, BanquetMoney, BanquetPackage, BanquetPolicyTemplate, BanquetReason, BanquetRoom, BanquetSession } from '@/api/types'
+import BanquetCloseDialog from '@/components/banquet/BanquetCloseDialog.vue'
 import BanquetConfirmDialog from '@/components/banquet/BanquetConfirmDialog.vue'
+import BanquetDepositTab from '@/components/banquet/BanquetDepositTab.vue'
+import BanquetFolioTab from '@/components/banquet/BanquetFolioTab.vue'
+import BanquetLinesTab from '@/components/banquet/BanquetLinesTab.vue'
 import BanquetEventDialog from '@/components/banquet/BanquetEventDialog.vue'
 import BanquetSessionDialog from '@/components/banquet/BanquetSessionDialog.vue'
+import { Card } from '@/components/ui/card'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -15,19 +20,18 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { confirm } from '@/composables/useConfirm'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { formatDate, formatDateShort } from '@/utils/format'
+import { formatDate, formatDateShort, formatMoney } from '@/utils/format'
 import { formatHoldRange } from '@/utils/banquet'
 
 /**
- * One event (docs/architecture/36-banquet.md 6.4): the header with what can be done to it, and the Sessions tab: each session with its room, hours, guests and place in the queue of options.
- * No money yet; the other tabs come with the packages and the bill.
+ * One event (docs/architecture/36-banquet.md 6.4 to 6.7): the header with what can be done to it, a strip with the money (contract, deposits, bill), and the tabs: Sessions (room, hours, guests and place in the queue of
+ * options), Items & packages (what is sold, the estimate), Deposit & policy (the schedule, the down payment, the cancellation policy) and Folio (the bill, the posting of the sessions, the transfer to a group).
  */
 const route = useRoute()
 const property = usePropertyStore()
@@ -44,6 +48,14 @@ const reasons = ref<BanquetReason[]>([])
 const error = ref<ApiError | null>(null)
 const loaded = ref(false)
 const tab = ref('sessions')
+const money = ref<BanquetMoney | null>(null)
+const lines = ref<BanquetLines | null>(null)
+const items = ref<BanquetItem[]>([])
+const packages = ref<BanquetPackage[]>([])
+const templates = ref<BanquetPolicyTemplate[]>([])
+const defaultMode = ref<'EXCLUSIVE' | 'INCLUSIVE'>('EXCLUSIVE')
+const businessDate = ref<string | null>(null)
+const canSeeMoney = computed(() => canManage.value || canConfirm.value || auth.can('banquet.read', pid.value))
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -64,10 +76,48 @@ async function load(): Promise<void> {
     rooms.value = ro.data?.data ?? []
     types.value = ty.data?.data ?? []
     reasons.value = re.data?.data ?? []
+    await loadMoney()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
     loaded.value = true
+  }
+}
+
+/** The money of the event: the lines with their estimate, the folio, the deposits and the policy, with the masters the forms choose from. */
+async function loadMoney(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null || !event.value || !canSeeMoney.value) return
+  const id = event.value.id
+  const [mo, li, it, pk, st, td, tp] = await Promise.all([
+    api.GET('/api/v1/properties/{propertyId}/banquet/events/{id}/money', { params: { path: { propertyId, id } } }),
+    api.GET('/api/v1/properties/{propertyId}/banquet/events/{id}/lines', { params: { path: { propertyId, id } } }),
+    api.GET('/api/v1/properties/{propertyId}/banquet/items', { params: { path: { propertyId } } }),
+    api.GET('/api/v1/properties/{propertyId}/banquet/packages', { params: { path: { propertyId } } }),
+    api.GET('/api/v1/properties/{propertyId}/banquet/settings', { params: { path: { propertyId } } }),
+    api.GET('/api/v1/properties/{propertyId}/banquet/today', { params: { path: { propertyId } } }),
+    api.GET('/api/v1/properties/{propertyId}/banquet/policy-templates', { params: { path: { propertyId }, query: { active: true } } }),
+  ])
+  money.value = mo.data ?? null
+  lines.value = li.data ?? null
+  items.value = it.data?.data ?? []
+  packages.value = pk.data?.data ?? []
+  defaultMode.value = st.data?.default_price_mode ?? 'EXCLUSIVE'
+  businessDate.value = td.data?.date ?? null
+  templates.value = tp.data?.data ?? []
+}
+/** After a change of the lines, the deposits or the folio: the event may have changed too (the estimate is on the page). */
+async function reloadMoney(): Promise<void> {
+  error.value = null
+  try {
+    const propertyId = pid.value
+    if (propertyId !== null && event.value) {
+      const { data } = await api.GET('/api/v1/properties/{propertyId}/banquet/events/{id}', { params: { path: { propertyId, id: event.value.id } } })
+      if (data) event.value = data
+    }
+    await loadMoney()
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
   }
 }
 watch([pid, eventId], load, { immediate: true })
@@ -81,6 +131,7 @@ const canTentative = computed(() => canManage.value && event.value?.status === '
 
 function saved(ev: BanquetEvent): void {
   event.value = ev
+  void loadMoney().catch((e) => { error.value = e instanceof ApiError ? e : null })
 }
 
 // ---- dialogs
@@ -126,35 +177,19 @@ async function makeTentative(): Promise<void> {
   }
 }
 
-// ---- lost / cancelled: a reason is required
+// ---- lost / cancelled: a reason is required, the fee of the policy is shown
 const closeOpen = ref(false)
-const closeForm = reactive({ reason_id: 0, note: '' })
-const closeError = ref<ApiError | null>(null)
 const closeAs = ref<'lost' | 'cancel'>('lost')
+const closeResult = ref<BanquetCancelResult | null>(null)
 function startClose(as: 'lost' | 'cancel'): void {
   closeAs.value = as
-  closeForm.reason_id = 0
-  closeForm.note = ''
-  closeError.value = null
   closeOpen.value = true
 }
-async function doClose(): Promise<void> {
-  const propertyId = pid.value
-  if (propertyId === null || !event.value) return
-  closeError.value = null
-  const params = { path: { propertyId, id: event.value.id } }
-  const body = { reason_id: closeForm.reason_id, reason_note: closeForm.note.trim() || null }
-  try {
-    const { data } = closeAs.value === 'lost'
-      ? await api.POST('/api/v1/properties/{propertyId}/banquet/events/{id}/lost', { params, body })
-      : await api.POST('/api/v1/properties/{propertyId}/banquet/events/{id}/cancel', { params, body })
-    if (data) event.value = data
-    closeOpen.value = false
-  } catch (e) {
-    closeError.value = e instanceof ApiError ? e : null
-  }
+function closed(result: BanquetCancelResult): void {
+  event.value = result.event
+  closeResult.value = result
+  void loadMoney().catch((e) => { error.value = e instanceof ApiError ? e : null })
 }
-const reasonOptions = computed(() => reasons.value.filter((r) => r.is_active && r.kind === (closeAs.value === 'lost' ? 'LOST' : 'CANCEL')))
 const placeOf = (s: BanquetSession): string => (event.value?.status === 'TENTATIVE' && s.status === 'ACTIVE' ? (s.rank === 1 ? t('banquet.session.first') : t('banquet.session.place', { n: s.rank ?? 1 })) : '')
 const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.slice(0, 5)}–${(s.end_time ?? '').slice(0, 5)}${s.ends_next_day ? ' +1' : ''}` : '–')
 </script>
@@ -177,9 +212,25 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
   <template v-else-if="event">
     <p v-if="event.status === 'TENTATIVE' && event.option_until" class="muted mb-3" data-testid="option-until">{{ t('banquet.event.optionUntil', { date: formatDate(event.option_until) }) }}</p>
     <p v-if="event.reason_name" class="muted mb-3" data-testid="event-reason">{{ t('banquet.event.reason') }}: {{ event.reason_name }}<template v-if="event.reason_note"> · {{ event.reason_note }}</template></p>
+    <Card v-if="money && canSeeMoney" class="mb-3 grid grid-cols-2 gap-3 p-3 text-sm sm:grid-cols-4" data-testid="money-strip">
+      <div><div class="text-muted-foreground">{{ t('banquet.money.contract') }}</div><div class="font-medium" data-testid="money-contract">{{ formatMoney(money.estimate.total) }}</div></div>
+      <div><div class="text-muted-foreground">{{ t('banquet.deposit.held') }}</div><div class="font-medium" data-testid="money-deposit">{{ formatMoney(money.deposit_received) }}</div></div>
+      <div><div class="text-muted-foreground">{{ t('banquet.folio.balance') }}</div><div class="font-medium" data-testid="money-balance">{{ money.folio ? formatMoney(money.folio.balance) : '–' }}</div></div>
+      <div v-if="money.overdue"><Badge variant="destructive" data-testid="money-overdue">{{ t('banquet.deposit.overdue') }}</Badge></div>
+    </Card>
+    <Card v-if="closeResult" class="mb-3 p-3 text-sm" data-testid="close-result">
+      <p class="m-0">{{ t('banquet.cancel.posted', { amount: formatMoney(closeResult.posted) }) }}</p>
+      <p v-if="Number(closeResult.refundable) > 0" class="m-0 mt-1 text-muted-foreground" data-testid="close-result-refund">
+        {{ t('banquet.cancel.refundable', { amount: formatMoney(closeResult.refundable) }) }}
+        <RouterLink v-if="closeResult.folio_id" :to="`/folios/${closeResult.folio_id}`" class="text-primary hover:underline">{{ t('banquet.cancel.openFolio') }}</RouterLink>
+      </p>
+    </Card>
     <Tabs :model-value="tab" @update:model-value="tab = String($event)">
       <TabsList data-testid="event-tabs">
         <TabsTrigger value="sessions" data-testid="tab-sessions">{{ t('banquet.event.tabSessions') }}</TabsTrigger>
+        <TabsTrigger v-if="canSeeMoney" value="lines" data-testid="tab-lines">{{ t('banquet.event.tabLines') }}</TabsTrigger>
+        <TabsTrigger v-if="canSeeMoney" value="deposit" data-testid="tab-deposit">{{ t('banquet.event.tabDeposit') }}</TabsTrigger>
+        <TabsTrigger v-if="canSeeMoney" value="folio" data-testid="tab-folio">{{ t('banquet.event.tabFolio') }}</TabsTrigger>
         <TabsTrigger value="details" data-testid="tab-details">{{ t('banquet.event.tabDetails') }}</TabsTrigger>
       </TabsList>
       <TabsContent value="sessions">
@@ -202,6 +253,15 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
           </li>
         </ul>
       </TabsContent>
+      <TabsContent v-if="canSeeMoney && money && lines" value="lines">
+        <BanquetLinesTab :property-id="pid!" :event="event" :lines="lines" :money="money" :items="items" :packages="packages" :default-mode="defaultMode" :can-manage="canManage" @changed="reloadMoney" />
+      </TabsContent>
+      <TabsContent v-if="canSeeMoney && money" value="deposit">
+        <BanquetDepositTab :property-id="pid!" :event="event" :money="money" :can-manage="canManage" :can-confirm="canConfirm" @changed="reloadMoney" />
+      </TabsContent>
+      <TabsContent v-if="canSeeMoney && money" value="folio">
+        <BanquetFolioTab :property-id="pid!" :event="event" :money="money" :business-date="businessDate" :can-manage="canManage" @changed="reloadMoney" />
+      </TabsContent>
       <TabsContent value="details">
         <dl class="m-0 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" data-testid="event-details">
           <div><dt class="text-muted-foreground">{{ t('banquet.event.type') }}</dt><dd class="m-0">{{ event.event_type_name ?? '–' }}</dd></div>
@@ -216,7 +276,7 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
 
     <BanquetEventDialog v-if="pid !== null" v-model:open="editOpen" :property-id="pid" :event="event" :types="types" @saved="saved" />
     <BanquetSessionDialog v-if="pid !== null" v-model:open="sessionOpen" :property-id="pid" :event="event" :rooms="rooms" :session="editing" @saved="saved" />
-    <BanquetConfirmDialog v-if="pid !== null" v-model:open="confirmOpen" :property-id="pid" :event="event" @saved="saved" />
+    <BanquetConfirmDialog v-if="pid !== null" v-model:open="confirmOpen" :property-id="pid" :event="event" :templates="templates" @saved="saved" />
 
     <Dialog :open="tentOpen" @update:open="(v) => (tentOpen = v)">
       <DialogContent class="max-w-md p-5" data-testid="tentative-dialog" @interact-outside.prevent>
@@ -235,27 +295,6 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
       </DialogContent>
     </Dialog>
 
-    <Dialog :open="closeOpen" @update:open="(v) => (closeOpen = v)">
-      <DialogContent class="max-w-md p-5" data-testid="close-dialog" @interact-outside.prevent>
-        <form novalidate class="flex flex-col gap-3" @submit.prevent="doClose">
-          <DialogTitle>{{ closeAs === 'lost' ? t('banquet.event.markLost') : t('banquet.event.cancel') }}</DialogTitle>
-          <DialogDescription>{{ t('banquet.event.closeHint') }}</DialogDescription>
-          <ErrorNotice v-if="closeError" :error="closeError" inline />
-          <FormField :label="t('banquet.event.reason')" required :error="closeError?.fieldMessage('reason_id')">
-            <template #default="{ id }">
-              <NativeSelect :id="id" v-model.number="closeForm.reason_id" name="reason_id">
-                <option :value="0">{{ t('banquet.event.choose') }}</option>
-                <option v-for="r in reasonOptions" :key="r.id" :value="r.id">{{ r.name }}</option>
-              </NativeSelect>
-            </template>
-          </FormField>
-          <FormField :label="t('banquet.event.reasonNote')"><template #default="{ id }"><Input :id="id" v-model="closeForm.note" name="reason_note" maxlength="500" /></template></FormField>
-          <div class="flex justify-end gap-2">
-            <Button type="button" variant="outline" @click="closeOpen = false">{{ t('common.cancel') }}</Button>
-            <Button type="submit" variant="destructive" data-testid="close-save">{{ closeAs === 'lost' ? t('banquet.event.markLost') : t('banquet.event.cancel') }}</Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <BanquetCloseDialog v-if="pid !== null" v-model:open="closeOpen" :property-id="pid" :event="event" :as="closeAs" :reasons="reasons" @done="closed" />
   </template>
 </template>

@@ -53,3 +53,10 @@ SELECT u.id, u.full_name, u.email, u.is_tenant_admin FROM users u
  WHERE u.tenant_id = @tenant_id AND u.is_active
    AND (u.is_tenant_admin OR EXISTS (SELECT 1 FROM user_properties up WHERE up.tenant_id = u.tenant_id AND up.user_id = u.id AND up.property_id = @property_id))
  ORDER BY u.full_name, u.id;
+
+-- The department of the banquet codes of a new property (36-banquet.md 5.3): food and beverage for BQT_FB, the other departments for the rest, none for a forfeited deposit.
+-- name: SeedBanquetDepartments :exec
+UPDATE charge_codes c SET department_id = dp.id
+  FROM (VALUES ('BQT_FB', 'FB'), ('BQT_ROOM', 'OOD'), ('BQT_EQUIPMENT', 'OOD'), ('BQT_DECOR', 'OOD'), ('BQT_OTHER', 'OOD')) AS m (charge_code, department_code)
+  JOIN departments dp ON dp.property_id = @property_id AND dp.code = m.department_code
+ WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.code = m.charge_code AND c.department_id IS NULL;

@@ -110,7 +110,7 @@ const closeFolio = `-- name: CloseFolio :one
 UPDATE folios f SET status = 'CLOSED', closed_at = $1::timestamptz, closed_by = $2, version = f.version + 1, updated_by = $2,
     closed_on = (SELECT b.business_date FROM business_days b WHERE b.property_id = f.property_id AND b.status = 'OPEN')
 WHERE f.tenant_id = $3 AND f.property_id = $4 AND f.id = $5
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type CloseFolioParams struct {
@@ -151,6 +151,7 @@ func (q *Queries) CloseFolio(ctx context.Context, arg CloseFolioParams) (Folio, 
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -251,6 +252,24 @@ type DeleteLockOutletsParams struct {
 func (q *Queries) DeleteLockOutlets(ctx context.Context, arg DeleteLockOutletsParams) error {
 	_, err := q.db.Exec(ctx, deleteLockOutlets, arg.TenantID, arg.PropertyID, arg.FolioID)
 	return err
+}
+
+const eventDepositsReceived = `-- name: EventDepositsReceived :one
+SELECT COALESCE(-sum(signed_amount), 0)::numeric AS received FROM folio_item_gl
+WHERE property_id = $1 AND folio_id = $2 AND kind = 'PAYMENT' AND is_deposit
+`
+
+type EventDepositsReceivedParams struct {
+	PropertyID int64
+	FolioID    int64
+}
+
+// The deposits received on a folio that has no stay: the payments taken before its first charge, less what was refunded of them (the view folio_item_gl decides what a deposit is).
+func (q *Queries) EventDepositsReceived(ctx context.Context, arg EventDepositsReceivedParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, eventDepositsReceived, arg.PropertyID, arg.FolioID)
+	var received decimal.Decimal
+	err := row.Scan(&received)
+	return received, err
 }
 
 const findUnlinkedOpenFolio = `-- name: FindUnlinkedOpenFolio :one
@@ -470,9 +489,66 @@ func (q *Queries) GetCompanyPosBilling(ctx context.Context, arg GetCompanyPosBil
 	return i, err
 }
 
+const getEventFolio = `-- name: GetEventFolio :one
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND folio_type = 'EVENT' AND banquet_event_id = $3
+ORDER BY (status = 'OPEN') DESC, id DESC LIMIT 1
+`
+
+type GetEventFolioParams struct {
+	TenantID   int64
+	PropertyID int64
+	EventID    *int64
+}
+
+func (q *Queries) GetEventFolio(ctx context.Context, arg GetEventFolioParams) (Folio, error) {
+	row := q.db.QueryRow(ctx, getEventFolio, arg.TenantID, arg.PropertyID, arg.EventID)
+	var i Folio
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.FolioNumber,
+		&i.ReservationID,
+		&i.StayID,
+		&i.FolioType,
+		&i.Status,
+		&i.OpenedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.ClosedOn,
+		&i.BillToCompanyID,
+		&i.BookingGroupID,
+		&i.OutletID,
+		&i.BanquetEventID,
+	)
+	return i, err
+}
+
+const getEventGroup = `-- name: GetEventGroup :one
+SELECT booking_group_id FROM banquet_events WHERE property_id = $1 AND id = $2
+`
+
+type GetEventGroupParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+// The group an event is linked to, read without a lock to classify a transfer; the transfer decides again under the locks.
+func (q *Queries) GetEventGroup(ctx context.Context, arg GetEventGroupParams) (*int64, error) {
+	row := q.db.QueryRow(ctx, getEventGroup, arg.PropertyID, arg.ID)
+	var booking_group_id *int64
+	err := row.Scan(&booking_group_id)
+	return booking_group_id, err
+}
+
 const getFolio = `-- name: GetFolio :one
 
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetFolioParams struct {
@@ -507,6 +583,7 @@ func (q *Queries) GetFolio(ctx context.Context, arg GetFolioParams) (Folio, erro
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -692,7 +769,7 @@ func (q *Queries) GetFolioNumber(ctx context.Context, arg GetFolioNumberParams) 
 }
 
 const getFolioOfStay = `-- name: GetFolioOfStay :one
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND folio_type = 'GUEST'
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND folio_type = 'GUEST'
 `
 
 type GetFolioOfStayParams struct {
@@ -725,6 +802,7 @@ func (q *Queries) GetFolioOfStay(ctx context.Context, arg GetFolioOfStayParams) 
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -970,7 +1048,7 @@ func (q *Queries) GetLineStay(ctx context.Context, arg GetLineStayParams) (GetLi
 
 const getMasterFolio = `-- name: GetMasterFolio :one
 
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND booking_group_id = $3 AND folio_type = 'MASTER'
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND booking_group_id = $3 AND folio_type = 'MASTER'
 `
 
 type GetMasterFolioParams struct {
@@ -1005,6 +1083,7 @@ func (q *Queries) GetMasterFolio(ctx context.Context, arg GetMasterFolioParams) 
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -1660,7 +1739,7 @@ func (q *Queries) InsertChargeAttempt(ctx context.Context, arg InsertChargeAttem
 const insertCompanyFolio = `-- name: InsertCompanyFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, 'COMPANY', $6, $7, $7)
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type InsertCompanyFolioParams struct {
@@ -1705,6 +1784,59 @@ func (q *Queries) InsertCompanyFolio(ctx context.Context, arg InsertCompanyFolio
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
+	)
+	return i, err
+}
+
+const insertEventFolio = `-- name: InsertEventFolio :one
+INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, banquet_event_id, bill_to_company_id, created_by, updated_by)
+VALUES ($1, $2, $3, 'EVENT', $4, $5, $6, $6)
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
+`
+
+type InsertEventFolioParams struct {
+	TenantID    int64
+	PropertyID  int64
+	FolioNumber string
+	EventID     *int64
+	CompanyID   *int64
+	ActorID     *int64
+}
+
+// The folio of an event (docs/architecture/36-banquet.md): at most one is open; the newest is the one that counts.
+func (q *Queries) InsertEventFolio(ctx context.Context, arg InsertEventFolioParams) (Folio, error) {
+	row := q.db.QueryRow(ctx, insertEventFolio,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FolioNumber,
+		arg.EventID,
+		arg.CompanyID,
+		arg.ActorID,
+	)
+	var i Folio
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.FolioNumber,
+		&i.ReservationID,
+		&i.StayID,
+		&i.FolioType,
+		&i.Status,
+		&i.OpenedAt,
+		&i.ClosedAt,
+		&i.ClosedBy,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+		&i.ClosedOn,
+		&i.BillToCompanyID,
+		&i.BookingGroupID,
+		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -1712,7 +1844,7 @@ func (q *Queries) InsertCompanyFolio(ctx context.Context, arg InsertCompanyFolio
 const insertFolio = `-- name: InsertFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $6)
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type InsertFolioParams struct {
@@ -1755,6 +1887,7 @@ func (q *Queries) InsertFolio(ctx context.Context, arg InsertFolioParams) (Folio
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -2065,7 +2198,7 @@ func (q *Queries) InsertLockOutlet(ctx context.Context, arg InsertLockOutletPara
 const insertMasterFolio = `-- name: InsertMasterFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, booking_group_id, bill_to_company_id, created_by, updated_by)
 VALUES ($1, $2, $3, 'MASTER', $4, $5, $6, $6)
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type InsertMasterFolioParams struct {
@@ -2108,6 +2241,7 @@ func (q *Queries) InsertMasterFolio(ctx context.Context, arg InsertMasterFolioPa
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -2115,7 +2249,7 @@ func (q *Queries) InsertMasterFolio(ctx context.Context, arg InsertMasterFolioPa
 const insertOutletFolio = `-- name: InsertOutletFolio :one
 INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, outlet_id, created_by, updated_by)
 VALUES ($1, $2, $3, 'OUTLET', $4, $5, $5)
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type InsertOutletFolioParams struct {
@@ -2157,6 +2291,7 @@ func (q *Queries) InsertOutletFolio(ctx context.Context, arg InsertOutletFolioPa
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -2533,7 +2668,7 @@ const linkFolioToStay = `-- name: LinkFolioToStay :one
 
 UPDATE folios SET stay_id = $1, version = version + 1, updated_by = $2
 WHERE tenant_id = $3 AND property_id = $4 AND id = $5
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type LinkFolioToStayParams struct {
@@ -2576,6 +2711,7 @@ func (q *Queries) LinkFolioToStay(ctx context.Context, arg LinkFolioToStayParams
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -3092,7 +3228,7 @@ func (q *Queries) ListFolioTransfers(ctx context.Context, arg ListFolioTransfers
 }
 
 const listFoliosOrdered = `-- name: ListFoliosOrdered :many
-SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, f.booking_group_id, f.outlet_id, bal.balance::numeric AS balance,
+SELECT f.id, f.tenant_id, f.property_id, f.folio_number, f.reservation_id, f.stay_id, f.folio_type, f.status, f.opened_at, f.closed_at, f.closed_by, f.version, f.created_at, f.created_by, f.updated_at, f.updated_by, f.closed_on, f.bill_to_company_id, f.booking_group_id, f.outlet_id, f.banquet_event_id, bal.balance::numeric AS balance,
        COALESCE((SELECT r.confirmation_number FROM reservations r WHERE r.property_id = f.property_id AND r.id = f.reservation_id), '')::text AS confirmation_number,
        COALESCE((SELECT g.code FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_code,
        COALESCE((SELECT g.name FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_name,
@@ -3120,7 +3256,7 @@ WHERE f.tenant_id = $2 AND f.property_id = $3
   AND ($6::bigint IS NULL OR f.booking_group_id = $6::bigint)
   AND ($7::text IS NULL OR f.folio_type = $7::text)
   -- the bills of the outlets are listed only when asked for (folio_type = OUTLET): every other list of the front desk keeps its meaning (34-pos.md 11)
-  AND ($7::text IS NOT NULL OR f.folio_type <> 'OUTLET')
+  AND ($7::text IS NOT NULL OR f.folio_type NOT IN ('OUTLET', 'EVENT'))
   AND ($8::bigint IS NULL OR f.outlet_id = $8::bigint)
   AND ($9::text IS NULL OR f.status = $9::text)
   -- the follow-up of a cancellation: the open folio of a reservation that has no live room and no stay, that still holds something (a deposit that was kept, a fee that was not paid)
@@ -3179,6 +3315,7 @@ type ListFoliosOrderedRow struct {
 	BillToCompanyID    *int64
 	BookingGroupID     *int64
 	OutletID           *int64
+	BanquetEventID     *int64
 	Balance            decimal.Decimal
 	ConfirmationNumber string
 	GroupCode          string
@@ -3239,6 +3376,7 @@ func (q *Queries) ListFoliosOrdered(ctx context.Context, arg ListFoliosOrderedPa
 			&i.BillToCompanyID,
 			&i.BookingGroupID,
 			&i.OutletID,
+			&i.BanquetEventID,
 			&i.Balance,
 			&i.ConfirmationNumber,
 			&i.GroupCode,
@@ -4354,7 +4492,7 @@ func (q *Queries) ListReservationGroups(ctx context.Context, arg ListReservation
 }
 
 const listStayFolios = `-- name: ListStayFolios :many
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 ORDER BY (folio_type = 'GUEST') DESC, id
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 ORDER BY (folio_type = 'GUEST') DESC, id
 `
 
 type ListStayFoliosParams struct {
@@ -4394,6 +4532,7 @@ func (q *Queries) ListStayFolios(ctx context.Context, arg ListStayFoliosParams) 
 			&i.BillToCompanyID,
 			&i.BookingGroupID,
 			&i.OutletID,
+			&i.BanquetEventID,
 		); err != nil {
 			return nil, err
 		}
@@ -4582,7 +4721,7 @@ func (q *Queries) ListStayOpenCompanyFolios(ctx context.Context, arg ListStayOpe
 }
 
 const listStayOpenFolios = `-- name: ListStayOpenFolios :many
-SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'OPEN' ORDER BY id
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = $3 AND status = 'OPEN' ORDER BY id
 `
 
 type ListStayOpenFoliosParams struct {
@@ -4621,6 +4760,7 @@ func (q *Queries) ListStayOpenFolios(ctx context.Context, arg ListStayOpenFolios
 			&i.BillToCompanyID,
 			&i.BookingGroupID,
 			&i.OutletID,
+			&i.BanquetEventID,
 		); err != nil {
 			return nil, err
 		}
@@ -4915,7 +5055,7 @@ func (q *Queries) PaymentTotals(ctx context.Context, arg PaymentTotalsParams) ([
 const reopenFolio = `-- name: ReopenFolio :one
 UPDATE folios f SET status = 'OPEN', closed_at = NULL, closed_by = NULL, closed_on = NULL, version = f.version + 1, updated_by = $1
 WHERE f.tenant_id = $2 AND f.property_id = $3 AND f.id = $4 AND f.status = 'CLOSED'
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type ReopenFolioParams struct {
@@ -4954,6 +5094,7 @@ func (q *Queries) ReopenFolio(ctx context.Context, arg ReopenFolioParams) (Folio
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }
@@ -5176,7 +5317,7 @@ func (q *Queries) SumRefundsOf(ctx context.Context, arg SumRefundsOfParams) (Sum
 const unlinkFolioFromStay = `-- name: UnlinkFolioFromStay :one
 UPDATE folios SET stay_id = NULL, version = version + 1, updated_by = $1
 WHERE tenant_id = $2 AND property_id = $3 AND id = $4
-RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id
+RETURNING id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id
 `
 
 type UnlinkFolioFromStayParams struct {
@@ -5215,6 +5356,7 @@ func (q *Queries) UnlinkFolioFromStay(ctx context.Context, arg UnlinkFolioFromSt
 		&i.BillToCompanyID,
 		&i.BookingGroupID,
 		&i.OutletID,
+		&i.BanquetEventID,
 	)
 	return i, err
 }

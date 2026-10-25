@@ -2313,7 +2313,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
         - { name: reservation_id, in: query, schema: { type: integer, format: int64 } }
         - { name: booking_group_id, in: query, schema: { type: integer, format: int64 }, description: The master folio of that group. }
-        - { name: folio_type, in: query, schema: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET] }, description: "Without it the bills of the outlets (OUTLET) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills." }
+        - { name: folio_type, in: query, schema: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET, EVENT] }, description: "Without it the bills of the outlets (OUTLET) and of the events (EVENT) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills; EVENT lists the bills of the banquet events." }
         - { name: outlet_id, in: query, schema: { type: integer, format: int64 }, description: The bills of one outlet. }
         - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
@@ -13001,8 +13001,13 @@ paths:
     post:
       operationId: confirmBanquetEvent
       summary: "Confirm a tentative event: the holds become exclusive (banquet.confirm)"
-      description: "409 BANQUET_OPTION_NOT_FIRST while an earlier option holds the room, with the holder in the context."
+      description: "409 BANQUET_OPTION_NOT_FIRST while an earlier option holds the room, with the holder in the context. The policy template given (else the default one) is copied to the event: the base, the tiers and the deposit schedule; the EVENT folio is opened when the event has none."
       tags: [banquet]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetConfirmInput" }
       responses:
         "200":
           description: The answer.
@@ -13019,6 +13024,7 @@ paths:
     post:
       operationId: loseBanquetEvent
       summary: "Close an inquiry or a tentative event as lost; the reason is required (banquet.manage)"
+      description: "A deposit on the folio can be forfeited (action FORFEIT, an amount up to the deposits received: 409 FORFEIT_EXCEEDS_DEPOSITS). The answer says what is left to refund; the refund itself is the common one of the folios (approval REFUND)."
       tags: [banquet]
       requestBody:
         required: true
@@ -13030,7 +13036,7 @@ paths:
           description: The answer.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/BanquetEvent" }
+              schema: { $ref: "#/components/schemas/BanquetCancelResult" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
@@ -13042,6 +13048,7 @@ paths:
     post:
       operationId: cancelBanquetEvent
       summary: "Cancel an event; the reason is required (banquet.manage, banquet.confirm for a definite one)"
+      description: "A definite event pays the fee of its policy tier (posted once on the EVENT folio) unless an amount is given; an amount below the policy needs fee_reason (422 FEE_REASON_REQUIRED). The answer says what is left to refund; the refund is the common one of the folios."
       tags: [banquet]
       requestBody:
         required: true
@@ -13053,7 +13060,7 @@ paths:
           description: The answer.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/BanquetEvent" }
+              schema: { $ref: "#/components/schemas/BanquetCancelResult" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
@@ -13095,6 +13102,376 @@ paths:
               schema: { type: object, required: [marked], properties: { marked: { type: integer } } }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/money:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetMoney
+      summary: "The money of an event: estimate, folio, deposits, policy, postings (banquet.manage, confirm or read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetMoney" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/folio:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetEventFolio
+      summary: "The EVENT folio of an event (banquet.manage, confirm or read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetFolioRef" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: openBanquetEventFolio
+      summary: "Receive a down payment: open the EVENT folio of an inquiry or a tentative event (banquet.manage)"
+      description: "Asking again returns the folio that is open. A payment made on it before the first charge is a deposit; the payment itself is the common one of the folios."
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetFolioRef" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/lines:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listBanquetLines
+      summary: "The lines of an event with their estimate (banquet.manage, confirm or read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetLines" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: addBanquetLine
+      summary: "Sell an item or a package in a session (banquet.manage)"
+      description: "The price and the mode start from the master and the setting and are frozen on the line. A discount above max_discount_pct_no_approval needs the approval of the rule BANQUET_DISCOUNT (428 APPROVAL_REQUIRED). 409 SESSION_POSTED when the session is posted."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetLineInput" }
+      responses:
+        "201":
+          description: The lines and the estimate.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetLines" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/lines/{lid}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: lid, in: path, required: true, schema: { type: integer, format: int64 } }
+    patch:
+      operationId: updateBanquetLine
+      summary: "Change the quantity, price, mode or discount of a line that is not posted (banquet.manage)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetLineUpdate" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetLines" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: removeBanquetLine
+      summary: "Remove a line that is not posted (banquet.manage)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetLines" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/estimate:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetEstimate
+      summary: "The estimate of the event by the charge engine (banquet.manage, confirm or read)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEstimate" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/deposit-schedule:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: putBanquetDepositSchedule
+      summary: "Replace the deposit schedule of an event (banquet.confirm)"
+      description: "Each row is a percent of the contract total or an amount, due on a date. A row is paid when the deposits received reach the cumulative due."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetScheduleInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetDeposit" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/policy:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: putBanquetPolicy
+      summary: "Set the cancellation policy of an event: the base and the tiers (banquet.confirm)"
+      description: "409 TIER_OVERLAP when two tiers cover the same days."
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPolicyInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetPolicy" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/posting-mode:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: setBanquetPostingMode
+      summary: "Post the sessions of this event at the close (AUTO) or by hand (MANUAL); empty goes back to the property setting (banquet.manage)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPostingModeInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/cancellation-quote:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBanquetCancellationQuote
+      summary: "What cancelling the event would cost today (banquet.manage or confirm)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetCancelQuote" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}/actual:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: sid, in: path, required: true, schema: { type: integer, format: int64 } }
+    put:
+      operationId: setBanquetSessionActual
+      summary: "Enter the guests that came (banquet.manage)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetActualInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetEvent" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}/post:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+      - { name: sid, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: postBanquetSession
+      summary: "Post a session to the EVENT folio by hand (banquet.manage)"
+      description: "The guests billed are the larger of the guaranteed and the actual number. 409 SESSION_ALREADY_POSTED, SESSION_NOT_DUE (dated after the open business day), SESSION_CANCELLED, NO_GUARANTEED_GUESTS (unless use_estimate). A late posting is dated the open business day."
+      tags: [banquet]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPostInput" }
+      responses:
+        "201":
+          description: What was posted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetPostResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/events/{id}/transfer-to-group:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: transferBanquetBillToGroup
+      summary: "Transfer the bill of an event to the master folio of a group (banquet.manage and folio.reverse, needs approval)"
+      description: "An event that is not linked to the group is linked first, then transferred, in one use case (scope EVENT_GROUP; it never needs folio.transfer_any). 409 EVENT_GROUP_MISMATCH when it is linked to another group; 404 GROUP_MASTER_NOT_FOUND when the group has no open master folio. Mode BALANCE is idempotent by Idempotency-Key."
+      tags: [banquet]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string, maxLength: 100 }, description: "Required for a transfer by BALANCE: the same key and request returns the transfer (replayed)." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetTransferInput" }
+      responses:
+        "201":
+          description: The transfer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransferResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reports/unposted:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetUnpostedReport
+      summary: "Sessions of definite events dated the business date or earlier that are not posted (banquet.manage or confirm)"
+      tags: [banquet]
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetUnposted" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/policy-templates:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listBanquetPolicyTemplates
+      summary: "The policy templates: deposits and cancellation tiers (banquet.setup, confirm, manage or read)"
+      tags: [banquet]
+      parameters:
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetPolicyTemplate" } } } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createBanquetPolicyTemplate
+      summary: "Add a policy template (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPolicyTemplateInput" }
+      responses:
+        "201":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetPolicyTemplate" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/policy-templates/{tid}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: tid, in: path, required: true, schema: { type: integer, format: int64 } }
+    patch:
+      operationId: updateBanquetPolicyTemplate
+      summary: "Change a policy template; the deposits and tiers replace the ones it has; no event changes (banquet.setup)"
+      tags: [banquet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanquetPolicyTemplateInput" }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetPolicyTemplate" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
@@ -14208,7 +14585,7 @@ components:
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
     ApprovalKind:
       type: string
-      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, INV_BILL_VARIANCE]
+      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, INV_BILL_VARIANCE, BANQUET_DISCOUNT]
       description: A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
     ApprovalRuleType:
       type: string
@@ -15349,7 +15726,7 @@ components:
       properties:
         batch_id: { type: integer, format: int64 }
         kind: { type: string, enum: [ITEM, BALANCE] }
-        scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, GROUP_MASTER, ANY, RETURN] }
+        scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, GROUP_MASTER, EVENT_GROUP, ANY, RETURN] }
         transfers: { type: array, items: { $ref: "#/components/schemas/TransferredItem" } }
         balances:
           type: array
@@ -15368,7 +15745,7 @@ components:
         batch_id: { type: integer, format: int64 }
         kind: { type: string, enum: [ITEM, BALANCE] }
         is_return: { type: boolean }
-        scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, GROUP_MASTER, ANY, RETURN] }
+        scope: { type: string, enum: [RESERVATION, GROUP_MEMBER, GROUP_MASTER, EVENT_GROUP, ANY, RETURN] }
         reason: { type: string }
         business_date: { $ref: "#/components/schemas/Date" }
         created_at: { type: string, format: date-time }
@@ -15544,7 +15921,8 @@ components:
       properties:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
-        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company." }
+        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET, EVENT], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company. EVENT is the bill of a banquet event (`banquet_event_id`): it has no reservation, stay, group or outlet; it may be billed to a company." }
+        banquet_event_id: { type: [integer, "null"], format: int64, description: "The event an EVENT folio is the bill of; null on the others." }
         outlet_id: { type: [integer, "null"], format: int64, description: "The outlet of an OUTLET folio; null on the others." }
         outlet_code: { type: string }
         outlet_name: { type: string }
@@ -15574,7 +15952,8 @@ components:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
         confirmation_number: { type: string, description: The confirmation number of the reservation of the folio (`RES000012`), so a list can name it. }
-        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet." }
+        folio_type: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET, EVENT], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet. EVENT is the bill of a banquet event." }
+        banquet_event_id: { type: [integer, "null"], format: int64 }
         outlet_id: { type: [integer, "null"], format: int64 }
         outlet_code: { type: string }
         outlet_name: { type: string }
@@ -23914,16 +24293,22 @@ components:
     BanquetSettings:
       type: object
       description: "The banquet settings of the property; the defaults when it has none (36-banquet.md 3.2)."
-      required: [tentative_conflict_mode, operating_from, operating_to]
+      required: [tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval]
       properties:
         tentative_conflict_mode: { type: string, enum: [REJECT, QUEUE] }
         operating_from: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
         operating_to: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        posting_mode: { type: string, enum: [AUTO, MANUAL], description: "AUTO posts the sessions at the day close; MANUAL leaves them to the office." }
+        default_price_mode: { type: string, enum: [EXCLUSIVE, INCLUSIVE], description: "The mode a new line starts with: ++ or nett." }
+        max_discount_pct_no_approval: { type: string, description: "A discount up to this percent needs no approval (0: every discount needs it)." }
     BanquetSettingsInput:
       type: object
       required: [tentative_conflict_mode]
       properties:
         tentative_conflict_mode: { type: string, enum: [REJECT, QUEUE] }
+        posting_mode: { type: string, enum: [AUTO, MANUAL], description: "Left out: unchanged." }
+        default_price_mode: { type: string, enum: [EXCLUSIVE, INCLUSIVE], description: "Left out: unchanged." }
+        max_discount_pct_no_approval: { type: [string, "null"], description: "Left out: unchanged." }
         operating_from: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
         operating_to: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
     BanquetRoomPart:
@@ -24204,6 +24589,9 @@ components:
       properties:
         reason_id: { type: integer, format: int64 }
         reason_note: { type: [string, "null"] }
+        amount: { type: [string, "null"], description: "The fee or the forfeit the person confirms; left out: the fee of the policy for a definite event, nothing for the others." }
+        action: { type: string, enum: [FEE, FORFEIT, ""], description: "FORFEIT keeps up to the deposits received." }
+        fee_reason: { type: [string, "null"], description: "Required when the amount is below the policy." }
     BanquetAvailabilityInput:
       type: object
       required: [room_id, session_date, start_time, end_time]
@@ -24334,3 +24722,328 @@ components:
       description: "The notices to mark; none marks them all."
       properties:
         ids: { type: array, items: { type: integer, format: int64 } }
+    BanquetConfirmInput:
+      type: object
+      properties:
+        policy_template_id: { type: [integer, "null"], format: int64, description: "The template to copy; left out: the default one, none at all when the property has no default." }
+    BanquetLineComponent:
+      type: object
+      required: [item_id, name, charge_code_id, charge_code, qty_per_pax, list_price, sort_order]
+      properties:
+        item_id: { type: integer, format: int64 }
+        name: { type: string }
+        charge_code_id: { type: integer, format: int64 }
+        charge_code: { type: string }
+        qty_per_pax: { type: string }
+        list_price: { type: string }
+        sort_order: { type: integer }
+    BanquetLine:
+      type: object
+      required: [id, session_id, line_no, item_id, package_id, description, basis, quantity, unit_price, price_mode, discount_pct, discount_amount, discount_by, discount_approved_by, charge_code_id, charge_code, fb_class, components]
+      properties:
+        id: { type: integer, format: int64 }
+        session_id: { type: integer, format: int64 }
+        line_no: { type: integer }
+        item_id: { type: [integer, "null"], format: int64 }
+        package_id: { type: [integer, "null"], format: int64 }
+        description: { type: string }
+        basis: { type: string, enum: [PER_PAX, PER_SESSION, PER_HOUR, PER_UNIT] }
+        quantity: { type: string }
+        unit_price: { type: string, description: "The price of one guest for a package." }
+        price_mode: { $ref: "#/components/schemas/PriceMode" }
+        discount_pct: { type: [string, "null"] }
+        discount_amount: { type: [string, "null"] }
+        discount_by: { type: [integer, "null"], format: int64 }
+        discount_approved_by: { type: [integer, "null"], format: int64 }
+        charge_code_id: { type: [integer, "null"], format: int64 }
+        charge_code: { type: [string, "null"] }
+        fb_class: { type: [string, "null"] }
+        components: { type: array, items: { $ref: "#/components/schemas/BanquetLineComponent" } }
+    BanquetLineInput:
+      type: object
+      required: [session_id]
+      description: "An item or a package; the price and the mode start from the master and the setting of the property."
+      properties:
+        session_id: { type: integer, format: int64 }
+        item_id: { type: [integer, "null"], format: int64 }
+        package_id: { type: [integer, "null"], format: int64 }
+        quantity: { type: [string, "null"] }
+        unit_price: { type: [string, "null"] }
+        price_mode: { type: string, enum: [EXCLUSIVE, INCLUSIVE, ""] }
+        description: { type: [string, "null"] }
+        discount_pct: { type: [string, "null"] }
+        discount_amount: { type: [string, "null"], description: "Not together with discount_pct." }
+        approval: { oneOf: [{ $ref: "#/components/schemas/Approval" }, { type: "null" }], description: "Of the rule BANQUET_DISCOUNT, for a discount above the limit." }
+    BanquetLineUpdate:
+      type: object
+      properties:
+        quantity: { type: [string, "null"] }
+        unit_price: { type: [string, "null"] }
+        price_mode: { type: string, enum: [EXCLUSIVE, INCLUSIVE, ""] }
+        description: { type: [string, "null"] }
+        discount_pct: { type: [string, "null"] }
+        discount_amount: { type: [string, "null"] }
+        clear_discount: { type: boolean }
+        approval: { oneOf: [{ $ref: "#/components/schemas/Approval" }, { type: "null" }] }
+    BanquetEstimateLine:
+      type: object
+      required: [line_id, pax, net, service, tax, total]
+      properties:
+        line_id: { type: integer, format: int64 }
+        pax: { type: integer }
+        net: { type: string }
+        service: { type: string }
+        tax: { type: string }
+        total: { type: string }
+    BanquetEstimateCode:
+      type: object
+      required: [charge_code_id, charge_code, gl_account_code, gl_account_name, net]
+      properties:
+        charge_code_id: { type: integer, format: int64 }
+        charge_code: { type: string }
+        gl_account_code: { type: [string, "null"], description: "The account of the general ledger the charge code posts its revenue to." }
+        gl_account_name: { type: [string, "null"] }
+        net: { type: string }
+    BanquetEstimate:
+      type: object
+      description: "The money of the event by the charge engine; posting follows the same plan."
+      required: [lines, by_code, net, service, tax, total]
+      properties:
+        lines: { type: array, items: { $ref: "#/components/schemas/BanquetEstimateLine" } }
+        by_code: { type: array, items: { $ref: "#/components/schemas/BanquetEstimateCode" } }
+        net: { type: string }
+        service: { type: string }
+        tax: { type: string }
+        total: { type: string }
+    BanquetLines:
+      type: object
+      required: [lines, estimate]
+      properties:
+        lines: { type: array, items: { $ref: "#/components/schemas/BanquetLine" } }
+        estimate: { $ref: "#/components/schemas/BanquetEstimate" }
+    BanquetDeposit:
+      type: object
+      required: [seq, label, due_date, percent, amount, cumulative, status]
+      properties:
+        seq: { type: integer }
+        label: { type: string }
+        due_date: { $ref: "#/components/schemas/Date" }
+        percent: { type: [string, "null"] }
+        amount: { type: string }
+        cumulative: { type: string }
+        status: { type: string, enum: [PAID, OVERDUE, DUE_SOON, PENDING] }
+    BanquetDepositRowInput:
+      type: object
+      required: [label, due_date]
+      properties:
+        label: { type: string }
+        due_date: { $ref: "#/components/schemas/Date" }
+        percent: { type: [string, "null"], description: "A percent of the contract total, or an amount." }
+        amount: { type: [string, "null"] }
+    BanquetScheduleInput:
+      type: object
+      required: [rows]
+      properties:
+        rows: { type: array, items: { $ref: "#/components/schemas/BanquetDepositRowInput" } }
+    BanquetTier:
+      type: object
+      required: [id, days_from, days_to, percent, action]
+      properties:
+        id: { type: integer, format: int64 }
+        days_from: { type: integer }
+        days_to: { type: [integer, "null"], description: "Empty: no upper limit." }
+        percent: { type: string }
+        action: { type: string, enum: [FEE, FORFEIT] }
+    BanquetTierInput:
+      type: object
+      required: [days_from, percent, action]
+      properties:
+        days_from: { type: integer, minimum: 0 }
+        days_to: { type: [integer, "null"] }
+        percent: { type: string }
+        action: { type: string, enum: [FEE, FORFEIT] }
+    BanquetPolicyInput:
+      type: object
+      required: [base, tiers]
+      properties:
+        base: { type: string, enum: [NET, GROSS], description: "NET: the percent applies to the net of the estimate; GROSS: to the total with service and tax." }
+        tiers: { type: array, items: { $ref: "#/components/schemas/BanquetTierInput" } }
+    BanquetPolicy:
+      type: object
+      required: [base, tiers, current, days_left]
+      properties:
+        base: { type: string, enum: [NET, GROSS, ""] }
+        tiers: { type: array, items: { $ref: "#/components/schemas/BanquetTier" } }
+        current: { oneOf: [{ $ref: "#/components/schemas/BanquetTier" }, { type: "null" }], description: "The tier in force today." }
+        days_left: { type: integer, description: "Days from the business date to the first session." }
+    BanquetFolioRef:
+      type: object
+      required: [id, number, status, debit, credit, balance]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        status: { type: string }
+        debit: { type: string }
+        credit: { type: string }
+        balance: { type: string }
+    BanquetPosting:
+      type: object
+      required: [session_id, business_date, pax_billed, pax_basis, auto, on_guarantee, posted_at]
+      properties:
+        session_id: { type: integer, format: int64 }
+        business_date: { $ref: "#/components/schemas/Date" }
+        pax_billed: { type: integer }
+        pax_basis: { type: string, enum: [ACTUAL, GUARANTEED, ESTIMATED] }
+        auto: { type: boolean }
+        on_guarantee: { type: boolean }
+        posted_at: { type: string, format: date-time }
+    BanquetGroupTarget:
+      type: object
+      required: [group_id, code, name, folio_id, folio_number]
+      properties:
+        group_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+    BanquetMoney:
+      type: object
+      required: [posting_mode, posting_mode_own, estimate, folio, deposit_received, schedule, schedule_total, overdue, policy, postings, cancelled_fee_item_id, groups]
+      properties:
+        posting_mode: { type: string, enum: [AUTO, MANUAL] }
+        posting_mode_own: { type: boolean, description: "True when the event overrides the setting of the property." }
+        estimate: { $ref: "#/components/schemas/BanquetEstimate" }
+        folio: { oneOf: [{ $ref: "#/components/schemas/BanquetFolioRef" }, { type: "null" }] }
+        deposit_received: { type: string }
+        schedule: { type: array, items: { $ref: "#/components/schemas/BanquetDeposit" } }
+        schedule_total: { type: string }
+        overdue: { type: boolean }
+        policy: { $ref: "#/components/schemas/BanquetPolicy" }
+        postings: { type: array, items: { $ref: "#/components/schemas/BanquetPosting" } }
+        cancelled_fee_item_id: { type: [integer, "null"], format: int64 }
+        groups: { type: array, items: { $ref: "#/components/schemas/BanquetGroupTarget" }, description: "Groups with an open master folio: where the bill can be transferred." }
+    BanquetPostInput:
+      type: object
+      properties:
+        pax_actual: { type: [integer, "null"], description: "The guests that came, entered with the posting." }
+        use_estimate: { type: boolean, description: "Allows a session with no guaranteed and no actual number to be billed on the estimated guests." }
+    BanquetActualInput:
+      type: object
+      required: [pax_actual]
+      properties:
+        pax_actual: { type: [integer, "null"], description: "Empty clears the number." }
+    BanquetPostedCharge:
+      type: object
+      required: [line_id, component_item_id, folio_item_id, description, net, service, tax, total, charge_code_id]
+      properties:
+        line_id: { type: integer, format: int64 }
+        component_item_id: { type: integer, format: int64 }
+        folio_item_id: { type: integer, format: int64 }
+        description: { type: string }
+        net: { type: string }
+        service: { type: string }
+        tax: { type: string }
+        total: { type: string }
+        charge_code_id: { type: integer, format: int64 }
+    BanquetPostResult:
+      type: object
+      required: [posting, charges, total]
+      properties:
+        posting: { $ref: "#/components/schemas/BanquetPosting" }
+        charges: { type: array, items: { $ref: "#/components/schemas/BanquetPostedCharge" } }
+        total: { type: string }
+    BanquetUnposted:
+      type: object
+      required: [session_id, event_id, event_number, event_name, session_no, session_name, session_date, room_name, pax_estimated, pax_guaranteed, pax_actual, posting_mode, sales_name, days_late, blocked, has_lines, inactive_code]
+      properties:
+        session_id: { type: integer, format: int64 }
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        session_no: { type: integer }
+        session_name: { type: string }
+        session_date: { $ref: "#/components/schemas/Date" }
+        room_name: { type: [string, "null"] }
+        pax_estimated: { type: integer }
+        pax_guaranteed: { type: [integer, "null"] }
+        pax_actual: { type: [integer, "null"] }
+        posting_mode: { type: string, enum: [AUTO, MANUAL] }
+        sales_name: { type: string }
+        days_late: { type: integer }
+        blocked: { type: boolean, description: "The close cannot post it: no guests." }
+        has_lines: { type: boolean }
+        inactive_code: { type: [string, "null"], description: "A charge code of a line of the session that is inactive: the close does not post the session until it is active again or the line is changed." }
+    BanquetTemplateDeposit:
+      type: object
+      required: [label, percent]
+      properties:
+        seq: { type: integer }
+        label: { type: string }
+        days_before: { type: [integer, "null"], description: "Days before the first session; empty: due at the signature (the confirmation)." }
+        percent: { type: string }
+    BanquetPolicyTemplate:
+      type: object
+      required: [id, code, name, is_default, base, is_active, deposits, tiers]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        is_default: { type: boolean }
+        base: { type: string, enum: [NET, GROSS] }
+        is_active: { type: boolean }
+        deposits: { type: array, items: { $ref: "#/components/schemas/BanquetTemplateDeposit" } }
+        tiers: { type: array, items: { $ref: "#/components/schemas/BanquetTier" } }
+    BanquetPolicyTemplateInput:
+      type: object
+      required: [code, name, base]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        is_default: { type: boolean }
+        base: { type: string, enum: [NET, GROSS] }
+        is_active: { type: [boolean, "null"] }
+        deposits: { type: array, items: { $ref: "#/components/schemas/BanquetTemplateDeposit" } }
+        tiers: { type: array, items: { $ref: "#/components/schemas/BanquetTierInput" } }
+    BanquetCancelQuote:
+      type: object
+      required: [status, base, base_amount, days_before, tier, fee, action, deposits_held, applied, refundable, still_owed, folio_id, fee_item_id, policy_defined]
+      properties:
+        status: { type: string }
+        base: { type: string, enum: [NET, GROSS, ""] }
+        base_amount: { type: string }
+        days_before: { type: integer }
+        tier: { oneOf: [{ $ref: "#/components/schemas/BanquetTier" }, { type: "null" }] }
+        fee: { type: string }
+        action: { type: string, enum: [FEE, FORFEIT, ""] }
+        deposits_held: { type: string }
+        applied: { type: string, description: "The deposit that pays the fee." }
+        refundable: { type: string, description: "The deposit left after the fee." }
+        still_owed: { type: string }
+        folio_id: { type: [integer, "null"], format: int64 }
+        fee_item_id: { type: [integer, "null"], format: int64 }
+        policy_defined: { type: boolean }
+    BanquetCancelResult:
+      type: object
+      required: [event, quote, posted, folio_item_id, refundable, folio_id]
+      properties:
+        event: { $ref: "#/components/schemas/BanquetEvent" }
+        quote: { $ref: "#/components/schemas/BanquetCancelQuote" }
+        posted: { type: string, description: "The fee or the forfeit posted on the EVENT folio." }
+        folio_item_id: { type: [integer, "null"], format: int64 }
+        refundable: { type: string, description: "The deposit left on the folio; it is refunded with the refund of the folios (approval REFUND), a separate step." }
+        folio_id: { type: [integer, "null"], format: int64 }
+    BanquetTransferInput:
+      type: object
+      required: [group_id, mode, reason]
+      properties:
+        group_id: { type: integer, format: int64 }
+        mode: { type: string, enum: [ITEMS, BALANCE] }
+        item_ids: { type: [array, "null"], items: { type: integer, format: int64 }, description: "Mode ITEMS: the charges to move." }
+        amount: { type: string, description: "Mode BALANCE: a positive amount, at most the balance." }
+        reason: { type: string, maxLength: 500 }
+        charge_code_id: { type: [integer, "null"], format: int64, description: "Mode ITEMS: every charge of this code that can still move." }
+        approval: { oneOf: [{ $ref: "#/components/schemas/Approval" }, { type: "null" }] }
+    BanquetPostingModeInput:
+      type: object
+      properties:
+        posting_mode: { type: string, enum: [AUTO, MANUAL, ""], description: "Empty goes back to the setting of the property." }

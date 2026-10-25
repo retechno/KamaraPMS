@@ -66,7 +66,7 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
   AND (sqlc.narg(booking_group_id)::bigint IS NULL OR f.booking_group_id = sqlc.narg(booking_group_id)::bigint)
   AND (sqlc.narg(folio_type)::text IS NULL OR f.folio_type = sqlc.narg(folio_type)::text)
   -- the bills of the outlets are listed only when asked for (folio_type = OUTLET): every other list of the front desk keeps its meaning (34-pos.md 11)
-  AND (sqlc.narg(folio_type)::text IS NOT NULL OR f.folio_type <> 'OUTLET')
+  AND (sqlc.narg(folio_type)::text IS NOT NULL OR f.folio_type NOT IN ('OUTLET', 'EVENT'))
   AND (sqlc.narg(outlet_id)::bigint IS NULL OR f.outlet_id = sqlc.narg(outlet_id)::bigint)
   AND (sqlc.narg(status)::text IS NULL OR f.status = sqlc.narg(status)::text)
   -- the follow-up of a cancellation: the open folio of a reservation that has no live room and no stay, that still holds something (a deposit that was kept, a fee that was not paid)
@@ -568,6 +568,25 @@ ORDER BY COALESCE(sqlc.narg(from_reservation_id)::bigint IS NOT NULL AND f.reser
          (f.folio_type = 'MASTER') DESC,
          COALESCE(sqlc.narg(from_group_id)::bigint IS NOT NULL AND res.booking_group_id = sqlc.narg(from_group_id)::bigint, false) DESC, f.id
 LIMIT @row_limit;
+
+-- The folio of an event (docs/architecture/36-banquet.md): at most one is open; the newest is the one that counts.
+-- name: InsertEventFolio :one
+INSERT INTO folios (tenant_id, property_id, folio_number, folio_type, banquet_event_id, bill_to_company_id, created_by, updated_by)
+VALUES (@tenant_id, @property_id, @folio_number, 'EVENT', @event_id, sqlc.narg(company_id), sqlc.narg(actor_id), sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: GetEventFolio :one
+SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND folio_type = 'EVENT' AND banquet_event_id = @event_id
+ORDER BY (status = 'OPEN') DESC, id DESC LIMIT 1;
+
+-- The group an event is linked to, read without a lock to classify a transfer; the transfer decides again under the locks.
+-- name: GetEventGroup :one
+SELECT booking_group_id FROM banquet_events WHERE property_id = @property_id AND id = @id;
+
+-- The deposits received on a folio that has no stay: the payments taken before its first charge, less what was refunded of them (the view folio_item_gl decides what a deposit is).
+-- name: EventDepositsReceived :one
+SELECT COALESCE(-sum(signed_amount), 0)::numeric AS received FROM folio_item_gl
+WHERE property_id = @property_id AND folio_id = @folio_id AND kind = 'PAYMENT' AND is_deposit;
 
 -- The room and the guest of a folio, for the line "from FOLxxx, room N".
 -- name: GetFolioPlace :one
