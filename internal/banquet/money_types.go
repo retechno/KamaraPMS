@@ -82,9 +82,12 @@ type EstimateLine struct {
 
 // EstimateCode is the net revenue of a charge code of the event.
 type EstimateCode struct {
-	ChargeCodeID int64           `json:"charge_code_id"`
-	ChargeCode   string          `json:"charge_code"`
-	Net          decimal.Decimal `json:"net"`
+	ChargeCodeID int64  `json:"charge_code_id"`
+	ChargeCode   string `json:"charge_code"`
+	// The account of the general ledger the charge code posts its revenue to, with its name: what the estimate shows as "revenue by account".
+	GLAccountCode *string         `json:"gl_account_code"`
+	GLAccountName *string         `json:"gl_account_name"`
+	Net           decimal.Decimal `json:"net"`
 }
 
 // Estimate is the money of an event by the charge engine (the same plan that posting follows, so the two cannot differ): the guests are the posted number, else the guaranteed (or actual) number,
@@ -247,6 +250,8 @@ type Unposted struct {
 	DaysLate      int        `json:"days_late"`
 	Blocked       bool       `json:"blocked"`
 	HasLines      bool       `json:"has_lines"`
+	// InactiveCode is a charge code a line of the session points at that is inactive: the close does not post the session until the code is active again or the line is changed.
+	InactiveCode *string `json:"inactive_code"`
 }
 
 // PolicyTemplate is a cancellation policy a property offers to its events, with the deposits it asks for.

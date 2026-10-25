@@ -24797,10 +24797,12 @@ components:
         total: { type: string }
     BanquetEstimateCode:
       type: object
-      required: [charge_code_id, charge_code, net]
+      required: [charge_code_id, charge_code, gl_account_code, gl_account_name, net]
       properties:
         charge_code_id: { type: integer, format: int64 }
         charge_code: { type: string }
+        gl_account_code: { type: [string, "null"], description: "The account of the general ledger the charge code posts its revenue to." }
+        gl_account_name: { type: [string, "null"] }
         net: { type: string }
     BanquetEstimate:
       type: object
@@ -24952,7 +24954,7 @@ components:
         total: { type: string }
     BanquetUnposted:
       type: object
-      required: [session_id, event_id, event_number, event_name, session_no, session_name, session_date, room_name, pax_estimated, pax_guaranteed, pax_actual, posting_mode, sales_name, days_late, blocked, has_lines]
+      required: [session_id, event_id, event_number, event_name, session_no, session_name, session_date, room_name, pax_estimated, pax_guaranteed, pax_actual, posting_mode, sales_name, days_late, blocked, has_lines, inactive_code]
       properties:
         session_id: { type: integer, format: int64 }
         event_id: { type: integer, format: int64 }
@@ -24968,8 +24970,9 @@ components:
         posting_mode: { type: string, enum: [AUTO, MANUAL] }
         sales_name: { type: string }
         days_late: { type: integer }
-        blocked: { type: boolean, description: "The close cannot post it (no guests, or a charge code that is inactive)." }
+        blocked: { type: boolean, description: "The close cannot post it: no guests." }
         has_lines: { type: boolean }
+        inactive_code: { type: [string, "null"], description: "A charge code of a line of the session that is inactive: the close does not post the session until it is active again or the line is changed." }
     BanquetTemplateDeposit:
       type: object
       required: [label, percent]

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { confirm } from '@/composables/useConfirm'
 import { t } from '@/i18n'
+import { revenueByAccount } from '@/utils/banquetMoney'
 import { formatDateShort, formatMoney } from '@/utils/format'
 import BanquetLineDialog from './BanquetLineDialog.vue'
 
@@ -110,7 +111,7 @@ async function remove(l: BanquetLine): Promise<void> {
       <template v-if="lines.estimate.by_code.length">
         <h4 class="m-0 mb-1 mt-3 text-xs font-semibold text-muted-foreground">{{ t('banquet.money.byCode') }}</h4>
         <ul class="m-0 flex list-none flex-col gap-0.5 p-0 text-sm" data-testid="estimate-by-code">
-          <li v-for="c in lines.estimate.by_code" :key="c.charge_code_id" class="flex justify-between gap-2"><span>{{ c.charge_code }}</span><span>{{ formatMoney(c.net) }}</span></li>
+          <li v-for="a in revenueByAccount(lines.estimate.by_code)" :key="a.key" class="flex justify-between gap-2" :data-testid="`estimate-account-${a.key}`"><span>{{ a.label }}</span><span>{{ formatMoney(String(a.net)) }}</span></li>
         </ul>
       </template>
       <p class="m-0 mt-3 text-xs text-muted-foreground">{{ t('banquet.money.estimateHint') }}</p>

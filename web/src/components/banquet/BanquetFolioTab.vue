@@ -26,6 +26,8 @@ const error = ref<ApiError | null>(null)
 const postTarget = ref<PostTarget | null>(null)
 const postOpen = ref(false)
 const transferOpen = ref(false)
+// An event that is not linked to a group can be transferred too (the dialog links it); the button is off only without the permission or without a group that has an open master folio
+const transferBlock = computed<'banquet.transfer.offPermission' | 'banquet.transfer.offNoGroup' | null>(() => (!props.canManage ? 'banquet.transfer.offPermission' : !props.money.groups.length && !props.event.booking_group_id ? 'banquet.transfer.offNoGroup' : null))
 const posted = computed(() => new Map(props.money.postings.map((p) => [p.session_id, p])))
 const sessions = computed(() => props.event.sessions.filter((s) => s.status === 'ACTIVE'))
 const definite = computed(() => props.event.status === 'DEFINITE')
@@ -60,7 +62,10 @@ function wasPosted(total: string): void {
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h3 class="m-0 text-base font-semibold">{{ t('banquet.folio.title') }}</h3>
         <div class="flex gap-2">
-          <Button v-if="canManage && money.folio && money.folio.status === 'OPEN'" type="button" variant="outline" data-testid="transfer-open" :disabled="!money.groups.length && !event.booking_group_id" @click="transferOpen = true">{{ t('banquet.transfer.open') }}</Button>
+          <Button
+            v-if="money.folio && money.folio.status === 'OPEN'" type="button" variant="outline" data-testid="transfer-open" :disabled="transferBlock !== null"
+            :title="transferBlock === null ? undefined : t(transferBlock)" @click="transferOpen = true"
+          >{{ t('banquet.transfer.open') }}</Button>
         </div>
       </div>
       <p v-if="!money.folio" class="m-0 text-sm text-muted-foreground" data-testid="folio-none">{{ t('banquet.folio.none') }}</p>

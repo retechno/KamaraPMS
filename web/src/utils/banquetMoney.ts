@@ -30,3 +30,15 @@ export function billedPax(guaranteed: number | null, actual: number | null): { p
   const a = actual ?? 0
   return a > g ? { pax: a, basis: 'ACTUAL' } : { pax: g, basis: 'GUARANTEED' }
 }
+
+/** The net revenue of an estimate by the account of the ledger the charge codes post to (a code without an account keeps its own name); the order of the first appearance. */
+export function revenueByAccount(codes: { charge_code_id: number; charge_code: string; gl_account_code: string | null; gl_account_name: string | null; net: string }[]): { key: string; label: string; net: number }[] {
+  const out = new Map<string, { key: string; label: string; net: number }>()
+  for (const c of codes) {
+    const key = c.gl_account_code ?? `code:${c.charge_code_id}`
+    const row = out.get(key) ?? { key, label: c.gl_account_code ? `${c.gl_account_code} ${c.gl_account_name ?? ''}`.trim() : c.charge_code, net: 0 }
+    row.net += Number(c.net)
+    out.set(key, row)
+  }
+  return [...out.values()]
+}

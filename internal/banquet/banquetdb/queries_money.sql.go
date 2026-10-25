@@ -65,7 +65,10 @@ func (q *Queries) ChargeCodeByCode(ctx context.Context, arg ChargeCodeByCodePara
 }
 
 const chargeCodeNames = `-- name: ChargeCodeNames :many
-SELECT id, code FROM charge_codes WHERE tenant_id = $1 AND property_id = $2 AND id = ANY($3::bigint[])
+SELECT cc.id, cc.code, cc.gl_account_code, a.name AS gl_account_name
+FROM charge_codes cc
+LEFT JOIN gl_accounts a ON a.property_id = cc.property_id AND a.code = cc.gl_account_code
+WHERE cc.tenant_id = $1 AND cc.property_id = $2 AND cc.id = ANY($3::bigint[])
 `
 
 type ChargeCodeNamesParams struct {
@@ -75,8 +78,10 @@ type ChargeCodeNamesParams struct {
 }
 
 type ChargeCodeNamesRow struct {
-	ID   int64
-	Code string
+	ID            int64
+	Code          string
+	GlAccountCode *string
+	GlAccountName *string
 }
 
 func (q *Queries) ChargeCodeNames(ctx context.Context, arg ChargeCodeNamesParams) ([]ChargeCodeNamesRow, error) {
@@ -88,7 +93,12 @@ func (q *Queries) ChargeCodeNames(ctx context.Context, arg ChargeCodeNamesParams
 	items := []ChargeCodeNamesRow{}
 	for rows.Next() {
 		var i ChargeCodeNamesRow
-		if err := rows.Scan(&i.ID, &i.Code); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.GlAccountCode,
+			&i.GlAccountName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -251,53 +261,6 @@ func (q *Queries) DueSessions(ctx context.Context, arg DueSessionsParams) ([]Due
 	for rows.Next() {
 		var i DueSessionsRow
 		if err := rows.Scan(&i.SessionID, &i.EventID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const dueSessionsInactiveCode = `-- name: DueSessionsInactiveCode :many
-SELECT DISTINCT e.number AS event_number, s.name AS session_name, cc.code AS charge_code
-FROM banquet_sessions s
-JOIN banquet_events e ON e.property_id = s.property_id AND e.id = s.event_id
-LEFT JOIN banquet_settings st ON st.property_id = e.property_id
-JOIN banquet_event_lines l ON l.property_id = s.property_id AND l.session_id = s.id AND l.is_active
-LEFT JOIN banquet_line_components lc ON lc.property_id = l.property_id AND lc.line_id = l.id
-JOIN charge_codes cc ON cc.property_id = l.property_id AND cc.id = COALESCE(lc.charge_code_id, l.charge_code_id)
-WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.status = 'DEFINITE' AND s.status = 'ACTIVE' AND s.session_date <= $3::date
-  AND COALESCE(e.posting_mode, st.posting_mode, 'AUTO') = 'AUTO' AND NOT cc.is_active
-  AND NOT EXISTS (SELECT 1 FROM banquet_session_postings p WHERE p.property_id = s.property_id AND p.session_id = s.id)
-ORDER BY e.number, s.name
-`
-
-type DueSessionsInactiveCodeParams struct {
-	TenantID   int64
-	PropertyID int64
-	Day        civil.Date
-}
-
-type DueSessionsInactiveCodeRow struct {
-	EventNumber string
-	SessionName string
-	ChargeCode  string
-}
-
-// The sessions the close would post whose lines point at an inactive charge code: the posting would fail, so the close names them before it runs.
-func (q *Queries) DueSessionsInactiveCode(ctx context.Context, arg DueSessionsInactiveCodeParams) ([]DueSessionsInactiveCodeRow, error) {
-	rows, err := q.db.Query(ctx, dueSessionsInactiveCode, arg.TenantID, arg.PropertyID, arg.Day)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []DueSessionsInactiveCodeRow{}
-	for rows.Next() {
-		var i DueSessionsInactiveCodeRow
-		if err := rows.Scan(&i.EventNumber, &i.SessionName, &i.ChargeCode); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1349,6 +1312,27 @@ func (q *Queries) SessionHasPosting(ctx context.Context, arg SessionHasPostingPa
 	return exists, err
 }
 
+const sessionInactiveCode = `-- name: SessionInactiveCode :one
+SELECT COALESCE((SELECT cc.code FROM banquet_event_lines l
+          LEFT JOIN banquet_line_components lc ON lc.property_id = l.property_id AND lc.line_id = l.id
+          JOIN charge_codes cc ON cc.property_id = l.property_id AND cc.id = COALESCE(lc.charge_code_id, l.charge_code_id)
+         WHERE l.property_id = $1 AND l.session_id = $2 AND l.is_active AND NOT cc.is_active
+         ORDER BY cc.code LIMIT 1), '')::text AS code
+`
+
+type SessionInactiveCodeParams struct {
+	PropertyID int64
+	SessionID  int64
+}
+
+// The first inactive charge code a session's lines point at, ” when there is none: the close does not post such a session (it stays on the report) instead of failing.
+func (q *Queries) SessionInactiveCode(ctx context.Context, arg SessionInactiveCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, sessionInactiveCode, arg.PropertyID, arg.SessionID)
+	var code string
+	err := row.Scan(&code)
+	return code, err
+}
+
 const sessionOfEvent = `-- name: SessionOfEvent :one
 SELECT status FROM banquet_sessions WHERE property_id = $1 AND event_id = $2 AND id = $3
 `
@@ -1505,7 +1489,12 @@ func (q *Queries) SetSessionActual(ctx context.Context, arg SetSessionActualPara
 const unpostedSessions = `-- name: UnpostedSessions :many
 SELECT s.id AS session_id, s.event_id, e.number AS event_number, e.name AS event_name, s.session_no, s.name AS session_name, s.session_date, r.name AS room_name,
        s.pax_estimated, s.pax_guaranteed, s.pax_actual, COALESCE(e.posting_mode, st.posting_mode, 'AUTO')::text AS posting_mode, u.full_name AS sales_name,
-       EXISTS (SELECT 1 FROM banquet_event_lines l WHERE l.property_id = s.property_id AND l.session_id = s.id AND l.is_active) AS has_lines
+       EXISTS (SELECT 1 FROM banquet_event_lines l WHERE l.property_id = s.property_id AND l.session_id = s.id AND l.is_active) AS has_lines,
+       COALESCE((SELECT cc.code FROM banquet_event_lines l
+          LEFT JOIN banquet_line_components lc ON lc.property_id = l.property_id AND lc.line_id = l.id
+          JOIN charge_codes cc ON cc.property_id = l.property_id AND cc.id = COALESCE(lc.charge_code_id, l.charge_code_id)
+         WHERE l.property_id = s.property_id AND l.session_id = s.id AND l.is_active AND NOT cc.is_active
+         ORDER BY cc.code LIMIT 1), '')::text AS inactive_code
 FROM banquet_sessions s
 JOIN banquet_events e ON e.property_id = s.property_id AND e.id = s.event_id
 JOIN users u ON u.tenant_id = e.tenant_id AND u.id = e.sales_user_id
@@ -1537,6 +1526,7 @@ type UnpostedSessionsRow struct {
 	PostingMode   string
 	SalesName     string
 	HasLines      bool
+	InactiveCode  string
 }
 
 // The report "sessions not posted" (4.10): active sessions of definite events, dated the business date or earlier, with no posting.
@@ -1564,6 +1554,7 @@ func (q *Queries) UnpostedSessions(ctx context.Context, arg UnpostedSessionsPara
 			&i.PostingMode,
 			&i.SalesName,
 			&i.HasLines,
+			&i.InactiveCode,
 		); err != nil {
 			return nil, err
 		}

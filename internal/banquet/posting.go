@@ -209,6 +209,15 @@ func (s *Service) postOne(ctx context.Context, p auth.Principal, propertyID int6
 		}
 		pax, basis, onGuarantee = sn.PaxEstimated, BasisEstimated, true
 	}
+	if o.auto {
+		inactive, err := q.SessionInactiveCode(ctx, banquetdb.SessionInactiveCodeParams{PropertyID: propertyID, SessionID: t.sessionID})
+		if err != nil {
+			return PostResult{}, false, err
+		}
+		if inactive != "" {
+			return PostResult{}, false, nil // the session stays unposted, on the report with its cause
+		}
+	}
 	decimals, err := s.decimals(ctx, p.TenantID, propertyID)
 	if err != nil {
 		return PostResult{}, false, err
@@ -293,6 +302,9 @@ func (s *Service) unposted(ctx context.Context, tenantID, propertyID int64) ([]U
 			u.PaxActual = ptr(int(*r.PaxActual))
 		}
 		u.Blocked = u.PaxGuaranteed == nil && u.PaxActual == nil
+		if r.InactiveCode != "" {
+			u.InactiveCode = ptr(r.InactiveCode)
+		}
 		out = append(out, u)
 	}
 	return out, nil
@@ -306,8 +318,8 @@ type NightAuditIssue struct {
 	Params  map[string]string
 }
 
-// NightAuditChecks are the findings of the close for the banquet (36 4.5): a session of the automatic close that has no guests is a warning, a session that waits for the office (manual) is a warning,
-// and a session of the automatic close that cannot be billed because a charge code of its lines is inactive is a blocker (the close would fail on it).
+// NightAuditChecks are the findings of the close for the banquet (36 4.5): a session of the automatic close that has no guests, one that waits for the office (manual) and one whose lines use an inactive
+// charge code are warnings; none of them blocks the close, and each stays on the report "Sessions not posted" with its cause.
 func (s *Service) NightAuditChecks(ctx context.Context, tenantID, propertyID int64) (blockers, warnings []NightAuditIssue, err error) {
 	list, err := s.unposted(ctx, tenantID, propertyID)
 	if err != nil {
@@ -319,22 +331,12 @@ func (s *Service) NightAuditChecks(ctx context.Context, tenantID, propertyID int
 		switch {
 		case u.PostingMode == PostingManual:
 			warnings = append(warnings, NightAuditIssue{Code: "BANQUET_SESSION_NOT_POSTED", Message: "a banquet session waits to be posted by the office: " + ref, Ref: ref, Params: params})
+		case u.InactiveCode != nil:
+			params["charge_code"] = *u.InactiveCode
+			warnings = append(warnings, NightAuditIssue{Code: "BANQUET_CHARGE_CODE_INACTIVE", Message: "a line of a banquet session uses an inactive charge code, so the close does not post it: " + ref, Ref: ref, Params: params})
 		case u.Blocked:
 			warnings = append(warnings, NightAuditIssue{Code: "BANQUET_SESSION_NO_GUESTS", Message: "a banquet session has no guaranteed and no actual guests, so the close does not post it: " + ref, Ref: ref, Params: params})
 		}
-	}
-	day := s.today(ctx, propertyID)
-	if day.IsZero() {
-		return blockers, warnings, nil
-	}
-	bad, err := s.q(ctx).DueSessionsInactiveCode(ctx, banquetdb.DueSessionsInactiveCodeParams{TenantID: tenantID, PropertyID: propertyID, Day: day})
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, b := range bad {
-		ref := b.EventNumber + " / " + b.SessionName
-		blockers = append(blockers, NightAuditIssue{Code: "BANQUET_CHARGE_CODE_INACTIVE", Message: "a line of a banquet session uses an inactive charge code, so the close cannot post it: " + ref, Ref: ref,
-			Params: map[string]string{"event": b.EventNumber, "session": b.SessionName, "charge_code": b.ChargeCode}})
 	}
 	return blockers, warnings, nil
 }

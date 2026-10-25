@@ -226,7 +226,7 @@ func TestAnAutoSessionWithNoGuestsIsSkippedWithAWarning(t *testing.T) {
 	}
 }
 
-func TestAChargeCodeThatIsInactiveBlocksTheCloseAndNothingIsPosted(t *testing.T) {
+func TestAChargeCodeThatIsInactiveOnlyWarnsAndTheSessionStaysOnTheReport(t *testing.T) {
 	f := setup(t)
 	m := f.money(t)
 	ev, sid := m.eventOn(t, "Inactive", "2026-09-30", 100)
@@ -234,14 +234,29 @@ func TestAChargeCodeThatIsInactiveBlocksTheCloseAndNothingIsPosted(t *testing.T)
 	m.confirm(t, ev.ID)
 	_, err := f.Pool.Exec(context.Background(), `UPDATE charge_codes SET is_active = false WHERE property_id = $1 AND code = 'BQT_ROOM'`, f.propID)
 	must(t, err)
-	blockers, _, err := f.svc.NightAuditChecks(context.Background(), f.tenantID, f.propID)
+	blockers, warns, err := f.svc.NightAuditChecks(context.Background(), f.tenantID, f.propID)
 	must(t, err)
 	found := false
-	for _, b := range blockers {
-		found = found || b.Code == "BANQUET_CHARGE_CODE_INACTIVE"
+	for _, w := range warns {
+		found = found || w.Code == "BANQUET_CHARGE_CODE_INACTIVE"
 	}
-	if !found {
-		t.Fatalf("blockers: %+v", blockers)
+	if len(blockers) != 0 || !found {
+		t.Fatalf("an inactive charge code only warns: blockers %+v, warnings %+v", blockers, warns)
+	}
+	m.closeDay(t) // the close goes through and posts nothing for that session
+	rep, err := f.svc.UnpostedReport(f.office, f.propID)
+	must(t, err)
+	listed := false
+	for _, u := range rep {
+		if u.SessionID == sid {
+			listed = true
+			if u.InactiveCode == nil || *u.InactiveCode != "BQT_ROOM" {
+				t.Fatalf("the cause of the session: %+v", u)
+			}
+		}
+	}
+	if !listed {
+		t.Fatalf("the session is not on the report: %+v", rep)
 	}
 	// a manual posting meets the same code and rolls back whole: the charges before it are not left
 	_, err = f.svc.PostSession(f.office, f.propID, ev.ID, sid, banquet.PostInput{})

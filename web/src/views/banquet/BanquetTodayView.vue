@@ -115,7 +115,7 @@ function posted(total: string): void {
       <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
         <li v-for="u in older" :key="u.session_id" class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2 text-sm" :data-testid="`older-${u.session_id}`">
           <span><RouterLink :to="`/banquet/events/${u.event_id}`" class="font-medium text-primary hover:underline">{{ u.event_name }}</RouterLink> <span class="text-muted-foreground">{{ u.event_number }} · {{ u.session_name }} · {{ formatDateShort(u.session_date) }} · {{ t('banquet.unposted.age', { n: u.days_late }) }}</span></span>
-          <span class="flex items-center gap-2"><Badge variant="outline">{{ u.blocked ? t('banquet.unposted.noGuests') : u.posting_mode === 'MANUAL' ? t('banquet.unposted.manual') : t('banquet.unposted.waiting') }}</Badge><Button v-if="canManage" type="button" size="sm" @click="post(u)">{{ t('banquet.post.action') }}</Button></span>
+          <span class="flex items-center gap-2"><Badge variant="outline">{{ u.posting_mode === 'AUTO' && u.inactive_code ? t('banquet.unposted.inactive') : u.blocked ? t('banquet.unposted.noGuests') : u.posting_mode === 'MANUAL' ? t('banquet.unposted.manual') : t('banquet.unposted.waiting') }}</Badge><Button v-if="canManage" type="button" size="sm" @click="post(u)">{{ t('banquet.post.action') }}</Button></span>
         </li>
       </ul>
       <p class="m-0 mt-2 text-xs text-muted-foreground">{{ t('banquet.today.olderHint') }}</p>

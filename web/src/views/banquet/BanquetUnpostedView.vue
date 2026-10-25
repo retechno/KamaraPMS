@@ -54,7 +54,7 @@ async function load(): Promise<void> {
 }
 watch(pid, load, { immediate: true })
 
-const cause = (u: BanquetUnposted): string => (u.blocked ? t('banquet.unposted.noGuests') : u.posting_mode === 'MANUAL' ? t('banquet.unposted.manual') : t('banquet.unposted.waiting'))
+const cause = (u: BanquetUnposted): string => (u.posting_mode === 'AUTO' && u.inactive_code ? `${t('banquet.unposted.inactive')} (${u.inactive_code})` : u.blocked ? t('banquet.unposted.noGuests') : u.posting_mode === 'MANUAL' ? t('banquet.unposted.manual') : t('banquet.unposted.waiting'))
 function post(u: BanquetUnposted): void {
   target.value = { event_id: u.event_id, session_id: u.session_id, event_number: u.event_number, event_name: u.event_name, session_name: u.session_name, session_date: u.session_date, room_name: u.room_name, pax_estimated: u.pax_estimated, pax_guaranteed: u.pax_guaranteed, pax_actual: u.pax_actual }
   postOpen.value = true

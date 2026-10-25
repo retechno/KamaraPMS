@@ -23263,6 +23263,9 @@ export interface components {
             /** Format: int64 */
             charge_code_id: number;
             charge_code: string;
+            /** @description The account of the general ledger the charge code posts its revenue to. */
+            gl_account_code: string | null;
+            gl_account_name: string | null;
             net: string;
         };
         /** @description The money of the event by the charge engine; posting follows the same plan. */
@@ -23428,9 +23431,11 @@ export interface components {
             posting_mode: "AUTO" | "MANUAL";
             sales_name: string;
             days_late: number;
-            /** @description The close cannot post it (no guests, or a charge code that is inactive). */
+            /** @description The close cannot post it: no guests. */
             blocked: boolean;
             has_lines: boolean;
+            /** @description A charge code of a line of the session that is inactive: the close does not post the session until it is active again or the line is changed. */
+            inactive_code: string | null;
         };
         BanquetTemplateDeposit: {
             seq?: number;

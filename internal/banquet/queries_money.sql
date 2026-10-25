@@ -141,7 +141,12 @@ ORDER BY s.session_date, s.event_id, s.session_no;
 -- The report "sessions not posted" (4.10): active sessions of definite events, dated the business date or earlier, with no posting.
 SELECT s.id AS session_id, s.event_id, e.number AS event_number, e.name AS event_name, s.session_no, s.name AS session_name, s.session_date, r.name AS room_name,
        s.pax_estimated, s.pax_guaranteed, s.pax_actual, COALESCE(e.posting_mode, st.posting_mode, 'AUTO')::text AS posting_mode, u.full_name AS sales_name,
-       EXISTS (SELECT 1 FROM banquet_event_lines l WHERE l.property_id = s.property_id AND l.session_id = s.id AND l.is_active) AS has_lines
+       EXISTS (SELECT 1 FROM banquet_event_lines l WHERE l.property_id = s.property_id AND l.session_id = s.id AND l.is_active) AS has_lines,
+       COALESCE((SELECT cc.code FROM banquet_event_lines l
+          LEFT JOIN banquet_line_components lc ON lc.property_id = l.property_id AND lc.line_id = l.id
+          JOIN charge_codes cc ON cc.property_id = l.property_id AND cc.id = COALESCE(lc.charge_code_id, l.charge_code_id)
+         WHERE l.property_id = s.property_id AND l.session_id = s.id AND l.is_active AND NOT cc.is_active
+         ORDER BY cc.code LIMIT 1), '')::text AS inactive_code
 FROM banquet_sessions s
 JOIN banquet_events e ON e.property_id = s.property_id AND e.id = s.event_id
 JOIN users u ON u.tenant_id = e.tenant_id AND u.id = e.sales_user_id
@@ -234,18 +239,15 @@ VALUES (@tenant_id, @property_id, sqlc.narg(template_id), sqlc.narg(event_id), @
 SELECT COALESCE(min(session_date), '1900-01-01'::date)::date FROM banquet_sessions WHERE property_id = @property_id AND event_id = @event_id AND status = 'ACTIVE';
 
 -- name: ChargeCodeNames :many
-SELECT id, code FROM charge_codes WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = ANY(@ids::bigint[]);
+SELECT cc.id, cc.code, cc.gl_account_code, a.name AS gl_account_name
+FROM charge_codes cc
+LEFT JOIN gl_accounts a ON a.property_id = cc.property_id AND a.code = cc.gl_account_code
+WHERE cc.tenant_id = @tenant_id AND cc.property_id = @property_id AND cc.id = ANY(@ids::bigint[]);
 
--- name: DueSessionsInactiveCode :many
--- The sessions the close would post whose lines point at an inactive charge code: the posting would fail, so the close names them before it runs.
-SELECT DISTINCT e.number AS event_number, s.name AS session_name, cc.code AS charge_code
-FROM banquet_sessions s
-JOIN banquet_events e ON e.property_id = s.property_id AND e.id = s.event_id
-LEFT JOIN banquet_settings st ON st.property_id = e.property_id
-JOIN banquet_event_lines l ON l.property_id = s.property_id AND l.session_id = s.id AND l.is_active
-LEFT JOIN banquet_line_components lc ON lc.property_id = l.property_id AND lc.line_id = l.id
-JOIN charge_codes cc ON cc.property_id = l.property_id AND cc.id = COALESCE(lc.charge_code_id, l.charge_code_id)
-WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.status = 'DEFINITE' AND s.status = 'ACTIVE' AND s.session_date <= @day::date
-  AND COALESCE(e.posting_mode, st.posting_mode, 'AUTO') = 'AUTO' AND NOT cc.is_active
-  AND NOT EXISTS (SELECT 1 FROM banquet_session_postings p WHERE p.property_id = s.property_id AND p.session_id = s.id)
-ORDER BY e.number, s.name;
+-- name: SessionInactiveCode :one
+-- The first inactive charge code a session's lines point at, '' when there is none: the close does not post such a session (it stays on the report) instead of failing.
+SELECT COALESCE((SELECT cc.code FROM banquet_event_lines l
+          LEFT JOIN banquet_line_components lc ON lc.property_id = l.property_id AND lc.line_id = l.id
+          JOIN charge_codes cc ON cc.property_id = l.property_id AND cc.id = COALESCE(lc.charge_code_id, l.charge_code_id)
+         WHERE l.property_id = @property_id AND l.session_id = @session_id AND l.is_active AND NOT cc.is_active
+         ORDER BY cc.code LIMIT 1), '')::text AS code;

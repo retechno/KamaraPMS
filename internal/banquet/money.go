@@ -149,14 +149,14 @@ func (s *Service) estimate(ctx context.Context, tenantID, propertyID, eventID in
 		return Estimate{}, err
 	}
 	for _, id := range order {
-		codes[id].ChargeCode = names[id]
+		codes[id].ChargeCode, codes[id].GLAccountCode, codes[id].GLAccountName = names[id].Code, names[id].GlAccountCode, names[id].GlAccountName
 		out.ByCode = append(out.ByCode, *codes[id])
 	}
 	return out, nil
 }
 
-func (s *Service) chargeCodeNames(ctx context.Context, tenantID, propertyID int64, ids []int64) (map[int64]string, error) {
-	out := map[int64]string{}
+func (s *Service) chargeCodeNames(ctx context.Context, tenantID, propertyID int64, ids []int64) (map[int64]banquetdb.ChargeCodeNamesRow, error) {
+	out := map[int64]banquetdb.ChargeCodeNamesRow{}
 	if len(ids) == 0 {
 		return out, nil
 	}
@@ -165,7 +165,7 @@ func (s *Service) chargeCodeNames(ctx context.Context, tenantID, propertyID int6
 		return nil, err
 	}
 	for _, r := range rows {
-		out[r.ID] = r.Code
+		out[r.ID] = r
 	}
 	return out, nil
 }
