@@ -14050,10 +14050,15 @@ export interface components {
             id: number;
             folio_number: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group (`booking_group_id`): it has no reservation and no stay. OUTLET is the folio of a bill of an outlet (`outlet_id`): it has no reservation, stay, group or company. EVENT is the bill of a banquet event (`banquet_event_id`): it has no reservation, stay, group or outlet; it may be billed to a company.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET" | "EVENT";
+            /**
+             * Format: int64
+             * @description The event an EVENT folio is the bill of; null on the others.
+             */
+            banquet_event_id?: number | null;
             /**
              * Format: int64
              * @description The outlet of an OUTLET folio; null on the others.
@@ -14105,10 +14110,12 @@ export interface components {
             /** @description The confirmation number of the reservation of the folio (`RES000012`) */
             confirmation_number?: string;
             /**
-             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet.
+             * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet. EVENT is the bill of a banquet event.
              * @enum {string}
              */
-            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+            folio_type: "GUEST" | "COMPANY" | "MASTER" | "OUTLET" | "EVENT";
+            /** Format: int64 */
+            banquet_event_id?: number | null;
             /** Format: int64 */
             outlet_id?: number | null;
             outlet_code?: string;
@@ -26635,8 +26642,8 @@ export interface operations {
                 reservation_id?: number;
                 /** @description The master folio of that group. */
                 booking_group_id?: number;
-                /** @description Without it the bills of the outlets (OUTLET) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills. */
-                folio_type?: "GUEST" | "COMPANY" | "MASTER" | "OUTLET";
+                /** @description Without it the bills of the outlets (OUTLET) and of the events (EVENT) are not listed: every list of the front desk keeps its meaning. OUTLET lists the bills; EVENT lists the bills of the banquet events. */
+                folio_type?: "GUEST" | "COMPANY" | "MASTER" | "OUTLET" | "EVENT";
                 /** @description The bills of one outlet. */
                 outlet_id?: number;
                 stay_id?: number;
