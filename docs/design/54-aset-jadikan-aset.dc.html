@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Jadikan aset</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.sub{font-size:12px;color:#626b77}
+.inp{height:40px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lb{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px}
+.rad{display:flex;gap:8px;align-items:flex-start;font-size:13px}
+.rad input{width:18px;height:18px;margin:0;accent-color:#1f6f5c}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:7px 10px;border-bottom:1px solid #e3e6ea}
+.thr{text-align:right}
+.td{padding:7px 10px;border-bottom:1px solid #eef0f2;font-size:13px}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#5b6068;display:flex;align-items:center;justify-content:center;position:relative">
+  <div style="position:absolute;inset:0;background:#f6f7f9;opacity:.35"></div>
+  <section role="dialog" aria-labelledby="dlg-title" style="position:relative;width:820px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div style="padding:20px 24px 8px">
+      <div class="sub">Tagihan BL-000231 · PT Sejuk Abadi · 3 Nov 2026 · akun 1530 · biaya 22.000.000</div>
+      <h1 id="dlg-title" style="margin:4px 0 0;font-size:22px">Jadikan aset</h1>
+    </div>
+    <div style="padding:8px 24px;display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:12px">
+      <label class="lb">Nama<input class="inp" value="AC split 1 PK"></label>
+      <label class="lb">Jumlah unit<input class="inp" value="4" style="text-align:right"></label>
+      <label class="lb">Kategori<select class="inp"><option>FF&amp;E · 96 bulan, garis lurus</option></select></label>
+      <label class="lb">Lokasi<select class="inp"><option>Kamar 401–404</option></select></label>
+      <label class="lb">Departemen<select class="inp"><option>Kamar</option></select></label>
+      <label class="lb">Tanggal mulai pakai<input class="inp" value="4 Nov 2026"></label>
+    </div>
+    <div style="padding:6px 24px;display:flex;flex-direction:column;gap:6px">
+      <span class="lb">Mulai disusutkan</span>
+      <label class="rad"><input type="radio" name="start" checked><span>Bulan mulai pakai (<strong>November 2026</strong>) · bawaan properti</span></label>
+      <label class="rad"><input type="radio" name="start"><span>Bulan berikutnya (Desember 2026)</span></label>
+      <span class="sub">Bisa diubah di halaman aset selama aset ini belum pernah disusutkan; setelah penyusutan pertama terposting, terkunci.</span>
+    </div>
+    <div style="padding:8px 24px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Unit</th><th class="th">Nomor (saat disimpan)</th><th class="th">Lokasi</th><th class="th thr">Biaya</th><th class="th thr">Per bulan</th></tr></thead>
+        <tbody>
+          <tr><td class="td">1</td><td class="td">FA-000132</td><td class="td">Kamar 401</td><td class="td num">5.500.000</td><td class="td num">57.292</td></tr>
+          <tr><td class="td">2</td><td class="td">FA-000133</td><td class="td">Kamar 402</td><td class="td num">5.500.000</td><td class="td num">57.292</td></tr>
+          <tr><td class="td">3</td><td class="td">FA-000134</td><td class="td">Kamar 403</td><td class="td num">5.500.000</td><td class="td num">57.292</td></tr>
+          <tr><td class="td">4</td><td class="td">FA-000135</td><td class="td">Kamar 404</td><td class="td num">5.500.000</td><td class="td num">57.292</td></tr>
+        </tbody>
+      </table>
+      <div class="sub" style="padding-top:6px">Biaya dibagi rata; selisih pembulatan masuk ke unit terakhir. Di atas batas kapitalisasi 2.500.000. Tidak ada jurnal baru: tagihan sudah mendebit 1530.</div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #e3e6ea;margin-top:6px">
+      <a href="53-aset-daftar-tunggu.dc.html" class="btn">Batal</a>
+      <button class="btnp">Buat 4 aset</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

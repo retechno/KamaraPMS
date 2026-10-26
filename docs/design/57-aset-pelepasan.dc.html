@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Pelepasan aset</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.btn{height:44px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.sub{font-size:12px;color:#626b77}
+.inp{height:40px;width:100%;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lb{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px}
+.seg{display:flex;border:1px solid #e3e6ea;border-radius:10px;overflow:hidden}
+.seg button{flex:1;height:40px;border:0;background:#fff;font:inherit;font-size:13px}
+.seg .s{background:#1f6f5c;color:#fff;font-weight:600}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid #eef0f2}
+.num{font-variant-numeric:tabular-nums}
+.box{border-radius:12px;padding:12px 14px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#5b6068;display:flex;align-items:center;justify-content:center;position:relative">
+  <div style="position:absolute;inset:0;background:#f6f7f9;opacity:.35"></div>
+  <section role="dialog" aria-labelledby="dlg-title" style="position:relative;width:820px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:flex;flex-direction:column">
+    <div style="padding:20px 24px 8px">
+      <div class="sub">FA-000019 · Sofa lobi set · FF&amp;E · Lobi · Kamar</div>
+      <h1 id="dlg-title" style="margin:4px 0 0;font-size:22px">Lepas aset</h1>
+    </div>
+    <div style="display:flex;gap:20px;padding:8px 24px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+        <div class="seg" role="group" aria-label="Jenis pelepasan"><button class="s">Dijual</button><button>Dihapus (rusak)</button><button>Dihapus (hilang)</button></div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+          <label class="lb">Tanggal pelepasan<input class="inp" value="6 Nov 2026"></label>
+          <label class="lb">Harga jual<input class="inp num" value="18.000.000" style="text-align:right"></label>
+          <label class="lb">Diterima ke<select class="inp"><option>1110 Kas</option><option>Bank</option><option>1230 Piutang lain-lain</option></select></label>
+          <label class="lb">Pembeli<input class="inp" value="CV Mebel Jaya"></label>
+        </div>
+        <label class="lb">Alasan<input class="inp" value="Diganti set baru saat renovasi lobi"></label>
+        <div class="sub">November tidak disusutkan untuk aset ini: bulan pelepasan tidak ikut penyusutan. Penyusutan Oktober sudah dijalankan.</div>
+      </div>
+      <div style="width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:10px">
+        <div style="background:#f6f7f9;border-radius:12px;padding:12px 14px">
+          <div class="kv"><span>Harga perolehan</span><span class="num">36.000.000</span></div>
+          <div class="kv"><span>Akumulasi</span><span class="num">21.000.000</span></div>
+          <div class="kv"><span>Nilai buku</span><span class="num">15.000.000</span></div>
+          <div class="kv" style="border-bottom:0"><strong>Laba pelepasan</strong><strong class="num" style="color:#185a4a">3.000.000</strong></div>
+        </div>
+        <div style="background:#f6f7f9;border-radius:12px;padding:12px 14px">
+          <strong style="font-size:13px">Jurnal saat disetujui</strong>
+          <div class="kv"><span>Dr 1110 Kas</span><span class="num">18.000.000</span></div>
+          <div class="kv"><span>Dr 1592 Akumulasi FF&amp;E</span><span class="num">21.000.000</span></div>
+          <div class="kv"><span>Cr 1530 FF&amp;E</span><span class="num">36.000.000</span></div>
+          <div class="kv" style="border-bottom:0"><span>Cr 7420 Laba/rugi pelepasan</span><span class="num">3.000.000</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:4px 24px">
+      <div class="box" style="background:#fffaf2;border:1px solid #e7b56a;color:#5c3608">
+        <strong>Perlu persetujuan "Pelepasan aset" dari orang lain: nominal 18.000.000 (yang lebih besar antara nilai buku dan harga jual) di atas batas 10.000.000.</strong>
+        <span>PPN atas penjualan aset belum dihitung; menunggu arahan konsultan pajak.</span>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid #e3e6ea;margin-top:10px">
+      <a href="52-aset-halaman.dc.html" class="btn">Batal</a>
+      <button class="btnp">Ajukan pelepasan</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Halaman aset</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:38px;padding:0 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:13px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.tab{padding:10px 2px;font-size:14px;text-decoration:none;color:#4a5361;border-bottom:2px solid transparent}
+.tabon{color:#1c2128;font-weight:600;border-bottom-color:#1f6f5c}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:7px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid #eef0f2}
+.kv span:first-child{color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#e3f2ee;color:#185a4a}
+.cur td{background:#f1f8f5;font-weight:600}
+.ev{display:flex;gap:10px;font-size:13px;padding:7px 0;border-bottom:1px solid #eef0f2}
+.ev b{width:92px;flex-shrink:0;font-weight:600;color:#4a5361}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav">Laporan aset</a>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:12px">
+    <a href="51-aset-register.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start">← Register aset</a>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="flex:1">
+        <div class="sub" style="font-size:12px">FA-000044 · Kendaraan · dari tagihan BL-000188 PT Astra Bali</div>
+        <h1 style="margin:2px 0 0;font-size:24px">Toyota HiAce</h1>
+      </div>
+      <span class="pill">Aktif</span>
+      <button class="btn">Pindahkan</button>
+      <button class="btn">Ubah umur / nilai sisa</button>
+      <button class="btn">Tambah nilai</button>
+      <a href="57-aset-pelepasan.dc.html" class="btn">Lepas / jual</a>
+      <a href="61-aset-label-qr.dc.html" class="btn">Label QR</a>
+    </div>
+
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <section class="card" style="width:340px;flex-shrink:0;padding:14px 16px;align-self:flex-start">
+        <div class="kv"><span>Lokasi</span><span>Parkir basement</span></div>
+        <div class="kv"><span>Departemen</span><span>Administrasi &amp; umum</span></div>
+        <div class="kv"><span>Pemasok</span><span>PT Astra Bali</span></div>
+        <div class="kv"><span>Nomor seri</span><span>DK 1234 AB · MHF11KF8</span></div>
+        <div class="kv"><span>Tgl perolehan</span><span>14 Feb 2025</span></div>
+        <div class="kv"><span>Mulai pakai</span><span>14 Feb 2025</span></div>
+        <div class="kv"><span>Mulai disusutkan</span><span>Feb 2025 (bulan mulai pakai)</span></div>
+        <div class="kv"><span>Garansi sampai</span><span>14 Feb 2028</span></div>
+        <div style="height:8px"></div>
+        <div class="kv"><span>Harga perolehan</span><strong>240.000.000</strong></div>
+        <div class="kv"><span>Nilai sisa</span><span>24.000.000</span></div>
+        <div class="kv"><span>Metode · umur</span><span>Garis lurus · 96 bulan</span></div>
+        <div class="kv"><span>Per bulan</span><span>2.250.000</span></div>
+        <div class="kv"><span>Akumulasi (21 bulan)</span><span>47.250.000</span></div>
+        <div class="kv"><strong>Nilai buku</strong><strong>192.750.000</strong></div>
+        <div style="height:8px"></div>
+        <div class="kv"><span>Kelompok fiskal</span><span>Kelompok 2 · garis lurus 12,5%</span></div>
+        <div class="kv" style="border-bottom:0"><span>Akumulasi fiskal s.d. Okt</span><span>52.500.000</span></div>
+      </section>
+
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <nav style="display:flex;gap:22px;border-bottom:1px solid #e3e6ea" aria-label="Bagian aset">
+          <a href="#" class="tab tabon">Jadwal penyusutan</a>
+          <a href="#" class="tab">Riwayat</a>
+          <a href="#" class="tab">Perbaikan · 2</a>
+        </nav>
+        <section class="card" style="overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Tahun</th><th class="th thr">Komersial</th><th class="th thr">Akumulasi</th><th class="th thr">Fiskal</th><th class="th thr">Akumulasi fiskal</th><th class="th thr">Koreksi fiskal</th></tr></thead>
+            <tbody>
+              <tr><td class="td">2025 · 11 bulan</td><td class="td num">24.750.000</td><td class="td num">24.750.000</td><td class="td num">27.500.000</td><td class="td num">27.500.000</td><td class="td num">−2.750.000</td></tr>
+              <tr class="cur"><td class="td">2026 · berjalan</td><td class="td num">27.000.000</td><td class="td num">51.750.000</td><td class="td num">30.000.000</td><td class="td num">57.500.000</td><td class="td num">−3.000.000</td></tr>
+              <tr><td class="td">2027</td><td class="td num">27.000.000</td><td class="td num">78.750.000</td><td class="td num">30.000.000</td><td class="td num">87.500.000</td><td class="td num">−3.000.000</td></tr>
+              <tr><td class="td">2028</td><td class="td num">27.000.000</td><td class="td num">105.750.000</td><td class="td num">30.000.000</td><td class="td num">117.500.000</td><td class="td num">−3.000.000</td></tr>
+              <tr><td class="td">2029</td><td class="td num">27.000.000</td><td class="td num">132.750.000</td><td class="td num">30.000.000</td><td class="td num">147.500.000</td><td class="td num">−3.000.000</td></tr>
+              <tr><td class="td">2030</td><td class="td num">27.000.000</td><td class="td num">159.750.000</td><td class="td num">30.000.000</td><td class="td num">177.500.000</td><td class="td num">−3.000.000</td></tr>
+              <tr><td class="td">2031</td><td class="td num">27.000.000</td><td class="td num">186.750.000</td><td class="td num">30.000.000</td><td class="td num">207.500.000</td><td class="td num">−3.000.000</td></tr>
+              <tr><td class="td">2032</td><td class="td num">27.000.000</td><td class="td num">213.750.000</td><td class="td num">30.000.000</td><td class="td num">237.500.000</td><td class="td num">−3.000.000</td></tr>
+              <tr><td class="td">2033 · 1 bulan</td><td class="td num">2.250.000</td><td class="td num">216.000.000</td><td class="td num">2.500.000</td><td class="td num">240.000.000</td><td class="td num">−250.000</td></tr>
+            </tbody>
+          </table>
+          <div style="padding:10px 14px;font-size:12px;color:#4a5361">Komersial menyusutkan sampai nilai sisa 24.000.000; fiskal kelompok 2 tanpa nilai sisa, dimulai bulan perolehan. Tahun berjalan adalah perkiraan sampai Desember; penyusutan nyata sampai Oktober 2026. Tarif fiskal perlu dikonfirmasi konsultan pajak.</div>
+        </section>
+        <section class="card" style="padding:12px 16px">
+          <strong style="font-size:14px">Riwayat terakhir</strong>
+          <div class="ev"><b>31 Okt 2026</b><span>Penyusutan Oktober 2.250.000 · JV-000412</span></div>
+          <div class="ev"><b>3 Mar 2026</b><span>Pindah dari Front office ke Administrasi &amp; umum (lokasi tetap)</span></div>
+          <div class="ev" style="border-bottom:0"><b>14 Feb 2025</b><span>Dibuat dari baris tagihan BL-000188 · 240.000.000</span></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

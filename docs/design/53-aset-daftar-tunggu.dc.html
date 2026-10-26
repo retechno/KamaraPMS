@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Daftar tunggu aset</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:34px;padding:0 12px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:13px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:34px;padding:0 12px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:13px;color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:9px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap;vertical-align:middle}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.src{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:11px;font-weight:700;background:#eef0f2;color:#1c2128}
+.warn{color:#9a3412;font-size:11px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav">Laporan aset</a>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div>
+      <h1 style="margin:0;font-size:24px">Daftar tunggu "Jadikan aset"</h1>
+      <div class="sub" style="font-size:12px;margin-top:4px">Setiap baris jurnal yang mendebit akun harga perolehan sebuah kategori dan belum dijadikan aset: dari tagihan pemasok, kas/kasir, bank, atau jurnal manual. Menjadikannya aset tidak membuat jurnal baru.</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="chip on">Menunggu · 5</button><button class="chip">Diabaikan · 1</button>
+      <span style="flex:1"></span>
+      <button class="chip">Semua sumber</button><button class="chip">Tagihan</button><button class="chip">Kas/kasir</button><button class="chip">Bank</button><button class="chip">Manual</button>
+    </div>
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Sumber</th><th class="th">Tanggal</th><th class="th">Uraian</th><th class="th">Akun</th><th class="th thr">Biaya</th><th class="th thr">Umur</th><th class="th"></th></tr></thead>
+        <tbody>
+          <tr><td class="td"><span class="src">Tagihan</span><div class="sub">BL-000231 · PT Sejuk Abadi</div></td><td class="td">3 Nov 2026</td><td class="td"><strong>AC split 1 PK (4 unit)</strong><div class="sub">PPN 2.420.000 dikreditkan (1425), tidak masuk biaya</div></td><td class="td">1530 FF&amp;E</td><td class="td num">22.000.000</td><td class="td num">3 hari</td><td class="td"><div style="display:flex;gap:6px"><a href="54-aset-jadikan-aset.dc.html" class="btnp">Jadikan aset</a><button class="btn">Tambah ke aset</button><button class="btn">Bukan aset</button></div></td></tr>
+          <tr><td class="td"><span class="src">Bank</span><div class="sub">BNK-000088 · BCA</div></td><td class="td">28 Okt 2026</td><td class="td"><strong>Genset 50 kVA</strong><div class="sub">transfer langsung ke CV Daya Listrik</div></td><td class="td">1530 FF&amp;E</td><td class="td num">185.000.000</td><td class="td num">9 hari</td><td class="td"><div style="display:flex;gap:6px"><a href="54-aset-jadikan-aset.dc.html" class="btnp">Jadikan aset</a><button class="btn">Tambah ke aset</button><button class="btn">Bukan aset</button></div></td></tr>
+          <tr><td class="td"><span class="src">Kas/kasir</span><div class="sub">KAS-000512 · kas kecil</div></td><td class="td">2 Nov 2026</td><td class="td"><strong>Printer kasir (2 unit)</strong></td><td class="td">1570 Komputer &amp; IT</td><td class="td num">7.400.000</td><td class="td num">4 hari</td><td class="td"><div style="display:flex;gap:6px"><a href="54-aset-jadikan-aset.dc.html" class="btnp">Jadikan aset</a><button class="btn">Tambah ke aset</button><button class="btn">Bukan aset</button></div></td></tr>
+          <tr><td class="td"><span class="src">Manual</span><div class="sub">JV-000340 · Rina</div></td><td class="td">30 Okt 2026</td><td class="td"><strong>Lampu taman</strong><div class="warn">Di bawah batas kapitalisasi 2.500.000</div></td><td class="td">1530 FF&amp;E</td><td class="td num">1.800.000</td><td class="td num">7 hari</td><td class="td"><div style="display:flex;gap:6px"><a href="54-aset-jadikan-aset.dc.html" class="btnp">Jadikan aset</a><button class="btn">Tambah ke aset</button><button class="btn">Bukan aset</button></div></td></tr>
+          <tr><td class="td"><span class="src">Tagihan</span><div class="sub">BL-000229 · CV Bali Glassware</div></td><td class="td">1 Nov 2026</td><td class="td"><strong>Gelas wine 120 pcs</strong><div class="sub">peralatan operasional: dijadikan satu batch</div></td><td class="td">1540 Peralatan operasional</td><td class="td num">4.200.000</td><td class="td num">5 hari</td><td class="td"><div style="display:flex;gap:6px"><a href="54-aset-jadikan-aset.dc.html" class="btnp">Jadikan batch</a><button class="btn">Bukan aset</button></div></td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;font-size:12px;color:#4a5361"><span>"Bukan aset" menyembunyikan baris dengan alasan (bisa dipulihkan); nilainya tampil di rekap sebagai saldo akun aset di luar register.</span><span>Total menunggu <strong style="color:#1c2128">220.400.000</strong></span></div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
