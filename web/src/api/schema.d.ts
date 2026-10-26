@@ -24818,9 +24818,9 @@ export interface components {
             register_from: string | null;
             capitalization_threshold: string;
             /** @enum {string} */
-            start_rule: "NEXT_MONTH" | "SAME_MONTH" | "MID_MONTH";
+            start_rule: "IN_SERVICE_MONTH" | "NEXT_MONTH";
             /** @enum {string} */
-            oe_policy: "EXPENSE" | "CAPITALIZE";
+            oe_policy: "EXPENSE" | "BATCH";
             oe_default_months: number;
             /** Format: date */
             oe_policy_changed_on: string | null;
@@ -24833,9 +24833,9 @@ export interface components {
             register_from?: string | null;
             capitalization_threshold: string;
             /** @enum {string} */
-            start_rule: "NEXT_MONTH" | "SAME_MONTH" | "MID_MONTH";
+            start_rule: "IN_SERVICE_MONTH" | "NEXT_MONTH";
             /** @enum {string} */
-            oe_policy: "EXPENSE" | "CAPITALIZE";
+            oe_policy: "EXPENSE" | "BATCH";
             oe_default_months?: number;
             tax_year_start_month?: number | null;
             version: number;

@@ -26388,8 +26388,8 @@ components:
       properties:
         register_from: { type: [string, "null"], format: date, description: "The first month the register depreciates (the first of a month); null until the opening balances or the first asset." }
         capitalization_threshold: { type: string }
-        start_rule: { type: string, enum: [NEXT_MONTH, SAME_MONTH, MID_MONTH] }
-        oe_policy: { type: string, enum: [EXPENSE, CAPITALIZE] }
+        start_rule: { type: string, enum: [IN_SERVICE_MONTH, NEXT_MONTH] }
+        oe_policy: { type: string, enum: [EXPENSE, BATCH] }
         oe_default_months: { type: integer }
         oe_policy_changed_on: { type: [string, "null"], format: date }
         tax_year_start_month: { type: [integer, "null"] }
@@ -26401,8 +26401,8 @@ components:
       properties:
         register_from: { type: [string, "null"], format: date }
         capitalization_threshold: { type: string }
-        start_rule: { type: string, enum: [NEXT_MONTH, SAME_MONTH, MID_MONTH] }
-        oe_policy: { type: string, enum: [EXPENSE, CAPITALIZE] }
+        start_rule: { type: string, enum: [IN_SERVICE_MONTH, NEXT_MONTH] }
+        oe_policy: { type: string, enum: [EXPENSE, BATCH] }
         oe_default_months: { type: integer }
         tax_year_start_month: { type: [integer, "null"] }
         version: { type: integer }
