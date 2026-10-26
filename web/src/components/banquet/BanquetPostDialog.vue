@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
+import type { BanquetStockNote } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -33,8 +34,22 @@ const actual = ref('')
 const useEstimate = ref(false)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
+// what the posting takes out of the warehouse (4.9): only said when the plan has the stock and the banquet has a warehouse
+const stock = ref<BanquetStockNote | null>(null)
+async function loadStock(): Promise<void> {
+  stock.value = null
+  const tg = props.target
+  if (!tg) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/banquet/events/{id}/lines', { params: { path: { propertyId: props.propertyId, id: tg.event_id } } })
+    stock.value = data?.stock ?? null
+  } catch {
+    stock.value = null // the note is a help; the posting does not depend on it
+  }
+}
 watch(() => props.open, (open) => {
   if (!open) return
+  void loadStock()
   error.value = null
   useEstimate.value = false
   actual.value = props.target?.pax_actual != null ? String(props.target.pax_actual) : ''
@@ -84,6 +99,7 @@ async function post(): Promise<void> {
           <span>{{ t('banquet.post.useEstimate', { n: target.pax_estimated }) }}</span>
         </label>
         <p class="m-0 text-sm text-muted-foreground">{{ t('banquet.post.date', { date: businessDate ? formatDateShort(businessDate) : '' }) }}</p>
+        <p v-if="stock?.enabled && stock.lines > 0" class="m-0 rounded-md border border-border p-2 text-sm" data-testid="post-stock">{{ t('banquet.post.stock', { n: stock.lines, warehouse: stock.warehouse_name ?? '' }) }}</p>
         <p class="m-0 text-xs text-muted-foreground">{{ t('banquet.post.once') }}</p>
         <div class="flex justify-end gap-2">
           <Button type="button" variant="outline" @click="emit('update:open', false)">{{ t('common.cancel') }}</Button>

@@ -174,15 +174,16 @@ func New(d Deps) *App {
 	notifierSvc.SetBanquet(banquetSvc)
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
-	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})         // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
-	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc})        // and the close asks the stock whether its books agree
-	inventorySvc.SetPayables(payablesSvc)                               // the bills of the purchasing are posted by the payables, on goods received not invoiced
-	inventorySvc.SetApprover(iamSvc)                                    // and a price difference above the tolerance is approved with credentials
-	payablesSvc.SetVoidGuard(inventorySvc)                              // a bill matched to goods received is voided only by unmatching it
-	inventorySvc.SetOccupancy(nightOccupancy{fd: frontdeskSvc})         // the amenities of the close need the rooms that were slept in
-	inventorySvc.SetPricer(posPricer{pos: posSvc})                      // the margin of a recipe reads the net price of the POS
-	inventorySvc.SetEntitlement(stockPlan{subs: subscriptionSvc})       // and a recipe is edited only when the plan has the module
-	posSvc.SetStock(posStock{inv: inventorySvc, subs: subscriptionSvc}) // a POS line that is sold is queued for the deduction from stock, in the same transaction (5.6)
+	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})                 // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
+	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc})                // and the close asks the stock whether its books agree
+	inventorySvc.SetPayables(payablesSvc)                                       // the bills of the purchasing are posted by the payables, on goods received not invoiced
+	inventorySvc.SetApprover(iamSvc)                                            // and a price difference above the tolerance is approved with credentials
+	payablesSvc.SetVoidGuard(inventorySvc)                                      // a bill matched to goods received is voided only by unmatching it
+	inventorySvc.SetOccupancy(nightOccupancy{fd: frontdeskSvc})                 // the amenities of the close need the rooms that were slept in
+	inventorySvc.SetPricer(posPricer{pos: posSvc})                              // the margin of a recipe reads the net price of the POS
+	inventorySvc.SetEntitlement(stockPlan{subs: subscriptionSvc})               // and a recipe is edited only when the plan has the module
+	posSvc.SetStock(posStock{inv: inventorySvc, subs: subscriptionSvc})         // a POS line that is sold is queued for the deduction from stock, in the same transaction (5.6)
+	banquetSvc.SetStock(banquetStock{inv: inventorySvc, subs: subscriptionSvc}) // a posted session queues the deduction of its goods, in the same transaction (36 4.9)
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)

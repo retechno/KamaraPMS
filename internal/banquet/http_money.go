@@ -223,6 +223,9 @@ func (h *Handler) unposted(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	v, err := h.svc.UnpostedReport(r.Context(), pid)
+	if err == nil && wantsCSV(r) {
+		return unpostedCSV(w, r, v)
+	}
 	return page(w, v, err)
 }
 

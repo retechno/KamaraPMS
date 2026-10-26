@@ -2,16 +2,17 @@
 
 -- ---------------------------------------------------------------- settings
 -- name: GetSettings :one
-SELECT tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval
-FROM banquet_settings WHERE property_id = @property_id;
+SELECT s.tentative_conflict_mode, s.operating_from, s.operating_to, s.posting_mode, s.default_price_mode, s.max_discount_pct_no_approval, s.warehouse_id, w.name AS warehouse_name
+FROM banquet_settings s LEFT JOIN inv_warehouses w ON w.property_id = s.property_id AND w.id = s.warehouse_id
+WHERE s.property_id = @property_id;
 
 -- name: UpsertSettings :exec
-INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval, updated_by)
-VALUES (@property_id, @tenant_id, @tentative_conflict_mode, sqlc.narg(operating_from), sqlc.narg(operating_to), @posting_mode, @default_price_mode, @max_discount_pct_no_approval, sqlc.narg(actor_id))
+INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval, warehouse_id, updated_by)
+VALUES (@property_id, @tenant_id, @tentative_conflict_mode, sqlc.narg(operating_from), sqlc.narg(operating_to), @posting_mode, @default_price_mode, @max_discount_pct_no_approval, sqlc.narg(warehouse_id), sqlc.narg(actor_id))
 ON CONFLICT (property_id) DO UPDATE
    SET tentative_conflict_mode = EXCLUDED.tentative_conflict_mode, operating_from = EXCLUDED.operating_from, operating_to = EXCLUDED.operating_to,
        posting_mode = EXCLUDED.posting_mode, default_price_mode = EXCLUDED.default_price_mode, max_discount_pct_no_approval = EXCLUDED.max_discount_pct_no_approval,
-       updated_by = EXCLUDED.updated_by, updated_at = now();
+       warehouse_id = EXCLUDED.warehouse_id, updated_by = EXCLUDED.updated_by, updated_at = now();
 
 -- ---------------------------------------------------------------- rooms
 -- name: ListRooms :many
@@ -201,9 +202,9 @@ SELECT status, booking_group_id, version FROM banquet_events WHERE property_id =
 
 -- name: InsertEvent :one
 INSERT INTO banquet_events (tenant_id, property_id, number, status, name, event_type_id, booker_guest_id, booker_company_id, contact_name, contact_phone, contact_email,
-                            sales_user_id, booking_group_id, notes, created_by, updated_by)
+                            sales_user_id, booking_group_id, notes, inquiry_on, created_by, updated_by)
 VALUES (@tenant_id, @property_id, @number, 'INQUIRY', @name, sqlc.narg(event_type_id), sqlc.narg(booker_guest_id), sqlc.narg(booker_company_id), sqlc.narg(contact_name),
-        sqlc.narg(contact_phone), sqlc.narg(contact_email), @sales_user_id, sqlc.narg(booking_group_id), sqlc.narg(notes), sqlc.narg(actor_id), sqlc.narg(actor_id))
+        sqlc.narg(contact_phone), sqlc.narg(contact_email), @sales_user_id, sqlc.narg(booking_group_id), sqlc.narg(notes), @inquiry_on, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateEvent :execrows
@@ -214,7 +215,7 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND ver
 
 -- name: SetEventStatus :exec
 UPDATE banquet_events SET status = @status, option_until = sqlc.narg(option_until), reason_id = sqlc.narg(reason_id), reason_note = sqlc.narg(reason_note),
-       definite_at = COALESCE(sqlc.narg(definite_at), definite_at), closed_at = sqlc.narg(closed_at), version = version + 1, updated_by = sqlc.narg(actor_id)
+       definite_at = COALESCE(sqlc.narg(definite_at), definite_at), definite_on = COALESCE(sqlc.narg(definite_on), definite_on), closed_at = sqlc.narg(closed_at), closed_on = sqlc.narg(closed_on), version = version + 1, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- ---------------------------------------------------------------- sessions

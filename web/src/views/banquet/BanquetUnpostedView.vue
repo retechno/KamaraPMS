@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { toast } from '@/composables/useToast'
+import { downloadCsv } from '@/views/accounting/reportApi'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -59,6 +60,18 @@ function post(u: BanquetUnposted): void {
   target.value = { event_id: u.event_id, session_id: u.session_id, event_number: u.event_number, event_name: u.event_name, session_name: u.session_name, session_date: u.session_date, room_name: u.room_name, pax_estimated: u.pax_estimated, pax_guaranteed: u.pax_guaranteed, pax_actual: u.pax_actual }
   postOpen.value = true
 }
+async function csv(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    await downloadCsv('/api/v1/properties/{propertyId}/banquet/reports/unposted', { path: { propertyId }, query: {} }, 'banquet-unposted.csv')
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+function print(): void {
+  window.print()
+}
 function posted(total: string): void {
   toast.success(t('banquet.post.done', { total: formatMoney(total) }))
   void load()
@@ -66,7 +79,12 @@ function posted(total: string): void {
 </script>
 
 <template>
-  <PageHeader :title="t('banquet.unposted.title')" :description="t('banquet.unposted.intro')" />
+  <PageHeader :title="t('banquet.unposted.title')" :description="t('banquet.unposted.intro')">
+    <template v-if="pid !== null" #actions>
+      <Button type="button" variant="outline" class="print:hidden" data-testid="report-print" @click="print">{{ t('inventory.reports.print') }}</Button>
+      <Button type="button" variant="outline" class="print:hidden" data-testid="report-csv" @click="csv">{{ t('inventory.reports.csv') }}</Button>
+    </template>
+  </PageHeader>
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else-if="loaded">

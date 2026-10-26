@@ -382,7 +382,7 @@ describe('costing', () => {
       ? { data: { ok: false, costing_method: 'AVERAGE', costing_locked_on: null, warehouses: 1, categories: 1, items: 1, issues: [{ severity: 'ERROR', code: 'INVENTORY_QUEUE_FAILED', message: '2 POS sale(s) could not be deducted', params: { n: '2' } }] } }
       : ok(path)))
     const text = body('[data-testid=issue-INVENTORY_QUEUE_FAILED]').text()
-    expect(text).toContain('2 penjualan POS gagal dipotong dari stok')
+    expect(text).toContain('2 penjualan POS atau banquet gagal dipotong dari stok')
     expect(text).not.toContain('could not be deducted')
   })
 

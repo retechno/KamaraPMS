@@ -258,8 +258,13 @@ SELECT r.cost_kind::text AS cost_kind, r.source_type::text AS source_type, r.sou
            WHEN 'INV_ISSUE' THEN (SELECT x.iss_number FROM inv_issues x WHERE x.property_id = @property_id AND x.id = r.source_id)
            WHEN 'INV_COUNT' THEN (SELECT x.cnt_number FROM inv_counts x WHERE x.property_id = @property_id AND x.id = r.source_id)
            WHEN 'INV_BILL' THEN (SELECT x.bill_number FROM supplier_bills x WHERE x.property_id = @property_id AND x.id = r.source_id)
-           WHEN 'POS_QUEUE' THEN (SELECT pb.bill_number FROM inv_consumption_queue q JOIN pos_bill_lines bl ON bl.property_id = q.property_id AND bl.id = q.pos_bill_line_id
-                                    JOIN pos_bills pb ON pb.property_id = bl.property_id AND pb.id = bl.bill_id WHERE q.property_id = @property_id AND q.id = r.source_id)
+           WHEN 'POS_QUEUE' THEN (SELECT COALESCE(pb.bill_number, be.number) FROM inv_consumption_queue q
+                                    LEFT JOIN pos_bill_lines bl ON bl.property_id = q.property_id AND bl.id = q.pos_bill_line_id
+                                    LEFT JOIN pos_bills pb ON pb.property_id = bl.property_id AND pb.id = bl.bill_id
+                                    LEFT JOIN banquet_posting_items bpi ON bpi.property_id = q.property_id AND bpi.id = q.banquet_posting_line_id
+                                    LEFT JOIN banquet_session_postings bp ON bp.property_id = bpi.property_id AND bp.id = bpi.posting_id
+                                    LEFT JOIN banquet_sessions bs ON bs.property_id = bp.property_id AND bs.id = bp.session_id
+                                    LEFT JOIN banquet_events be ON be.property_id = bs.property_id AND be.id = bs.event_id WHERE q.property_id = @property_id AND q.id = r.source_id)
        END, '')::text AS number,
        COALESCE(CASE r.source_type
            WHEN 'POS_QUEUE' THEN (SELECT bl.bill_id FROM inv_consumption_queue q JOIN pos_bill_lines bl ON bl.property_id = q.property_id AND bl.id = q.pos_bill_line_id WHERE q.property_id = @property_id AND q.id = r.source_id)

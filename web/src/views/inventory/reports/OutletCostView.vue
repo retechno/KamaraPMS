@@ -49,7 +49,7 @@ const over = (actual: string | null, target: string | null): boolean => actual !
         </thead>
         <tbody>
           <tr v-for="(x, n) in r.data.value.rows" :key="n" class="border-t border-border align-top" :data-testid="`outlet-row-${x.outlet_code || 'none'}-${x.class}`">
-            <td class="py-2 pr-2">{{ x.outlet_name || t('inventory.reports.outlet.noOutlet') }}<span v-if="x.warehouse_name" class="block text-xs text-muted-foreground">{{ x.warehouse_name }}</span></td>
+            <td class="py-2 pr-2">{{ x.source === 'BANQUET' ? t('inventory.reports.outlet.banquet') : x.outlet_name || t('inventory.reports.outlet.noOutlet') }}<span v-if="x.warehouse_name" class="block text-xs text-muted-foreground">{{ x.warehouse_name }}</span></td>
             <td class="py-2 pr-2">{{ t(`inventory.reports.class.${x.class}`) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(x.revenue) }}<span v-if="Number(x.no_recipe_revenue)" class="block text-xs text-muted-foreground">{{ t('inventory.reports.outlet.noRecipe', { amount: formatMoney(x.no_recipe_revenue) }) }}</span></td>
             <td class="py-2 pr-2 text-right">{{ money(x.theory) }}</td>

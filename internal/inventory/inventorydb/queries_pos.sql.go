@@ -69,8 +69,24 @@ func (q *Queries) CategoryFbClass(ctx context.Context, arg CategoryFbClassParams
 	return fb_class, err
 }
 
+const chargeCodeDepartment = `-- name: ChargeCodeDepartment :one
+SELECT department_id FROM charge_codes WHERE property_id = $1 AND id = $2
+`
+
+type ChargeCodeDepartmentParams struct {
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) ChargeCodeDepartment(ctx context.Context, arg ChargeCodeDepartmentParams) (*int64, error) {
+	row := q.db.QueryRow(ctx, chargeCodeDepartment, arg.PropertyID, arg.ID)
+	var department_id *int64
+	err := row.Scan(&department_id)
+	return department_id, err
+}
+
 const claimConsumptionRowByID = `-- name: ClaimConsumptionRowByID :one
-SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND id = $3 AND status IN ('PENDING', 'FAILED') FOR UPDATE SKIP LOCKED
+SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at, source, banquet_posting_line_id, department_id FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND id = $3 AND status IN ('PENDING', 'FAILED') FOR UPDATE SKIP LOCKED
 `
 
 type ClaimConsumptionRowByIDParams struct {
@@ -105,12 +121,15 @@ func (q *Queries) ClaimConsumptionRowByID(ctx context.Context, arg ClaimConsumpt
 		&i.AppliedOn,
 		&i.CreatedAt,
 		&i.AppliedAt,
+		&i.Source,
+		&i.BanquetPostingLineID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
 
 const claimConsumptionRows = `-- name: ClaimConsumptionRows :many
-SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at FROM inv_consumption_queue
+SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at, source, banquet_posting_line_id, department_id FROM inv_consumption_queue
  WHERE tenant_id = $1 AND property_id = $2 AND warehouse_id = $3 AND status = 'PENDING'
  ORDER BY id LIMIT $4 FOR UPDATE SKIP LOCKED
 `
@@ -159,6 +178,9 @@ func (q *Queries) ClaimConsumptionRows(ctx context.Context, arg ClaimConsumption
 			&i.AppliedOn,
 			&i.CreatedAt,
 			&i.AppliedAt,
+			&i.Source,
+			&i.BanquetPostingLineID,
+			&i.DepartmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -269,13 +291,13 @@ func (q *Queries) DeleteRecipeLines(ctx context.Context, arg DeleteRecipeLinesPa
 }
 
 const getConsumptionByLine = `-- name: GetConsumptionByLine :one
-SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND pos_bill_line_id = $3 AND kind = $4
+SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at, source, banquet_posting_line_id, department_id FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND pos_bill_line_id = $3 AND kind = $4
 `
 
 type GetConsumptionByLineParams struct {
 	TenantID      int64
 	PropertyID    int64
-	PosBillLineID int64
+	PosBillLineID *int64
 	Kind          string
 }
 
@@ -309,12 +331,15 @@ func (q *Queries) GetConsumptionByLine(ctx context.Context, arg GetConsumptionBy
 		&i.AppliedOn,
 		&i.CreatedAt,
 		&i.AppliedAt,
+		&i.Source,
+		&i.BanquetPostingLineID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
 
 const getConsumptionRow = `-- name: GetConsumptionRow :one
-SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at, source, banquet_posting_line_id, department_id FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
 
 type GetConsumptionRowParams struct {
@@ -348,6 +373,9 @@ func (q *Queries) GetConsumptionRow(ctx context.Context, arg GetConsumptionRowPa
 		&i.AppliedOn,
 		&i.CreatedAt,
 		&i.AppliedAt,
+		&i.Source,
+		&i.BanquetPostingLineID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -437,10 +465,51 @@ func (q *Queries) GetProductForRecipe(ctx context.Context, arg GetProductForReci
 	return i, err
 }
 
+const insertBanquetConsumptionRow = `-- name: InsertBanquetConsumptionRow :one
+INSERT INTO inv_consumption_queue (tenant_id, property_id, source, warehouse_id, banquet_posting_line_id, department_id, kind, product_id, quantity, sale_class, sale_date, components, status, created_at)
+VALUES ($1, $2, 'BANQUET', $3, $4::bigint, $5, 'SALE', $6, $7, $8, $9, $10, 'PENDING', $11)
+ON CONFLICT (banquet_posting_line_id, kind) DO NOTHING
+RETURNING id
+`
+
+type InsertBanquetConsumptionRowParams struct {
+	TenantID             int64
+	PropertyID           int64
+	WarehouseID          int64
+	BanquetPostingLineID int64
+	DepartmentID         *int64
+	ProductID            int64
+	Quantity             decimal.Decimal
+	SaleClass            string
+	SaleDate             civil.Date
+	Components           []byte
+	CreatedAt            time.Time
+}
+
+// A line of a banquet posting that is sold from the stock (36 4.9): no POS line, no outlet; the department is the one of the charge code of the line. It is a sale only (Q3: nothing is voided).
+func (q *Queries) InsertBanquetConsumptionRow(ctx context.Context, arg InsertBanquetConsumptionRowParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertBanquetConsumptionRow,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.WarehouseID,
+		arg.BanquetPostingLineID,
+		arg.DepartmentID,
+		arg.ProductID,
+		arg.Quantity,
+		arg.SaleClass,
+		arg.SaleDate,
+		arg.Components,
+		arg.CreatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertConsumptionRow = `-- name: InsertConsumptionRow :one
 
 INSERT INTO inv_consumption_queue (tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'PENDING', $13)
+VALUES ($1, $2, $3::bigint, $4, $5::bigint, $6, $7, $8, $9, $10, $11, $12, 'PENDING', $13)
 ON CONFLICT (pos_bill_line_id, kind) DO NOTHING
 RETURNING id
 `
@@ -600,6 +669,88 @@ func (q *Queries) ListBalancesOfItems(ctx context.Context, arg ListBalancesOfIte
 	return items, nil
 }
 
+const listBanquetWithoutDeduction = `-- name: ListBanquetWithoutDeduction :many
+SELECT pi.id AS posting_line_id, e.id AS event_id, e.number AS event_number, s.name AS session_name,
+       COALESCE(c.pos_product_id, l.pos_product_id)::bigint AS product_id, p.name AS product_name,
+       (CASE WHEN c.item_id IS NOT NULL THEN bp.pax_billed * c.qty_per_pax
+             WHEN l.basis = 'PER_PAX' THEN bp.pax_billed * l.quantity
+             WHEN l.basis IN ('PER_SESSION', 'PER_UNIT') THEN l.quantity
+             ELSE 0 END)::numeric AS quantity,
+       bp.business_date AS sent_on
+  FROM banquet_posting_items pi
+  JOIN banquet_session_postings bp ON bp.property_id = pi.property_id AND bp.id = pi.posting_id
+  JOIN banquet_sessions s ON s.property_id = bp.property_id AND s.id = bp.session_id
+  JOIN banquet_events e ON e.property_id = s.property_id AND e.id = s.event_id
+  JOIN banquet_event_lines l ON l.property_id = pi.property_id AND l.id = pi.line_id
+  LEFT JOIN banquet_line_components c ON c.property_id = pi.property_id AND c.line_id = pi.line_id AND c.item_id = pi.component_item_id
+  JOIN pos_products p ON p.property_id = pi.property_id AND p.id = COALESCE(c.pos_product_id, l.pos_product_id)
+ WHERE bp.tenant_id = $1 AND bp.property_id = $2 AND bp.business_date BETWEEN $3 AND $4
+   AND EXISTS (SELECT 1 FROM pos_recipe_lines r WHERE r.property_id = p.property_id AND r.product_id = p.id)
+   AND NOT EXISTS (SELECT 1 FROM inv_consumption_queue q WHERE q.property_id = pi.property_id AND q.banquet_posting_line_id = pi.id AND q.kind = 'SALE')
+   AND (CASE WHEN c.item_id IS NOT NULL THEN bp.pax_billed * c.qty_per_pax
+             WHEN l.basis = 'PER_PAX' THEN bp.pax_billed * l.quantity
+             WHEN l.basis IN ('PER_SESSION', 'PER_UNIT') THEN l.quantity
+             ELSE 0 END) > 0
+ ORDER BY bp.business_date DESC, pi.id DESC LIMIT $5
+`
+
+type ListBanquetWithoutDeductionParams struct {
+	TenantID   int64
+	PropertyID int64
+	FromDate   civil.Date
+	ToDate     civil.Date
+	RowLimit   int32
+}
+
+type ListBanquetWithoutDeductionRow struct {
+	PostingLineID int64
+	EventID       int64
+	EventNumber   string
+	SessionName   string
+	ProductID     int64
+	ProductName   string
+	Quantity      decimal.Decimal
+	SentOn        civil.Date
+}
+
+// The same report for the banquet (36 4.9): the lines of a posted session that are linked to a POS product with a recipe and have no row in the queue (posted while the module was off, or before the banquet had
+// a warehouse). The quantity is the one the posting queues: a component counts qty_per_pax for each billed guest, a line per guest its quantity for each billed guest, a line per session or per unit its quantity;
+// a line per hour deducts nothing.
+func (q *Queries) ListBanquetWithoutDeduction(ctx context.Context, arg ListBanquetWithoutDeductionParams) ([]ListBanquetWithoutDeductionRow, error) {
+	rows, err := q.db.Query(ctx, listBanquetWithoutDeduction,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.FromDate,
+		arg.ToDate,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBanquetWithoutDeductionRow{}
+	for rows.Next() {
+		var i ListBanquetWithoutDeductionRow
+		if err := rows.Scan(
+			&i.PostingLineID,
+			&i.EventID,
+			&i.EventNumber,
+			&i.SessionName,
+			&i.ProductID,
+			&i.ProductName,
+			&i.Quantity,
+			&i.SentOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConsumptionMovementIDs = `-- name: ListConsumptionMovementIDs :many
 SELECT movement_ids FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -631,15 +782,19 @@ func (q *Queries) ListConsumptionMovementIDs(ctx context.Context, arg ListConsum
 }
 
 const listConsumptionQueue = `-- name: ListConsumptionQueue :many
-SELECT q.id, q.outlet_id, o.code AS outlet_code, o.name AS outlet_name, q.warehouse_id, w.name AS warehouse_name, q.pos_bill_line_id, q.kind, q.sale_queue_id,
+SELECT q.id, q.outlet_id, COALESCE(o.code, '')::text AS outlet_code, COALESCE(o.name, '')::text AS outlet_name, q.warehouse_id, w.name AS warehouse_name, q.pos_bill_line_id, q.kind, q.sale_queue_id,
        q.product_id, p.name AS product_name, q.quantity, q.sale_class, q.sale_date, q.status, q.attempts, q.error_code, q.error_message, q.created_at, q.applied_on,
-       COALESCE(b.bill_number, '')::text AS bill_number
+       q.source::text AS source, COALESCE(b.bill_number, be.number || ' · ' || bs.name, '')::text AS bill_number
   FROM inv_consumption_queue q
-  JOIN pos_outlets o ON o.property_id = q.property_id AND o.id = q.outlet_id
+  LEFT JOIN pos_outlets o ON o.property_id = q.property_id AND o.id = q.outlet_id
   JOIN inv_warehouses w ON w.property_id = q.property_id AND w.id = q.warehouse_id
   JOIN pos_products p ON p.property_id = q.property_id AND p.id = q.product_id
-  JOIN pos_bill_lines l ON l.property_id = q.property_id AND l.id = q.pos_bill_line_id
-  JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id
+  LEFT JOIN pos_bill_lines l ON l.property_id = q.property_id AND l.id = q.pos_bill_line_id
+  LEFT JOIN pos_bills b ON b.property_id = l.property_id AND b.id = l.bill_id
+  LEFT JOIN banquet_posting_items bpi ON bpi.property_id = q.property_id AND bpi.id = q.banquet_posting_line_id
+  LEFT JOIN banquet_session_postings bp ON bp.property_id = bpi.property_id AND bp.id = bpi.posting_id
+  LEFT JOIN banquet_sessions bs ON bs.property_id = bp.property_id AND bs.id = bp.session_id
+  LEFT JOIN banquet_events be ON be.property_id = bs.property_id AND be.id = bs.event_id
  WHERE q.tenant_id = $1 AND q.property_id = $2 AND q.status = ANY($3::text[]) AND ($4::bigint IS NULL OR q.id = $4::bigint)
  ORDER BY q.id DESC LIMIT $5
 `
@@ -654,12 +809,12 @@ type ListConsumptionQueueParams struct {
 
 type ListConsumptionQueueRow struct {
 	ID            int64
-	OutletID      int64
+	OutletID      *int64
 	OutletCode    string
 	OutletName    string
 	WarehouseID   int64
 	WarehouseName string
-	PosBillLineID int64
+	PosBillLineID *int64
 	Kind          string
 	SaleQueueID   *int64
 	ProductID     int64
@@ -673,6 +828,7 @@ type ListConsumptionQueueRow struct {
 	ErrorMessage  *string
 	CreatedAt     time.Time
 	AppliedOn     *civil.Date
+	Source        string
 	BillNumber    string
 }
 
@@ -713,6 +869,7 @@ func (q *Queries) ListConsumptionQueue(ctx context.Context, arg ListConsumptionQ
 			&i.ErrorMessage,
 			&i.CreatedAt,
 			&i.AppliedOn,
+			&i.Source,
 			&i.BillNumber,
 		); err != nil {
 			return nil, err
@@ -726,7 +883,7 @@ func (q *Queries) ListConsumptionQueue(ctx context.Context, arg ListConsumptionQ
 }
 
 const listHeldConsumption = `-- name: ListHeldConsumption :many
-SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at FROM inv_consumption_queue
+SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at, source, banquet_posting_line_id, department_id FROM inv_consumption_queue
  WHERE tenant_id = $1 AND property_id = $2 AND warehouse_id = $3 AND status = 'HELD' ORDER BY sale_date, id
 `
 
@@ -768,6 +925,9 @@ func (q *Queries) ListHeldConsumption(ctx context.Context, arg ListHeldConsumpti
 			&i.AppliedOn,
 			&i.CreatedAt,
 			&i.AppliedAt,
+			&i.Source,
+			&i.BanquetPostingLineID,
+			&i.DepartmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -1135,7 +1295,7 @@ func (q *Queries) ListWarehousesWithPending(ctx context.Context, arg ListWarehou
 }
 
 const lockConsumptionRow = `-- name: LockConsumptionRow :one
-SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, outlet_id, warehouse_id, pos_bill_line_id, kind, sale_queue_id, product_id, quantity, sale_class, sale_date, components, status, attempts, error_code, error_message, movement_ids, applied_on, created_at, applied_at, source, banquet_posting_line_id, department_id FROM inv_consumption_queue WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type LockConsumptionRowParams struct {
@@ -1170,6 +1330,9 @@ func (q *Queries) LockConsumptionRow(ctx context.Context, arg LockConsumptionRow
 		&i.AppliedOn,
 		&i.CreatedAt,
 		&i.AppliedAt,
+		&i.Source,
+		&i.BanquetPostingLineID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -1269,4 +1432,22 @@ type SetConsumptionRetryParams struct {
 func (q *Queries) SetConsumptionRetry(ctx context.Context, arg SetConsumptionRetryParams) error {
 	_, err := q.db.Exec(ctx, setConsumptionRetry, arg.TenantID, arg.PropertyID, arg.ID)
 	return err
+}
+
+const warehouseClassOf = `-- name: WarehouseClassOf :one
+SELECT COALESCE(cost_class, 'OTHER')::text FROM inv_warehouses WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type WarehouseClassOfParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// The department a banquet sale is charged to: the one of the charge code of the line.
+func (q *Queries) WarehouseClassOf(ctx context.Context, arg WarehouseClassOfParams) (string, error) {
+	row := q.db.QueryRow(ctx, warehouseClassOf, arg.TenantID, arg.PropertyID, arg.ID)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
 }

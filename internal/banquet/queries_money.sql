@@ -107,8 +107,9 @@ INSERT INTO banquet_session_postings (tenant_id, property_id, session_id, folio_
 VALUES (@tenant_id, @property_id, @session_id, @folio_id, @business_date, @pax_billed, @pax_basis, @auto, @on_guarantee, sqlc.narg(posted_by))
 RETURNING id;
 
--- name: InsertPostingItem :exec
-INSERT INTO banquet_posting_items (property_id, posting_id, line_id, component_item_id, folio_item_id) VALUES (@property_id, @posting_id, @line_id, sqlc.narg(component_item_id), @folio_item_id);
+-- name: InsertPostingItem :one
+INSERT INTO banquet_posting_items (property_id, posting_id, line_id, component_item_id, folio_item_id) VALUES (@property_id, @posting_id, @line_id, sqlc.narg(component_item_id), @folio_item_id)
+RETURNING id;
 
 -- name: ListEventPostings :many
 SELECT p.id, p.session_id, p.folio_id, p.business_date, p.pax_billed, p.pax_basis, p.auto, p.on_guarantee, p.posted_at

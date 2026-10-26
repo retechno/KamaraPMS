@@ -104,6 +104,19 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupReport
 			rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: "APPROVAL_CHAIN_EMPTY", Ref: doc, Message: "the chain of " + doc + " has no level: a document is approved when it is submitted", Params: map[string]string{"doc": doc}})
 		}
 	}
+	mism, err := q.ListFbClassMismatches(ctx, inventorydb.ListFbClassMismatchesParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return rep, err
+	}
+	for _, m := range mism {
+		acct := ""
+		if m.Account != nil {
+			acct = *m.Account
+		}
+		rep.Issues = append(rep.Issues, SetupIssue{Severity: SeverityWarning, Code: FindFbClassRevenue, Ref: m.Source + ":" + m.Ref,
+			Message: fmt.Sprintf("%s %s (%s) is %s but its charge code %s posts the revenue to %s: the cost reports follow the class and the general ledger follows the account", m.Source, m.Ref, m.Name, m.Class, m.ChargeCode, acct),
+			Params:  map[string]string{"source": m.Source, "ref": m.Ref, "name": m.Name, "class": m.Class, "charge_code": m.ChargeCode, "account": acct}})
+	}
 	blockers, warnings, err := s.NightAuditStock(ctx, p.TenantID, propertyID, civil.Date{})
 	if err != nil {
 		return rep, err

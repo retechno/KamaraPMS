@@ -23,6 +23,14 @@ export function formatBusinessDate(date: string): string {
   return month ? `${Number(m[3])} ${month} ${m[1]}` : date
 }
 
+/** "2026-10" -> "Okt 2026" (a month of a report; the key of the row stays ISO). Invalid input is returned unchanged. */
+export function formatBusinessMonth(month: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(month)
+  if (!m) return month
+  const name = MONTHS[currentLocale()][Number(m[2]) - 1]
+  return name ? `${name} ${m[1]}` : month
+}
+
 /** "2026-09-30" -> "30 Sep" (a dense list of the open year). Invalid input is returned unchanged. */
 export function formatBusinessDateShort(date: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)

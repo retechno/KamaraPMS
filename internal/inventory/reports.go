@@ -2,9 +2,11 @@ package inventory
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strconv"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/inventory/inventorydb"
@@ -56,8 +58,9 @@ func (s *Service) period(ctx context.Context, propertyID int64, from, to *civil.
 
 // ---------------------------------------------------------------- targets
 
-// CostTarget is the target cost percentage of food or beverage, for the property (OutletID nil) or for an outlet.
+// CostTarget is the target cost percentage of food or beverage, for the property (OutletID nil), for an outlet, or for the banquet (Source BANQUET, no outlet). An empty source is the POS.
 type CostTarget struct {
+	Source    string          `json:"source"`
 	OutletID  *int64          `json:"outlet_id"`
 	Class     string          `json:"class"`
 	TargetPct decimal.Decimal `json:"target_pct"`
@@ -79,7 +82,7 @@ func (s *Service) targetsOf(ctx context.Context, tenantID, propertyID int64) ([]
 	}
 	out := make([]CostTarget, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, CostTarget{OutletID: r.OutletID, Class: r.Class, TargetPct: r.TargetPct})
+		out = append(out, CostTarget{Source: r.Source, OutletID: r.OutletID, Class: r.Class, TargetPct: r.TargetPct})
 	}
 	return out, nil
 }
@@ -91,6 +94,14 @@ func (s *Service) SetCostTarget(ctx context.Context, propertyID int64, in CostTa
 		return CostTarget{}, err
 	}
 	var f []apperr.FieldError
+	if in.Source == "" {
+		in.Source = SourcePOS
+	}
+	if in.Source != SourcePOS && in.Source != SourceBanquet {
+		f = append(f, fieldErr("source", "INVALID_VALUE", "POS or BANQUET"))
+	} else if in.Source == SourceBanquet && in.OutletID != nil {
+		f = append(f, fieldErr("outlet_id", "INVALID_VALUE", "the banquet has no outlet"))
+	}
 	if in.Class != "FOOD" && in.Class != "BEVERAGE" {
 		f = append(f, fieldErr("class", "INVALID_VALUE", "FOOD or BEVERAGE"))
 	}
@@ -103,28 +114,43 @@ func (s *Service) SetCostTarget(ctx context.Context, propertyID int64, in CostTa
 	err = s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
 		q := s.q(ctx)
 		old, _ := s.targetsOf(ctx, p.TenantID, propertyID)
-		if err := q.UpsertCostTarget(ctx, inventorydb.UpsertCostTargetParams{TenantID: p.TenantID, PropertyID: propertyID, OutletID: in.OutletID, Class: in.Class, TargetPct: in.TargetPct, ActorID: p.ActorID()}); err != nil {
+		if err := q.UpsertCostTarget(ctx, inventorydb.UpsertCostTargetParams{TenantID: p.TenantID, PropertyID: propertyID, Source: in.Source, OutletID: in.OutletID, Class: in.Class, TargetPct: in.TargetPct, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
-		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "inventory.cost_target_set", "inv_cost_target", idKey(in.OutletID), "cost target "+in.Class, targetOf(old, in.OutletID, in.Class), in))
+		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "inventory.cost_target_set", "inv_cost_target", idKey(in.OutletID), "cost target "+in.Class, targetOfSource(old, in.Source, in.OutletID, in.Class), in))
 	})
 	return in, err
 }
 
 func targetOf(list []CostTarget, outlet *int64, class string) *CostTarget {
+	return targetOfSource(list, SourcePOS, outlet, class)
+}
+
+func targetOfSource(list []CostTarget, source string, outlet *int64, class string) *CostTarget {
 	for i := range list {
-		if list[i].Class == class && idKey(list[i].OutletID) == idKey(outlet) {
+		if list[i].Class == class && list[i].Source == source && idKey(list[i].OutletID) == idKey(outlet) {
 			return &list[i]
 		}
 	}
 	return nil
 }
 
-// DeleteCostTarget removes a target; an outlet without its own target takes the property's.
+// DeleteCostTarget removes the target of an outlet of the POS (or of the property); an outlet without its own target takes the property's.
 func (s *Service) DeleteCostTarget(ctx context.Context, propertyID int64, outlet *int64, class string) error {
+	return s.DeleteCostTargetOf(ctx, propertyID, SourcePOS, outlet, class)
+}
+
+// DeleteCostTargetOf removes a target by its source: the banquet has one of its own, with no outlet.
+func (s *Service) DeleteCostTargetOf(ctx context.Context, propertyID int64, source string, outlet *int64, class string) error {
 	p, err := s.manage(ctx, propertyID)
 	if err != nil {
 		return err
+	}
+	if source == "" {
+		source = SourcePOS
+	}
+	if source != SourcePOS && source != SourceBanquet {
+		return invalid("cost target", fieldErr("source", "INVALID_VALUE", "POS or BANQUET"))
 	}
 	if class != "FOOD" && class != "BEVERAGE" {
 		return invalid("cost target", fieldErr("class", "INVALID_VALUE", "FOOD or BEVERAGE"))
@@ -132,22 +158,31 @@ func (s *Service) DeleteCostTarget(ctx context.Context, propertyID int64, outlet
 	return s.write(ctx, propertyID, func(ctx context.Context, bd civil.Date) error {
 		q := s.q(ctx)
 		old, _ := s.targetsOf(ctx, p.TenantID, propertyID)
-		n, err := q.DeleteCostTarget(ctx, inventorydb.DeleteCostTargetParams{TenantID: p.TenantID, PropertyID: propertyID, OutletID: outlet, Class: class})
+		n, err := q.DeleteCostTarget(ctx, inventorydb.DeleteCostTargetParams{TenantID: p.TenantID, PropertyID: propertyID, Source: source, OutletID: outlet, Class: class})
 		if err != nil {
 			return err
 		}
 		if n == 0 {
 			return notFound("COST_TARGET_NOT_FOUND", "cost target")
 		}
-		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "inventory.cost_target_removed", "inv_cost_target", idKey(outlet), "cost target "+class, targetOf(old, outlet, class), nil))
+		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "inventory.cost_target_removed", "inv_cost_target", idKey(outlet), "cost target "+class, targetOfSource(old, source, outlet, class), nil))
 	})
 }
 
-// targets answers the target of a class at an outlet: its own, else the property's, else none.
+// targets answers the target of a class at an outlet: its own, else the property's, else none. The banquet has a target of its own (source BANQUET), else the property's.
 type targets struct{ list []CostTarget }
 
 func (t targets) of(outlet *int64, class string) *decimal.Decimal {
-	if outlet != nil {
+	return t.ofSource(SourcePOS, outlet, class)
+}
+
+func (t targets) ofSource(source string, outlet *int64, class string) *decimal.Decimal {
+	switch {
+	case source == SourceBanquet:
+		if x := targetOfSource(t.list, SourceBanquet, nil, class); x != nil {
+			return &x.TargetPct
+		}
+	case outlet != nil:
 		if x := targetOf(t.list, outlet, class); x != nil {
 			return &x.TargetPct
 		}
@@ -165,7 +200,7 @@ func (t targets) weighted(rows []FbDayRow, class string) *decimal.Decimal {
 		if r.Class != class || !r.Revenue.IsPositive() {
 			continue
 		}
-		tp := t.of(r.OutletID, class)
+		tp := t.ofSource(r.Source, r.OutletID, class)
 		if tp == nil {
 			continue
 		}
@@ -254,7 +289,9 @@ type DailyCostDay struct {
 	Food     FbPart                     `json:"food"`
 	Beverage FbPart                     `json:"beverage"`
 	Fb       FbPart                     `json:"fb"`
-	Rooms    int                        `json:"occupied_rooms"`
+	// Banquet is the part of Fb that comes from the banquet (36 F13): its revenue, its cost and its percentage. Fb includes it; Fb less Banquet is the part of the outlets.
+	Banquet FbPart `json:"banquet"`
+	Rooms   int    `json:"occupied_rooms"`
 	// CostPerRoom is the amenities cost over the rooms the amenities were made for.
 	CostPerRoom *decimal.Decimal           `json:"amenity_cost_per_room"`
 	Departments map[string]decimal.Decimal `json:"departments"`
@@ -308,6 +345,14 @@ func summarizeDays(in dayInput, tg targets) DailyCostDay {
 		}
 	}
 	out.Fb = fbCells(in.fb, "FOOD", "BEVERAGE")
+	var bq []FbDayRow
+	for _, r := range in.fb {
+		if r.Source == SourceBanquet {
+			bq = append(bq, r)
+		}
+	}
+	out.Banquet = fbCells(bq, "FOOD", "BEVERAGE")
+	out.Banquet.Target = tg.weighted(bq, "FOOD")
 	if in.rooms > 0 {
 		v := out.Kinds[CostAmenity].Div(decimal.NewFromInt(int64(in.rooms))).Round(2)
 		out.CostPerRoom = &v
@@ -511,6 +556,9 @@ type ReconColumn struct {
 	TheoryRevenue decimal.Decimal `json:"theory_revenue"`
 	// NoRecipeDays counts the days with revenue and no cost from recipes; they are left out of the theoretical %.
 	NoRecipeDays int `json:"no_recipe_days"`
+	// BanquetRevenue and BanquetTheory are the part of Revenue and of Theory that comes from the banquet ("of which banquet", 36 F13); the figures above include them.
+	BanquetRevenue decimal.Decimal `json:"banquet_revenue"`
+	BanquetTheory  decimal.Decimal `json:"banquet_theory"`
 }
 
 // Reconciliation is the report of 12.1 for a period.
@@ -529,7 +577,7 @@ func addCols(a, b ReconColumn) ReconColumn {
 	return ReconColumn{Opening: a.Opening.Add(b.Opening), OpeningPosted: a.OpeningPosted.Add(b.OpeningPosted), Purchases: a.Purchases.Add(b.Purchases), TransferIn: a.TransferIn.Add(b.TransferIn), TransferOut: a.TransferOut.Add(b.TransferOut),
 		Closing: a.Closing.Add(b.Closing), StaffMeal: a.StaffMeal.Add(b.StaffMeal), Entertainment: a.Entertainment.Add(b.Entertainment), Revenue: a.Revenue.Add(b.Revenue),
 		Theory: a.Theory.Add(b.Theory), Waste: a.Waste.Add(b.Waste), CountVariance: a.CountVariance.Add(b.CountVariance), NoRecipeEstimate: a.NoRecipeEstimate.Add(b.NoRecipeEstimate),
-		TheoryRevenue: a.TheoryRevenue.Add(b.TheoryRevenue)}
+		TheoryRevenue: a.TheoryRevenue.Add(b.TheoryRevenue), BanquetRevenue: a.BanquetRevenue.Add(b.BanquetRevenue), BanquetTheory: a.BanquetTheory.Add(b.BanquetTheory)}
 }
 
 // finish computes the lines that follow from the others.
@@ -647,6 +695,10 @@ func (s *Service) FbReconciliation(ctx context.Context, propertyID int64, from, 
 	var byClass = map[string][]FbDayRow{}
 	for _, r := range fig.Fb {
 		cols[r.Class].Revenue = cols[r.Class].Revenue.Add(r.Revenue)
+		if r.Source == SourceBanquet {
+			cols[r.Class].BanquetRevenue = cols[r.Class].BanquetRevenue.Add(r.Revenue)
+			cols[r.Class].BanquetTheory = cols[r.Class].BanquetTheory.Add(r.SaleCost)
+		}
 		byClass[r.Class] = append(byClass[r.Class], r)
 	}
 	for class, rows := range byClass {
@@ -702,6 +754,8 @@ func (s *Service) FbReconciliation(ctx context.Context, propertyID int64, from, 
 
 // OutletCostRow is the theory and the actual cost of one class at one outlet (12.4).
 type OutletCostRow struct {
+	// Source is POS, or BANQUET for the row of the banquet (it has no outlet; its code is BANQUET).
+	Source          string           `json:"source"`
 	OutletID        *int64           `json:"outlet_id"`
 	OutletCode      string           `json:"outlet_code"`
 	OutletName      string           `json:"outlet_name"`
@@ -761,10 +815,10 @@ func (s *Service) OutletCost(ctx context.Context, propertyID int64, from, to *ci
 	dataRev := map[fbKey]decimal.Decimal{} // the revenue of the days that have a cost from recipes: the percentages are over these days only
 	for _, r := range fig.Fb {
 		id, has := idOrZero(r.OutletID)
-		k := fbKey{outlet: id, hasOut: has, class: r.Class}
+		k := fbKey{source: r.Source, outlet: id, hasOut: has, class: r.Class}
 		x, ok := rows[k]
 		if !ok {
-			x = &OutletCostRow{OutletID: r.OutletID, Class: r.Class}
+			x = &OutletCostRow{Source: r.Source, OutletID: r.OutletID, Class: r.Class}
 			rows[k] = x
 		}
 		x.Revenue = x.Revenue.Add(r.Revenue)
@@ -786,19 +840,37 @@ func (s *Service) OutletCost(ctx context.Context, propertyID int64, from, to *ci
 		return OutletCostReport{}, err
 	}
 	counted := map[int64]bool{}
+	bqWh, err := q.BanquetWarehouse(ctx, propertyID) // the warehouse of the banquet: its count variance goes to the banquet rows
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return OutletCostReport{}, err
+	}
+	var bqName string
+	if bqWh != nil {
+		if w, err := q.GetWarehouse(ctx, inventorydb.GetWarehouseParams{TenantID: p.TenantID, PropertyID: propertyID, ID: *bqWh}); err == nil {
+			bqName = w.Name
+		}
+	}
 	for _, c := range cv {
 		counted[c.WarehouseID] = true
 		var owners []*OutletCostRow
 		weight := decimal.Zero
 		for k, r := range rows {
-			if k.hasOut && k.class == c.ItemClass && byID[k.outlet].WarehouseID != nil && *byID[k.outlet].WarehouseID == c.WarehouseID {
+			switch {
+			case k.hasOut && k.class == c.ItemClass && byID[k.outlet].WarehouseID != nil && *byID[k.outlet].WarehouseID == c.WarehouseID:
+				owners, weight = append(owners, r), weight.Add(r.Theory)
+			case k.source == SourceBanquet && k.class == c.ItemClass && bqWh != nil && *bqWh == c.WarehouseID:
 				owners, weight = append(owners, r), weight.Add(r.Theory)
 			}
 		}
 		if len(owners) == 0 {
 			continue
 		}
-		sort.Slice(owners, func(i, j int) bool { return idKey(owners[i].OutletID) < idKey(owners[j].OutletID) })
+		sort.Slice(owners, func(i, j int) bool {
+			if owners[i].Source != owners[j].Source {
+				return owners[i].Source < owners[j].Source
+			}
+			return idKey(owners[i].OutletID) < idKey(owners[j].OutletID)
+		})
 		left := c.Variance
 		for i, r := range owners {
 			share := c.Variance.Div(decimal.NewFromInt(int64(len(owners))))
@@ -839,12 +911,18 @@ func (s *Service) OutletCost(ctx context.Context, propertyID int64, from, to *ci
 			}
 		} else {
 			r.Basis = "BOOK"
+			if r.Source == SourceBanquet {
+				r.OutletCode, r.OutletName, r.WarehouseName = "BANQUET", "Banquet", bqName
+				if bqWh != nil && counted[*bqWh] {
+					r.Basis = "COUNT"
+				}
+			}
 		}
 		r.Actual = r.Theory.Add(r.CountVariance)
 		r.Difference = r.Actual.Sub(r.Theory)
 		r.TheoryPct, r.ActualPct = pct(r.Theory, dataRev[k]), pct(r.Actual, dataRev[k])
 		r.NoRecipeData = r.Revenue.IsPositive() && r.TheoryPct == nil
-		r.TargetPct = tg.of(r.OutletID, r.Class)
+		r.TargetPct = tg.ofSource(r.Source, r.OutletID, r.Class)
 		out.Rows = append(out.Rows, *r)
 	}
 	sort.Slice(out.Rows, func(i, j int) bool {

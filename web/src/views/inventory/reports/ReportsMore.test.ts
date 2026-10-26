@@ -258,6 +258,7 @@ describe('the daily cost, opened on a day', () => {
     food: { revenue: '0', cost: '0', pct: null, target_pct: null, above_target: false, mtd_pct: null, no_recipe_days: 0, no_recipe_data: false },
     beverage: { revenue: '0', cost: '0', pct: null, target_pct: null, above_target: false, mtd_pct: null, no_recipe_days: 0, no_recipe_data: false },
     fb: { revenue: '0', cost: '0', pct: null, target_pct: null, above_target: false, mtd_pct: null, no_recipe_days: 0, no_recipe_data: false },
+    banquet: { revenue: '0', cost: '0', pct: null, target_pct: null, above_target: false, mtd_pct: null, no_recipe_days: 0, no_recipe_data: false },
   }
   const costDay = {
     date: '2026-09-29', total: '320000',
@@ -284,7 +285,7 @@ describe('the daily cost, opened on a day', () => {
 
 describe('the reconciliation, on the days with recipe data', () => {
   it('says how many days have no recipe data', async () => {
-    const col = { theory: '0', theory_revenue: '0', no_recipe_days: 0 }
+    const col = { theory: '0', theory_revenue: '0', no_recipe_days: 0, banquet_revenue: '0', banquet_theory: '0' }
     await setup(ReconciliationView, view, () => ({ data: { from: '2026-09-01', to: '2026-09-30', closing_basis: 'BOOK', food: col, beverage: col, total: { ...col, no_recipe_days: 4 }, gl: { status: 'MATCH', gl_through: '2026-09-29', lines: [], stock_total: '0', gl_total: '0', difference: '0' } } }))
     expect(body('[data-testid=recon-no-recipe-days]').text()).toBe('4 day(s) without recipe data')
   })

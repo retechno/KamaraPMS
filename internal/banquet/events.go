@@ -206,7 +206,7 @@ func (s *Service) CreateEvent(ctx context.Context, propertyID int64, in EventInp
 		}
 		id, err := s.q(ctx).InsertEvent(ctx, banquetdb.InsertEventParams{TenantID: p.TenantID, PropertyID: propertyID, Number: number, Name: in.Name, EventTypeID: in.EventTypeID,
 			BookerGuestID: in.BookerGuestID, BookerCompanyID: in.BookerCompanyID, ContactName: blankToNil(in.ContactName), ContactPhone: blankToNil(in.ContactPhone),
-			ContactEmail: blankToNil(in.ContactEmail), SalesUserID: sales, BookingGroupID: in.BookingGroupID, Notes: blankToNil(in.Notes), ActorID: p.ActorID()})
+			ContactEmail: blankToNil(in.ContactEmail), SalesUserID: sales, BookingGroupID: in.BookingGroupID, Notes: blankToNil(in.Notes), InquiryOn: bd, ActorID: p.ActorID()})
 		if err != nil {
 			return err
 		}

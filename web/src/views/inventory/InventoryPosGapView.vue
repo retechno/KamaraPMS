@@ -85,8 +85,8 @@ watch(pid, load, { immediate: true })
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in rows" :key="r.bill_line_id" class="border-t border-border" :data-testid="`gap-row-${r.bill_line_id}`">
-            <td class="py-2 pr-2">{{ formatDate(r.sent_on) }}</td><td class="py-2 pr-2">{{ r.outlet_name }}</td><td class="py-2 pr-2">{{ r.bill_number }}</td>
+          <tr v-for="r in rows" :key="`${r.source}-${r.bill_line_id ?? r.posting_line_id}`" class="border-t border-border" :data-testid="r.source === 'BANQUET' ? `gap-row-banquet-${r.posting_line_id}` : `gap-row-${r.bill_line_id}`">
+            <td class="py-2 pr-2">{{ formatDate(r.sent_on) }}</td><td class="py-2 pr-2">{{ r.source === 'BANQUET' ? t('inventory.reports.outlet.banquet') : r.outlet_name }}</td><td class="py-2 pr-2">{{ r.bill_number }}</td>
             <td class="py-2 pr-2">{{ r.product_name }}</td><td class="py-2 pr-2 text-right">{{ formatQty(r.quantity) }}</td>
             <td class="py-2 text-right"><Badge v-if="r.voided" variant="outline">{{ t('inventory.posGap.voided') }}</Badge></td>
           </tr>

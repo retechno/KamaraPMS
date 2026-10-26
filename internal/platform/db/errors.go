@@ -586,6 +586,17 @@ var constraintErrors = map[string]mapped{
 	"banquet_documents_contract_uk":        {apperr.KindConflict, "DUPLICATE_REQUEST", "the contract of this revision was made already"},
 	"banquet_documents_number_uk":          {apperr.KindConflict, "DUPLICATE_REQUEST", "the number of the contract is in use"},
 	"email_outbox_shape_ck":                {apperr.KindInvalid, "INVALID_VALUE", "an e-mail belongs to a reservation or to an event and a document"},
+
+	// Banquet, PR 4: stock and reports (36 3.5, 4.9)
+	"banquet_settings_warehouse_fk":         {apperr.KindInvalid, "WAREHOUSE_NOT_FOUND", "the warehouse does not exist in this property"},
+	"banquet_posting_items_property_id_uk":  {apperr.KindConflict, "DUPLICATE_REQUEST", "the line of the posting exists already"},
+	"inv_consumption_queue_banquet_line_fk": {apperr.KindInternal, "QUEUE_ROW_INCONSISTENT", "the line of the posting does not exist in this property"},
+	"inv_consumption_queue_department_fk":   {apperr.KindInternal, "QUEUE_ROW_INCONSISTENT", "the department does not exist in this property"},
+	"inv_consumption_queue_banquet_kind_uk": {apperr.KindConflict, "DUPLICATE_REQUEST", "the line of the posting was queued already"},
+	"inv_consumption_queue_source_ck":       {apperr.KindInternal, "QUEUE_ROW_INCONSISTENT", "a queue row comes from the POS or from the banquet"},
+	"inv_consumption_queue_one_source_ck":   {apperr.KindInternal, "QUEUE_ROW_INCONSISTENT", "a queue row comes from exactly one source, a POS line or a line of a banquet posting"},
+	"inv_fb_cost_days_source_ck":            {apperr.KindInternal, "QUEUE_ROW_INCONSISTENT", "the revenue of the banquet has no outlet"},
+	"inv_cost_targets_source_ck":            {apperr.KindInvalid, "INVALID_VALUE", "the target of the banquet has no outlet"},
 }
 
 // MappedConstraintNames lists every constraint name with a dedicated API error

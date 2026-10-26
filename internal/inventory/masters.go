@@ -965,8 +965,12 @@ type WarehouseInput struct {
 
 // ListWarehouses lists the warehouses with the value of their stock.
 func (s *Service) ListWarehouses(ctx context.Context, propertyID int64) ([]Warehouse, error) {
-	p, err := s.canRead(ctx, propertyID)
+	// whoever sets up the banquet chooses its warehouse from this list, and nothing else of the stock is open to them (36 4.9)
+	p, err := auth.Require(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := auth.RequireAny(ctx, s.authz, propertyID, append(slices.Clone(readers), auth.PermBanquetSetup)...); err != nil {
 		return nil, err
 	}
 	rows, err := s.q(ctx).ListWarehouses(ctx, inventorydb.ListWarehousesParams{TenantID: p.TenantID, PropertyID: propertyID})

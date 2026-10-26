@@ -128,6 +128,7 @@ export const navigation: NavSection[] = [
       { id: 'banquetEvents', to: '/banquet/events', permission: ['banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
       { id: 'banquetToday', to: '/banquet/today', permission: ['banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
       { id: 'banquetUnposted', to: '/banquet/unposted', permission: ['banquet.manage', 'banquet.confirm'], module: 'BANQUET' },
+      { id: 'banquetReports', to: '/banquet/reports', permission: ['banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
       { id: 'banquetRooms', to: '/banquet/rooms', permission: ['banquet.setup', 'banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
       { id: 'banquetCatalog', to: '/banquet/catalog', permission: ['banquet.setup', 'banquet.manage', 'banquet.confirm', 'banquet.read'], module: 'BANQUET' },
       { id: 'banquetSettings', to: '/banquet/settings', permission: 'banquet.setup', module: 'BANQUET' },

@@ -42,9 +42,16 @@ type CostDayRow struct {
 	Amount       decimal.Decimal `json:"amount"`
 }
 
-// FbDayRow is the food or beverage figures of one day at one outlet (nil: warehouses without an outlet).
+// The sources of the revenue and of the cost of food and beverage: the outlets of the POS, and the banquet (36-banquet.md 4.9, F13), which has no outlet.
+const (
+	SourcePOS     = "POS"
+	SourceBanquet = "BANQUET"
+)
+
+// FbDayRow is the food or beverage figures of one day at one outlet (nil: warehouses without an outlet), or of the banquet (Source BANQUET, no outlet).
 type FbDayRow struct {
 	Date              civil.Date      `json:"date"`
+	Source            string          `json:"source"`
 	OutletID          *int64          `json:"outlet_id"`
 	Class             string          `json:"class"`
 	Revenue           decimal.Decimal `json:"revenue_net"`
@@ -74,6 +81,7 @@ type costKey struct {
 
 type fbKey struct {
 	date   civil.Date
+	source string
 	outlet int64
 	hasOut bool
 	class  string
@@ -107,17 +115,21 @@ func (s *Service) dayFigures(ctx context.Context, tenantID, propertyID int64, fr
 	}
 	costs := map[costKey]decimal.Decimal{}
 	fbs := map[fbKey]*FbDayRow{}
-	fb := func(d civil.Date, outlet *int64, class string) *FbDayRow {
+	fb := func(d civil.Date, source string, outlet *int64, class string) *FbDayRow {
 		id, has := idOrZero(outlet)
-		k := fbKey{date: d, outlet: id, hasOut: has, class: class}
+		k := fbKey{date: d, source: source, outlet: id, hasOut: has, class: class}
 		r, ok := fbs[k]
 		if !ok {
-			r = &FbDayRow{Date: d, OutletID: idPtr(id, has), Class: class}
+			r = &FbDayRow{Date: d, Source: source, OutletID: idPtr(id, has), Class: class}
 			fbs[k] = r
 		}
 		return r
 	}
 	for _, m := range mv {
+		// the goods of a banquet leave the warehouse of an outlet, but no outlet sold them: its cost is the row of the banquet (36-banquet.md F13)
+		if m.Source == SourceBanquet {
+			m.OutletID = nil
+		}
 		dept, hasDept := idOrZero(m.DepartmentID)
 		out, hasOut := idOrZero(m.OutletID)
 		k := costKey{date: m.BusinessDate, dept: dept, outlet: out, kind: m.CostKind, hasDept: hasDept, hasOut: hasOut}
@@ -127,16 +139,16 @@ func (s *Service) dayFigures(ctx context.Context, tenantID, propertyID int64, fr
 		}
 		switch m.CostKind {
 		case CostSaleFood, CostSaleBeverage:
-			r := fb(m.BusinessDate, m.OutletID, m.CostClass)
+			r := fb(m.BusinessDate, m.Source, m.OutletID, m.CostClass)
 			r.SaleCost = r.SaleCost.Add(m.Amount)
 		case CostWaste:
-			r := fb(m.BusinessDate, m.OutletID, m.CostClass)
+			r := fb(m.BusinessDate, m.Source, m.OutletID, m.CostClass)
 			r.WasteCost = r.WasteCost.Add(m.Amount)
 		case CostStaffMeal:
-			r := fb(m.BusinessDate, m.OutletID, m.CostClass)
+			r := fb(m.BusinessDate, m.Source, m.OutletID, m.CostClass)
 			r.StaffMealCost = r.StaffMealCost.Add(m.Amount)
 		case CostEntertain:
-			r := fb(m.BusinessDate, m.OutletID, m.CostClass)
+			r := fb(m.BusinessDate, m.Source, m.OutletID, m.CostClass)
 			r.EntertainmentCost = r.EntertainmentCost.Add(m.Amount)
 		}
 	}
@@ -144,7 +156,20 @@ func (s *Service) dayFigures(ctx context.Context, tenantID, propertyID int64, fr
 		if r.Class != "FOOD" && r.Class != "BEVERAGE" {
 			continue
 		}
-		row := fb(r.BusinessDate, r.OutletID, r.Class)
+		row := fb(r.BusinessDate, SourcePOS, r.OutletID, r.Class)
+		row.Revenue = row.Revenue.Add(r.RevenueNet)
+		row.NoRecipeRevenue = row.NoRecipeRevenue.Add(r.NoRecipeRevenue)
+	}
+	// the banquet: the net revenue of the food and beverage lines of the posted sessions, beside the outlets (F13)
+	bq, err := q.BanquetFbRevenueOfRange(ctx, inventorydb.BanquetFbRevenueOfRangeParams{TenantID: tenantID, PropertyID: propertyID, FromDate: from, ToDate: to})
+	if err != nil {
+		return DayFigures{}, err
+	}
+	for _, r := range bq {
+		if r.Class != "FOOD" && r.Class != "BEVERAGE" {
+			continue
+		}
+		row := fb(r.BusinessDate, SourceBanquet, nil, r.Class)
 		row.Revenue = row.Revenue.Add(r.RevenueNet)
 		row.NoRecipeRevenue = row.NoRecipeRevenue.Add(r.NoRecipeRevenue)
 	}
@@ -172,6 +197,9 @@ func (s *Service) dayFigures(ctx context.Context, tenantID, propertyID int64, fr
 		a, b := out.Fb[i], out.Fb[j]
 		if c := a.Date.Compare(b.Date); c != 0 {
 			return c < 0
+		}
+		if a.Source != b.Source {
+			return a.Source < b.Source
 		}
 		if idKey(a.OutletID) != idKey(b.OutletID) {
 			return idKey(a.OutletID) < idKey(b.OutletID)
@@ -224,7 +252,7 @@ func (s *Service) TakeSnapshots(ctx context.Context, p auth.Principal, propertyI
 		}
 	}
 	for _, r := range f.Fb {
-		if err := q.InsertFbCostDay(ctx, inventorydb.InsertFbCostDayParams{TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: bd, OutletID: r.OutletID, Class: r.Class, RevenueNet: r.Revenue,
+		if err := q.InsertFbCostDay(ctx, inventorydb.InsertFbCostDayParams{TenantID: p.TenantID, PropertyID: propertyID, BusinessDate: bd, Source: r.Source, OutletID: r.OutletID, Class: r.Class, RevenueNet: r.Revenue,
 			NoRecipeRevenue: r.NoRecipeRevenue, SaleCost: r.SaleCost, WasteCost: r.WasteCost, StaffMealCost: r.StaffMealCost, EntertainmentCost: r.EntertainmentCost}); err != nil {
 			return err
 		}
@@ -259,7 +287,7 @@ func (s *Service) figuresOf(ctx context.Context, tenantID, propertyID int64, fro
 			return DayFigures{}, err
 		}
 		for _, r := range fb {
-			out.Fb = append(out.Fb, FbDayRow{Date: r.BusinessDate, OutletID: r.OutletID, Class: r.Class, Revenue: r.RevenueNet, NoRecipeRevenue: r.NoRecipeRevenue, SaleCost: r.SaleCost,
+			out.Fb = append(out.Fb, FbDayRow{Date: r.BusinessDate, Source: r.Source, OutletID: r.OutletID, Class: r.Class, Revenue: r.RevenueNet, NoRecipeRevenue: r.NoRecipeRevenue, SaleCost: r.SaleCost,
 				WasteCost: r.WasteCost, StaffMealCost: r.StaffMealCost, EntertainmentCost: r.EntertainmentCost})
 		}
 	}

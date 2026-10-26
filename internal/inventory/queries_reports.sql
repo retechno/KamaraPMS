@@ -11,37 +11,38 @@
 WITH b AS (
     SELECT m.business_date, m.gl_department_id AS department_id, m.outlet_id, m.cost_class, m.kind, m.value_delta, m.gl_amount, m.gl_debit_account_id, m.gl_credit_account_id,
            COALESCE(iss.origin, '') AS origin, (st.engineering_department_id IS NOT NULL AND m.gl_department_id = st.engineering_department_id) AS engineering,
-           ppv.account_id AS ppv_account_id
+           ppv.account_id AS ppv_account_id, COALESCE(qr.source, 'POS') AS source
       FROM inv_movements m
       LEFT JOIN inv_issues iss ON m.source_type = 'INV_ISSUE' AND iss.property_id = m.property_id AND iss.id = m.source_id
+      LEFT JOIN inv_consumption_queue qr ON m.source_type = 'POS_QUEUE' AND qr.property_id = m.property_id AND qr.id = m.source_id
       LEFT JOIN inventory_settings st ON st.property_id = m.property_id
       LEFT JOIN gl_account_map ppv ON ppv.property_id = m.property_id AND ppv.map_key = 'INV_PPV'
      WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.business_date BETWEEN @from_date AND @to_date
 ), r AS (
-    SELECT business_date, department_id, outlet_id, cost_class,
+    SELECT business_date, department_id, outlet_id, cost_class, source,
            CASE cost_class WHEN 'FOOD' THEN 'SALE_COST_FOOD' WHEN 'BEVERAGE' THEN 'SALE_COST_BEVERAGE' ELSE 'OTHER_USE' END AS cost_kind, -value_delta AS amount
       FROM b WHERE kind IN ('POS_SALE', 'POS_SALE_RETURN', 'NEG_SETTLE')
     UNION ALL
-    SELECT business_date, department_id, outlet_id, cost_class,
+    SELECT business_date, department_id, outlet_id, cost_class, source,
            CASE cost_class WHEN 'FOOD' THEN 'SALE_COST_FOOD' WHEN 'BEVERAGE' THEN 'SALE_COST_BEVERAGE' ELSE 'OTHER_USE' END, -gl_amount
       FROM b WHERE kind = 'COGS_TO_WASTE'
     UNION ALL
-    SELECT business_date, department_id, outlet_id, cost_class, 'WASTE', gl_amount FROM b WHERE kind = 'COGS_TO_WASTE'
+    SELECT business_date, department_id, outlet_id, cost_class, source, 'WASTE', gl_amount FROM b WHERE kind = 'COGS_TO_WASTE'
     UNION ALL
-    SELECT business_date, department_id, outlet_id, cost_class, kind, -value_delta FROM b WHERE kind IN ('WASTE', 'STAFF_MEAL', 'ENTERTAINMENT')
+    SELECT business_date, department_id, outlet_id, cost_class, source, kind, -value_delta FROM b WHERE kind IN ('WASTE', 'STAFF_MEAL', 'ENTERTAINMENT')
     UNION ALL
-    SELECT business_date, department_id, outlet_id, cost_class,
+    SELECT business_date, department_id, outlet_id, cost_class, source,
            CASE WHEN origin = 'AMENITY' THEN 'AMENITY' WHEN engineering THEN 'ENGINEERING' ELSE 'OTHER_USE' END, -value_delta
       FROM b WHERE kind = 'ISSUE'
     UNION ALL
-    SELECT business_date, department_id, outlet_id, cost_class, 'COUNT_VARIANCE', -value_delta FROM b WHERE kind IN ('COUNT_LOSS', 'COUNT_GAIN')
+    SELECT business_date, department_id, outlet_id, cost_class, source, 'COUNT_VARIANCE', -value_delta FROM b WHERE kind IN ('COUNT_LOSS', 'COUNT_GAIN')
     UNION ALL
-    SELECT business_date, department_id, outlet_id, cost_class, 'PRICE_VARIANCE',
+    SELECT business_date, department_id, outlet_id, cost_class, source, 'PRICE_VARIANCE',
            CASE WHEN gl_debit_account_id = ppv_account_id THEN gl_amount ELSE -gl_amount END
       FROM b WHERE kind = 'COST_ADJUST' AND ppv_account_id IS NOT NULL AND (gl_debit_account_id = ppv_account_id OR gl_credit_account_id = ppv_account_id)
 )
-SELECT business_date, department_id, outlet_id, cost_class::text AS cost_class, cost_kind::text AS cost_kind, sum(amount)::numeric AS amount
-  FROM r GROUP BY business_date, department_id, outlet_id, cost_class, cost_kind
+SELECT business_date, department_id, outlet_id, cost_class::text AS cost_class, source::text AS source, cost_kind::text AS cost_kind, sum(amount)::numeric AS amount
+  FROM r GROUP BY business_date, department_id, outlet_id, cost_class, source, cost_kind
 HAVING sum(amount) <> 0
  ORDER BY business_date, cost_kind;
 
@@ -74,6 +75,31 @@ SELECT i.business_date, f.outlet_id AS outlet_id,
  GROUP BY i.business_date, f.outlet_id, COALESCE(cc.fb_class, NULLIF(w.cost_class, ''), 'OTHER')
  ORDER BY i.business_date, f.outlet_id;
 
+-- The net sales of the banquet by business day and class (36 4.9, F13): the net amount of the food and beverage lines of the posted sessions, from the EVENT folios, before service charge and tax. A reversal
+-- takes the line it reverses; an adjustment that names the item it corrects (reference FOLIO_ITEM) takes that item's line; a transfer to a master folio is not revenue and not read. The class is the one the
+-- line (or the component of a package) froze when it was added. A line with no POS product, or whose product has no recipe, is also counted apart (no stock was deducted for it).
+-- name: BanquetFbRevenueOfRange :many
+SELECT i.business_date, COALESCE(NULLIF(COALESCE(c.fb_class, l.fb_class), ''), 'OTHER')::text AS class,
+       COALESCE(sum(i.net_amount), 0)::numeric AS revenue_net,
+       COALESCE(sum(i.net_amount) FILTER (WHERE NOT EXISTS (SELECT 1 FROM pos_recipe_lines r WHERE r.property_id = l.property_id AND r.product_id = COALESCE(c.pos_product_id, l.pos_product_id))), 0)::numeric AS no_recipe_revenue
+  FROM folio_items i
+  JOIN folios f ON f.property_id = i.property_id AND f.id = i.folio_id AND f.folio_type = 'EVENT'
+  JOIN folio_items o ON o.property_id = i.property_id
+                    AND o.id = COALESCE(i.reverses_item_id, CASE WHEN i.reference_type = 'FOLIO_ITEM' AND i.reference_id ~ '^[0-9]+$' THEN i.reference_id::bigint END, i.id)
+  JOIN banquet_posting_items pi ON pi.property_id = o.property_id AND pi.folio_item_id = o.id
+  JOIN banquet_event_lines l ON l.property_id = pi.property_id AND l.id = pi.line_id
+  LEFT JOIN banquet_line_components c ON c.property_id = pi.property_id AND c.line_id = pi.line_id AND c.item_id = pi.component_item_id
+  LEFT JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
+ WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.business_date BETWEEN @from_date AND @to_date
+   AND i.transaction_type IN ('CHARGE', 'ADJUSTMENT', 'REVERSAL') AND COALESCE(cc.charge_type, '') NOT IN ('TRANSFER', 'ROUNDING')
+   AND NOT (i.source = 'TRANSFER' OR i.reference_type = 'FOLIO_TRANSFER')
+ GROUP BY i.business_date, COALESCE(NULLIF(COALESCE(c.fb_class, l.fb_class), ''), 'OTHER')
+ ORDER BY i.business_date;
+
+-- The warehouse the banquet takes its goods from: its own cost rows are read beside the outlets that sell from the same warehouse.
+-- name: BanquetWarehouse :one
+SELECT warehouse_id FROM banquet_settings WHERE property_id = @property_id;
+
 -- ---------------------------------------------------------------------------------------------------------------------
 -- The snapshots (written by the close, idempotent for a day: the day is deleted and written again)
 
@@ -100,8 +126,8 @@ INSERT INTO inv_cost_days (tenant_id, property_id, business_date, department_id,
 VALUES (@tenant_id, @property_id, @business_date, sqlc.narg(department_id), sqlc.narg(outlet_id), @cost_kind, @amount);
 
 -- name: InsertFbCostDay :exec
-INSERT INTO inv_fb_cost_days (tenant_id, property_id, business_date, outlet_id, class, revenue_net, no_recipe_revenue, sale_cost, waste_cost, staff_meal_cost, entertainment_cost)
-VALUES (@tenant_id, @property_id, @business_date, sqlc.narg(outlet_id), @class, @revenue_net, @no_recipe_revenue, @sale_cost, @waste_cost, @staff_meal_cost, @entertainment_cost);
+INSERT INTO inv_fb_cost_days (tenant_id, property_id, business_date, source, outlet_id, class, revenue_net, no_recipe_revenue, sale_cost, waste_cost, staff_meal_cost, entertainment_cost)
+VALUES (@tenant_id, @property_id, @business_date, @source, sqlc.narg(outlet_id), @class, @revenue_net, @no_recipe_revenue, @sale_cost, @waste_cost, @staff_meal_cost, @entertainment_cost);
 
 -- The balance at the end of the day of every pair that moved on it, from the ledger up to the day (so a day taken again later, or a rebuild, writes the same figures).
 -- name: InsertBalanceDaysOfDay :exec
@@ -118,9 +144,9 @@ SELECT business_date, department_id, outlet_id, cost_kind, amount FROM inv_cost_
  ORDER BY business_date, cost_kind;
 
 -- name: ListFbCostDays :many
-SELECT business_date, outlet_id, class, revenue_net, no_recipe_revenue, sale_cost, waste_cost, staff_meal_cost, entertainment_cost FROM inv_fb_cost_days
+SELECT business_date, source, outlet_id, class, revenue_net, no_recipe_revenue, sale_cost, waste_cost, staff_meal_cost, entertainment_cost FROM inv_fb_cost_days
  WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date BETWEEN @from_date AND @to_date
- ORDER BY business_date, outlet_id, class;
+ ORDER BY business_date, source, outlet_id, class;
 
 -- The rooms the amenities of each night were made for (the occupied rooms of the daily cost).
 -- name: AmenityRoomsOfRange :many
@@ -132,18 +158,18 @@ SELECT business_date, rooms FROM inv_amenity_runs
 -- The targets of the cost percentage
 
 -- name: ListCostTargets :many
-SELECT t.id, t.outlet_id, t.class, t.target_pct, t.updated_at FROM inv_cost_targets t
+SELECT t.id, t.source, t.outlet_id, t.class, t.target_pct, t.updated_at FROM inv_cost_targets t
  WHERE t.tenant_id = @tenant_id AND t.property_id = @property_id
- ORDER BY (t.outlet_id IS NOT NULL), t.outlet_id, t.class;
+ ORDER BY t.source DESC, (t.outlet_id IS NOT NULL), t.outlet_id, t.class;
 
 -- name: UpsertCostTarget :exec
-INSERT INTO inv_cost_targets (tenant_id, property_id, outlet_id, class, target_pct, updated_by)
-VALUES (@tenant_id, @property_id, sqlc.narg(outlet_id), @class, @target_pct, sqlc.narg(actor_id))
-ON CONFLICT (property_id, COALESCE(outlet_id, 0), class) DO UPDATE SET target_pct = EXCLUDED.target_pct, updated_at = now(), updated_by = EXCLUDED.updated_by;
+INSERT INTO inv_cost_targets (tenant_id, property_id, source, outlet_id, class, target_pct, updated_by)
+VALUES (@tenant_id, @property_id, @source, sqlc.narg(outlet_id), @class, @target_pct, sqlc.narg(actor_id))
+ON CONFLICT (property_id, source, COALESCE(outlet_id, 0), class) DO UPDATE SET target_pct = EXCLUDED.target_pct, updated_at = now(), updated_by = EXCLUDED.updated_by;
 
 -- name: DeleteCostTarget :execrows
 DELETE FROM inv_cost_targets
- WHERE tenant_id = @tenant_id AND property_id = @property_id AND COALESCE(outlet_id, 0) = COALESCE(sqlc.narg(outlet_id)::bigint, 0) AND class = @class;
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND source = @source AND COALESCE(outlet_id, 0) = COALESCE(sqlc.narg(outlet_id)::bigint, 0) AND class = @class;
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- The reconciliation (12.1) and the cost per outlet (12.4)
@@ -293,3 +319,23 @@ HAVING sum(-m.value_delta) <> 0 OR sum(-m.qty_delta) <> 0
 -- The names of the departments and outlets that appear in the cost rows.
 -- name: DepartmentNames :many
 SELECT d.id, d.code, d.name FROM departments d WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id ORDER BY d.code;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- The setup check FB_CLASS_REVENUE_MISMATCH (35 4.9, 36 F13): the class of a POS category (its own, else its parent's) or of a banquet item against the revenue account of the charge code it sells on
+-- (food 4210, beverage 4220). The cost reports follow the class and the general ledger follows the charge code; the warning says when the two part.
+-- name: ListFbClassMismatches :many
+SELECT 'POS'::text AS source, p.code AS ref, p.name AS name, COALESCE(c.fb_class, pc.fb_class)::text AS class, cc.code AS charge_code, cc.gl_account_code AS account
+  FROM pos_products p
+  JOIN pos_categories c ON c.property_id = p.property_id AND c.id = p.category_id
+  LEFT JOIN pos_categories pc ON pc.property_id = c.property_id AND pc.id = c.parent_id
+  JOIN charge_codes cc ON cc.property_id = p.property_id AND cc.id = p.charge_code_id
+ WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.is_active
+   AND ((COALESCE(c.fb_class, pc.fb_class) = 'FOOD' AND cc.gl_account_code = '4220') OR (COALESCE(c.fb_class, pc.fb_class) = 'BEVERAGE' AND cc.gl_account_code = '4210'))
+UNION ALL
+SELECT 'BANQUET'::text, i.code, i.name, i.fb_class::text, cc.code, cc.gl_account_code
+  FROM banquet_items i
+  JOIN charge_codes cc ON cc.property_id = i.property_id AND cc.id = i.charge_code_id
+ WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.is_active
+   AND ((i.fb_class = 'FOOD' AND cc.gl_account_code = '4220') OR (i.fb_class = 'BEVERAGE' AND cc.gl_account_code = '4210'))
+ORDER BY 1, 2
+LIMIT 100;

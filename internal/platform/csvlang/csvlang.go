@@ -4,7 +4,9 @@
 package csvlang
 
 import (
+	"encoding/csv"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -112,6 +114,13 @@ var id = map[string]string{ //nolint:gosec // G101: column names, not credential
 	"tasks_done": "Tugas selesai", "tasks_skipped": "Tugas dilewati", "tax": "Pajak", "total": "Total", "type": "Tipe", "user": "Pengguna", "value": "Nilai",
 	"voided": "Dibatalkan", "voided_count": "Jumlah dibatalkan", "reservation": "Reservasi", "reservation_room_id": "ID kamar reservasi", "stay": "Menginap",
 	"Total": "Total", "Opening balance": "Saldo awal",
+	"group": "Kelompok", "key": "Kunci", "definite": "Definite", "definite_events": "Acara definite", "tentative": "Tentative", "tentative_events": "Acara tentative",
+	"event_type": "Tipe acara", "sales": "Sales", "room_code": "Kode ruang", "available_hours": "Jam tersedia", "occupancy_pct": "Okupansi (%)",
+	"posted_sessions": "Sesi diposting", "revenue_per_hour": "Pendapatan per jam", "event_number": "Nomor acara", "event": "Acara", "session": "Sesi", "estimated": "Estimasi",
+	"guaranteed": "Dijamin", "actual": "Aktual", "difference": "Selisih", "created": "Dibuat", "lost": "Hilang", "definite_value": "Nilai definite", "lost_value": "Nilai hilang",
+	"conversion_pct": "Konversi (%)", "closed_on": "Tanggal ditutup", "reason_code": "Kode alasan", "note": "Catatan", "start": "Mulai", "end": "Selesai", "setup": "Susunan",
+	"contact": "Kontak", "phone": "Telepon", "beo_revision": "Revisi BEO", "beo_unread": "BEO belum dibaca", "posting_mode": "Mode posting", "days_late": "Hari terlambat",
+	"blocked": "Terblokir", "inactive_code": "Kode tidak aktif", "available": "Tersedia", "revenue": "Pendapatan",
 	"avg_price":              "Harga rata-rata",
 	"receipts":               "Penerimaan",
 	"billed_value":           "Nilai ditagih",
@@ -157,4 +166,34 @@ var id = map[string]string{ //nolint:gosec // G101: column names, not credential
 	"count_variance_value":   "Nilai selisih opname",
 	"cost_adjust_qty":        "Jumlah penyesuaian harga",
 	"cost_adjust_value":      "Nilai penyesuaian harga",
+}
+
+// Write answers rows as a CSV download, the header in the language of the request. Text that a spreadsheet could read as a formula is prefixed with an apostrophe.
+func Write(w http.ResponseWriter, r *http.Request, filename string, rows [][]string) error {
+	if len(rows) > 0 {
+		rows[0] = Header(r, rows[0])
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	out := csv.NewWriter(w)
+	for _, row := range rows {
+		safe := make([]string, len(row))
+		for i, c := range row {
+			if c != "" && (strings.ContainsRune("=+@\t\r", rune(c[0])) || strings.HasPrefix(c, "-") && !isNumber(c)) {
+				c = "'" + c
+			}
+			safe[i] = c
+		}
+		if err := out.Write(safe); err != nil {
+			return err
+		}
+	}
+	out.Flush()
+	return out.Error()
+}
+
+func isNumber(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }

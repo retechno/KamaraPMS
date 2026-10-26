@@ -35,7 +35,7 @@ func (s *Service) settings(ctx context.Context, propertyID int64) (Settings, err
 		return Settings{}, err
 	}
 	return Settings{TentativeConflictMode: r.TentativeConflictMode, OperatingFrom: r.OperatingFrom, OperatingTo: r.OperatingTo, PostingMode: r.PostingMode, DefaultPriceMode: r.DefaultPriceMode,
-		MaxDiscountPctNoApproval: r.MaxDiscountPctNoApproval}, nil
+		MaxDiscountPctNoApproval: r.MaxDiscountPctNoApproval, WarehouseID: r.WarehouseID, WarehouseName: r.WarehouseName}, nil
 }
 
 // PutSettings changes the settings (banquet.setup). The conflict mode applies to the bookings and moves that come after it, never to what exists; every change is audited.
@@ -72,7 +72,20 @@ func (s *Service) PutSettings(ctx context.Context, propertyID int64, in Settings
 			return err
 		}
 		out = Settings{TentativeConflictMode: in.TentativeConflictMode, OperatingFrom: in.OperatingFrom, OperatingTo: in.OperatingTo, PostingMode: old.PostingMode, DefaultPriceMode: old.DefaultPriceMode,
-			MaxDiscountPctNoApproval: old.MaxDiscountPctNoApproval}
+			MaxDiscountPctNoApproval: old.MaxDiscountPctNoApproval, WarehouseID: old.WarehouseID, WarehouseName: old.WarehouseName}
+		if in.WarehouseID.Set {
+			out.WarehouseID, out.WarehouseName = nil, nil
+			if in.WarehouseID.ID != nil {
+				w, err := s.q(ctx).WarehouseOfProperty(ctx, banquetdb.WarehouseOfPropertyParams{PropertyID: propertyID, ID: *in.WarehouseID.ID})
+				if err != nil {
+					return invalidCode("WAREHOUSE_NOT_FOUND", "warehouse_id", "the warehouse does not exist in this property")
+				}
+				if !w.IsActive {
+					return invalidCode("WAREHOUSE_INACTIVE", "warehouse_id", "the warehouse is not active")
+				}
+				out.WarehouseID, out.WarehouseName = in.WarehouseID.ID, &w.Name
+			}
+		}
 		if in.PostingMode != "" {
 			out.PostingMode = in.PostingMode
 		}
@@ -84,7 +97,7 @@ func (s *Service) PutSettings(ctx context.Context, propertyID int64, in Settings
 		}
 		if err := s.q(ctx).UpsertSettings(ctx, banquetdb.UpsertSettingsParams{PropertyID: propertyID, TenantID: p.TenantID, TentativeConflictMode: out.TentativeConflictMode,
 			OperatingFrom: out.OperatingFrom, OperatingTo: out.OperatingTo, PostingMode: out.PostingMode, DefaultPriceMode: out.DefaultPriceMode,
-			MaxDiscountPctNoApproval: out.MaxDiscountPctNoApproval, ActorID: p.ActorID()}); err != nil {
+			MaxDiscountPctNoApproval: out.MaxDiscountPctNoApproval, WarehouseID: out.WarehouseID, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, bd, "banquet.settings_changed", "banquet_settings", propertyID, "settings", old, out))

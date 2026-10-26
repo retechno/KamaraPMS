@@ -721,8 +721,9 @@ func (q *Queries) GetReason(ctx context.Context, arg GetReasonParams) (GetReason
 
 const getSettings = `-- name: GetSettings :one
 
-SELECT tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval
-FROM banquet_settings WHERE property_id = $1
+SELECT s.tentative_conflict_mode, s.operating_from, s.operating_to, s.posting_mode, s.default_price_mode, s.max_discount_pct_no_approval, s.warehouse_id, w.name AS warehouse_name
+FROM banquet_settings s LEFT JOIN inv_warehouses w ON w.property_id = s.property_id AND w.id = s.warehouse_id
+WHERE s.property_id = $1
 `
 
 type GetSettingsRow struct {
@@ -732,6 +733,8 @@ type GetSettingsRow struct {
 	PostingMode              string
 	DefaultPriceMode         string
 	MaxDiscountPctNoApproval decimal.Decimal
+	WarehouseID              *int64
+	WarehouseName            *string
 }
 
 // Banquet, PR 1 (docs/architecture/36-banquet.md): masters, events, sessions, holds, notices. Every query is scoped by tenant and property.
@@ -746,6 +749,8 @@ func (q *Queries) GetSettings(ctx context.Context, propertyID int64) (GetSetting
 		&i.PostingMode,
 		&i.DefaultPriceMode,
 		&i.MaxDiscountPctNoApproval,
+		&i.WarehouseID,
+		&i.WarehouseName,
 	)
 	return i, err
 }
@@ -788,9 +793,9 @@ func (q *Queries) InsertDueNotices(ctx context.Context, arg InsertDueNoticesPara
 
 const insertEvent = `-- name: InsertEvent :one
 INSERT INTO banquet_events (tenant_id, property_id, number, status, name, event_type_id, booker_guest_id, booker_company_id, contact_name, contact_phone, contact_email,
-                            sales_user_id, booking_group_id, notes, created_by, updated_by)
+                            sales_user_id, booking_group_id, notes, inquiry_on, created_by, updated_by)
 VALUES ($1, $2, $3, 'INQUIRY', $4, $5, $6, $7, $8,
-        $9, $10, $11, $12, $13, $14, $14)
+        $9, $10, $11, $12, $13, $14, $15, $15)
 RETURNING id
 `
 
@@ -808,6 +813,7 @@ type InsertEventParams struct {
 	SalesUserID     int64
 	BookingGroupID  *int64
 	Notes           *string
+	InquiryOn       civil.Date
 	ActorID         *int64
 }
 
@@ -826,6 +832,7 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) (int64
 		arg.SalesUserID,
 		arg.BookingGroupID,
 		arg.Notes,
+		arg.InquiryOn,
 		arg.ActorID,
 	)
 	var id int64
@@ -2133,8 +2140,8 @@ func (q *Queries) SetEventHoldKind(ctx context.Context, arg SetEventHoldKindPara
 
 const setEventStatus = `-- name: SetEventStatus :exec
 UPDATE banquet_events SET status = $1, option_until = $2, reason_id = $3, reason_note = $4,
-       definite_at = COALESCE($5, definite_at), closed_at = $6, version = version + 1, updated_by = $7
-WHERE tenant_id = $8 AND property_id = $9 AND id = $10
+       definite_at = COALESCE($5, definite_at), definite_on = COALESCE($6, definite_on), closed_at = $7, closed_on = $8, version = version + 1, updated_by = $9
+WHERE tenant_id = $10 AND property_id = $11 AND id = $12
 `
 
 type SetEventStatusParams struct {
@@ -2143,7 +2150,9 @@ type SetEventStatusParams struct {
 	ReasonID    *int64
 	ReasonNote  *string
 	DefiniteAt  *time.Time
+	DefiniteOn  *civil.Date
 	ClosedAt    *time.Time
+	ClosedOn    *civil.Date
 	ActorID     *int64
 	TenantID    int64
 	PropertyID  int64
@@ -2157,7 +2166,9 @@ func (q *Queries) SetEventStatus(ctx context.Context, arg SetEventStatusParams) 
 		arg.ReasonID,
 		arg.ReasonNote,
 		arg.DefiniteAt,
+		arg.DefiniteOn,
 		arg.ClosedAt,
+		arg.ClosedOn,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -2431,12 +2442,12 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (i
 }
 
 const upsertSettings = `-- name: UpsertSettings :exec
-INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO banquet_settings (property_id, tenant_id, tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval, warehouse_id, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (property_id) DO UPDATE
    SET tentative_conflict_mode = EXCLUDED.tentative_conflict_mode, operating_from = EXCLUDED.operating_from, operating_to = EXCLUDED.operating_to,
        posting_mode = EXCLUDED.posting_mode, default_price_mode = EXCLUDED.default_price_mode, max_discount_pct_no_approval = EXCLUDED.max_discount_pct_no_approval,
-       updated_by = EXCLUDED.updated_by, updated_at = now()
+       warehouse_id = EXCLUDED.warehouse_id, updated_by = EXCLUDED.updated_by, updated_at = now()
 `
 
 type UpsertSettingsParams struct {
@@ -2448,6 +2459,7 @@ type UpsertSettingsParams struct {
 	PostingMode              string
 	DefaultPriceMode         string
 	MaxDiscountPctNoApproval decimal.Decimal
+	WarehouseID              *int64
 	ActorID                  *int64
 }
 
@@ -2461,6 +2473,7 @@ func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) 
 		arg.PostingMode,
 		arg.DefaultPriceMode,
 		arg.MaxDiscountPctNoApproval,
+		arg.WarehouseID,
 		arg.ActorID,
 	)
 	return err
