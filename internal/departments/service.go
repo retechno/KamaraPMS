@@ -96,9 +96,9 @@ func (s *Service) list(ctx context.Context, tenantID, propertyID int64, id *int6
 }
 
 // List answers the departments, each department followed by its sub-departments (accounting.view, or the permission of a screen that uses them: pos.manage for the department of an outlet, inventory.request for
-// the department of a purchase request, inventory.manage for the department of a warehouse).
+// the department of a purchase request, inventory.manage for the department of a warehouse, banquet.setup for the department that reads a section of the BEO).
 func (s *Service) List(ctx context.Context, propertyID int64, f Filter) ([]Department, error) {
-	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage, auth.PermInventoryRequest, auth.PermInventoryManage)
+	p, err := s.needAny(ctx, propertyID, auth.PermAccountingView, auth.PermPOSManage, auth.PermInventoryRequest, auth.PermInventoryManage, auth.PermBanquetSetup)
 	if err != nil {
 		return nil, err
 	}

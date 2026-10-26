@@ -574,6 +574,18 @@ var constraintErrors = map[string]mapped{
 	"banquet_policy_tiers_template_uk":     {apperr.KindConflict, "TIER_OVERLAP", "two tiers start on the same day"},
 	"banquet_policy_tiers_event_uk":        {apperr.KindConflict, "TIER_OVERLAP", "two tiers start on the same day"},
 	"banquet_notices_deposit_uk":           {apperr.KindConflict, "DUPLICATE_REQUEST", "the reminder was written already"},
+
+	// Banquet, PR 3: the documents (36 3.4)
+	"banquet_beo_sections_section_ck":      {apperr.KindInvalid, "INVALID_VALUE", "an unknown section of the BEO"},
+	"banquet_beo_sections_body_ck":         {apperr.KindInvalid, "INVALID_VALUE", "the text of a section is at most 4000 characters"},
+	"banquet_run_of_show_seq_uk":           {apperr.KindConflict, "DUPLICATE_REQUEST", "the programme has two lines in one place"},
+	"banquet_run_of_show_body_ck":          {apperr.KindInvalid, "INVALID_VALUE", "a line of the programme has a text"},
+	"banquet_beo_revisions_no_uk":          {apperr.KindConflict, "DUPLICATE_REQUEST", "the revision was written already"},
+	"banquet_beo_recipients_department_fk": {apperr.KindInvalid, "DEPARTMENT_NOT_FOUND", "the department does not exist in this property"},
+	"banquet_beo_recipients_section_ck":    {apperr.KindInvalid, "INVALID_VALUE", "an unknown section of the BEO"},
+	"banquet_documents_contract_uk":        {apperr.KindConflict, "DUPLICATE_REQUEST", "the contract of this revision was made already"},
+	"banquet_documents_number_uk":          {apperr.KindConflict, "DUPLICATE_REQUEST", "the number of the contract is in use"},
+	"email_outbox_shape_ck":                {apperr.KindInvalid, "INVALID_VALUE", "an e-mail belongs to a reservation or to an event and a document"},
 }
 
 // MappedConstraintNames lists every constraint name with a dedicated API error

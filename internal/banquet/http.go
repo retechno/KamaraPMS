@@ -64,6 +64,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/notices/seen", httpx.HandlerFunc(h.noticesSeen))
 
 	h.registerMoney(mux)
+	h.registerDocs(mux)
 }
 
 func pathInt(r *http.Request, name string) (int64, error) {

@@ -20,6 +20,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	const p = "/api/v1/properties/{propertyId}/reservations/{id}/emails"
 	mux.Handle("GET "+p, httpx.HandlerFunc(h.list))
 	mux.Handle("POST "+p, httpx.HandlerFunc(h.resend))
+	h.registerBanquet(mux)
 }
 
 func route(r *http.Request) (propertyID, id int64, err error) {

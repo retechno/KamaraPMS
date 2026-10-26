@@ -97,4 +97,14 @@ export const documentPath = {
     const qs = q.toString()
     return `/api/v1/properties/${propertyId}/companies/${companyId}/statement.pdf${qs ? `?${qs}` : ''}`
   },
+  banquetProposal: (propertyId: number, eventId: number) => `/api/v1/properties/${propertyId}/banquet/events/${eventId}/documents/proposal.pdf`,
+  banquetContract: (propertyId: number, eventId: number) => `/api/v1/properties/${propertyId}/banquet/events/${eventId}/documents/contract.pdf`,
+  banquetDocument: (propertyId: number, documentId: number) => `/api/v1/properties/${propertyId}/banquet/documents/${documentId}/file.pdf`,
+  banquetBeo: (propertyId: number, eventId: number, sessionId?: number, revision?: number) => {
+    const q = new URLSearchParams()
+    if (sessionId) q.set('session_id', String(sessionId))
+    if (revision) q.set('revision', String(revision))
+    const qs = q.toString()
+    return `/api/v1/properties/${propertyId}/banquet/events/${eventId}/documents/beo.pdf${qs ? `?${qs}` : ''}`
+  },
 }

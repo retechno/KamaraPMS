@@ -133,6 +133,9 @@ func (s *Service) AddSession(ctx context.Context, propertyID, eventID int64, in 
 				return err
 			}
 		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
+			return err
+		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
 		if err != nil {
 			return err
@@ -223,6 +226,9 @@ func (s *Service) UpdateSession(ctx context.Context, propertyID, eventID, sessio
 		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
 			return err
 		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
+			return err
+		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
 		if err != nil {
 			return err
@@ -268,6 +274,9 @@ func (s *Service) CancelSession(ctx context.Context, propertyID, eventID, sessio
 			return err
 		}
 		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
+			return err
+		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
 			return err
 		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
@@ -560,6 +569,9 @@ func (s *Service) Confirm(ctx context.Context, propertyID, eventID int64, in Con
 				return err
 			}
 		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{confirmed: true}); err != nil {
+			return err
+		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)
 		if err != nil {
 			return err
@@ -711,6 +723,9 @@ func (s *Service) ListNotices(ctx context.Context, propertyID int64, unseenOnly 
 	out := make([]Notice, len(rows))
 	for i, r := range rows {
 		out[i] = Notice{ID: r.ID, Kind: r.Kind, EventID: r.EventID, EventNumber: r.EventNumber, EventName: r.EventName, SessionID: r.SessionID, NoticeDate: r.NoticeDate, CreatedAt: r.CreatedAt, SeenAt: r.SeenAt}
+		if r.RevisionNo != nil {
+			out[i].RevisionNo = ptr(int(*r.RevisionNo))
+		}
 	}
 	return out, nil
 }

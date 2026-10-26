@@ -524,6 +524,7 @@ type Notice struct {
 	EventName   string     `json:"event_name"`
 	SessionID   *int64     `json:"session_id"`
 	NoticeDate  civil.Date `json:"notice_date"`
+	RevisionNo  *int       `json:"revision_no"`
 	CreatedAt   time.Time  `json:"created_at"`
 	SeenAt      *time.Time `json:"seen_at"`
 }

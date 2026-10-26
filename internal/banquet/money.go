@@ -454,6 +454,9 @@ func (s *Service) AddLine(ctx context.Context, propertyID, eventID int64, in Lin
 		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
 			return err
 		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
+			return err
+		}
 		lines, est, err := s.eventEstimate(ctx, p.TenantID, propertyID, eventID)
 		if err != nil {
 			return err
@@ -586,6 +589,9 @@ func (s *Service) UpdateLine(ctx context.Context, propertyID, eventID, lineID in
 		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
 			return err
 		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
+			return err
+		}
 		lines, est, err := s.eventEstimate(ctx, p.TenantID, propertyID, eventID)
 		if err != nil {
 			return err
@@ -664,6 +670,9 @@ func (s *Service) RemoveLine(ctx context.Context, propertyID, eventID, lineID in
 			return notFound("LINE_NOT_FOUND", "line")
 		}
 		if err := s.refreshEstimate(ctx, p, propertyID, bd, eventID); err != nil {
+			return err
+		}
+		if _, err := s.revise(ctx, p, propertyID, bd, eventID, reviseOpts{}); err != nil {
 			return err
 		}
 		lines, est, err := s.eventEstimate(ctx, p.TenantID, propertyID, eventID)

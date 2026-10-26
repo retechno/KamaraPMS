@@ -39,8 +39,8 @@ Wiring is in `internal/app/app.go` (and `internal/rooms/roomstest/roomstest.go` 
 | `shifts` | Cashier shifts, the cash drawer, drops, pay-in and pay-out, cash over and short | (00047) | `billing/` CashierShift | 11 |
 | `budget` | Budgets per fiscal year (versions, grid, spread, CSV, approval), statistics, budget against actual, by department | (00049, 00050, 00053) | `budget/` | 11, 12 |
 | `departments` | Departments and sub-departments, the accounting dimension | departments (00051) | `accounting/` Departments | 12 |
-| `reports`, `documents` | Operational and money reports (JSON, CSV, PDF); printed documents, confirmation e-mail | none own (00021) | `reports/` | 04, 07 |
-| `audit`, `auditlog`, `notifications` | Append-only audit trail (writer, reader), e-mail outbox | audit_logs (00011, 00021) | `audit/` | 01 |
+| `reports`, `documents` | Operational and money reports (JSON, CSV, PDF); printed documents, confirmation e-mail, banquet proposal, contract and BEO (36, 00091) | none own (00021) | `reports/` | 04, 07 |
+| `audit`, `auditlog`, `notifications` | Append-only audit trail (writer, reader), e-mail outbox (reservation confirmation, banquet proposal and contract) | audit_logs (00011, 00021) | `audit/` | 01 |
 | `app` | Composition root, HTTP routing, end-to-end API tests | none | none | 06 |
 
 Commands: `cmd/api` (server), `cmd/migrate`, `cmd/pms-admin` (tenant and admin), `cmd/pms-seed` (demo rooms and rates).

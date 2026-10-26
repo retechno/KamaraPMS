@@ -39,3 +39,19 @@ SELECT * FROM email_outbox
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_id = @reservation_id
 ORDER BY id DESC
 LIMIT 20;
+
+-- The e-mails of the banquet (36 F8, B12): a proposal or a contract of an event, with the document it carries and the language it is printed in.
+-- name: InsertEventEmail :one
+INSERT INTO email_outbox (tenant_id, property_id, kind, banquet_event_id, document_id, language, to_address, next_attempt_at, created_at, created_by)
+VALUES (@tenant_id, @property_id, @kind, @event_id, @document_id, @language, @to_address, @now::timestamptz, @now::timestamptz, sqlc.narg(actor_id))
+RETURNING *;
+
+-- name: ListEventEmails :many
+SELECT o.id, o.kind, o.document_id, d.number AS document_number, d.revision_no, o.language, o.to_address, o.status, o.attempts, o.last_error, o.sent_at, o.created_at
+FROM email_outbox o JOIN banquet_documents d ON d.property_id = o.property_id AND d.id = o.document_id
+WHERE o.tenant_id = @tenant_id AND o.property_id = @property_id AND o.banquet_event_id = @event_id
+ORDER BY o.id DESC
+LIMIT 50;
+
+-- name: EventEmailQueued :one
+SELECT EXISTS (SELECT 1 FROM email_outbox WHERE property_id = @property_id AND banquet_event_id = @event_id AND kind = @kind AND to_address = @to_address AND status = 'QUEUED');

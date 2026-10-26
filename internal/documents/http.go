@@ -34,6 +34,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	h.registerTaxInvoice(mux)
 	h.registerBudget(mux)
 	h.registerShifts(mux)
+	h.registerBanquet(mux)
 }
 
 func (h *Handler) serve(render func(ctx context.Context, propertyID, id int64) (Document, error)) func(http.ResponseWriter, *http.Request) error {

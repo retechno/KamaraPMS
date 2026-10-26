@@ -11316,6 +11316,344 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/beo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The BEO of an event: the sections of each session, where each stands for its department, and the history of the revisions (banquet.read)
+         * @description Before Definite the BEO is a draft (`draft` true, no revisions). After it, every save of the event is one revision. A section is CHANGED when its text, or the date, time, room, set-up or number of guests of its session, changed since the last revision a person of its department read.
+         */
+        get: operations["getBanquetBeo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/sessions/{sid}/beo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the texts and the programme of a session (banquet.manage)
+         * @description The sections named are replaced, the others stay; a programme given replaces the old one (an empty list clears it). After Definite the save is one revision and tells the head and the deputy of the department of each section that changed; a section with no department tells nobody. Saving what is already there is no revision.
+         */
+        put: operations["saveBanquetBeo"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/beo/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a section of a session as read at the last revision (banquet.read)
+         * @description Without `section`, every section of the session.
+         */
+        post: operations["ackBanquetBeo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/beo/revisions/{no}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                no: number;
+            };
+            cookie?: never;
+        };
+        /** The event as it was at a revision (banquet.read) */
+        get: operations["getBanquetBeoRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/beo-recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The department of each section of the BEO, with the head and the deputy who are told (banquet.read) */
+        get: operations["listBanquetBeoRecipients"];
+        /**
+         * Set the department of the sections of the BEO (banquet.setup)
+         * @description A section with no department takes none: nobody is told when it changes. The head and the deputy are the ones of the department in the Departments settings.
+         */
+        put: operations["putBanquetBeoRecipients"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The proposals that were recorded and the contracts that were issued for an event (banquet.read) */
+        get: operations["listBanquetDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/documents/contract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Number the contract of the revision in force (banquet.confirm)
+         * @description The contract is final for the revision it carries: asking again for the same revision gives the same number, and a later revision needs a new contract. Only a Definite event has one (409 EVENT_STATUS_INVALID).
+         */
+        post: operations["issueBanquetContract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/documents/proposal.pdf": {
+        parameters: {
+            query?: {
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The proposal of an event as it is now, as PDF (banquet.read) */
+        get: operations["getBanquetProposalPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/documents/contract.pdf": {
+        parameters: {
+            query?: {
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The contract of the revision in force, as PDF (banquet.read); 404 CONTRACT_NOT_ISSUED when none was issued for it */
+        get: operations["getBanquetContractPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/documents/beo.pdf": {
+        parameters: {
+            query?: {
+                /** @description One session; left out: every active session */
+                session_id?: number;
+                /** @description The BEO as it was at a revision; left out: as it is now */
+                revision?: number;
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The BEO of an event or of a session, as PDF (banquet.read) */
+        get: operations["getBanquetBeoPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/documents/{id}/file.pdf": {
+        parameters: {
+            query?: {
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A recorded proposal or contract, as PDF, from the snapshot it kept (banquet.read) */
+        get: operations["getBanquetDocumentPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The proposals and contracts sent by e-mail for an event, newest first, with their status (banquet.read) */
+        get: operations["listBanquetEmails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/emails/proposal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record the proposal as it is now and e-mail it (banquet.manage)
+         * @description The e-mail goes through the outbox (QUEUED, then SENT, FAILED or SKIPPED). 409 EMAIL_NOT_CONFIGURED without a mail server, 409 EMAIL_ALREADY_QUEUED while the same message waits, 422 EVENT_HAS_NO_EMAIL when the event has no contact e-mail and none is given.
+         */
+        post: operations["sendBanquetProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/emails/contract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Number the contract of the revision in force and e-mail it (banquet.confirm)
+         * @description As sendBanquetProposal; the contract is the one of the revision in force, numbered once.
+         */
+        post: operations["sendBanquetContract"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/events/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a Definite event (banquet.manage)
+         * @description Every active session must be posted (409 SESSIONS_NOT_POSTED, with the count of the ones that are not). The status becomes COMPLETED; the bill of the event is not closed.
+         */
+        post: operations["completeBanquetEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/banquet/events/{id}/money": {
         parameters: {
             query?: never;
@@ -23156,7 +23494,9 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            kind: "OPTION_PROMOTED" | "OPTION_DUE" | "OPTION_LOST";
+            kind: "OPTION_PROMOTED" | "OPTION_DUE" | "OPTION_LOST" | "DEPOSIT_DUE" | "BEO_REVISED" | "FEE_PROPOSED";
+            /** @description For BEO_REVISED: the last revision that told the person. */
+            revision_no: number | null;
             /** Format: int64 */
             event_id: number;
             event_number: string;
@@ -23172,6 +23512,232 @@ export interface components {
         /** @description The notices to mark; none marks them all. */
         BanquetNoticesSeenInput: {
             ids?: number[];
+        };
+        BanquetBeoReader: {
+            user_name: string;
+            revision: number;
+            /** Format: date-time */
+            at: string;
+        };
+        /** @description state: DRAFT before Definite, UNREAD when nobody of the department read it, READ when it was read and nothing changed since, CHANGED when its text, or the shared data of its session, changed after the last revision that was read (`changed_since`). no_department: the property did not map this section to a department, so nobody is told when it changes. */
+        BanquetBeoSection: {
+            /** @enum {string} */
+            section: "GENERAL" | "KITCHEN" | "FB_SERVICE" | "HOUSEKEEPING" | "ENGINEERING" | "SECURITY" | "FRONT_OFFICE";
+            body: string;
+            /** Format: int64 */
+            department_id: number | null;
+            department_name: string | null;
+            head: string | null;
+            deputy: string | null;
+            no_department: boolean;
+            /** @enum {string} */
+            state: "DRAFT" | "UNREAD" | "READ" | "CHANGED";
+            read_revision: number | null;
+            changed_since: number | null;
+            read_by: components["schemas"]["BanquetBeoReader"][];
+        };
+        BanquetRunLine: {
+            seq: number;
+            at_time: components["schemas"]["TimeOfDay"];
+            text: string;
+        };
+        BanquetBeoSession: {
+            /** Format: int64 */
+            id: number;
+            no: number;
+            name: string;
+            date: components["schemas"]["Date"];
+            start: components["schemas"]["TimeOfDay"] | null;
+            end: components["schemas"]["TimeOfDay"] | null;
+            ends_next_day: boolean;
+            room: string;
+            setup: string;
+            pax_estimated: number;
+            pax_guaranteed: number | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "CANCELLED";
+            sections: components["schemas"]["BanquetBeoSection"][];
+            run_of_show: components["schemas"]["BanquetRunLine"][];
+        };
+        /** @description One thing a save changed. The screen writes the sentence from the kind and the values. */
+        BanquetBeoChange: {
+            kind: string;
+            /** Format: int64 */
+            session_id?: number;
+            session_no?: number;
+            field?: string;
+            section?: string;
+            old?: string;
+            new?: string;
+            text?: string;
+        };
+        BanquetBeoRevisionRow: {
+            revision_no: number;
+            note: string | null;
+            changes: components["schemas"]["BanquetBeoChange"][];
+            /** @description How many people were told by this revision. */
+            notified: number;
+            created_by_name: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        BanquetBeoRecipient: {
+            /** @enum {string} */
+            section: "KITCHEN" | "FB_SERVICE" | "HOUSEKEEPING" | "ENGINEERING" | "SECURITY" | "FRONT_OFFICE";
+            /** Format: int64 */
+            department_id: number | null;
+            department_code: string | null;
+            department_name: string | null;
+            head: string | null;
+            deputy: string | null;
+        };
+        BanquetBeo: {
+            /** Format: int64 */
+            event_id: number;
+            number: string;
+            name: string;
+            status: string;
+            /** @description The last revision; 0 while the event is a draft. */
+            revision: number;
+            draft: boolean;
+            sessions: components["schemas"]["BanquetBeoSession"][];
+            revisions: components["schemas"]["BanquetBeoRevisionRow"][];
+            recipients: components["schemas"]["BanquetBeoRecipient"][];
+        };
+        BanquetBeoRunLineInput: {
+            at_time: components["schemas"]["TimeOfDay"];
+            text: string;
+        };
+        BanquetBeoInput: {
+            /** @description The text of each section named; the others stay. */
+            sections?: {
+                [key: string]: string;
+            };
+            /** @description Replaces the programme; an empty list clears it; left out: unchanged. */
+            run_of_show?: components["schemas"]["BanquetBeoRunLineInput"][];
+            /** @description Why, for the history. */
+            note?: string | null;
+        };
+        BanquetBeoAckInput: {
+            /** Format: int64 */
+            session_id: number;
+            /** @enum {string} */
+            section?: "GENERAL" | "KITCHEN" | "FB_SERVICE" | "HOUSEKEEPING" | "ENGINEERING" | "SECURITY" | "FRONT_OFFICE";
+        };
+        BanquetBeoRecipientItem: {
+            /** @enum {string} */
+            section: "KITCHEN" | "FB_SERVICE" | "HOUSEKEEPING" | "ENGINEERING" | "SECURITY" | "FRONT_OFFICE";
+            /** Format: int64 */
+            department_id: number | null;
+        };
+        BanquetBeoRecipientsInput: {
+            items: components["schemas"]["BanquetBeoRecipientItem"][];
+        };
+        BanquetSnapshotEvent: {
+            number: string;
+            name: string;
+            status: string;
+            event_type: string;
+            booker: string;
+            contact_name: string;
+            contact_phone: string;
+            contact_email: string;
+            sales_name: string;
+            group_name: string;
+            notes: string;
+            option_until: string;
+        };
+        BanquetSnapshotSession: {
+            /** Format: int64 */
+            id: number;
+            no: number;
+            name: string;
+            date: components["schemas"]["Date"];
+            start: components["schemas"]["TimeOfDay"] | null;
+            end: components["schemas"]["TimeOfDay"] | null;
+            ends_next_day: boolean;
+            room: string;
+            setup: string;
+            pax_estimated: number;
+            pax_guaranteed: number | null;
+            status: string;
+            notes: string;
+            sections: {
+                [key: string]: string;
+            };
+            run_of_show: components["schemas"]["BanquetRunLine"][];
+        };
+        BanquetSnapshotDeposit: {
+            label: string;
+            due_date: components["schemas"]["Date"];
+            percent: string | null;
+            amount: string;
+        };
+        /** @description The whole document of an event at one moment: what a revision keeps and what the PDFs are drawn from. */
+        BanquetSnapshot: {
+            version: number;
+            event: components["schemas"]["BanquetSnapshotEvent"];
+            sessions: components["schemas"]["BanquetSnapshotSession"][];
+            lines: components["schemas"]["BanquetLine"][];
+            estimate: components["schemas"]["BanquetEstimate"];
+            deposits: components["schemas"]["BanquetSnapshotDeposit"][];
+            policy: {
+                base: string;
+                tiers: components["schemas"]["BanquetTier"][];
+            };
+        };
+        BanquetBeoRevision: {
+            revision_no: number;
+            /** Format: date-time */
+            created_at: string;
+            snapshot: components["schemas"]["BanquetSnapshot"];
+        };
+        /** @description A proposal that was recorded (no number, no revision) or a contract (BQC- number, final for the revision it carries). */
+        BanquetDocument: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "PROPOSAL" | "CONTRACT";
+            number: string | null;
+            revision_no: number | null;
+            /** Format: date-time */
+            created_at: string;
+            created_by_name: string;
+        };
+        BanquetSendEmailInput: {
+            /** @description Left out: the contact e-mail of the event. */
+            to?: string;
+            /**
+             * @description The language of the PDF; English when left out.
+             * @enum {string}
+             */
+            language?: "en" | "id";
+        };
+        BanquetEmail: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "BANQUET_PROPOSAL" | "BANQUET_CONTRACT";
+            to: string;
+            /** @enum {string} */
+            status: "QUEUED" | "SENT" | "FAILED" | "SKIPPED";
+            attempts: number;
+            last_error?: string;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            document_id: number;
+            document_number: string | null;
+            revision_no: number | null;
+            /** @enum {string} */
+            language: "en" | "id";
+        };
+        BanquetEmails: {
+            /** @description False when the server has no mail server: nothing can be sent. */
+            enabled: boolean;
+            data: components["schemas"]["BanquetEmail"][];
         };
         BanquetConfirmInput: {
             /**
@@ -42124,6 +42690,455 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetBeo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetBeo"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    saveBanquetBeo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                sid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetBeoInput"];
+            };
+        };
+        responses: {
+            /** @description The BEO after the save. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetBeo"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    ackBanquetBeo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetBeoAckInput"];
+            };
+        };
+        responses: {
+            /** @description The BEO after the mark. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetBeo"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetBeoRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetBeoRevision"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBanquetBeoRecipients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetBeoRecipient"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    putBanquetBeoRecipients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BanquetBeoRecipientsInput"];
+            };
+        };
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetBeoRecipient"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listBanquetDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BanquetDocument"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    issueBanquetContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The contract. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetDocument"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getBanquetProposalPdf: {
+        parameters: {
+            query?: {
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getBanquetContractPdf: {
+        parameters: {
+            query?: {
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getBanquetBeoPdf: {
+        parameters: {
+            query?: {
+                /** @description One session; left out: every active session */
+                session_id?: number;
+                /** @description The BEO as it was at a revision; left out: as it is now */
+                revision?: number;
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getBanquetDocumentPdf: {
+        parameters: {
+            query?: {
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listBanquetEmails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEmails"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    sendBanquetProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BanquetSendEmailInput"];
+            };
+        };
+        responses: {
+            /** @description The e-mail that was queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEmail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    sendBanquetContract: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BanquetSendEmailInput"];
+            };
+        };
+        responses: {
+            /** @description The e-mail that was queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEmail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    completeBanquetEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The event. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetEvent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getBanquetMoney: {

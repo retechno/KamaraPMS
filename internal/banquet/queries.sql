@@ -409,7 +409,7 @@ ON CONFLICT (property_id, event_id, user_id, notice_date) WHERE kind = 'OPTION_D
 RETURNING event_id;
 
 -- name: ListNotices :many
-SELECT n.id, n.kind, n.event_id, e.number AS event_number, e.name AS event_name, n.session_id, n.notice_date, n.created_at, n.seen_at
+SELECT n.id, n.kind, n.event_id, e.number AS event_number, e.name AS event_name, n.session_id, n.notice_date, n.revision_no, n.created_at, n.seen_at
 FROM banquet_notices n JOIN banquet_events e ON e.property_id = n.property_id AND e.id = n.event_id
 WHERE n.tenant_id = @tenant_id AND n.property_id = @property_id AND n.user_id = @user_id AND (NOT @unseen_only::boolean OR n.seen_at IS NULL)
 ORDER BY n.id DESC
