@@ -227,6 +227,64 @@ func TestLockOrderIsEnforced(t *testing.T) {
 	}
 }
 
+// The fixed asset register shares LevelAssets (47) with the suppliers; inside it the order is suppliers, the register settings, the assets, the stock-takes (docs/architecture/37-fixed-assets.md 6).
+func TestAssetLevelOrderIsEnforced(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if _, err := f.pool.Exec(ctx, `INSERT INTO fa_settings (tenant_id, property_id) VALUES ($1, $2)`, f.tenantID, f.propertyID); err != nil {
+		t.Fatal(err)
+	}
+	var settingsID int64
+	if err := f.pool.QueryRow(ctx, `SELECT id FROM fa_settings WHERE property_id = $1`, f.propertyID).Scan(&settingsID); err != nil {
+		t.Fatal(err)
+	}
+	if db.LevelAssets != db.LevelPayables {
+		t.Fatalf("the register shares the level of the suppliers: %d, %d", db.LevelAssets, db.LevelPayables)
+	}
+	err := f.txm.WithinTx(ctx, func(ctx context.Context) error {
+		if err := db.LockRows(ctx, db.Accounting, db.ForShare, f.propertyID, nil); err != nil { // the accounting settings come first (46)
+			return err
+		}
+		if err := db.LockRows(ctx, db.Suppliers, db.ForShare, f.propertyID, nil); err != nil {
+			return err
+		}
+		if err := db.LockRows(ctx, db.FASettings, db.ForUpdate, f.propertyID, []int64{settingsID}); err != nil {
+			return err
+		}
+		return db.LockRows(ctx, db.FAAssets, db.ForNoKeyUpdate, f.propertyID, nil)
+	})
+	if err != nil {
+		t.Fatalf("suppliers, settings, assets is the order: %v", err)
+	}
+	for name, order := range map[string][]db.LockTable{
+		"settings after assets":   {db.FAAssets, db.FASettings},
+		"supplier after settings": {db.FASettings, db.Suppliers},
+		"assets after audits":     {db.FAAudits, db.FAAssets},
+	} {
+		err := f.txm.WithinTx(ctx, func(ctx context.Context) error {
+			for _, tbl := range order {
+				if err := db.LockRows(ctx, tbl, db.ForShare, f.propertyID, nil); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if !errors.Is(err, db.ErrLockOrder) {
+			t.Fatalf("%s: got %v, want ErrLockOrder", name, err)
+		}
+	}
+	// the level above (the bank, 48) may follow the assets, and the assets may not follow it
+	err = f.txm.WithinTx(ctx, func(ctx context.Context) error {
+		if err := db.LockRows(ctx, db.BankAccounts, db.ForShare, f.propertyID, nil); err != nil {
+			return err
+		}
+		return db.LockRows(ctx, db.FAAssets, db.ForShare, f.propertyID, nil)
+	})
+	if !errors.Is(err, db.ErrLockOrder) {
+		t.Fatalf("assets after the bank: got %v, want ErrLockOrder", err)
+	}
+}
+
 func TestLockRowsIsPropertyScoped(t *testing.T) {
 	f := setup(t)
 	err := f.txm.WithinTx(context.Background(), func(ctx context.Context) error {

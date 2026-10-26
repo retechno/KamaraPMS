@@ -1911,7 +1911,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('tax_payments',            'ROOT',   'tax'),
     ('tax_opening_credits',     'ROOT',   'tax'),
     ('budgets',                 'ROOT',   'budgets'),
-    ('inv_movements',           'ROOT',   'the stock ledger');
+    ('inv_movements',           'ROOT',   'the stock ledger'),
+    ('fa_assets',               'ROOT',   'the fixed asset register'),
+    ('fa_ledger',               'ROOT',   'the fixed asset register ledger');
 -- A child row cannot exist without a root row above: it never needs its own test.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('folio_item_components', 'CHILD', 'of folio_items'), ('stay_charge_postings', 'CHILD', 'of folio_items'),
@@ -1937,7 +1939,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('inv_counts', 'CHILD', 'of inv_movements: the variance of an approved count'), ('inv_count_lines', 'CHILD', 'of inv_movements'),
     ('inv_amenity_runs', 'CHILD', 'of inv_movements: the cost of the night'), ('inv_amenity_run_lines', 'CHILD', 'of inv_movements'),
     ('inv_balance_days', 'CHILD', 'of inv_movements: the balance at the end of a day'), ('inv_cost_days', 'CHILD', 'of inv_movements: the cost of a day'),
-    ('inv_fb_cost_days', 'CHILD', 'of inv_movements: the food and beverage cost of a day beside the POS revenue');
+    ('inv_fb_cost_days', 'CHILD', 'of inv_movements: the food and beverage cost of a day beside the POS revenue'),
+    ('fa_opening_imports', 'CHILD', 'of fa_assets: the totals of an import, whose assets are in the register');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -1950,7 +1953,7 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('pos_options', 'CONFIG', 'add-on and variant price differences'), ('pos_price_list_items', 'CONFIG', 'prices of an outlet'), ('folio_outlet_locks', 'CONFIG', 'the limit of outlet charges of a folio'),
     ('pos_room_charge_attempts', 'PLAN', 'a request of an outlet to charge a room, kept as a trail; the money is in the ledger'),
     ('pos_bill_lines', 'PLAN', 'the line of an order with its price snapshot; the money is the ledger row it posts when it is sent'),
-    ('banquet_items', 'CONFIG', 'the list price of an item'), ('banquet_packages', 'CONFIG', 'the price per guest of a package'), ('inv_items', 'CONFIG', 'the reference cost of an item'), ('inv_levels', 'CONFIG', 'minimum and maximum quantities'), ('inventory_settings', 'CONFIG', 'tolerances and the receipt limit'),
+    ('banquet_items', 'CONFIG', 'the list price of an item'), ('banquet_packages', 'CONFIG', 'the price per guest of a package'), ('inv_items', 'CONFIG', 'the reference cost of an item'), ('inv_levels', 'CONFIG', 'minimum and maximum quantities'), ('inventory_settings', 'CONFIG', 'tolerances and the receipt limit'), ('fa_settings', 'CONFIG', 'the capitalization threshold'),
     ('inv_supplier_items', 'CONFIG', 'the last price of a supplier for an item'), ('inv_approval_levels', 'CONFIG', 'the amount a level of a chain applies above'),
     ('inv_requests', 'PLAN', 'a purchase request: an estimate of what will be bought'), ('inv_request_lines', 'PLAN', 'the estimate of a line'),
     ('inv_approval_steps', 'PLAN', 'the snapshot of a level and the total the approver saw'), ('inv_approval_edits', 'PLAN', 'what an approver changed: a quantity or an estimated price'),
@@ -2718,6 +2721,176 @@ SELECT expect_error('a target is above zero', '23514', $q$SELECT pms_test.inv_ba
 SELECT expect_error('a target is at most 100', '23514', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'FOOD', 100.5)$q$);
 SELECT expect_error('a target is for food or beverage', '23514', $q$SELECT pms_test.inv_base()$q$, $q$INSERT INTO inv_cost_targets (tenant_id, property_id, class, target_pct) VALUES (tn('ABC'), pr('BALI'), 'OTHER', 30)$q$);
 SELECT expect_error('the engineering department is a department of the property', '23503', $q$SELECT pms_test.inv_base()$q$, $q$UPDATE inventory_settings SET engineering_department_id = 999999$q$);
+
+------------------------------------------------------------------------------------------
+-- Fixed assets, PR 1 (migration 00093, docs/architecture/37-fixed-assets.md): the masters, the register, the ledger, the chart
+------------------------------------------------------------------------------------------
+CREATE FUNCTION pms_test.fa_base() RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group)
+    VALUES (tn('ABC'), pr('BALI'), '1530', 'FF&E', 'ASSET', 'DEBIT', 'FIXED_ASSETS'),
+           (tn('ABC'), pr('BALI'), '1510', 'Land', 'ASSET', 'DEBIT', 'FIXED_ASSETS'),
+           (tn('ABC'), pr('BALI'), '1592', 'Accumulated depreciation - FF&E', 'ASSET', 'CREDIT', 'FIXED_ASSETS'),
+           (tn('ABC'), pr('BALI'), '7520', 'Depreciation - FF&E', 'EXPENSE', 'DEBIT', 'DEPRECIATION');
+    INSERT INTO fa_settings (tenant_id, property_id) VALUES (tn('ABC'), pr('BALI'));
+    INSERT INTO fa_categories (tenant_id, property_id, code, name, kind, cost_account_id, accumulated_account_id, expense_account_id, method, life_months, fiscal_group, fiscal_method)
+    SELECT tn('ABC'), pr('BALI'), 'FFE', 'FF&E', 'FFE', c.id, a.id, e.id, 'SL', 96, 'G2', 'SL'
+      FROM gl_accounts c, gl_accounts a, gl_accounts e
+     WHERE c.property_id = pr('BALI') AND c.code = '1530' AND a.property_id = pr('BALI') AND a.code = '1592' AND e.property_id = pr('BALI') AND e.code = '7520';
+    INSERT INTO fa_categories (tenant_id, property_id, code, name, kind, cost_account_id)
+    SELECT tn('ABC'), pr('BALI'), 'LAND', 'Land', 'LAND', c.id FROM gl_accounts c WHERE c.property_id = pr('BALI') AND c.code = '1510';
+END $$;
+-- An asset of the category FFE: cost 36,000,000, life 96 months. The columns that a test changes are parameters.
+CREATE FUNCTION pms_test.fa_asset(p_number text DEFAULT 'FA-000001', p_category text DEFAULT 'FFE', p_residual numeric DEFAULT 0, p_accum numeric DEFAULT 0, p_months int DEFAULT 0, p_label text DEFAULT 'AAAAAAAAAAAA') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_assets (tenant_id, property_id, number, name, category_id, source, acquisition_date, in_service_date, start_rule, first_dep_month, cost, residual_value, life_months, method,
+                           accum_depr, dep_months_done, last_dep_month, label_code)
+    SELECT tn('ABC'), pr('BALI'), p_number, 'Lobby sofa', c.id, 'JOURNAL', DATE '2026-01-10', DATE '2026-01-10', 'IN_SERVICE_MONTH',
+           CASE WHEN c.is_depreciable THEN DATE '2026-01-01' END, 36000000, p_residual,
+           CASE WHEN c.is_depreciable THEN 96 END, CASE WHEN c.is_depreciable THEN 'SL' END,
+           p_accum, p_months, CASE WHEN p_months > 0 THEN DATE '2026-03-01' END, p_label
+      FROM fa_categories c WHERE c.property_id = pr('BALI') AND c.code = p_category
+$$;
+
+SELECT expect_ok('the masters of the register are accepted', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$);
+SELECT expect_ok('a depreciable category says so, and land and construction in progress do not', $q$SELECT pms_test.fa_base()$q$,
+    $q$DO $d$ BEGIN
+        IF NOT (SELECT is_depreciable FROM fa_categories WHERE code = 'FFE' AND property_id = pr('BALI')) THEN RAISE EXCEPTION 'FFE is depreciable'; END IF;
+        IF (SELECT is_depreciable FROM fa_categories WHERE code = 'LAND' AND property_id = pr('BALI')) THEN RAISE EXCEPTION 'land is not depreciable'; END IF;
+    END $d$;$q$);
+SELECT expect_error('a category code is unique in the property', '23505', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_categories (tenant_id, property_id, code, name, kind, cost_account_id) SELECT tn('ABC'), pr('BALI'), 'LAND', 'Land again', 'LAND', cost_account_id FROM fa_categories WHERE code = 'LAND'$q$);
+SELECT expect_error('the cost account of a category is an asset account', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_categories (tenant_id, property_id, code, name, kind, cost_account_id) SELECT tn('ABC'), pr('BALI'), 'X', 'X', 'OTHER', id FROM gl_accounts WHERE code = '7520' AND property_id = pr('BALI')$q$);
+SELECT expect_error('the expense account of a category is an expense account', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$UPDATE fa_categories SET expense_account_id = (SELECT id FROM gl_accounts WHERE code = '1530' AND property_id = pr('BALI')) WHERE code = 'FFE'$q$);
+SELECT expect_error('the accumulated account of a category is an asset account', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$UPDATE fa_categories SET accumulated_account_id = (SELECT id FROM gl_accounts WHERE code = '7520' AND property_id = pr('BALI')) WHERE code = 'FFE'$q$);
+SELECT expect_error('the four fields of depreciation come together', '23514', $q$SELECT pms_test.fa_base()$q$, $q$UPDATE fa_categories SET life_months = NULL WHERE code = 'FFE'$q$);
+SELECT expect_error('land is not depreciated', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$UPDATE fa_categories SET accumulated_account_id = (SELECT id FROM gl_accounts WHERE code = '1592' AND property_id = pr('BALI')), expense_account_id = (SELECT id FROM gl_accounts WHERE code = '7520' AND property_id = pr('BALI')),
+              method = 'SL', life_months = 10 WHERE code = 'LAND'$q$);
+SELECT expect_error('a building is straight line for the tax', '23514', $q$SELECT pms_test.fa_base()$q$, $q$UPDATE fa_categories SET fiscal_group = 'BLD_PERMANENT', fiscal_method = 'DB' WHERE code = 'FFE'$q$);
+SELECT expect_error('a category is of a known kind', '23514', $q$SELECT pms_test.fa_base()$q$, $q$UPDATE fa_categories SET kind = 'BOAT' WHERE code = 'FFE'$q$);
+SELECT expect_error('the life of a category is 1 to 1200 months', '23514', $q$SELECT pms_test.fa_base()$q$, $q$UPDATE fa_categories SET life_months = 0 WHERE code = 'FFE'$q$);
+
+-- locations
+SELECT expect_ok('a free area is a location with no reference', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), 'LOBBY', 'Lobby', 'AREA', 'LLLLLLLLLLLL')$q$);
+SELECT expect_error('a location of a room names the room', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), 'R101', 'Room 101', 'ROOM', 'LLLLLLLLLLLL')$q$);
+SELECT expect_error('a free area names no room', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, warehouse_id, label_code) VALUES (tn('ABC'), pr('BALI'), 'LOBBY', 'Lobby', 'AREA', 1, 'LLLLLLLLLLLL')$q$);
+SELECT expect_error('a location code is unique in the property', '23505', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), 'LOBBY', 'Lobby', 'AREA', 'LLLLLLLLLLLL')$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), 'LOBBY', 'Lobby 2', 'AREA', 'MMMMMMMMMMMM')$q$);
+SELECT expect_error('a label code is unique', '23505', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), 'LOBBY', 'Lobby', 'AREA', 'LLLLLLLLLLLL')$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), 'POOL', 'Pool', 'AREA', 'LLLLLLLLLLLL')$q$);
+SELECT expect_error('a label code is 12 letters and digits', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), 'LOBBY', 'Lobby', 'AREA', 'SHORT')$q$);
+
+-- assets
+SELECT expect_error('an asset number is unique in the property', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001')$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 0, 0, 'BBBBBBBBBBBB')$q$);
+SELECT expect_error('a label code of an asset is unique', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001')$q$, $q$SELECT pms_test.fa_asset('FA-000002')$q$);
+SELECT expect_error('the residual value is not above the cost', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 40000000)$q$);
+SELECT expect_error('the accumulated depreciation does not pass cost less residual', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 6000000, 31000000, 10)$q$);
+SELECT expect_ok('an asset that is fully depreciated is accepted', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 6000000, 30000000, 96)$q$);
+SELECT expect_error('an asset cannot be depreciated more months than its life', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 100, 97)$q$);
+SELECT expect_error('months depreciated come with the last month depreciated', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 0, 0)$q$,
+    $q$UPDATE fa_assets SET dep_months_done = 2$q$);
+SELECT expect_error('land carries no accumulated depreciation', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'LAND', 0, 500)$q$);
+SELECT expect_ok('land is an asset with no life', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'LAND')$q$);
+SELECT expect_error('a disposed asset has its date, and no other asset does', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$UPDATE fa_assets SET status = 'DISPOSED'$q$);
+SELECT expect_error('an opening asset names its import', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$UPDATE fa_assets SET source = 'OPENING'$q$);
+SELECT expect_error('the fiscal accumulation comes with its date', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$UPDATE fa_assets SET fiscal_accum_opening = 100$q$);
+SELECT expect_ok('the fiscal state of an old asset is kept with the asset', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$UPDATE fa_assets SET fiscal_accum_opening = 36000000, fiscal_opening_as_of = DATE '2026-09-30', fiscal_months_done_opening = 48, fiscal_opening_estimated = true, fiscal_group = 'G1', fiscal_method = 'SL'$q$);
+SELECT expect_error('a category in use cannot be deleted', '23503', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$DELETE FROM fa_categories WHERE code = 'FFE'$q$);
+
+-- the start of the depreciation is locked once the asset has been depreciated (A8)
+SELECT expect_ok('the start of an asset that was never depreciated can change', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$UPDATE fa_assets SET start_rule = 'NEXT_MONTH', first_dep_month = DATE '2026-02-01', in_service_date = DATE '2026-01-20'$q$);
+SELECT expect_error('the start of a depreciated asset is locked: the first month', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 1000, 1)$q$,
+    $q$UPDATE fa_assets SET first_dep_month = DATE '2026-02-01'$q$);
+SELECT expect_error('the start of a depreciated asset is locked: the rule', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 1000, 1)$q$,
+    $q$UPDATE fa_assets SET start_rule = 'NEXT_MONTH'$q$);
+SELECT expect_error('the start of a depreciated asset is locked: the date in service', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 1000, 1)$q$,
+    $q$UPDATE fa_assets SET in_service_date = DATE '2026-01-20'$q$);
+SELECT expect_ok('a depreciated asset can still change its name and its location', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 1000, 1)$q$,
+    $q$UPDATE fa_assets SET name = 'Lobby sofa, grey', serial_no = 'SN-1'$q$);
+SELECT expect_ok('the start is free again when the months depreciated are back to zero', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset('FA-000001', 'FFE', 0, 1000, 1)$q$,
+    $q$UPDATE fa_assets SET accum_depr = 0, dep_months_done = 0, last_dep_month = NULL$q$, $q$UPDATE fa_assets SET first_dep_month = DATE '2026-02-01'$q$);
+
+-- the register ledger is append-only (3.2)
+CREATE FUNCTION pms_test.fa_ledger_row(p_kind text DEFAULT 'ACQUIRE', p_line int DEFAULT 1, p_reverses bigint DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_ledger (tenant_id, property_id, asset_id, category_id, kind, event_date, cost_delta, source_type, source_id, source_line, reverses_id)
+    SELECT a.tenant_id, a.property_id, a.id, a.category_id, p_kind, DATE '2026-01-10', CASE WHEN p_reverses IS NULL THEN 36000000 ELSE -36000000 END, 'TEST', 1, p_line, p_reverses FROM fa_assets a
+$$;
+SELECT expect_ok('a row of the register ledger is accepted', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$);
+SELECT expect_error('the register ledger cannot be updated', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$, $q$UPDATE fa_ledger SET cost_delta = 1$q$);
+SELECT expect_error('the register ledger cannot be deleted from', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$, $q$DELETE FROM fa_ledger$q$);
+SELECT expect_error('the register ledger cannot be truncated', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$, $q$TRUNCATE fa_ledger$q$);
+SELECT expect_error('a register row is posted once for its source and kind', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$, $q$SELECT pms_test.fa_ledger_row()$q$);
+SELECT expect_error('only a reversal row names the row it reverses', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$,
+    $q$SELECT pms_test.fa_ledger_row('DEPRECIATE', 2, (SELECT id FROM fa_ledger LIMIT 1))$q$);
+SELECT expect_ok('a reversal row negates another', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$,
+    $q$SELECT pms_test.fa_ledger_row('REVERSAL', 2, (SELECT id FROM fa_ledger LIMIT 1))$q$);
+SELECT expect_error('a register row is reversed once', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row()$q$,
+    $q$SELECT pms_test.fa_ledger_row('REVERSAL', 2, (SELECT id FROM fa_ledger LIMIT 1))$q$, $q$SELECT pms_test.fa_ledger_row('REVERSAL', 3, (SELECT id FROM fa_ledger WHERE kind = 'ACQUIRE'))$q$);
+SELECT expect_error('a register row is of a known kind', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_ledger_row('SPEND')$q$);
+
+-- the opening import, the sequences, the journal type, the currency lock
+SELECT expect_ok('an opening import with and without a journal', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_opening_imports (tenant_id, property_id, number, as_of, mode, asset_count, total_cost, total_accum) VALUES (tn('ABC'), pr('BALI'), 'FAI-000001', DATE '2026-09-30', 'REGISTER_ONLY', 2, 100, 40)$q$);
+SELECT expect_error('the as-of date of an import is a month end', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_opening_imports (tenant_id, property_id, number, as_of, mode, asset_count, total_cost, total_accum) VALUES (tn('ABC'), pr('BALI'), 'FAI-000001', DATE '2026-09-15', 'REGISTER_ONLY', 2, 100, 40)$q$);
+SELECT expect_error('an import with a journal names it', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_opening_imports (tenant_id, property_id, number, as_of, mode, asset_count, total_cost, total_accum) VALUES (tn('ABC'), pr('BALI'), 'FAI-000001', DATE '2026-09-30', 'WITH_JOURNAL', 2, 100, 40)$q$);
+SELECT expect_error('an import number is unique in the property', '23505', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_opening_imports (tenant_id, property_id, number, as_of, mode, asset_count, total_cost, total_accum) VALUES (tn('ABC'), pr('BALI'), 'FAI-000001', DATE '2026-09-30', 'REGISTER_ONLY', 2, 100, 40)$q$,
+    $q$INSERT INTO fa_opening_imports (tenant_id, property_id, number, as_of, mode, asset_count, total_cost, total_accum) VALUES (tn('ABC'), pr('BALI'), 'FAI-000001', DATE '2026-10-31', 'REGISTER_ONLY', 1, 100, 40)$q$);
+SELECT expect_ok('the sequences of the register are accepted', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO document_sequences (tenant_id, property_id, sequence_type, prefix) VALUES (tn('ABC'), pr('BALI'), 'FIXED_ASSET', 'FA-'), (tn('ABC'), pr('BALI'), 'FA_OPENING', 'FAI-')$q$);
+SELECT expect_ok('a journal of the register has the type ASSET', $q$SELECT pms_test.fa_base()$q$,
+    $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JV-FA1', 'ASSET', DATE '2026-10-31', 'Depreciation') RETURNING id) INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit) SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '7520'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1592'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_error('an unknown journal type is still refused', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JV-FA1', 'ASSETS', DATE '2026-10-31', 'Depreciation') RETURNING id) INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit) SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr FROM j, (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '7520'), 100, 0), (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1592'), 0, 100)) AS v(n, acc, dr, cr)$q$);
+SELECT expect_ok('an asset and a row of the register ledger are financial data: the currency of the property is locked',
+    $q$DO $d$ BEGIN IF position('fa_assets' IN pg_get_functiondef('property_has_financial_data(bigint)'::regprocedure)) = 0
+                      OR position('fa_ledger' IN pg_get_functiondef('property_has_financial_data(bigint)'::regprocedure)) = 0 THEN RAISE EXCEPTION 'the currency lock does not read the register'; END IF; END $d$;$q$);
+
+-- the fiscal groups
+SELECT expect_ok('the fiscal groups are data of the property', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_fiscal_groups (tenant_id, property_id, code, life_years, sl_rate, db_rate) VALUES (tn('ABC'), pr('BALI'), 'G1', 4, 25, 50), (tn('ABC'), pr('BALI'), 'BLD_PERMANENT', 20, 5, NULL)$q$);
+SELECT expect_error('a building has no declining balance rate', '23514', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_fiscal_groups (tenant_id, property_id, code, life_years, sl_rate, db_rate) VALUES (tn('ABC'), pr('BALI'), 'BLD_PERMANENT', 20, 5, 10)$q$);
+SELECT expect_error('a fiscal group is one row for a property', '23505', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO fa_fiscal_groups (tenant_id, property_id, code, life_years, sl_rate, db_rate) VALUES (tn('ABC'), pr('BALI'), 'G1', 4, 25, 50)$q$,
+    $q$INSERT INTO fa_fiscal_groups (tenant_id, property_id, code, life_years, sl_rate, db_rate) VALUES (tn('ABC'), pr('BALI'), 'G1', 4, 26, 50)$q$);
+
+-- the standard chart of a new property, and the seed of the register
+SELECT expect_ok('the standard chart has the accounts of the register, in both languages, and 1590 is a header',
+    $q$DO $d$ BEGIN
+        IF (SELECT count(*) FROM usali_chart() WHERE code IN ('1570', '1591', '1592', '1593', '1594', '1595', '7540', '7550')) <> 8 THEN RAISE EXCEPTION 'missing accounts'; END IF;
+        IF (SELECT count(*) FROM usali_chart_names('id') WHERE code IN ('1570', '1591', '1592', '1593', '1594', '1595', '7540', '7550')) <> 8 THEN RAISE EXCEPTION 'missing names'; END IF;
+        IF (SELECT count(*) FROM usali_chart() WHERE code = '1590') <> 1 OR (SELECT is_postable FROM usali_chart() WHERE code = '1590') THEN RAISE EXCEPTION '1590 is one header'; END IF;
+        IF (SELECT count(*) FROM usali_chart() WHERE parent_code = '1590') <> 5 THEN RAISE EXCEPTION 'five accounts under 1590'; END IF;
+        IF (SELECT count(*) FROM usali_chart() WHERE code IN ('1591', '1592', '1593', '1594', '1595') AND (normal_side <> 'CREDIT' OR statement_group <> 'FIXED_ASSETS')) <> 0 THEN RAISE EXCEPTION 'accumulated accounts are credit accounts of the fixed assets'; END IF;
+        IF (SELECT count(*) FROM usali_chart() WHERE code IN ('7540', '7550') AND statement_group <> 'DEPRECIATION') <> 0 THEN RAISE EXCEPTION 'the depreciation is added back in the cash flow'; END IF;
+    END $d$;$q$);
+SELECT expect_ok('a new property gets its settings, its fiscal groups and the seven default categories, once',
+    $q$SELECT seed_chart_of_accounts(tn('ABC'), pr('BALI'), NULL, DATE '2026-01-01', 'id')$q$, $q$SELECT seed_fa_categories(tn('ABC'), pr('BALI'), 'id')$q$,
+    $q$DO $d$ BEGIN
+        IF (SELECT count(*) FROM fa_categories WHERE property_id = pr('BALI')) <> 7 THEN RAISE EXCEPTION 'seven categories'; END IF;
+        IF (SELECT count(*) FROM fa_categories WHERE property_id = pr('BALI') AND is_depreciable) <> 5 THEN RAISE EXCEPTION 'five depreciable categories'; END IF;
+        IF (SELECT name FROM fa_categories WHERE property_id = pr('BALI') AND code = 'LAND') <> 'Tanah' THEN RAISE EXCEPTION 'Indonesian names'; END IF;
+        IF (SELECT count(*) FROM fa_fiscal_groups WHERE property_id = pr('BALI')) <> 6 THEN RAISE EXCEPTION 'six fiscal groups'; END IF;
+        IF (SELECT count(*) FROM fa_settings WHERE property_id = pr('BALI')) <> 1 THEN RAISE EXCEPTION 'one settings row'; END IF;
+        IF (SELECT count(*) FROM fa_categories k JOIN gl_accounts a ON a.id = k.accumulated_account_id AND a.property_id = k.property_id
+             WHERE k.property_id = pr('BALI') AND a.parent_id = (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1590')) <> 5 THEN RAISE EXCEPTION 'the accumulated accounts sit under 1590'; END IF;
+        IF seed_fa_categories(tn('ABC'), pr('BALI'), 'id') <> 0 THEN RAISE EXCEPTION 'the seed is idempotent'; END IF;
+    END $d$;$q$);
+SELECT expect_error('a language without names is refused by the seed of the register', '22023', $q$SELECT seed_fa_categories(tn('ABC'), pr('BALI'), 'fr')$q$);
 
 ------------------------------------------------------------------------------------------
 -- Summary

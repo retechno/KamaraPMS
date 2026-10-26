@@ -14,9 +14,9 @@ import (
 // The behaviour tests insert one row of each table (with what the table cannot exist without) and require the refusal. The tables that are only possible with a journal
 // (a supplier bill, a tax opening credit ...) are also locked by the journal they reference; for those the definition test is what proves the table itself is on the list.
 
-// the tables the function reads, as migration 00058 defines them, and inv_movements, which migration 00084 adds (the stock ledger holds money in the currency).
+// the tables the function reads, as migration 00058 defines them, inv_movements, which migration 00084 adds (the stock ledger holds money in the currency), and fa_assets and fa_ledger, which migration 00093 adds (the register holds costs).
 var financialRoots = []string{
-	"bank_statements", "budgets", "cashier_shifts", "city_ledger_adjustments", "city_ledger_invoices", "city_ledger_receipts", "folio_items", "gl_journals",
+	"bank_statements", "budgets", "cashier_shifts", "city_ledger_adjustments", "city_ledger_invoices", "city_ledger_receipts", "fa_assets", "fa_ledger", "folio_items", "gl_journals",
 	"inv_movements", "payments", "supplier_bills", "supplier_credit_notes", "supplier_payments", "tax_opening_credits", "tax_payments", "tax_returns",
 }
 
@@ -91,6 +91,13 @@ func TestEveryRootTableOfFinancialDataLocksTheCurrency(t *testing.T) {
 		mustExec(t, tx, `INSERT INTO tax_return_lines (tenant_id, property_id, return_id, line_no, charge_code, rate, items, base_amount, tax_amount) VALUES ($1, $2, $3, 1, 'ROOM', 11, 1, 100, 11)`, tn, p, id)
 		return id
 	}
+	asset := func(t *testing.T, tx sqler, tn, p int64) (assetID, categoryID int64) {
+		acc := mustID(t, tx, `INSERT INTO gl_accounts (tenant_id, property_id, code, name, account_type, normal_side, statement_group) VALUES ($1, $2, '1510', 'Land', 'ASSET', 'DEBIT', 'FIXED_ASSETS') RETURNING id`, tn, p)
+		categoryID = mustID(t, tx, `INSERT INTO fa_categories (tenant_id, property_id, code, name, kind, cost_account_id) VALUES ($1, $2, 'LAND', 'Land', 'LAND', $3) RETURNING id`, tn, p, acc)
+		assetID = mustID(t, tx, `INSERT INTO fa_assets (tenant_id, property_id, number, name, category_id, source, acquisition_date, in_service_date, start_rule, cost, residual_value, label_code)
+			VALUES ($1, $2, 'FA-000001', 'Plot', $3, 'JOURNAL', '2026-09-30', '2026-09-30', 'IN_SERVICE_MONTH', 1000, 0, 'AAAAAAAAAAAA') RETURNING id`, tn, p, categoryID)
+		return assetID, categoryID
+	}
 	cases := []struct {
 		table string
 		add   func(t *testing.T, tx sqler, tn, p int64)
@@ -163,6 +170,11 @@ func TestEveryRootTableOfFinancialDataLocksTheCurrency(t *testing.T) {
 			wh := mustID(t, tx, `INSERT INTO inv_warehouses (tenant_id, property_id, code, name, kind) VALUES ($1, $2, 'MAIN', 'Main', 'MAIN') RETURNING id`, tn, p)
 			mustExec(t, tx, `INSERT INTO inv_movements (tenant_id, property_id, warehouse_id, item_id, kind, qty_delta, value_delta, business_date, source_type, source_id, item_class, cost_class)
 				VALUES ($1, $2, $3, $4, 'OPENING', 10, 100, '2026-09-30', 'TEST', 1, 'FOOD', 'FOOD')`, tn, p, wh, item)
+		}},
+		{"fa_assets", func(t *testing.T, tx sqler, tn, p int64) { asset(t, tx, tn, p) }},
+		{"fa_ledger", func(t *testing.T, tx sqler, tn, p int64) {
+			a, c := asset(t, tx, tn, p)
+			mustExec(t, tx, `INSERT INTO fa_ledger (tenant_id, property_id, asset_id, category_id, kind, event_date, cost_delta, source_type, source_id, source_line) VALUES ($1, $2, $3, $4, 'ACQUIRE', '2026-09-30', 1000, 'TEST', 1, 1)`, tn, p, a, c)
 		}},
 		{"budgets", func(t *testing.T, tx sqler, tn, p int64) {
 			mustExec(t, tx, `INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES ($1, $2, '2026-01-01', 1, 'Budget 2026')`, tn, p)

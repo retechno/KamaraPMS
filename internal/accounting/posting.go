@@ -168,6 +168,15 @@ func (po *Poster) CheckAccount(ctx context.Context, id int64, field string) erro
 			return apperr.Invalid("the account is invalid", fieldErr(field, "CONTROL_ACCOUNT", "only the inventory posts to this account"))
 		}
 	}
+	if !po.allowed[KeyFixedAssets] { // the accumulated depreciation accounts of the categories are the register's own (37-fixed-assets.md F5)
+		assets, err := po.svc.assetControlAccounts(ctx, po.p.TenantID, po.propertyID)
+		if err != nil {
+			return err
+		}
+		if assets[id] {
+			return apperr.Invalid("the account is invalid", fieldErr(field, "CONTROL_ACCOUNT", "only the fixed assets post to this account"))
+		}
+	}
 	return nil
 }
 
@@ -203,7 +212,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	if typ == "" {
 		typ = JournalPayables
 	}
-	if typ != JournalPayables && typ != JournalBank && typ != JournalTax && typ != JournalReceivables && typ != JournalCashier {
+	if typ != JournalPayables && typ != JournalBank && typ != JournalTax && typ != JournalReceivables && typ != JournalCashier && typ != JournalAsset {
 		return 0, "", apperr.Internal(fmt.Errorf("a module cannot post a journal of type %s", typ))
 	}
 	if len(in.Lines) < 2 {
@@ -262,7 +271,7 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 		return 0, err
 	}
 	switch {
-	case orig.Type != JournalPayables && orig.Type != JournalTax && orig.Type != JournalReceivables:
+	case orig.Type != JournalPayables && orig.Type != JournalTax && orig.Type != JournalReceivables && orig.Type != JournalAsset:
 		return 0, apperr.Conflict("JOURNAL_NOT_REVERSIBLE", "only the journal of a bill or a payment is reversed here")
 	case orig.ReversedByID != nil:
 		return 0, apperr.Conflict("JOURNAL_ALREADY_REVERSED", "the journal has been reversed already")

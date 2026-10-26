@@ -49,7 +49,7 @@ func TestTheNamesOfEveryLanguageAreOfTheSameCodes(t *testing.T) {
 	for _, c := range []struct {
 		fn    string
 		count int
-	}{{"usali_chart_names", 207}, {"department_names", 8}, {"charge_code_names", 18}} {
+	}{{"usali_chart_names", 215}, {"department_names", 8}, {"charge_code_names", 18}} {
 		en, id := f.names(t, c.fn, "en"), f.names(t, c.fn, "id")
 		if len(en) != c.count || len(id) != c.count {
 			t.Fatalf("%s: %d English and %d Indonesian names, want %d", c.fn, len(en), len(id), c.count)
@@ -67,7 +67,7 @@ func TestTheNamesOfEveryLanguageAreOfTheSameCodes(t *testing.T) {
 	// the English names are the standard definition, word for word
 	var differ int
 	must(t, f.Pool.QueryRow(context.Background(), `SELECT count(*) FROM usali_chart() c JOIN usali_chart_names('en') n ON n.code = c.code WHERE n.name <> c.name`).Scan(&differ))
-	if differ != 0 || f.Count(t, `SELECT count(*) FROM usali_chart()`) != 207 {
+	if differ != 0 || f.Count(t, `SELECT count(*) FROM usali_chart()`) != 215 {
 		t.Fatalf("the English names are those of usali_chart(): %d differ", differ)
 	}
 	// a language that has no names is refused, not seeded in English
@@ -153,7 +153,7 @@ func TestTheTwoLanguagesDifferOnlyInTheNames(t *testing.T) {
 			t.Errorf("%s differ between the languages (%d and %d rows)", what, len(a), len(b))
 		}
 	}
-	if n := f.Count(t, `SELECT count(*) FROM gl_accounts WHERE property_id = $1`, id.ID); n != 207 {
+	if n := f.Count(t, `SELECT count(*) FROM gl_accounts WHERE property_id = $1`, id.ID); n != 215 {
 		t.Fatalf("the chart has %d accounts", n)
 	}
 }

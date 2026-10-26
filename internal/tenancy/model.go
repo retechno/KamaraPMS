@@ -319,6 +319,10 @@ const (
 	SeqBanquetEvent SequenceType = "BANQUET_EVENT"
 	// SeqBanquetContract numbers the contracts of the banquet events (BQC-000012).
 	SeqBanquetContract SequenceType = "BANQUET_CONTRACT"
+	// SeqFixedAsset numbers the assets of the register (FA-000123).
+	SeqFixedAsset SequenceType = "FIXED_ASSET"
+	// SeqFAOpening numbers the opening imports of the register (FAI-000001).
+	SeqFAOpening SequenceType = "FA_OPENING"
 )
 
 // defaultSequences are created with every property.
@@ -356,4 +360,6 @@ var defaultSequences = []struct {
 	{SeqInvCNT, "CNT-"},
 	{SeqBanquetEvent, "BQ-"},
 	{SeqBanquetContract, "BQC-"},
+	{SeqFixedAsset, "FA-"},
+	{SeqFAOpening, "FAI-"},
 }

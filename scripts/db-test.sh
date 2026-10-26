@@ -119,8 +119,11 @@ M86="$(ls "$ROOT"/migrations/00086_*.sql)"
 M87="$(ls "$ROOT"/migrations/00087_*.sql)"
 M88="$(ls "$ROOT"/migrations/00088_*.sql)"
 M92="$(ls "$ROOT"/migrations/00092_*.sql)"
+M93="$(ls "$ROOT"/migrations/00093_*.sql)"
 # 00092 (the stock of the banquet) stands on the inventory tables of 00084, 00087 and 00088, so it goes first and comes back after 00088 does
 # 00088 stands on 00087, 00087 on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
+# 00093 (the fixed assets) has a foreign key to the warehouses of 00084, so it goes first of all and comes back last
+section down "$M93" | psql_run
 section down "$M92" | psql_run
 section down "$M88" | psql_run
 section down "$M87" | psql_run
@@ -202,6 +205,25 @@ section up "$M88" | psql_run >/dev/null
 
 echo "==> migration 00092 (the stock and the reports of the banquet) comes back on the inventory it stands on"
 section up "$M92" | psql_run >/dev/null
+
+echo "==> migration 00093 (fixed assets) on properties with 1590 unused, posted to, taken codes and no chart"
+psql_run < "$ROOT/db/tests/migration_00093_pre.sql"
+section up "$M93" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
+psql_run < "$ROOT/db/tests/migration_00093_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# the data step of the Up can run again: a property that has the accounts is left as it is
+accounts_before=$(psql_run -tA -c "SELECT count(*) FROM gl_accounts")
+section up "$M93" | awk '/^DO \$\$/,/^\$\$;/' | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    again: /p'
+accounts_after=$(psql_run -tA -c "SELECT count(*) FROM gl_accounts")
+if [ "$accounts_before" != "$accounts_after" ]; then echo "FAIL: running the data step of 00093 again added accounts ($accounts_before -> $accounts_after)" >&2; exit 1; fi
+# the Down is refused while the register holds anything (an opening import is enough), and changes nothing
+psql_run -c "INSERT INTO fa_opening_imports (tenant_id, property_id, number, as_of, mode, asset_count, total_cost, total_accum) SELECT tenant_id, id, 'FAI-000001', DATE '2026-09-30', 'REGISTER_ONLY', 1, 100, 0 FROM properties WHERE code = 'FA1'"
+if section down "$M93" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m93-down.err"; then echo "FAIL: the Down of 00093 ran while the register held data" >&2; exit 1; fi
+grep -q "cannot roll back 00093" "${TMPDIR:-/tmp}/m93-down.err" || { echo "FAIL: the Down of 00093 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m93-down.err" >&2; exit 1; }
+echo "    down refused while the register holds data"
+psql_run -c "DELETE FROM fa_opening_imports"
+section down "$M93" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
+psql_run < "$ROOT/db/tests/migration_00093_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M93" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
