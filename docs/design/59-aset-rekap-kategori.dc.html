@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Rekap aset per kategori</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.lk{font-size:13px;color:#4a5361;text-decoration:none;padding:4px 10px 4px 18px}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:right;padding:8px 9px;border-bottom:1px solid #e3e6ea;white-space:nowrap;vertical-align:bottom}
+.thl{text-align:left}
+.td{padding:8px 9px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.tdl{text-align:left}
+.grp{text-align:center;font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;padding:8px;border-bottom:1px solid #e3e6ea;background:#fbfbfc}
+.tot td{font-weight:700;background:#f6f7f9}
+.dif{color:#9a3412;font-weight:600}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Laporan aset</a>
+    <span class="lk" style="color:#1c2128;font-weight:600">Rekap per kategori</span>
+    <a href="60-aset-koreksi-fiskal.dc.html" class="lk">Koreksi fiskal</a>
+    <span class="lk">Jadwal penyusutan</span>
+    <span class="lk">Per lokasi &amp; departemen</span>
+    <span class="lk">Garansi &amp; umur habis</span>
+    <span class="lk">Selisih opname</span>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0;font-size:24px;flex:1">Rekap aset per kategori</h1>
+      <button class="chip on">Oktober 2026</button><button class="chip">Pilih periode</button>
+      <button class="btn">Cetak</button><button class="btn">Unduh CSV</button>
+    </div>
+    <div style="font-size:12px;color:#626b77">Register dicocokkan dengan saldo akun buku besar per 31 Okt 2026. Selisih dijelaskan sebabnya; tidak memblokir apa pun.</div>
+
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr><th class="grp" style="text-align:left"></th><th class="grp" colspan="4">Harga perolehan</th><th class="grp" colspan="4">Akumulasi penyusutan</th><th class="grp"></th><th class="grp" colspan="2">Buku besar (harga)</th></tr>
+          <tr><th class="th thl">Kategori</th><th class="th">Awal</th><th class="th">Tambah</th><th class="th">Kurang</th><th class="th">Akhir</th><th class="th">Awal</th><th class="th">Penyusutan</th><th class="th">Kurang</th><th class="th">Akhir</th><th class="th">Nilai buku</th><th class="th">Saldo akun</th><th class="th">Selisih</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td tdl">Tanah · 1510</td><td class="td">5.000.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">5.000.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td">5.000.000.000</td><td class="td">5.000.000.000</td><td class="td">0</td></tr>
+          <tr><td class="td tdl">Bangunan · 1520/1591</td><td class="td">2.400.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">2.400.000.000</td><td class="td">600.000.000</td><td class="td">10.000.000</td><td class="td">–</td><td class="td">610.000.000</td><td class="td">1.790.000.000</td><td class="td">2.400.000.000</td><td class="td">0</td></tr>
+          <tr><td class="td tdl">FF&amp;E · 1530/1592</td><td class="td">172.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">172.000.000</td><td class="td">82.291.667</td><td class="td">3.041.667</td><td class="td">–</td><td class="td">85.333.334</td><td class="td">86.666.666</td><td class="td">358.800.000</td><td class="td dif"><a href="53-aset-daftar-tunggu.dc.html" class="dif">186.800.000</a></td></tr>
+          <tr><td class="td tdl">Peralatan operasional · 1540/1593</td><td class="td">6.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">6.000.000</td><td class="td">1.500.000</td><td class="td">250.000</td><td class="td">–</td><td class="td">1.750.000</td><td class="td">4.250.000</td><td class="td">6.000.000</td><td class="td">0</td></tr>
+          <tr><td class="td tdl">Kendaraan · 1550/1594</td><td class="td">390.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">390.000.000</td><td class="td">195.000.000</td><td class="td">2.250.000</td><td class="td">–</td><td class="td">197.250.000</td><td class="td">192.750.000</td><td class="td">390.000.000</td><td class="td">0</td></tr>
+          <tr><td class="td tdl">Komputer &amp; IT · 1570/1595</td><td class="td">22.800.000</td><td class="td">18.000.000</td><td class="td">–</td><td class="td">40.800.000</td><td class="td">4.600.000</td><td class="td">550.000</td><td class="td">–</td><td class="td">5.150.000</td><td class="td">35.650.000</td><td class="td">40.800.000</td><td class="td">0</td></tr>
+          <tr><td class="td tdl">Aset dlm pembangunan · 1560</td><td class="td">1.200.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">1.200.000.000</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td">1.200.000.000</td><td class="td">1.200.000.000</td><td class="td">0</td></tr>
+          <tr class="tot"><td class="td tdl">Total</td><td class="td">9.190.800.000</td><td class="td">18.000.000</td><td class="td">–</td><td class="td">9.208.800.000</td><td class="td">883.391.667</td><td class="td">16.091.667</td><td class="td">–</td><td class="td">899.483.334</td><td class="td">8.309.316.666</td><td class="td">9.395.600.000</td><td class="td">186.800.000</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:10px 14px;font-size:12px;color:#4a5361;display:flex;flex-direction:column;gap:3px">
+        <span><strong style="color:#9a3412">FF&amp;E 186.800.000</strong> = daftar tunggu yang belum dijadikan aset: genset 185.000.000 (BNK-000088, 28 Okt) dan lampu taman 1.800.000 (JV-000340, 30 Okt).</span>
+        <span>Akumulasi penyusutan di buku besar sama dengan register untuk semua kategori (akun akumulasi hanya diisi modul aset).</span>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

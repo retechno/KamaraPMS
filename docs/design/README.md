@@ -82,6 +82,27 @@ Pola layar sama dengan Inventory: daftar selebar layar lalu halaman acara seleba
 
 Contoh angka banquet saling cocok antarlayar dan dengan dokumen 36 bagian 10: paket Fullday Meeting 363.000 nett × 100 pax = 36.300.000 per sesi (neto 30.000.000, servis 3.000.000, pajak 3.300.000); BQ-000123 dua sesi, total kontrak 72.600.000, deposit 30/50/20 = 21.780.000 / 36.300.000 / 14.520.000; pembatalan 20 hari sebelum: 50% × 30.000.000 = 15.000.000, sisa deposit 14.040.000.
 
+## Aset tetap (`docs/architecture/37-fixed-assets.md`)
+
+Bagian dari modul Inventory (A17). Pola layar sama: daftar selebar layar lalu halaman dokumen; dialog di atas layar yang diredupkan; opname di ponsel 390 px.
+
+| File | Isi | PR aset |
+|---|---|---|
+| `51-aset-register.dc.html` | Register aset: kategori, lokasi dan departemen, harga, akumulasi, nilai buku, sisa umur, status; tanah, aset dalam pembangunan, batch OE, aset lama yang habis disusutkan | 1 |
+| `52-aset-halaman.dc.html` | Halaman satu aset: data, nilai, kelompok fiskal; jadwal penyusutan komersial vs fiskal per tahun dengan koreksi; riwayat | 1 (jadwal: 2, fiskal: 4) |
+| `53-aset-daftar-tunggu.dc.html` | Daftar tunggu "Jadikan aset" dari setiap baris jurnal berakun harga perolehan (tagihan, kas/kasir, bank, manual), batas kapitalisasi, "Bukan aset" | 2 |
+| `54-aset-jadikan-aset.dc.html` | Dialog Jadikan aset: satu baris jadi beberapa unit, bulan mulai penyusutan per aset (A8), tanpa jurnal baru | 2 |
+| `55-aset-saldo-awal.dc.html` | Saldo awal aset lama: CSV, mode dengan jurnal atau register saja, kolom fiskal, aset yang sudah habis disusutkan, pratinjau jurnal ke 3900 | 1 |
+| `56-aset-penyusutan.dc.html` | Penyusutan bulanan: bulan berurutan, pratinjau jurnal per kategori dan departemen, hambatan | 2 |
+| `57-aset-pelepasan.dc.html` | Dialog pelepasan: dijual atau dihapus, laba/rugi 7420, jurnal, persetujuan ASSET_DISPOSAL, catatan PPN | 3 |
+| `58-aset-kategori-pengaturan.dc.html` | Kategori dengan akun, metode, umur, departemen bawaan, kelompok fiskal; pengaturan properti (bulan mulai, aturan OE, batas kapitalisasi, register mulai) | 1 |
+| `59-aset-rekap-kategori.dc.html` | Rekap per kategori: awal, tambah, kurang, penyusutan, akhir, nilai buku, dicocokkan dengan buku besar dan selisihnya | 4 |
+| `60-aset-koreksi-fiskal.dc.html` | Koreksi fiskal per aset untuk satu tahun pajak | 4 |
+| `61-aset-label-qr.dc.html` | Cetak label QR (A4 atau printer label); QR berisi kode, bukan URL (gambar QR di mockup hanya pola contoh) | 1 |
+| `62-aset-opname-ponsel.dc.html` | Opname aset di ponsel: pindai lokasi dan aset, ditemukan / lokasi lain / rusak / hilang menjadi usulan | 4 |
+
+Contoh angka aset saling cocok antarlayar: register 15 aset, harga 9.208.800.000, akumulasi 899.483.334, nilai buku 8.309.316.666 per 31 Okt 2026; penyusutan Oktober 16.091.667; rekap FF&E selisih 186.800.000 = genset dan lampu taman di daftar tunggu; pelepasan sofa lobi 36.000.000 / 21.000.000 dijual 18.000.000, laba 3.000.000 (37 bagian 10.6); aset lama lemari kayu sesuai 37 bagian 10.15.
+
 Cara membaca:
 - Nilai warna, ukuran font, radius, jarak, dan tinggi tombol ada di atribut `style="…"`. Itu nilai yang dimaksud.
 - `<x-dc>`, `<helmet>`, `<sc-for>`, `<sc-if>` adalah format editor desain: `sc-for` = `v-for`, `sc-if` = `v-if`, dan `{{x}}` diisi dari `renderVals()` di bagian bawah file (data contoh).

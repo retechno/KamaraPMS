@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Koreksi fiskal penyusutan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.lk{font-size:13px;color:#4a5361;text-decoration:none;padding:4px 10px 4px 18px}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:7px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:6px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.tot td{font-weight:700;background:#f6f7f9}
+.pos{color:#185a4a}
+.neg{color:#9a3412}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Laporan aset</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="lk">Rekap per kategori</a>
+    <span class="lk" style="color:#1c2128;font-weight:600">Koreksi fiskal</span>
+    <span class="lk">Jadwal penyusutan</span>
+    <span class="lk">Per lokasi &amp; departemen</span>
+    <span class="lk">Garansi &amp; umur habis</span>
+    <span class="lk">Selisih opname</span>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0;font-size:24px;flex:1">Koreksi fiskal penyusutan</h1>
+      <button class="chip on">Tahun pajak 2026</button><button class="chip">2027</button>
+      <button class="btn">Cetak</button><button class="btn">Unduh CSV</button>
+    </div>
+    <div style="font-size:12px;color:#626b77">Komersial = buku besar (PSAK 16). Fiskal = UU PPh pasal 11, dimulai bulan perolehan, tanpa nilai sisa. Register dimulai Oktober 2026, jadi tahun pajak 2026 hanya memuat Oktober–Desember; November–Desember adalah perkiraan. Tarif dan kelompok perlu dikonfirmasi konsultan pajak.</div>
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Aset</th><th class="th">Kelompok fiskal</th><th class="th thr">Komersial</th><th class="th thr">Fiskal</th><th class="th thr">Koreksi</th><th class="th">Catatan</th></tr></thead>
+        <tbody>
+          <tr><td class="td">FA-000002 · Gedung utama</td><td class="td">Bangunan permanen 5%</td><td class="td num">30.000.000</td><td class="td num">30.000.000</td><td class="td num">0</td><td class="td sub"></td></tr>
+          <tr><td class="td">FA-000012 · Kursi kamar Deluxe</td><td class="td">Kelompok 2 · 12,5%</td><td class="td num">3.000.000</td><td class="td num">1.125.000</td><td class="td num pos">+1.875.000</td><td class="td sub">umur komersial lebih pendek</td></tr>
+          <tr><td class="td">FA-000019 · Sofa lobi set</td><td class="td">Kelompok 2 · 12,5%</td><td class="td num">750.000</td><td class="td num">375.000</td><td class="td num pos">+375.000</td><td class="td sub">dilepas 6 Nov 2026</td></tr>
+          <tr><td class="td">FA-000031 · Meja makan restoran</td><td class="td">Kelompok 2 · 12,5%</td><td class="td num">1.500.000</td><td class="td num">750.000</td><td class="td num pos">+750.000</td><td class="td sub"></td></tr>
+          <tr><td class="td">FA-000044 · Toyota HiAce</td><td class="td">Kelompok 2 · 12,5%</td><td class="td num">6.750.000</td><td class="td num">7.500.000</td><td class="td num neg">−750.000</td><td class="td sub">komersial memakai nilai sisa</td></tr>
+          <tr><td class="td">FA-000051 · Server PMS</td><td class="td">Kelompok 1 · 25%</td><td class="td num">750.000</td><td class="td num">750.000</td><td class="td num">0</td><td class="td sub"></td></tr>
+          <tr><td class="td">FA-000060 · Piring makan 300 pcs</td><td class="td">Kelompok 1 · 25%</td><td class="td num">750.000</td><td class="td num">375.000</td><td class="td num pos">+375.000</td><td class="td sub">batch OE</td></tr>
+          <tr><td class="td">FA-000075 · Komputer front office</td><td class="td">Kelompok 1 · 25%</td><td class="td num">900.000</td><td class="td num">675.000</td><td class="td num pos">+225.000</td><td class="td sub"></td></tr>
+          <tr><td class="td">FA-000088 · Lemari kayu kamar</td><td class="td">Kelompok 1 · 25%</td><td class="td num">1.125.000</td><td class="td num">0</td><td class="td num pos">+1.125.000</td><td class="td sub">fiskal sudah habis akhir 2023</td></tr>
+          <tr><td class="td">FA-000089 · Kursi banquet 200 pcs</td><td class="td">Kelompok 2 · 12,5%</td><td class="td num">1.250.001</td><td class="td num">1.250.000</td><td class="td num pos">+1</td><td class="td sub">akumulasi fiskal dihitung saat impor</td></tr>
+          <tr><td class="td">FA-000130, FA-000131 · Laptop sales</td><td class="td">Kelompok 1 · 25%</td><td class="td num">750.000</td><td class="td num">1.125.000</td><td class="td num neg">−375.000</td><td class="td sub">komersial mulai Nov, fiskal mulai Okt</td></tr>
+          <tr class="tot"><td class="td">Total 12 aset</td><td class="td"></td><td class="td num">47.525.001</td><td class="td num">43.925.000</td><td class="td num pos">+3.600.001</td><td class="td"></td></tr>
+        </tbody>
+      </table>
+      <div style="padding:9px 14px;font-size:12px;color:#4a5361">Koreksi positif: beban komersial lebih besar dari fiskal, ditambahkan ke laba fiskal di SPT. Tanah, aset dalam pembangunan, dan aset yang sudah habis di kedua buku tidak tampil.</div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

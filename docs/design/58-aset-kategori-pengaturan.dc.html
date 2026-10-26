@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Kategori dan pengaturan aset</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:36px;padding:0 12px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:13px;color:#1c2128}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.td{padding:8px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.sub{font-size:11px;color:#626b77}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden}
+.ch{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e3e6ea}
+.set{padding:12px 16px;border-bottom:1px solid #eef0f2;display:flex;flex-direction:column;gap:6px}
+.st{font-size:14px;font-weight:600}
+.opt{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.opt input{width:18px;height:18px;margin:1px 0 0;accent-color:#1f6f5c;flex-shrink:0}
+.inp{height:38px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav">Laporan aset</a>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center"><h1 style="margin:0;font-size:24px;flex:1">Kategori &amp; pengaturan aset</h1><button class="btnp">Simpan</button></div>
+    <section class="card">
+      <div class="ch"><strong style="font-size:15px;flex:1">Kategori</strong><button class="btn">Kategori baru</button></div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Kategori</th><th class="th">Akun harga</th><th class="th">Akumulasi</th><th class="th">Beban</th><th class="th">Metode · umur bawaan</th><th class="th">Departemen bawaan</th><th class="th">Kelompok fiskal</th><th class="th">Aset</th></tr></thead>
+        <tbody>
+          <tr><td class="td"><strong>Tanah</strong></td><td class="td">1510</td><td class="td sub">–</td><td class="td sub">–</td><td class="td sub">tidak disusutkan</td><td class="td">Administrasi &amp; umum</td><td class="td sub">–</td><td class="td">1</td></tr>
+          <tr><td class="td"><strong>Bangunan</strong></td><td class="td">1520</td><td class="td">1591</td><td class="td">7510</td><td class="td">Garis lurus · 240 bln</td><td class="td">Pemeliharaan properti</td><td class="td">Bangunan permanen · 20 thn</td><td class="td">1</td></tr>
+          <tr><td class="td"><strong>FF&amp;E</strong></td><td class="td">1530</td><td class="td">1592</td><td class="td">7520</td><td class="td">Garis lurus · 96 bln</td><td class="td">–</td><td class="td">Kelompok 2 · 8 thn</td><td class="td">5</td></tr>
+          <tr><td class="td"><strong>Peralatan operasional</strong></td><td class="td">1540</td><td class="td">1593</td><td class="td">7530</td><td class="td">Garis lurus · 24 bln</td><td class="td">Makanan &amp; minuman</td><td class="td">Kelompok 1 · 4 thn</td><td class="td">1</td></tr>
+          <tr><td class="td"><strong>Kendaraan</strong></td><td class="td">1550</td><td class="td">1594</td><td class="td">7540</td><td class="td">Garis lurus · 96 bln</td><td class="td">Administrasi &amp; umum</td><td class="td">Kelompok 2 · 8 thn</td><td class="td">2</td></tr>
+          <tr><td class="td"><strong>Komputer &amp; IT</strong></td><td class="td">1570</td><td class="td">1595</td><td class="td">7550</td><td class="td">Garis lurus · 48 bln</td><td class="td">IT</td><td class="td">Kelompok 1 · 4 thn</td><td class="td">4</td></tr>
+          <tr><td class="td"><strong>Aset dalam pembangunan</strong></td><td class="td">1560</td><td class="td sub">–</td><td class="td sub">–</td><td class="td sub">tidak disusutkan</td><td class="td">–</td><td class="td sub">–</td><td class="td">1</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:8px 16px;font-size:12px;color:#4a5361">Kelompok dan tarif fiskal adalah nilai awal yang perlu dikonfirmasi konsultan pajak. Akun kategori yang sudah punya aset tidak bisa diubah; buat kategori baru lalu pindahkan asetnya.</div>
+    </section>
+
+    <section class="card">
+      <div class="ch"><strong style="font-size:15px">Pengaturan properti</strong></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="set" style="border-right:1px solid #eef0f2">
+          <span class="st">Mulai penyusutan (bawaan)</span>
+          <label class="opt"><input type="radio" name="s" checked>Bulan mulai pakai</label>
+          <label class="opt"><input type="radio" name="s">Bulan berikutnya</label>
+          <span class="sub">Bisa diganti per aset saat diterima, selama aset belum disusutkan.</span>
+        </div>
+        <div class="set" style="border-right:1px solid #eef0f2">
+          <span class="st">Peralatan operasional</span>
+          <label class="opt"><input type="radio" name="oe" checked>Amortisasi per batch</label>
+          <label class="opt"><input type="radio" name="oe">Langsung beban saat dibeli</label>
+          <span class="sub">Berlaku untuk pembelian sesudahnya; batch yang ada tetap diamortisasi.</span>
+        </div>
+        <div class="set">
+          <span class="st">Batas kapitalisasi</span>
+          <input class="inp" value="2.500.000" style="width:160px;text-align:right" aria-label="Batas kapitalisasi">
+          <span class="sub">Di bawah batas: peringatan saja, tidak memblokir.</span>
+          <span class="st" style="padding-top:6px">Register mulai</span>
+          <span style="font-size:13px">Oktober 2026 · terkunci setelah penyusutan pertama</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

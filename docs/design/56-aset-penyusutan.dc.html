@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Penyusutan bulanan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:7px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.ok{background:#e3f2ee;color:#185a4a}
+.due{background:#fdf1dc;color:#5c3608}
+.mo{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #eef0f2;font-size:13px}
+.mon{background:#f1f8f5}
+.tot td{font-weight:700;background:#f6f7f9}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav">Laporan aset</a>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div>
+      <div class="sub" style="font-size:12px">Tanggal bisnis Jum 6 Nov 2026 · register sejak Okt 2026</div>
+      <h1 style="margin:2px 0 0;font-size:24px">Penyusutan bulanan</h1>
+    </div>
+    <div style="display:flex;gap:16px;flex:1;min-height:0">
+      <section class="card" style="width:300px;flex-shrink:0;overflow:hidden;align-self:flex-start">
+        <div class="mo mon"><span><strong>Oktober 2026</strong><div class="sub">bulan buku terbuka · belum dijalankan</div></span><span class="pill due">Siap</span></div>
+        <div class="mo"><span>November 2026<div class="sub">belum berakhir</div></span><span class="pill">–</span></div>
+        <div style="padding:10px 14px;font-size:12px;color:#4a5361">Bulan dijalankan berurutan. Oktober tidak bisa ditutup di Akuntansi sebelum penyusutannya dijalankan. Membuka kembali bulan yang sudah tutup membalik jurnal penyusutannya.</div>
+      </section>
+
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <section class="card" style="overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #e3e6ea">
+            <strong style="font-size:15px;flex:1">Pratinjau Oktober 2026 · jurnal tanggal 31 Okt 2026</strong>
+            <span class="sub">10 aset disusutkan · 5 tidak (tanah, pembangunan, sudah habis, mulai November)</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th class="th">Akun</th><th class="th">Departemen</th><th class="th">Aset</th><th class="th thr">Debit</th><th class="th thr">Kredit</th></tr></thead>
+            <tbody>
+              <tr><td class="td">7520 Penyusutan FF&amp;E</td><td class="td">Kamar</td><td class="td sub">FA-000012, FA-000019, FA-000088</td><td class="td num">2.125.000</td><td class="td num"></td></tr>
+              <tr><td class="td">7520 Penyusutan FF&amp;E</td><td class="td">Makanan &amp; minuman</td><td class="td sub">FA-000031, FA-000089</td><td class="td num">916.667</td><td class="td num"></td></tr>
+              <tr><td class="td">7510 Penyusutan bangunan</td><td class="td">Pemeliharaan properti</td><td class="td sub">FA-000002</td><td class="td num">10.000.000</td><td class="td num"></td></tr>
+              <tr><td class="td">7540 Penyusutan kendaraan</td><td class="td">Administrasi &amp; umum</td><td class="td sub">FA-000044</td><td class="td num">2.250.000</td><td class="td num"></td></tr>
+              <tr><td class="td">7550 Penyusutan komputer &amp; IT</td><td class="td">IT</td><td class="td sub">FA-000051</td><td class="td num">250.000</td><td class="td num"></td></tr>
+              <tr><td class="td">7550 Penyusutan komputer &amp; IT</td><td class="td">Kamar</td><td class="td sub">FA-000075</td><td class="td num">300.000</td><td class="td num"></td></tr>
+              <tr><td class="td">7530 Amortisasi peralatan operasional</td><td class="td">Makanan &amp; minuman</td><td class="td sub">FA-000060</td><td class="td num">250.000</td><td class="td num"></td></tr>
+              <tr><td class="td">1592 Akumulasi penyusutan FF&amp;E</td><td class="td"></td><td class="td"></td><td class="td num"></td><td class="td num">3.041.667</td></tr>
+              <tr><td class="td">1591 Akumulasi penyusutan bangunan</td><td class="td"></td><td class="td"></td><td class="td num"></td><td class="td num">10.000.000</td></tr>
+              <tr><td class="td">1594 Akumulasi penyusutan kendaraan</td><td class="td"></td><td class="td"></td><td class="td num"></td><td class="td num">2.250.000</td></tr>
+              <tr><td class="td">1595 Akumulasi penyusutan komputer &amp; IT</td><td class="td"></td><td class="td"></td><td class="td num"></td><td class="td num">550.000</td></tr>
+              <tr><td class="td">1593 Akumulasi amortisasi peralatan operasional</td><td class="td"></td><td class="td"></td><td class="td num"></td><td class="td num">250.000</td></tr>
+              <tr class="tot"><td class="td">Total</td><td class="td"></td><td class="td"></td><td class="td num">16.091.667</td><td class="td num">16.091.667</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="flex:1;font-size:12px;color:#4a5361">Tidak ada hambatan: semua akun aktif, departemen tiap baris terisi (departemen aset di akhir bulan). Departemen FA-000075 mengikuti lokasinya di front office.</span>
+          <button class="btnp">Jalankan penyusutan Oktober</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

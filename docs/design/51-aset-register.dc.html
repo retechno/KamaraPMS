@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Register aset tetap</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.chip{height:36px;padding:0 14px;border:1px solid #e3e6ea;border-radius:18px;background:#fff;font:inherit;font-size:13px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-size:14px;padding:0 12px}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:5px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600;background:#eef0f2;color:#4a5361}
+.ok{background:#e3f2ee;color:#185a4a}
+.warn{background:#fdf1dc;color:#5c3608}
+.tot td{font-weight:700;background:#f6f7f9}
+.tile{flex:1;background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+.tl{font-size:12px;color:#626b77}
+.tv{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav">Laporan aset</a>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0;font-size:24px;flex:1">Register aset tetap</h1>
+      <a href="61-aset-label-qr.dc.html" class="btn">Cetak label QR</a>
+      <a href="55-aset-saldo-awal.dc.html" class="btn">Aset lama (saldo awal)</a>
+      <a href="53-aset-daftar-tunggu.dc.html" class="btn" style="background:#1f6f5c;color:#fff;border-color:#1f6f5c">Daftar tunggu · 5</a>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="tile"><span class="tl">Harga perolehan</span><span class="tv">9.208.800.000</span><span class="tl">15 aset aktif</span></div>
+      <div class="tile"><span class="tl">Akumulasi penyusutan</span><span class="tv">899.483.334</span><span class="tl">per 31 Okt 2026</span></div>
+      <div class="tile"><span class="tl">Nilai buku</span><span class="tv">8.309.316.666</span><span class="tl">cocok dengan buku besar</span></div>
+      <div class="tile"><span class="tl">Penyusutan Oktober</span><span class="tv">16.091.667</span><span class="tl">JV-000412 · sudah dijalankan</span></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="chip on">Semua kategori</button><button class="chip">Bangunan</button><button class="chip">FF&amp;E</button><button class="chip">Peralatan operasional</button><button class="chip">Kendaraan</button><button class="chip">Komputer &amp; IT</button>
+      <span style="flex:1"></span>
+      <select class="inp" aria-label="Lokasi"><option>Semua lokasi</option></select>
+      <select class="inp" aria-label="Status"><option>Aktif</option></select>
+      <input class="inp" style="width:220px" placeholder="Cari nomor, nama, seri" aria-label="Cari aset">
+    </div>
+    <section style="background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Aset</th><th class="th">Kategori</th><th class="th">Lokasi · departemen</th><th class="th">Mulai pakai</th><th class="th thr">Harga</th><th class="th thr">Akumulasi</th><th class="th thr">Nilai buku</th><th class="th thr">Sisa umur</th><th class="th">Status</th></tr></thead>
+        <tbody>
+          <tr><td class="td"><strong>Tanah hotel</strong><div class="sub">FA-000001</div></td><td class="td">Tanah</td><td class="td">Area hotel<div class="sub">Administrasi &amp; umum</div></td><td class="td">Jan 2015</td><td class="td num">5.000.000.000</td><td class="td num">–</td><td class="td num">5.000.000.000</td><td class="td num sub">tidak disusutkan</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Gedung utama</strong><div class="sub">FA-000002</div></td><td class="td">Bangunan</td><td class="td">Area hotel<div class="sub">Pemeliharaan properti</div></td><td class="td">Okt 2021</td><td class="td num">2.400.000.000</td><td class="td num">610.000.000</td><td class="td num">1.790.000.000</td><td class="td num">179 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Gedung annex (dalam pembangunan)</strong><div class="sub">FA-000005</div></td><td class="td">Aset dlm pembangunan</td><td class="td">Area timur</td><td class="td">–</td><td class="td num">1.200.000.000</td><td class="td num">–</td><td class="td num">1.200.000.000</td><td class="td num sub">belum dipakai</td><td class="td"><span class="pill">Pembangunan</span></td></tr>
+          <tr><td class="td"><a href="52-aset-halaman.dc.html" style="font-weight:600;text-decoration:none">Toyota HiAce</a><div class="sub">FA-000044 · DK 1234 AB</div></td><td class="td">Kendaraan</td><td class="td">Parkir basement<div class="sub">Administrasi &amp; umum</div></td><td class="td">Feb 2025</td><td class="td num">240.000.000</td><td class="td num">47.250.000</td><td class="td num">192.750.000</td><td class="td num">75 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Sofa lobi set</strong><div class="sub">FA-000019</div></td><td class="td">FF&amp;E</td><td class="td">Lobi<div class="sub">Kamar</div></td><td class="td">Jul 2024</td><td class="td num">36.000.000</td><td class="td num">21.000.000</td><td class="td num">15.000.000</td><td class="td num">20 bln</td><td class="td"><span class="pill warn">Menunggu persetujuan jual</span></td></tr>
+          <tr><td class="td"><strong>Kursi kamar Deluxe (set)</strong><div class="sub">FA-000012</div></td><td class="td">FF&amp;E</td><td class="td">Kamar 201–210<div class="sub">Kamar</div></td><td class="td">Okt 2025</td><td class="td num">36.000.000</td><td class="td num">13.000.000</td><td class="td num">23.000.000</td><td class="td num">23 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Meja makan restoran</strong><div class="sub">FA-000031</div></td><td class="td">FF&amp;E</td><td class="td">Restoran Teratai<div class="sub">Makanan &amp; minuman</div></td><td class="td">Apr 2026</td><td class="td num">24.000.000</td><td class="td num">3.500.000</td><td class="td num">20.500.000</td><td class="td num">41 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Lemari kayu kamar</strong><div class="sub">FA-000088 · saldo awal</div></td><td class="td">FF&amp;E</td><td class="td">Kamar 301–310<div class="sub">Kamar</div></td><td class="td">Jan 2020</td><td class="td num">36.000.000</td><td class="td num">30.750.000</td><td class="td num">5.250.000</td><td class="td num">14 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Kursi banquet 200 pcs</strong><div class="sub">FA-000089 · saldo awal</div></td><td class="td">FF&amp;E</td><td class="td">Gudang banquet<div class="sub">Makanan &amp; minuman</div></td><td class="td">Jun 2023</td><td class="td num">40.000.000</td><td class="td num">17.083.334</td><td class="td num">22.916.666</td><td class="td num">55 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Mobil pickup L300</strong><div class="sub">FA-000090 · saldo awal</div></td><td class="td">Kendaraan</td><td class="td">Parkir belakang<div class="sub">Administrasi &amp; umum</div></td><td class="td">Mar 2017</td><td class="td num">150.000.000</td><td class="td num">150.000.000</td><td class="td num">0</td><td class="td num sub">habis disusutkan</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Piring makan 300 pcs</strong><div class="sub">FA-000060 · batch OE</div></td><td class="td">Peralatan operasional</td><td class="td">Gudang F&amp;B<div class="sub">Makanan &amp; minuman</div></td><td class="td">Apr 2026</td><td class="td num">6.000.000</td><td class="td num">1.750.000</td><td class="td num">4.250.000</td><td class="td num">17 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Server PMS</strong><div class="sub">FA-000051</div></td><td class="td">Komputer &amp; IT</td><td class="td">Ruang server<div class="sub">IT</div></td><td class="td">Des 2025</td><td class="td num">12.000.000</td><td class="td num">2.750.000</td><td class="td num">9.250.000</td><td class="td num">37 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Komputer front office</strong><div class="sub">FA-000075</div></td><td class="td">Komputer &amp; IT</td><td class="td">Front office<div class="sub">Kamar</div></td><td class="td">Mar 2026</td><td class="td num">10.800.000</td><td class="td num">2.400.000</td><td class="td num">8.400.000</td><td class="td num">28 bln</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr><td class="td"><strong>Laptop sales (2 unit)</strong><div class="sub">FA-000130, FA-000131 · dari kas</div></td><td class="td">Komputer &amp; IT</td><td class="td">Kantor sales<div class="sub">Sales &amp; marketing</div></td><td class="td">Okt 2026</td><td class="td num">18.000.000</td><td class="td num">0</td><td class="td num">18.000.000</td><td class="td num sub">mulai Nov 2026</td><td class="td"><span class="pill ok">Aktif</span></td></tr>
+          <tr class="tot"><td class="td">Total 15 aset</td><td class="td"></td><td class="td"></td><td class="td"></td><td class="td num">9.208.800.000</td><td class="td num">899.483.334</td><td class="td num">8.309.316.666</td><td class="td"></td><td class="td"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

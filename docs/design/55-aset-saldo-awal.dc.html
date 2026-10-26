@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Saldo awal aset lama</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:44px;padding:0 18px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:8px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap;vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.opt{flex:1;border:1px solid #e3e6ea;border-radius:12px;padding:12px 14px;display:flex;gap:10px;font-size:13px}
+.opt input{width:18px;height:18px;margin:2px 0 0;accent-color:#1f6f5c}
+.sel{border-color:#1f6f5c;background:#f1f8f5}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.ok{color:#185a4a;font-size:12px}
+.wr{color:#9a3412;font-size:12px}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">INVENTORY</div>
+    <a href="17-inv-barang-stok.dc.html" class="nav">Barang &amp; stok</a>
+    <a href="18-inv-pembelian-daftar.dc.html" class="nav">Pembelian</a>
+    <a href="22-inv-permintaan-gudang-daftar.dc.html" class="nav">Permintaan &amp; transfer</a>
+    <a href="24-inv-pemakaian-daftar.dc.html" class="nav">Pemakaian &amp; waste</a>
+    <a href="29-inv-laporan-fb-cost.dc.html" class="nav">Laporan</a>
+    <div class="sec">ASET TETAP</div>
+    <a href="51-aset-register.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Register aset</a>
+    <a href="53-aset-daftar-tunggu.dc.html" class="nav">Daftar tunggu</a>
+    <a href="56-aset-penyusutan.dc.html" class="nav">Penyusutan</a>
+    <a href="59-aset-rekap-kategori.dc.html" class="nav">Laporan aset</a>
+    <a href="58-aset-kategori-pengaturan.dc.html" class="nav">Pengaturan aset</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:12px">
+    <a href="51-aset-register.dc.html" style="font-size:13px;font-weight:600;text-decoration:none;align-self:flex-start">← Register aset</a>
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0;font-size:24px;flex:1">Saldo awal aset lama</h1>
+      <button class="btn">Unduh template CSV</button>
+      <button class="btn">Tambah satu aset lama</button>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-end">
+      <label style="font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px">Per tanggal (akhir bulan)<input class="inp" value="30 Sep 2026"></label>
+      <label style="font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:5px">File<input class="inp" value="aset-lama-ubud.csv · 3 baris" style="width:260px"></label>
+      <label class="opt sel"><input type="radio" name="m" checked><span><strong>Dengan jurnal</strong><br><span class="sub">Buku besar belum berisi aset ini: Dr harga, Cr akumulasi, selisihnya ke 3900.</span></span></label>
+      <label class="opt"><input type="radio" name="m"><span><strong>Register saja</strong><br><span class="sub">Buku besar sudah berisi saldonya: tanpa jurnal, total per kategori harus sama dengan saldo buku besar.</span></span></label>
+    </div>
+
+    <section class="card" style="overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Aset</th><th class="th">Kategori</th><th class="th">Mulai pakai</th><th class="th thr">Harga</th><th class="th thr">Akumulasi</th><th class="th thr">Nilai buku</th><th class="th thr">Sisa umur</th><th class="th">Fiskal</th><th class="th">Hasil periksa</th></tr></thead>
+        <tbody>
+          <tr><td class="td"><strong>Lemari kayu kamar</strong><div class="sub">Kamar 301–310</div></td><td class="td">FF&amp;E</td><td class="td">Jan 2020</td><td class="td num">36.000.000</td><td class="td num">30.375.000</td><td class="td num">5.625.000</td><td class="td num">15 bln</td><td class="td">Kel. 1 · akum. 36.000.000<div class="sub">fiskal sudah habis</div></td><td class="td ok">Siap</td></tr>
+          <tr><td class="td"><strong>Mobil pickup L300</strong><div class="sub">Parkir belakang</div></td><td class="td">Kendaraan</td><td class="td">Mar 2017</td><td class="td num">150.000.000</td><td class="td num">150.000.000</td><td class="td num">0</td><td class="td num">habis</td><td class="td">Kel. 2 · akum. 150.000.000</td><td class="td ok">Siap · sudah habis disusutkan, tetap di register</td></tr>
+          <tr><td class="td"><strong>Kursi banquet 200 pcs</strong><div class="sub">Gudang banquet</div></td><td class="td">FF&amp;E</td><td class="td">Jun 2023</td><td class="td num">40.000.000</td><td class="td num">16.666.667</td><td class="td num">23.333.333</td><td class="td num">56 bln</td><td class="td">Kel. 2 · dihitung</td><td class="td wr">Peringatan: akumulasi fiskal dihitung, periksa dengan SPT tahun lalu</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div style="display:flex;gap:16px">
+      <section class="card" style="flex:1;padding:14px 16px">
+        <strong style="font-size:14px">Jurnal saldo awal (pratinjau) · tanggal 1 Okt 2026</strong>
+        <div class="kv"><span>Dr 1530 FF&amp;E</span><span>76.000.000</span></div>
+        <div class="kv"><span>Dr 1550 Kendaraan</span><span>150.000.000</span></div>
+        <div class="kv"><span>Cr 1592 Akumulasi penyusutan FF&amp;E</span><span>47.041.667</span></div>
+        <div class="kv"><span>Cr 1594 Akumulasi penyusutan kendaraan</span><span>150.000.000</span></div>
+        <div class="kv"><span>Cr 3900 Ekuitas saldo awal</span><span>28.958.333</span></div>
+        <div class="kv" style="border-top:1px solid #e3e6ea;margin-top:4px;font-weight:700"><span>Debit = kredit</span><span>226.000.000</span></div>
+      </section>
+      <section class="card" style="width:420px;flex-shrink:0;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+        <span style="font-size:13px;color:#4a5361">Penyusutan aset ini dilanjutkan mulai Oktober 2026. Impor tidak bisa dibatalkan sekaligus; tiap aset bisa dibatalkan sebelum penyusutan pertamanya.</span>
+        <div style="flex:1"></div>
+        <button class="btnp">Impor 3 aset · FAI-000002 (FA-000088 s.d. FA-000090)</button>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
