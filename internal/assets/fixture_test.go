@@ -3,6 +3,7 @@ package assets_test
 import (
 	"context"
 	"os"
+	"sync/atomic"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -86,11 +87,11 @@ func row(name, cat, cost, accum string, months int) assets.OpeningRow {
 	return r
 }
 
-var keyCounter int
+var keyCounter atomic.Int64
 
 func nextKey() string {
-	keyCounter++
-	return "k" + string(rune('a'+keyCounter%26)) + string(rune('0'+keyCounter/26%10)) + string(rune('0'+keyCounter/260%10))
+	n := int(keyCounter.Add(1))
+	return "k" + string(rune('a'+n%26)) + string(rune('0'+n/26%10)) + string(rune('0'+n/260%10))
 }
 
 func (f *fx) journalLines(t *testing.T, journalID int64) map[string]decimal.Decimal {
