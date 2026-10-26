@@ -20,6 +20,8 @@ type LineComponent struct {
 	QtyPerPax    decimal.Decimal `json:"qty_per_pax"`
 	ListPrice    decimal.Decimal `json:"list_price"`
 	SortOrder    int             `json:"sort_order"`
+	FbClass      *string         `json:"fb_class"`
+	PosProductID *int64          `json:"pos_product_id"`
 }
 
 // Line is what is sold in a session: an item or a package, with the price and the mode frozen when it was added.
@@ -41,6 +43,7 @@ type Line struct {
 	ChargeCodeID       *int64           `json:"charge_code_id"`
 	ChargeCode         *string          `json:"charge_code"`
 	FbClass            *string          `json:"fb_class"`
+	PosProductID       *int64           `json:"pos_product_id"`
 	Components         []LineComponent  `json:"components"`
 }
 
@@ -105,6 +108,15 @@ type Estimate struct {
 type LinesView struct {
 	Lines    []Line   `json:"lines"`
 	Estimate Estimate `json:"estimate"`
+	// Stock says whether posting a session of this event deducts goods (Inventory on, a warehouse set), and how many lines would.
+	Stock StockNote `json:"stock"`
+}
+
+// StockNote is what the dialog of posting tells about the deduction of goods (4.9).
+type StockNote struct {
+	Enabled       bool    `json:"enabled"`
+	WarehouseName *string `json:"warehouse_name"`
+	Lines         int     `json:"lines"`
 }
 
 // DepositView is a row of the deposit schedule with where it stands.

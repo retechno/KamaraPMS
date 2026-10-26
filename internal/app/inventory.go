@@ -6,6 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/banquet"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/inventory"
 	"kamarapms/internal/nightaudit"
@@ -102,6 +103,26 @@ func (h posStock) QueueVoid(ctx context.Context, tenantID, propertyID int64, v p
 		return err
 	}
 	return h.inv.QueueVoid(ctx, tenantID, propertyID, inventory.PosVoid{BillLineID: v.BillLineID, Waste: v.Waste, BusinessDate: v.BusinessDate})
+}
+
+// banquetStock is what the banquet asks of the stock (internal/banquet does not import internal/inventory): the hook of the deduction of a posted session, gated by the plan (INVENTORY, 36 4.9).
+type banquetStock struct {
+	inv  *inventory.Service
+	subs *subscription.Service
+}
+
+func (h banquetStock) On(ctx context.Context, tenantID int64) (bool, error) {
+	acc, err := h.subs.AccessOf(ctx, tenantID)
+	if err != nil {
+		return false, nil //nolint:nilerr // a tenant with no subscription has no stock module
+	}
+	return acc.Has(subscription.Inventory), nil
+}
+
+func (h banquetStock) QueueSale(ctx context.Context, tenantID, propertyID int64, sale banquet.StockSale) error {
+	_, err := h.inv.QueueBanquetSale(ctx, tenantID, propertyID, inventory.BanquetSale{PostingLineID: sale.PostingLineID, WarehouseID: sale.WarehouseID, ProductID: sale.ProductID,
+		ChargeCodeID: sale.ChargeCodeID, Quantity: sale.Quantity, SaleClass: sale.SaleClass, BusinessDate: sale.BusinessDate})
+	return err
 }
 
 // posPricer answers the recipe's question of the net price of a product at an outlet.

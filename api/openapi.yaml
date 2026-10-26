@@ -12350,7 +12350,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/InventoryCostTarget" }
+            schema: { $ref: "#/components/schemas/InventoryCostTargetInput" }
       responses:
         "200":
           description: The target.
@@ -12365,6 +12365,7 @@ paths:
       tags: [inventory]
       parameters:
         - { name: outlet_id, in: query, description: "Absent: the property's target.", schema: { type: integer } }
+        - { name: source, in: query, description: "BANQUET removes the target of the banquet; absent: POS.", schema: { type: string, enum: [POS, BANQUET] } }
         - { name: class, in: query, required: true, description: "", schema: { type: string, enum: [FOOD, BEVERAGE] } }
       responses:
         "204": { description: Removed. }
@@ -13690,8 +13691,11 @@ paths:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: getBanquetUnpostedReport
-      summary: "Sessions of definite events dated the business date or earlier that are not posted (banquet.manage or confirm)"
+      summary: "Sessions of definite events dated the business date or earlier that are not posted (banquet.manage or confirm); ?format=csv for a file"
       tags: [banquet]
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+        - { name: lang, in: query, description: "id: the names of the columns of the CSV in Indonesian.", schema: { type: string, enum: [en, id] } }
       responses:
         "200":
           description: The answer.
@@ -13700,6 +13704,132 @@ paths:
               schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/BanquetUnposted" } } } }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reports/forecast:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetForecastReport
+      summary: "Forecast of revenue by month, type of event and sales person: the definite and the tentative on rows of their own (banquet.read and the others)"
+      tags: [banquet]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD; absent: the first day of the month of the business date.", schema: { type: string, format: date } }
+        - { name: to, in: query, description: "YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most.", schema: { type: string, format: date } }
+        - { name: with_tax, in: query, description: "true: the amounts include service and tax.", schema: { type: boolean } }
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+        - { name: lang, in: query, description: "id: the names of the columns of the CSV in Indonesian.", schema: { type: string, enum: [en, id] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetForecastReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reports/rooms:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetRoomsReport
+      summary: "Revenue and occupancy by meeting room"
+      tags: [banquet]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD; absent: the first day of the month of the business date.", schema: { type: string, format: date } }
+        - { name: to, in: query, description: "YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most.", schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+        - { name: lang, in: query, description: "id: the names of the columns of the CSV in Indonesian.", schema: { type: string, enum: [en, id] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetRoomsReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reports/guests:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetGuestsReport
+      summary: "Guaranteed against the actual guests of the sessions"
+      tags: [banquet]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD; absent: the first day of the month of the business date.", schema: { type: string, format: date } }
+        - { name: to, in: query, description: "YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most.", schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+        - { name: lang, in: query, description: "id: the names of the columns of the CSV in Indonesian.", schema: { type: string, enum: [en, id] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetGuestsReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reports/sales:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetSalesReport
+      summary: "Production by sales person and the conversion: definite / (definite + lost)"
+      tags: [banquet]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD; absent: the first day of the month of the business date.", schema: { type: string, format: date } }
+        - { name: to, in: query, description: "YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most.", schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+        - { name: lang, in: query, description: "id: the names of the columns of the CSV in Indonesian.", schema: { type: string, enum: [en, id] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetSalesReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reports/lost:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetLostReport
+      summary: "Lost and cancelled events with the reasons"
+      tags: [banquet]
+      parameters:
+        - { name: from, in: query, description: "YYYY-MM-DD; absent: the first day of the month of the business date.", schema: { type: string, format: date } }
+        - { name: to, in: query, description: "YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most.", schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+        - { name: lang, in: query, description: "id: the names of the columns of the CSV in Indonesian.", schema: { type: string, enum: [en, id] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetLostReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/banquet/reports/schedule:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getBanquetScheduleReport
+      summary: "The sessions of a day, for the board and for print"
+      tags: [banquet]
+      parameters:
+        - { name: day, in: query, description: "YYYY-MM-DD; absent: the business date.", schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [csv] } }
+        - { name: lang, in: query, description: "id: the names of the columns of the CSV in Indonesian.", schema: { type: string, enum: [en, id] } }
+      responses:
+        "200":
+          description: The answer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BanquetScheduleReport" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/banquet/policy-templates:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -23751,15 +23881,16 @@ components:
         lines: { type: array, items: { $ref: "#/components/schemas/InventoryRecipeLineInput" } }
     InventoryQueueRow:
       type: object
-      required: [id, outlet_id, outlet_code, outlet_name, warehouse_id, warehouse_name, bill_line_id, bill_number, kind, product_id, product_name, quantity, sale_class, sale_date, status, attempts, error_code, error_message, created_at, applied_on]
+      required: [id, source, outlet_id, outlet_code, outlet_name, warehouse_id, warehouse_name, bill_line_id, bill_number, kind, product_id, product_name, quantity, sale_class, sale_date, status, attempts, error_code, error_message, created_at, applied_on]
       properties:
         id: { type: integer, format: int64 }
-        outlet_id: { type: integer, format: int64 }
+        source: { type: string, enum: [POS, BANQUET], description: "BANQUET is the deduction of a posted banquet session: no outlet, no POS line; bill_number is its event and session." }
+        outlet_id: { type: [integer, "null"], format: int64 }
         outlet_code: { type: string }
         outlet_name: { type: string }
         warehouse_id: { type: integer, format: int64 }
         warehouse_name: { type: string }
-        bill_line_id: { type: integer, format: int64 }
+        bill_line_id: { type: [integer, "null"], format: int64 }
         bill_number: { type: string }
         kind: { type: string, enum: [SALE, VOID_RETURN, VOID_WASTE] }
         product_id: { type: integer, format: int64 }
@@ -23786,10 +23917,19 @@ components:
       properties:
         summary: { $ref: "#/components/schemas/InventoryQueueSummary" }
         rows: { type: array, items: { $ref: "#/components/schemas/InventoryQueueRow" } }
-    InventoryCostTarget:
+    InventoryCostTargetInput:
       type: object
       required: [outlet_id, class, target_pct]
       properties:
+        source: { type: string, enum: [POS, BANQUET], description: "Omitted: POS. BANQUET takes outlet_id null." }
+        outlet_id: { type: [integer, "null"], format: int64 }
+        class: { type: string, enum: [FOOD, BEVERAGE] }
+        target_pct: { type: string, description: "Above 0 and up to 100, two decimals." }
+    InventoryCostTarget:
+      type: object
+      required: [source, outlet_id, class, target_pct]
+      properties:
+        source: { type: string, enum: [POS, BANQUET], description: "BANQUET is the target of the banquet (no outlet); an empty source in a request is POS." }
         outlet_id: { type: [integer, "null"], format: int64, description: "null: the property's target, which an outlet without its own takes." }
         class: { type: string, enum: [FOOD, BEVERAGE] }
         target_pct: { type: string, description: "Above 0 and up to 100, two decimals." }
@@ -23807,7 +23947,7 @@ components:
         no_recipe_data: { type: boolean, description: "True when there is revenue and no day of it has a cost from recipes: pct is then null." }
     InventoryDailyCostDay:
       type: object
-      required: [date, live, kinds, total, food, beverage, fb, occupied_rooms, amenity_cost_per_room, departments]
+      required: [date, live, kinds, total, food, beverage, fb, banquet, occupied_rooms, amenity_cost_per_room, departments]
       properties:
         date: { $ref: "#/components/schemas/Date" }
         live: { type: boolean, description: "True for a day the close has not stored (the open day): computed from the ledger." }
@@ -23816,6 +23956,7 @@ components:
         food: { $ref: "#/components/schemas/InventoryFbPart" }
         beverage: { $ref: "#/components/schemas/InventoryFbPart" }
         fb: { $ref: "#/components/schemas/InventoryFbPart" }
+        banquet: { $ref: "#/components/schemas/InventoryFbPart", description: "The part of fb that comes from the banquet (36-banquet.md F13): fb includes it." }
         occupied_rooms: { type: integer }
         amenity_cost_per_room: { type: [string, "null"] }
         departments: { type: object, additionalProperties: { type: string }, description: "Amount by department id; 0 is the cost with no department." }
@@ -23859,7 +24000,7 @@ components:
         difference: { type: string }
     InventoryReconColumn:
       type: object
-      required: [opening, opening_posted, purchases, transfer_in, transfer_out, closing, goods_used, staff_meal, entertainment, net_cost, revenue, actual_pct, theory, theory_pct, difference, difference_points, waste, count_variance, no_recipe_estimate, other_outflows, target_pct, theory_revenue, no_recipe_days]
+      required: [opening, opening_posted, purchases, transfer_in, transfer_out, closing, goods_used, staff_meal, entertainment, net_cost, revenue, actual_pct, theory, theory_pct, difference, difference_points, waste, count_variance, no_recipe_estimate, other_outflows, target_pct, theory_revenue, no_recipe_days, banquet_revenue, banquet_theory]
       properties:
         opening: { type: string }
         opening_posted: { type: string, description: "The opening stock (OPN) posted inside the period; it is not a purchase." }
@@ -23884,6 +24025,8 @@ components:
         target_pct: { type: [string, "null"] }
         theory_revenue: { type: string, description: "The revenue of the days that have a cost of sales from recipes: theory_pct is the theory over it." }
         no_recipe_days: { type: integer, description: "Days with revenue and no cost from recipes: left out of theory_pct." }
+        banquet_revenue: { type: string, description: "Of which the banquet: the part of revenue that comes from the banquet." }
+        banquet_theory: { type: string, description: "Of which the banquet: the part of theory that comes from the banquet." }
     InventoryReconciliation:
       type: object
       required: [from, to, food, beverage, total, closing_basis, gl]
@@ -23897,8 +24040,9 @@ components:
         gl: { $ref: "#/components/schemas/InventoryGlCheck" }
     InventoryOutletCostRow:
       type: object
-      required: [outlet_id, outlet_code, outlet_name, warehouse_name, class, revenue, no_recipe_revenue, theory, theory_pct, count_variance, actual, actual_pct, basis, difference, waste, staff_meal, entertainment, target_pct, no_recipe_days, no_recipe_data]
+      required: [source, outlet_id, outlet_code, outlet_name, warehouse_name, class, revenue, no_recipe_revenue, theory, theory_pct, count_variance, actual, actual_pct, basis, difference, waste, staff_meal, entertainment, target_pct, no_recipe_days, no_recipe_data]
       properties:
+        source: { type: string, enum: [POS, BANQUET], description: "BANQUET is the row of the banquet: no outlet, code BANQUET." }
         outlet_id: { type: [integer, "null"], format: int64 }
         outlet_code: { type: string }
         outlet_name: { type: string }
@@ -24563,8 +24707,10 @@ components:
         waiting_approvals: { type: integer }
     InventorySalesWithoutDeduction:
       type: object
-      required: [bill_line_id, bill_number, outlet_id, outlet_code, outlet_name, product_id, product_name, quantity, sent_on, voided]
+      required: [source, bill_line_id, bill_number, outlet_id, outlet_code, outlet_name, product_id, product_name, quantity, sent_on, voided]
       properties:
+        source: { type: string, enum: [POS, BANQUET], description: "BANQUET is a line of a posted banquet session: bill_number is its event and session, outlet_code is BANQUET." }
+        posting_line_id: { type: integer, format: int64, description: "A banquet line: the line of the posting." }
         bill_line_id: { type: integer, format: int64 }
         bill_number: { type: string }
         outlet_id: { type: integer, format: int64 }
@@ -24578,8 +24724,10 @@ components:
     BanquetSettings:
       type: object
       description: "The banquet settings of the property; the defaults when it has none (36-banquet.md 3.2)."
-      required: [tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval]
+      required: [tentative_conflict_mode, operating_from, operating_to, posting_mode, default_price_mode, max_discount_pct_no_approval, warehouse_id, warehouse_name]
       properties:
+        warehouse_id: { type: [integer, "null"], format: int64, description: "The warehouse the goods of a posted session are taken from; none: the banquet deducts nothing (4.9)." }
+        warehouse_name: { type: [string, "null"] }
         tentative_conflict_mode: { type: string, enum: [REJECT, QUEUE] }
         operating_from: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
         operating_to: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
@@ -24594,6 +24742,7 @@ components:
         posting_mode: { type: string, enum: [AUTO, MANUAL], description: "Left out: unchanged." }
         default_price_mode: { type: string, enum: [EXCLUSIVE, INCLUSIVE], description: "Left out: unchanged." }
         max_discount_pct_no_approval: { type: [string, "null"], description: "Left out: unchanged." }
+        warehouse_id: { type: [integer, "null"], format: int64, description: "Left out: unchanged; null: no warehouse. It must be an active warehouse of the property." }
         operating_from: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
         operating_to: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
     BanquetRoomPart:
@@ -25240,10 +25389,177 @@ components:
       type: object
       properties:
         policy_template_id: { type: [integer, "null"], format: int64, description: "The template to copy; left out: the default one, none at all when the property has no default." }
+    BanquetForecastGroup:
+      type: object
+      required: [key, name, definite, tentative, definite_events, tentative_events]
+      properties:
+        key: { type: string, description: "The month (YYYY-MM), or the id of the event type or of the sales person." }
+        name: { type: string }
+        definite: { type: string }
+        tentative: { type: string, description: "A row of its own: it is never added to the definite." }
+        definite_events: { type: integer }
+        tentative_events: { type: integer }
+    BanquetForecastReport:
+      type: object
+      required: [from, to, with_tax, months, by_type, by_sales, definite, tentative, tentative_overdue, unposted, unposted_oldest_days, conversion_pct]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        with_tax: { type: boolean }
+        months: { type: array, items: { $ref: "#/components/schemas/BanquetForecastGroup" } }
+        by_type: { type: array, items: { $ref: "#/components/schemas/BanquetForecastGroup" } }
+        by_sales: { type: array, items: { $ref: "#/components/schemas/BanquetForecastGroup" } }
+        definite: { type: string }
+        tentative: { type: string }
+        tentative_overdue: { type: integer, description: "Tentative events whose option date has gone." }
+        unposted: { type: integer, description: "Sessions that are due and not posted." }
+        unposted_oldest_days: { type: integer }
+        conversion_pct: { type: [string, "null"], description: "Definite / (definite + lost) over the 90 days before the end of the period." }
+    BanquetRoomRow:
+      type: object
+      required: [room_id, code, name, is_combo, sessions, hours, available_hours, occupancy_pct, posted_sessions, revenue, revenue_per_hour]
+      properties:
+        room_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        is_combo: { type: boolean }
+        sessions: { type: integer }
+        hours: { type: string, description: "The hours the room was held by definite and completed sessions, inside the hours of operation; a combination and its parts block each other." }
+        available_hours: { type: string }
+        occupancy_pct: { type: [string, "null"] }
+        posted_sessions: { type: integer }
+        revenue: { type: string, description: "Net, of the sessions posted in the period." }
+        revenue_per_hour: { type: [string, "null"] }
+    BanquetRoomsReport:
+      type: object
+      required: [from, to, operating_from, operating_to, days, rooms, revenue]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        operating_from: { $ref: "#/components/schemas/TimeOfDay" }
+        operating_to: { $ref: "#/components/schemas/TimeOfDay" }
+        days: { type: integer }
+        rooms: { type: array, items: { $ref: "#/components/schemas/BanquetRoomRow" } }
+        revenue: { type: string }
+    BanquetGuestRow:
+      type: object
+      required: [session_id, event_id, event_number, event_name, session_no, session_name, session_date, room_name, pax_estimated, pax_guaranteed, pax_actual, difference]
+      properties:
+        session_id: { type: integer, format: int64 }
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        session_no: { type: integer }
+        session_name: { type: string }
+        session_date: { $ref: "#/components/schemas/Date" }
+        room_name: { type: [string, "null"] }
+        pax_estimated: { type: integer }
+        pax_guaranteed: { type: [integer, "null"] }
+        pax_actual: { type: [integer, "null"] }
+        difference: { type: [integer, "null"], description: "Actual less guaranteed, when both are known." }
+    BanquetGuestsReport:
+      type: object
+      required: [from, to, rows, guaranteed, actual, difference, compared_count, over, under]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        rows: { type: array, items: { $ref: "#/components/schemas/BanquetGuestRow" } }
+        guaranteed: { type: integer, description: "The totals are over the sessions that have both numbers." }
+        actual: { type: integer }
+        difference: { type: integer }
+        compared_count: { type: integer }
+        over: { type: integer }
+        under: { type: integer }
+    BanquetSalesRow:
+      type: object
+      required: [sales_user_id, sales_name, created, definite, lost, definite_value, lost_value, conversion_pct]
+      properties:
+        sales_user_id: { type: integer, format: int64 }
+        sales_name: { type: string }
+        created: { type: integer }
+        definite: { type: integer }
+        lost: { type: integer }
+        definite_value: { type: string }
+        lost_value: { type: string }
+        conversion_pct: { type: [string, "null"], description: "Definite / (definite + lost)." }
+    BanquetSalesReport:
+      type: object
+      required: [from, to, rows, total]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        rows: { type: array, items: { $ref: "#/components/schemas/BanquetSalesRow" } }
+        total: { $ref: "#/components/schemas/BanquetSalesRow" }
+    BanquetLostRow:
+      type: object
+      required: [event_id, event_number, event_name, status, sales_name, value, reason_code, reason_name, reason_note, closed_on]
+      properties:
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        status: { type: string, enum: [LOST, CANCELLED] }
+        sales_name: { type: string }
+        value: { type: string }
+        reason_code: { type: string }
+        reason_name: { type: string }
+        reason_note: { type: [string, "null"] }
+        closed_on: { $ref: "#/components/schemas/Date" }
+    BanquetLostGroup:
+      type: object
+      required: [status, reason_code, reason_name, events, value]
+      properties:
+        status: { type: string, enum: [LOST, CANCELLED] }
+        reason_code: { type: string }
+        reason_name: { type: string }
+        events: { type: integer }
+        value: { type: string }
+    BanquetLostReport:
+      type: object
+      required: [from, to, groups, rows, lost, cancelled, value]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+        groups: { type: array, items: { $ref: "#/components/schemas/BanquetLostGroup" } }
+        rows: { type: array, items: { $ref: "#/components/schemas/BanquetLostRow" } }
+        lost: { type: integer }
+        cancelled: { type: integer }
+        value: { type: string }
+    BanquetScheduleRow:
+      type: object
+      required: [session_id, event_id, event_number, event_name, status, session_no, session_name, start_time, end_time, ends_next_day, room_name, setup_style, pax_estimated, pax_guaranteed, pax_actual, contact_name, contact_phone, sales_name, beo_revision, beo_unread]
+      properties:
+        session_id: { type: integer, format: int64 }
+        event_id: { type: integer, format: int64 }
+        event_number: { type: string }
+        event_name: { type: string }
+        status: { type: string }
+        session_no: { type: integer }
+        session_name: { type: string }
+        start_time: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        end_time: { oneOf: [{ $ref: "#/components/schemas/TimeOfDay" }, { type: "null" }] }
+        ends_next_day: { type: boolean }
+        room_name: { type: [string, "null"] }
+        setup_style: { type: [string, "null"] }
+        pax_estimated: { type: integer }
+        pax_guaranteed: { type: [integer, "null"] }
+        pax_actual: { type: [integer, "null"] }
+        contact_name: { type: [string, "null"] }
+        contact_phone: { type: [string, "null"] }
+        sales_name: { type: string }
+        beo_revision: { type: integer, description: "The revision of the BEO that is out; 0: none yet." }
+        beo_unread: { type: integer, description: "Sections with a text that no department has acknowledged for that revision." }
+    BanquetScheduleReport:
+      type: object
+      required: [day, rows]
+      properties:
+        day: { $ref: "#/components/schemas/Date" }
+        rows: { type: array, items: { $ref: "#/components/schemas/BanquetScheduleRow" } }
     BanquetLineComponent:
       type: object
-      required: [item_id, name, charge_code_id, charge_code, qty_per_pax, list_price, sort_order]
+      required: [item_id, name, charge_code_id, charge_code, qty_per_pax, list_price, sort_order, fb_class, pos_product_id]
       properties:
+        fb_class: { type: [string, "null"] }
+        pos_product_id: { type: [integer, "null"], format: int64 }
         item_id: { type: integer, format: int64 }
         name: { type: string }
         charge_code_id: { type: integer, format: int64 }
@@ -25253,8 +25569,9 @@ components:
         sort_order: { type: integer }
     BanquetLine:
       type: object
-      required: [id, session_id, line_no, item_id, package_id, description, basis, quantity, unit_price, price_mode, discount_pct, discount_amount, discount_by, discount_approved_by, charge_code_id, charge_code, fb_class, components]
+      required: [id, session_id, line_no, item_id, package_id, description, basis, quantity, unit_price, price_mode, discount_pct, discount_amount, discount_by, discount_approved_by, charge_code_id, charge_code, fb_class, pos_product_id, components]
       properties:
+        pos_product_id: { type: [integer, "null"], format: int64, description: "The POS product the item is linked to: the goods of its recipe are deducted when the session is posted." }
         id: { type: integer, format: int64 }
         session_id: { type: integer, format: int64 }
         line_no: { type: integer }
@@ -25329,12 +25646,20 @@ components:
         service: { type: string }
         tax: { type: string }
         total: { type: string }
+    BanquetStockNote:
+      type: object
+      required: [enabled, warehouse_name, lines]
+      properties:
+        enabled: { type: boolean, description: "True when the plan has the stock and the banquet has a warehouse: posting a session then deducts goods." }
+        warehouse_name: { type: [string, "null"] }
+        lines: { type: integer, description: "How many lines and components of the event are linked to a product with a recipe." }
     BanquetLines:
       type: object
-      required: [lines, estimate]
+      required: [lines, estimate, stock]
       properties:
         lines: { type: array, items: { $ref: "#/components/schemas/BanquetLine" } }
         estimate: { $ref: "#/components/schemas/BanquetEstimate" }
+        stock: { $ref: "#/components/schemas/BanquetStockNote" }
     BanquetDeposit:
       type: object
       required: [seq, label, due_date, percent, amount, cumulative, status]

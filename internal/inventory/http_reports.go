@@ -1,7 +1,6 @@
 package inventory
 
 import (
-	"encoding/csv"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,32 +36,7 @@ func wantsCSV(r *http.Request) bool { return r.URL.Query().Get("format") == "csv
 
 // writeCSV answers rows as a download. Text that a spreadsheet could read as a formula is prefixed with an apostrophe.
 func writeCSV(w http.ResponseWriter, r *http.Request, filename string, rows [][]string) error {
-	if len(rows) > 0 {
-		rows[0] = csvlang.Header(r, rows[0])
-	}
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-	w.Header().Set("Cache-Control", "no-store")
-	out := csv.NewWriter(w)
-	for _, row := range rows {
-		safe := make([]string, len(row))
-		for i, c := range row {
-			if c != "" && (strings.ContainsRune("=+@\t\r", rune(c[0])) || strings.HasPrefix(c, "-") && !isNumber(c)) {
-				c = "'" + c
-			}
-			safe[i] = c
-		}
-		if err := out.Write(safe); err != nil {
-			return err
-		}
-	}
-	out.Flush()
-	return out.Error()
-}
-
-func isNumber(s string) bool {
-	_, err := strconv.ParseFloat(s, 64)
-	return err == nil
+	return csvlang.Write(w, r, filename, rows)
 }
 
 func dec(d decimal.Decimal) string { return d.String() }
@@ -124,7 +98,8 @@ func (h *Handler) deleteCostTarget(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	class := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("class")))
-	if err := h.svc.DeleteCostTarget(r.Context(), pid, outlet, class); err != nil {
+	source := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("source")))
+	if err := h.svc.DeleteCostTargetOf(r.Context(), pid, source, outlet, class); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)

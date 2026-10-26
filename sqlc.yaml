@@ -434,6 +434,7 @@ sql:
       - internal/banquet/queries.sql
       - internal/banquet/queries_money.sql
       - internal/banquet/queries_docs.sql
+      - internal/banquet/queries_reports.sql
     gen:
       go:
         package: banquetdb

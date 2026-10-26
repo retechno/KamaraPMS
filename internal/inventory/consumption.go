@@ -211,7 +211,7 @@ func (s *Service) QueueVoid(ctx context.Context, tenantID, propertyID int64, v P
 		return db.ErrNoTx
 	}
 	q := s.q(ctx)
-	sale, err := q.GetConsumptionByLine(ctx, inventorydb.GetConsumptionByLineParams{TenantID: tenantID, PropertyID: propertyID, PosBillLineID: v.BillLineID, Kind: QueueSale})
+	sale, err := q.GetConsumptionByLine(ctx, inventorydb.GetConsumptionByLineParams{TenantID: tenantID, PropertyID: propertyID, PosBillLineID: &v.BillLineID, Kind: QueueSale})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // the line was never queued: no recipe, no warehouse, or the module was off
 	}
@@ -232,11 +232,14 @@ func (s *Service) QueueVoid(ctx context.Context, tenantID, propertyID int64, v P
 	default:
 		return nil
 	}
+	if sale.OutletID == nil { // a banquet row is never voided (36 Q3)
+		return nil
+	}
 	kind := QueueVoidReturn
 	if v.Waste {
 		kind = QueueVoidWaste
 	}
-	_, err = q.InsertConsumptionRow(ctx, inventorydb.InsertConsumptionRowParams{TenantID: tenantID, PropertyID: propertyID, OutletID: sale.OutletID, WarehouseID: sale.WarehouseID,
+	_, err = q.InsertConsumptionRow(ctx, inventorydb.InsertConsumptionRowParams{TenantID: tenantID, PropertyID: propertyID, OutletID: *sale.OutletID, WarehouseID: sale.WarehouseID,
 		PosBillLineID: v.BillLineID, Kind: kind, SaleQueueID: &sale.ID, ProductID: sale.ProductID, Quantity: sale.Quantity, SaleClass: sale.SaleClass, SaleDate: v.BusinessDate, Components: sale.Components, CreatedAt: s.clock.Now()})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -296,20 +299,25 @@ func (c *queueCtx) counter(ctx context.Context, ra inventorydb.InvConsumptionQue
 		}
 		account = *acc
 	}
-	dept, ok := c.outlets[ra.OutletID]
-	if !ok {
-		o, err := c.s.q(ctx).GetOutletStock(ctx, inventorydb.GetOutletStockParams{TenantID: c.p.TenantID, PropertyID: c.propertyID, ID: ra.OutletID})
-		if err != nil {
-			return nil, orNotFound(err, notFound("OUTLET_NOT_FOUND", "outlet"))
+	// the department of the cost: the one of the outlet that sold, and for the banquet (no outlet) the one of the charge code of the line, kept on the row
+	dept := ra.DepartmentID
+	if ra.OutletID != nil {
+		od, ok := c.outlets[*ra.OutletID]
+		if !ok {
+			o, err := c.s.q(ctx).GetOutletStock(ctx, inventorydb.GetOutletStockParams{TenantID: c.p.TenantID, PropertyID: c.propertyID, ID: *ra.OutletID})
+			if err != nil {
+				return nil, orNotFound(err, notFound("OUTLET_NOT_FOUND", "outlet"))
+			}
+			od = o.DepartmentID
+			c.outlets[*ra.OutletID] = od
 		}
-		dept = o.DepartmentID
-		c.outlets[ra.OutletID] = dept
+		dept = &od
 	}
-	key := [2]int64{account, dept}
+	key := [2]int64{account, idKey(dept)}
 	d, ok := c.depts[key]
 	if !ok {
 		var err error
-		if d, err = c.s.resolveDepartment(ctx, c.p, c.propertyID, account, &dept, true, "department_id"); err != nil {
+		if d, err = c.s.resolveDepartment(ctx, c.p, c.propertyID, account, dept, true, "department_id"); err != nil {
 			return nil, err
 		}
 		c.depts[key] = d
@@ -342,14 +350,13 @@ func sourceDate(ra inventorydb.InvConsumptionQueue, bd civil.Date) *civil.Date {
 func (c *queueCtx) applyRowComponent(ctx context.Context, stock *Stock, bd civil.Date, ra inventorydb.InvConsumptionQueue, k int, comp queueComponent, saleMovement int64) (int64, error) {
 	pair := Pair{ra.WarehouseID, comp.ItemID}
 	ref := Ref{Type: queueSource, ID: ra.ID, Line: k + 1, SourceDate: sourceDate(ra, bd)}
-	outlet := ra.OutletID
 	switch ra.Kind {
 	case QueueSale:
 		counter, err := c.counter(ctx, ra, comp.ItemID)
 		if err != nil {
 			return 0, err
 		}
-		posted, err := stock.Out(ctx, AllowShortfall(OutArgs{Pair: pair, Kind: KindPosSale, Qty: comp.qty(), Ref: ref, Counter: counter, CostClass: ra.SaleClass, OutletID: &outlet}, "POS_SALE"))
+		posted, err := stock.Out(ctx, AllowShortfall(OutArgs{Pair: pair, Kind: KindPosSale, Qty: comp.qty(), Ref: ref, Counter: counter, CostClass: ra.SaleClass, OutletID: ra.OutletID}, "POS_SALE"))
 		return posted.MovementID, err
 	case QueueVoidReturn:
 		posted, err := stock.Reverse(ctx, ReverseArgs{MovementID: saleMovement, Kind: KindPosSaleReturn, Ref: ref})
@@ -693,26 +700,28 @@ func (s *Service) DrainQueue(ctx context.Context, p auth.Principal, propertyID i
 
 // QueueRow is a row of the queue as the screens show it.
 type QueueRow struct {
-	ID            int64           `json:"id"`
-	OutletID      int64           `json:"outlet_id"`
-	OutletCode    string          `json:"outlet_code"`
-	OutletName    string          `json:"outlet_name"`
-	WarehouseID   int64           `json:"warehouse_id"`
-	WarehouseName string          `json:"warehouse_name"`
-	BillLineID    int64           `json:"bill_line_id"`
-	BillNumber    string          `json:"bill_number"`
-	Kind          string          `json:"kind"`
-	ProductID     int64           `json:"product_id"`
-	ProductName   string          `json:"product_name"`
-	Quantity      decimal.Decimal `json:"quantity"`
-	SaleClass     string          `json:"sale_class"`
-	SaleDate      civil.Date      `json:"sale_date"`
-	Status        string          `json:"status"`
-	Attempts      int             `json:"attempts"`
-	ErrorCode     *string         `json:"error_code"`
-	ErrorMessage  *string         `json:"error_message"`
-	CreatedAt     time.Time       `json:"created_at"`
-	AppliedOn     *civil.Date     `json:"applied_on"`
+	ID            int64  `json:"id"`
+	Source        string `json:"source"`
+	OutletID      *int64 `json:"outlet_id"`
+	OutletCode    string `json:"outlet_code"`
+	OutletName    string `json:"outlet_name"`
+	WarehouseID   int64  `json:"warehouse_id"`
+	WarehouseName string `json:"warehouse_name"`
+	BillLineID    *int64 `json:"bill_line_id"`
+	// BillNumber is the number of the POS bill, or for a banquet row the number of the event and the name of the session.
+	BillNumber   string          `json:"bill_number"`
+	Kind         string          `json:"kind"`
+	ProductID    int64           `json:"product_id"`
+	ProductName  string          `json:"product_name"`
+	Quantity     decimal.Decimal `json:"quantity"`
+	SaleClass    string          `json:"sale_class"`
+	SaleDate     civil.Date      `json:"sale_date"`
+	Status       string          `json:"status"`
+	Attempts     int             `json:"attempts"`
+	ErrorCode    *string         `json:"error_code"`
+	ErrorMessage *string         `json:"error_message"`
+	CreatedAt    time.Time       `json:"created_at"`
+	AppliedOn    *civil.Date     `json:"applied_on"`
 }
 
 // QueueSummary is what waits, for the setup check and the badge of the screens.
@@ -846,7 +855,7 @@ func (s *Service) queueRow(ctx context.Context, p auth.Principal, propertyID, id
 }
 
 func toQueueRow(r inventorydb.ListConsumptionQueueRow) QueueRow {
-	return QueueRow{ID: r.ID, OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName, WarehouseID: r.WarehouseID, WarehouseName: r.WarehouseName, BillLineID: r.PosBillLineID,
+	return QueueRow{ID: r.ID, Source: r.Source, OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName, WarehouseID: r.WarehouseID, WarehouseName: r.WarehouseName, BillLineID: r.PosBillLineID,
 		BillNumber: r.BillNumber, Kind: r.Kind, ProductID: r.ProductID, ProductName: r.ProductName, Quantity: r.Quantity, SaleClass: r.SaleClass, SaleDate: r.SaleDate, Status: r.Status,
 		Attempts: int(r.Attempts), ErrorCode: r.ErrorCode, ErrorMessage: r.ErrorMessage, CreatedAt: r.CreatedAt, AppliedOn: r.AppliedOn}
 }

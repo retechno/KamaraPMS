@@ -2,10 +2,11 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { BanquetEventType, BanquetPolicyTemplate, BanquetReason, BanquetSettings } from '@/api/types'
+import type { BanquetEventType, BanquetPolicyTemplate, BanquetReason, BanquetSettings, InventoryWarehouse } from '@/api/types'
 import BanquetRecipientsCard from '@/components/banquet/BanquetRecipientsCard.vue'
 import BanquetTemplateDialog from '@/components/banquet/BanquetTemplateDialog.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import OutletCostTargets from '@/components/inventory/OutletCostTargets.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +18,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
+import { useSubscriptionStore } from '@/stores/subscription'
 
 /**
  * The banquet settings (docs/architecture/36-banquet.md 3.2, 6.10): what happens when a tentative booking asks for a room that another tentative booking holds (refuse, or queue behind it), and the
@@ -24,6 +26,12 @@ import { usePropertyStore } from '@/stores/property'
  */
 const property = usePropertyStore()
 const pid = computed(() => property.currentId)
+const subscription = useSubscriptionStore()
+// the stock of the banquet exists only where the Inventory module does (docs/architecture/36-banquet.md 4.9)
+const stockOn = computed(() => subscription.modules !== null && subscription.has('INVENTORY'))
+const warehouses = ref<InventoryWarehouse[]>([])
+const warehouseId = ref<number | null>(null)
+const warehouseName = ref<string | null>(null)
 const settings = reactive<{ mode: 'REJECT' | 'QUEUE'; from: string | null; to: string | null; posting: 'AUTO' | 'MANUAL'; priceMode: 'EXCLUSIVE' | 'INCLUSIVE'; maxDiscount: string }>({ mode: 'REJECT', from: null, to: null, posting: 'AUTO', priceMode: 'EXCLUSIVE', maxDiscount: '0' })
 const templates = ref<BanquetPolicyTemplate[]>([])
 const templateOpen = ref(false)
@@ -54,6 +62,16 @@ async function load(): Promise<void> {
     types.value = ty.data?.data ?? []
     reasons.value = re.data?.data ?? []
     templates.value = tp.data?.data ?? []
+    warehouseId.value = d?.warehouse_id ?? null
+    warehouseName.value = d?.warehouse_name ?? null
+    if (stockOn.value) {
+      try {
+        const w = await api.GET('/api/v1/properties/{propertyId}/inventory/warehouses', path)
+        warehouses.value = (w.data?.data ?? []).filter((x) => x.is_active || x.id === warehouseId.value)
+      } catch {
+        warehouses.value = []
+      }
+    }
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -68,6 +86,23 @@ async function saveSettings(): Promise<void> {
   try {
     await api.PUT('/api/v1/properties/{propertyId}/banquet/settings', { params: { path: { propertyId } }, body: { tentative_conflict_mode: settings.mode, operating_from: settings.from || null, operating_to: settings.to || null, posting_mode: settings.posting, default_price_mode: settings.priceMode, max_discount_pct_no_approval: settings.maxDiscount.trim() || '0' } })
     toast.success(t('banquet.settings.saved'))
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  } finally {
+    saving.value = false
+  }
+}
+
+// the warehouse the stock of the sessions leaves: saved on its own; only the fields sent change, so the posting and the price mode stay as they are
+async function saveWarehouse(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  saving.value = true
+  error.value = null
+  try {
+    await api.PUT('/api/v1/properties/{propertyId}/banquet/settings', { params: { path: { propertyId } }, body: { tentative_conflict_mode: settings.mode, warehouse_id: warehouseId.value } })
+    toast.success(t('banquet.settings.saved'))
+    await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   } finally {
@@ -144,6 +179,24 @@ async function saveSmall(): Promise<void> {
         <p class="m-0 text-xs text-muted-foreground">{{ t('banquet.settings.maxDiscountHint') }}</p>
         <div><Button type="submit" :disabled="saving" data-testid="money-save">{{ t('common.save') }}</Button></div>
       </form>
+    </Card>
+
+    <Card v-if="stockOn" class="p-4" data-testid="stock-section">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="saveWarehouse">
+        <h2 class="m-0 text-base font-semibold">{{ t('banquet.settings.stock') }}</h2>
+        <p class="m-0 text-sm text-muted-foreground">{{ t('banquet.settings.stockHint') }}</p>
+        <FormField :label="t('banquet.settings.warehouse')">
+          <template #default="{ id }">
+            <NativeSelect :id="id" v-model="warehouseId" name="warehouse_id" data-testid="banquet-warehouse">
+              <option :value="null">{{ t('banquet.settings.noWarehouse') }}</option>
+              <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+            </NativeSelect>
+          </template>
+        </FormField>
+        <p v-if="warehouseId === null" class="m-0 text-xs text-muted-foreground" data-testid="warehouse-off">{{ t('banquet.settings.stockOff') }}</p>
+        <div><Button type="submit" :disabled="saving" data-testid="warehouse-save">{{ t('common.save') }}</Button></div>
+      </form>
+      <OutletCostTargets banquet class="mt-4" />
     </Card>
 
     <Card class="p-4" data-testid="templates-section">

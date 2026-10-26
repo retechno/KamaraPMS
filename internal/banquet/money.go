@@ -39,11 +39,11 @@ func (s *Service) loadLines(ctx context.Context, tenantID, propertyID, eventID i
 	for i, r := range rows {
 		out[i] = Line{ID: r.ID, SessionID: r.SessionID, LineNo: int(r.LineNo), ItemID: r.ItemID, PackageID: r.PackageID, Description: r.Description, Basis: r.Basis, Quantity: r.Quantity,
 			UnitPrice: r.UnitPrice, PriceMode: r.PriceMode, DiscountPct: r.DiscountPct, DiscountAmount: r.DiscountAmount, DiscountBy: r.DiscountBy, DiscountApprovedBy: r.DiscountApprovedBy,
-			ChargeCodeID: r.ChargeCodeID, ChargeCode: r.ChargeCode, FbClass: r.FbClass, Components: []LineComponent{}}
+			ChargeCodeID: r.ChargeCodeID, ChargeCode: r.ChargeCode, FbClass: r.FbClass, PosProductID: r.PosProductID, Components: []LineComponent{}}
 		for _, c := range comps {
 			if c.LineID == r.ID {
 				out[i].Components = append(out[i].Components, LineComponent{ItemID: c.ItemID, Name: c.Name, ChargeCodeID: c.ChargeCodeID, ChargeCode: c.ChargeCode, QtyPerPax: c.QtyPerPax,
-					ListPrice: c.ListPrice, SortOrder: int(c.SortOrder)})
+					ListPrice: c.ListPrice, SortOrder: int(c.SortOrder), FbClass: c.FbClass, PosProductID: c.PosProductID})
 			}
 		}
 	}
@@ -198,7 +198,11 @@ func (s *Service) ListLines(ctx context.Context, propertyID, eventID int64) (Lin
 		return LinesView{}, orNotFound(err, notFound("EVENT_NOT_FOUND", "event"))
 	}
 	lines, est, err := s.eventEstimate(ctx, p.TenantID, propertyID, eventID)
-	return LinesView{Lines: lines, Estimate: est}, err
+	if err != nil {
+		return LinesView{}, err
+	}
+	note, err := s.stockNote(ctx, p.TenantID, propertyID, lines)
+	return LinesView{Lines: lines, Estimate: est, Stock: note}, err
 }
 
 // Estimate answers the money of an event by the engine.

@@ -65,6 +65,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 
 	h.registerMoney(mux)
 	h.registerDocs(mux)
+	h.registerReports(mux)
 }
 
 func pathInt(r *http.Request, name string) (int64, error) {

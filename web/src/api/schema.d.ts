@@ -11927,8 +11927,122 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Sessions of definite events dated the business date or earlier that are not posted (banquet.manage or confirm) */
+        /** Sessions of definite events dated the business date or earlier that are not posted (banquet.manage or confirm); ?format=csv for a file */
         get: operations["getBanquetUnpostedReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reports/forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Forecast of revenue by month, type of event and sales person: the definite and the tentative on rows of their own (banquet.read and the others) */
+        get: operations["getBanquetForecastReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reports/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Revenue and occupancy by meeting room */
+        get: operations["getBanquetRoomsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reports/guests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Guaranteed against the actual guests of the sessions */
+        get: operations["getBanquetGuestsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reports/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Production by sales person and the conversion: definite / (definite + lost) */
+        get: operations["getBanquetSalesReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reports/lost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Lost and cancelled events with the reasons */
+        get: operations["getBanquetLostReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/banquet/reports/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The sessions of a day, for the board and for print */
+        get: operations["getBanquetScheduleReport"];
         put?: never;
         post?: never;
         delete?: never;
@@ -22233,15 +22347,20 @@ export interface components {
         InventoryQueueRow: {
             /** Format: int64 */
             id: number;
+            /**
+             * @description BANQUET is the deduction of a posted banquet session: no outlet, no POS line; bill_number is its event and session.
+             * @enum {string}
+             */
+            source: "POS" | "BANQUET";
             /** Format: int64 */
-            outlet_id: number;
+            outlet_id: number | null;
             outlet_code: string;
             outlet_name: string;
             /** Format: int64 */
             warehouse_id: number;
             warehouse_name: string;
             /** Format: int64 */
-            bill_line_id: number;
+            bill_line_id: number | null;
             bill_number: string;
             /** @enum {string} */
             kind: "SALE" | "VOID_RETURN" | "VOID_WASTE";
@@ -22270,7 +22389,25 @@ export interface components {
             summary: components["schemas"]["InventoryQueueSummary"];
             rows: components["schemas"]["InventoryQueueRow"][];
         };
+        InventoryCostTargetInput: {
+            /**
+             * @description Omitted: POS. BANQUET takes outlet_id null.
+             * @enum {string}
+             */
+            source?: "POS" | "BANQUET";
+            /** Format: int64 */
+            outlet_id: number | null;
+            /** @enum {string} */
+            class: "FOOD" | "BEVERAGE";
+            /** @description Above 0 and up to 100, two decimals. */
+            target_pct: string;
+        };
         InventoryCostTarget: {
+            /**
+             * @description BANQUET is the target of the banquet (no outlet); an empty source in a request is POS.
+             * @enum {string}
+             */
+            source: "POS" | "BANQUET";
             /**
              * Format: int64
              * @description null: the property's target, which an outlet without its own takes.
@@ -22306,6 +22443,8 @@ export interface components {
             food: components["schemas"]["InventoryFbPart"];
             beverage: components["schemas"]["InventoryFbPart"];
             fb: components["schemas"]["InventoryFbPart"];
+            /** @description The part of fb that comes from the banquet (36-banquet.md F13): fb includes it. */
+            banquet: components["schemas"]["InventoryFbPart"];
             occupied_rooms: number;
             amenity_cost_per_room: string | null;
             /** @description Amount by department id; 0 is the cost with no department. */
@@ -22372,6 +22511,10 @@ export interface components {
             theory_revenue: string;
             /** @description Days with revenue and no cost from recipes: left out of theory_pct. */
             no_recipe_days: number;
+            /** @description Of which the banquet: the part of revenue that comes from the banquet. */
+            banquet_revenue: string;
+            /** @description Of which the banquet: the part of theory that comes from the banquet. */
+            banquet_theory: string;
         };
         InventoryReconciliation: {
             from: components["schemas"]["Date"];
@@ -22384,6 +22527,11 @@ export interface components {
             gl: components["schemas"]["InventoryGlCheck"];
         };
         InventoryOutletCostRow: {
+            /**
+             * @description BANQUET is the row of the banquet: no outlet, code BANQUET.
+             * @enum {string}
+             */
+            source: "POS" | "BANQUET";
             /** Format: int64 */
             outlet_id: number | null;
             outlet_code: string;
@@ -23022,6 +23170,16 @@ export interface components {
             waiting_approvals: number;
         };
         InventorySalesWithoutDeduction: {
+            /**
+             * @description BANQUET is a line of a posted banquet session: bill_number is its event and session, outlet_code is BANQUET.
+             * @enum {string}
+             */
+            source: "POS" | "BANQUET";
+            /**
+             * Format: int64
+             * @description A banquet line: the line of the posting.
+             */
+            posting_line_id?: number;
             /** Format: int64 */
             bill_line_id: number;
             bill_number: string;
@@ -23038,6 +23196,12 @@ export interface components {
         };
         /** @description The banquet settings of the property; the defaults when it has none (36-banquet.md 3.2). */
         BanquetSettings: {
+            /**
+             * Format: int64
+             * @description The warehouse the goods of a posted session are taken from; none: the banquet deducts nothing (4.9).
+             */
+            warehouse_id: number | null;
+            warehouse_name: string | null;
             /** @enum {string} */
             tentative_conflict_mode: "REJECT" | "QUEUE";
             operating_from: components["schemas"]["TimeOfDay"] | null;
@@ -23070,6 +23234,11 @@ export interface components {
             default_price_mode?: "EXCLUSIVE" | "INCLUSIVE";
             /** @description Left out: unchanged. */
             max_discount_pct_no_approval?: string | null;
+            /**
+             * Format: int64
+             * @description Left out: unchanged; null: no warehouse. It must be an active warehouse of the property.
+             */
+            warehouse_id?: number | null;
             operating_from?: components["schemas"]["TimeOfDay"] | null;
             operating_to?: components["schemas"]["TimeOfDay"] | null;
         };
@@ -23746,7 +23915,170 @@ export interface components {
              */
             policy_template_id?: number | null;
         };
+        BanquetForecastGroup: {
+            /** @description The month (YYYY-MM), or the id of the event type or of the sales person. */
+            key: string;
+            name: string;
+            definite: string;
+            /** @description A row of its own: it is never added to the definite. */
+            tentative: string;
+            definite_events: number;
+            tentative_events: number;
+        };
+        BanquetForecastReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            with_tax: boolean;
+            months: components["schemas"]["BanquetForecastGroup"][];
+            by_type: components["schemas"]["BanquetForecastGroup"][];
+            by_sales: components["schemas"]["BanquetForecastGroup"][];
+            definite: string;
+            tentative: string;
+            /** @description Tentative events whose option date has gone. */
+            tentative_overdue: number;
+            /** @description Sessions that are due and not posted. */
+            unposted: number;
+            unposted_oldest_days: number;
+            /** @description Definite / (definite + lost) over the 90 days before the end of the period. */
+            conversion_pct: string | null;
+        };
+        BanquetRoomRow: {
+            /** Format: int64 */
+            room_id: number;
+            code: string;
+            name: string;
+            is_combo: boolean;
+            sessions: number;
+            /** @description The hours the room was held by definite and completed sessions, inside the hours of operation; a combination and its parts block each other. */
+            hours: string;
+            available_hours: string;
+            occupancy_pct: string | null;
+            posted_sessions: number;
+            /** @description Net, of the sessions posted in the period. */
+            revenue: string;
+            revenue_per_hour: string | null;
+        };
+        BanquetRoomsReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            operating_from: components["schemas"]["TimeOfDay"];
+            operating_to: components["schemas"]["TimeOfDay"];
+            days: number;
+            rooms: components["schemas"]["BanquetRoomRow"][];
+            revenue: string;
+        };
+        BanquetGuestRow: {
+            /** Format: int64 */
+            session_id: number;
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            session_no: number;
+            session_name: string;
+            session_date: components["schemas"]["Date"];
+            room_name: string | null;
+            pax_estimated: number;
+            pax_guaranteed: number | null;
+            pax_actual: number | null;
+            /** @description Actual less guaranteed, when both are known. */
+            difference: number | null;
+        };
+        BanquetGuestsReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rows: components["schemas"]["BanquetGuestRow"][];
+            /** @description The totals are over the sessions that have both numbers. */
+            guaranteed: number;
+            actual: number;
+            difference: number;
+            compared_count: number;
+            over: number;
+            under: number;
+        };
+        BanquetSalesRow: {
+            /** Format: int64 */
+            sales_user_id: number;
+            sales_name: string;
+            created: number;
+            definite: number;
+            lost: number;
+            definite_value: string;
+            lost_value: string;
+            /** @description Definite / (definite + lost). */
+            conversion_pct: string | null;
+        };
+        BanquetSalesReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            rows: components["schemas"]["BanquetSalesRow"][];
+            total: components["schemas"]["BanquetSalesRow"];
+        };
+        BanquetLostRow: {
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            /** @enum {string} */
+            status: "LOST" | "CANCELLED";
+            sales_name: string;
+            value: string;
+            reason_code: string;
+            reason_name: string;
+            reason_note: string | null;
+            closed_on: components["schemas"]["Date"];
+        };
+        BanquetLostGroup: {
+            /** @enum {string} */
+            status: "LOST" | "CANCELLED";
+            reason_code: string;
+            reason_name: string;
+            events: number;
+            value: string;
+        };
+        BanquetLostReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            groups: components["schemas"]["BanquetLostGroup"][];
+            rows: components["schemas"]["BanquetLostRow"][];
+            lost: number;
+            cancelled: number;
+            value: string;
+        };
+        BanquetScheduleRow: {
+            /** Format: int64 */
+            session_id: number;
+            /** Format: int64 */
+            event_id: number;
+            event_number: string;
+            event_name: string;
+            status: string;
+            session_no: number;
+            session_name: string;
+            start_time: components["schemas"]["TimeOfDay"] | null;
+            end_time: components["schemas"]["TimeOfDay"] | null;
+            ends_next_day: boolean;
+            room_name: string | null;
+            setup_style: string | null;
+            pax_estimated: number;
+            pax_guaranteed: number | null;
+            pax_actual: number | null;
+            contact_name: string | null;
+            contact_phone: string | null;
+            sales_name: string;
+            /** @description The revision of the BEO that is out; 0: none yet. */
+            beo_revision: number;
+            /** @description Sections with a text that no department has acknowledged for that revision. */
+            beo_unread: number;
+        };
+        BanquetScheduleReport: {
+            day: components["schemas"]["Date"];
+            rows: components["schemas"]["BanquetScheduleRow"][];
+        };
         BanquetLineComponent: {
+            fb_class: string | null;
+            /** Format: int64 */
+            pos_product_id: number | null;
             /** Format: int64 */
             item_id: number;
             name: string;
@@ -23758,6 +24090,11 @@ export interface components {
             sort_order: number;
         };
         BanquetLine: {
+            /**
+             * Format: int64
+             * @description The POS product the item is linked to: the goods of its recipe are deducted when the session is posted.
+             */
+            pos_product_id: number | null;
             /** Format: int64 */
             id: number;
             /** Format: int64 */
@@ -23843,9 +24180,17 @@ export interface components {
             tax: string;
             total: string;
         };
+        BanquetStockNote: {
+            /** @description True when the plan has the stock and the banquet has a warehouse: posting a session then deducts goods. */
+            enabled: boolean;
+            warehouse_name: string | null;
+            /** @description How many lines and components of the event are linked to a product with a recipe. */
+            lines: number;
+        };
         BanquetLines: {
             lines: components["schemas"]["BanquetLine"][];
             estimate: components["schemas"]["BanquetEstimate"];
+            stock: components["schemas"]["BanquetStockNote"];
         };
         BanquetDeposit: {
             seq: number;
@@ -41543,7 +41888,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["InventoryCostTarget"];
+                "application/json": components["schemas"]["InventoryCostTargetInput"];
             };
         };
         responses: {
@@ -41565,6 +41910,8 @@ export interface operations {
             query: {
                 /** @description Absent: the property's target. */
                 outlet_id?: number;
+                /** @description BANQUET removes the target of the banquet; absent: POS. */
+                source?: "POS" | "BANQUET";
                 class: "FOOD" | "BEVERAGE";
             };
             header?: never;
@@ -43577,7 +43924,11 @@ export interface operations {
     };
     getBanquetUnpostedReport: {
         parameters: {
-            query?: never;
+            query?: {
+                format?: "csv";
+                /** @description id: the names of the columns of the CSV in Indonesian. */
+                lang?: "en" | "id";
+            };
             header?: never;
             path: {
                 propertyId: components["parameters"]["PropertyId"];
@@ -43599,6 +43950,204 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getBanquetForecastReport: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD; absent: the first day of the month of the business date. */
+                from?: string;
+                /** @description YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most. */
+                to?: string;
+                /** @description true: the amounts include service and tax. */
+                with_tax?: boolean;
+                format?: "csv";
+                /** @description id: the names of the columns of the CSV in Indonesian. */
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetForecastReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetRoomsReport: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD; absent: the first day of the month of the business date. */
+                from?: string;
+                /** @description YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most. */
+                to?: string;
+                format?: "csv";
+                /** @description id: the names of the columns of the CSV in Indonesian. */
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetRoomsReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetGuestsReport: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD; absent: the first day of the month of the business date. */
+                from?: string;
+                /** @description YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most. */
+                to?: string;
+                format?: "csv";
+                /** @description id: the names of the columns of the CSV in Indonesian. */
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetGuestsReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetSalesReport: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD; absent: the first day of the month of the business date. */
+                from?: string;
+                /** @description YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most. */
+                to?: string;
+                format?: "csv";
+                /** @description id: the names of the columns of the CSV in Indonesian. */
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetSalesReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetLostReport: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD; absent: the first day of the month of the business date. */
+                from?: string;
+                /** @description YYYY-MM-DD; absent: the last day of the month (the forecast: five months on). 400 days at most. */
+                to?: string;
+                format?: "csv";
+                /** @description id: the names of the columns of the CSV in Indonesian. */
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetLostReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getBanquetScheduleReport: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD; absent: the business date. */
+                day?: string;
+                format?: "csv";
+                /** @description id: the names of the columns of the CSV in Indonesian. */
+                lang?: "en" | "id";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanquetScheduleReport"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     listBanquetPolicyTemplates: {

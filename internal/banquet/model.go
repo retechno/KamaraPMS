@@ -3,6 +3,7 @@
 package banquet
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"time"
@@ -93,6 +94,30 @@ type Settings struct {
 	PostingMode              string          `json:"posting_mode"`
 	DefaultPriceMode         string          `json:"default_price_mode"`
 	MaxDiscountPctNoApproval decimal.Decimal `json:"max_discount_pct_no_approval"`
+	// The stock (PR 4): the warehouse the goods of a posted session are taken from. Without one the banquet deducts nothing.
+	WarehouseID   *int64  `json:"warehouse_id"`
+	WarehouseName *string `json:"warehouse_name"`
+}
+
+// NullableID is an id a request may leave out (keep), set, or clear with null.
+type NullableID struct {
+	Set bool
+	ID  *int64
+}
+
+// UnmarshalJSON marks the field as present, whether it holds an id or null.
+func (n *NullableID) UnmarshalJSON(b []byte) error {
+	n.Set = true
+	if string(b) == "null" {
+		n.ID = nil
+		return nil
+	}
+	var v int64
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	n.ID = &v
+	return nil
 }
 
 // SettingsInput changes the settings.
@@ -104,6 +129,8 @@ type SettingsInput struct {
 	PostingMode              string           `json:"posting_mode"`
 	DefaultPriceMode         string           `json:"default_price_mode"`
 	MaxDiscountPctNoApproval *decimal.Decimal `json:"max_discount_pct_no_approval"`
+	// The warehouse of the banquet: left out keeps it, null clears it.
+	WarehouseID NullableID `json:"warehouse_id"`
 }
 
 // RoomPart is a base room of a combined room.

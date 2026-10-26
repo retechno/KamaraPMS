@@ -32,6 +32,8 @@ type Service struct {
 	folios  *folios.Service
 	billing *billingconfig.Service
 	iam     *iam.Service
+	// The stock (PR 4): nil, or off by the plan, and the banquet deducts nothing.
+	stock StockHook
 }
 
 // NewService wires the service.

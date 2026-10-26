@@ -420,16 +420,19 @@ func (s *Service) SaveRecipe(ctx context.Context, propertyID, productID int64, i
 
 // SalesWithoutDeduction is a row of the report of 5.6: a line of the POS with a recipe that has no row in the queue.
 type SalesWithoutDeduction struct {
-	BillLineID  int64           `json:"bill_line_id"`
-	BillNumber  string          `json:"bill_number"`
-	OutletID    int64           `json:"outlet_id"`
-	OutletCode  string          `json:"outlet_code"`
-	OutletName  string          `json:"outlet_name"`
-	ProductID   int64           `json:"product_id"`
-	ProductName string          `json:"product_name"`
-	Quantity    decimal.Decimal `json:"quantity"`
-	SentOn      civil.Date      `json:"sent_on"`
-	Voided      bool            `json:"voided"`
+	// Source is POS, or BANQUET for a line of a posted banquet session (BillNumber is then the number of the event and the session, OutletCode is BANQUET and PostingLineID names the line).
+	Source        string          `json:"source"`
+	PostingLineID int64           `json:"posting_line_id,omitempty"`
+	BillLineID    int64           `json:"bill_line_id"`
+	BillNumber    string          `json:"bill_number"`
+	OutletID      int64           `json:"outlet_id"`
+	OutletCode    string          `json:"outlet_code"`
+	OutletName    string          `json:"outlet_name"`
+	ProductID     int64           `json:"product_id"`
+	ProductName   string          `json:"product_name"`
+	Quantity      decimal.Decimal `json:"quantity"`
+	SentOn        civil.Date      `json:"sent_on"`
+	Voided        bool            `json:"voided"`
 }
 
 // SalesWithoutDeductionReport lists the lines of the POS posted between two business dates that have a recipe and no queue row: sales made while the module was off (inventory.view).
@@ -454,7 +457,21 @@ func (s *Service) SalesWithoutDeductionReport(ctx context.Context, propertyID in
 	out := make([]SalesWithoutDeduction, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, SalesWithoutDeduction{BillLineID: r.BillLineID, BillNumber: derefStr(r.BillNumber), OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName,
-			ProductID: r.ProductID, ProductName: r.ProductName, Quantity: r.Quantity, SentOn: r.SentOn, Voided: r.Status == "VOID"})
+			ProductID: r.ProductID, ProductName: r.ProductName, Quantity: r.Quantity, SentOn: r.SentOn, Voided: r.Status == "VOID", Source: SourcePOS})
+	}
+	if outletID == nil { // the banquet has no outlet: its lines are in the report unless one outlet was asked for
+		room := limit - len(out)
+		if room < 1 {
+			return out, nil
+		}
+		bq, err := s.q(ctx).ListBanquetWithoutDeduction(ctx, inventorydb.ListBanquetWithoutDeductionParams{TenantID: p.TenantID, PropertyID: propertyID, FromDate: from, ToDate: to, RowLimit: int32(room)}) //nolint:gosec // G115: bounded
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range bq {
+			out = append(out, SalesWithoutDeduction{Source: SourceBanquet, PostingLineID: r.PostingLineID, BillNumber: r.EventNumber + " · " + r.SessionName, OutletCode: "BANQUET", OutletName: "Banquet",
+				ProductID: r.ProductID, ProductName: r.ProductName, Quantity: r.Quantity, SentOn: r.SentOn})
+		}
 	}
 	return out, nil
 }

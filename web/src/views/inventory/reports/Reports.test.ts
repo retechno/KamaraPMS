@@ -65,7 +65,7 @@ afterEach(() => {
 const part = (revenue: string, cost: string, pct: string | null, target: string | null, above = false, mtd: string | null = pct) => ({ revenue, cost, pct, target_pct: target, above_target: above, mtd_pct: mtd, no_recipe_days: 0, no_recipe_data: false })
 const day = (date: string, over: Record<string, unknown> = {}) => ({
   date, live: false, kinds: { SALE_COST_FOOD: '300000', SALE_COST_BEVERAGE: '50000', WASTE: '20000', STAFF_MEAL: '10000', ENTERTAINMENT: '5000', AMENITY: '40000', ENGINEERING: '0', OTHER_USE: '15000', COUNT_VARIANCE: '0', PRICE_VARIANCE: '-2000' },
-  total: '438000', food: part('1000000', '300000', '30', '32'), beverage: part('250000', '50000', '20', '22'), fb: part('1250000', '350000', '28', null), occupied_rooms: 20, amenity_cost_per_room: '2000',
+  total: '438000', food: part('1000000', '300000', '30', '32'), beverage: part('250000', '50000', '20', '22'), fb: part('1250000', '350000', '28', null), banquet: part('0', '0', null, null), occupied_rooms: 20, amenity_cost_per_room: '2000',
   departments: { '0': '2000', '3': '436000' }, ...over,
 })
 const dailyCost = () => ({
@@ -277,7 +277,7 @@ describe('the inventory page', () => {
 })
 
 describe('the target of an outlet', () => {
-  const targets = (own: object[] = []) => (path: string) => (path.endsWith('/cost-targets') ? { data: { data: [{ outlet_id: null, class: 'FOOD', target_pct: '30' }, ...own] } } : { data: {} })
+  const targets = (own: object[] = []) => (path: string) => (path.endsWith('/cost-targets') ? { data: { data: [{ source: 'POS', outlet_id: null, class: 'FOOD', target_pct: '30' }, ...own] } } : { data: {} })
 
   it('shows the target of the property when the outlet has none, and saves its own', async () => {
     await setup(OutletCostTargets, ['inventory.view', 'inventory.manage'], targets(), { outletId: 4 })
@@ -291,7 +291,7 @@ describe('the target of an outlet', () => {
   })
 
   it('removes the own target when the field is emptied, and refuses a value outside 1 to 100', async () => {
-    await setup(OutletCostTargets, ['inventory.view', 'inventory.manage'], targets([{ outlet_id: 4, class: 'BEVERAGE', target_pct: '22' }]), { outletId: 4 })
+    await setup(OutletCostTargets, ['inventory.view', 'inventory.manage'], targets([{ source: 'POS', outlet_id: 4, class: 'BEVERAGE', target_pct: '22' }]), { outletId: 4 })
     expect((body('[data-testid=target-BEVERAGE]').element as HTMLInputElement).value).toBe('22')
     await type('[data-testid=target-BEVERAGE]', '120')
     expect(has('[data-testid=target-invalid]')).toBe(true)

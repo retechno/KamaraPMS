@@ -640,8 +640,9 @@ func (q *Queries) InsertPolicyTemplate(ctx context.Context, arg InsertPolicyTemp
 	return id, err
 }
 
-const insertPostingItem = `-- name: InsertPostingItem :exec
+const insertPostingItem = `-- name: InsertPostingItem :one
 INSERT INTO banquet_posting_items (property_id, posting_id, line_id, component_item_id, folio_item_id) VALUES ($1, $2, $3, $4, $5)
+RETURNING id
 `
 
 type InsertPostingItemParams struct {
@@ -652,15 +653,17 @@ type InsertPostingItemParams struct {
 	FolioItemID     int64
 }
 
-func (q *Queries) InsertPostingItem(ctx context.Context, arg InsertPostingItemParams) error {
-	_, err := q.db.Exec(ctx, insertPostingItem,
+func (q *Queries) InsertPostingItem(ctx context.Context, arg InsertPostingItemParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertPostingItem,
 		arg.PropertyID,
 		arg.PostingID,
 		arg.LineID,
 		arg.ComponentItemID,
 		arg.FolioItemID,
 	)
-	return err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertSessionPosting = `-- name: InsertSessionPosting :one

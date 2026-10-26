@@ -223,11 +223,13 @@ const (
 	FindNegative     = "INVENTORY_NEGATIVE_STOCK"
 	FindUnbilled     = "INVENTORY_RECEIPT_UNBILLED"
 	FindQueueFailed  = "INVENTORY_QUEUE_FAILED"
+	// FindFbClassRevenue is a setup warning: the class of a POS category or of a banquet item and the revenue account of its charge code disagree (35 4.9, 36 F13).
+	FindFbClassRevenue = "FB_CLASS_REVENUE_MISMATCH"
 )
 
 // FindingCodes are the codes of the findings of the stock, in the night audit and in the setup check.
 var FindingCodes = []string{FindBalanceDrift, FindGLMismatch, FindNegative, FindUnbilled, FindQueueFailed, FindCountOpen, FindAmenityPlanInvalid, FindAmenityHeld, FindAmenityShort,
-	"NO_CATEGORY", "NO_WAREHOUSE", "NO_ITEM", "ACCOUNT_MAP_INCOMPLETE", "DEPARTMENT_HEAD_INACTIVE", "APPROVAL_CHAIN_EMPTY"}
+	"NO_CATEGORY", "NO_WAREHOUSE", "NO_ITEM", "ACCOUNT_MAP_INCOMPLETE", "DEPARTMENT_HEAD_INACTIVE", "APPROVAL_CHAIN_EMPTY", FindFbClassRevenue}
 
 func str(v any) string { return fmt.Sprint(v) }
 

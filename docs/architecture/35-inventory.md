@@ -1103,8 +1103,8 @@ The identity of the first lines is exact in ledger terms, because the counts pos
 - A POS line counts in the class of its **sale class**, the one resolved for the cost (4.9): the `fb_class` of the category of the product, else the class of the outlet's warehouse. So revenue and cost of one line meet in one class.
 - Revenue = the net amount of the line after discount, **before service charge and tax**; voided lines are out; a **comp** line carries no revenue (its cost stays in the cost of sales, 5.6, and the report shows "of which comps" as a memo line).
 - A line of class OTHER (shop, a service) is not in these reports. A set menu or a combo is one product, so one class: the class of its category.
-- Only POS revenue is read. Banquet or room-service revenue posted straight to a folio is outside these reports until POS covers it.
-- The class does not come from the revenue account of the charge code. When the two disagree the setup check shows `FB_CLASS_REVENUE_MISMATCH` (4.9), so the general-ledger revenue by account and this split can be reconciled by the accountant.
+- POS revenue and **banquet** revenue are read (36 4.9, built in Banquet PR 4): the net F&B lines of a posted banquet session count in the class of their item, under the source `BANQUET`, and the reports show "of which banquet" (12.1, 12.2) and "Banquet" as an outlet of its own (12.4), with its own cost target. Room-service revenue posted straight to a folio is outside these reports until POS covers it.
+- The class does not come from the revenue account of the charge code. When the two disagree the setup check shows `FB_CLASS_REVENUE_MISMATCH` (4.9; implemented in Banquet PR 4, for POS products and banquet items), so the general-ledger revenue by account and this split can be reconciled by the accountant.
 
 ### 12.4 F&B cost per outlet (mockup 29)
 
@@ -1116,7 +1116,7 @@ Per outlet and class: theory (recipes x sales of the outlet) against actual cons
 - **Valuation per warehouse** as of a date (qty, value, average), totals by category, **against the GL account** of the category (6.3).
 - **Recipe cost** per product in the POS master (5.6) and a list of products with cost, price and margin, lowest margin first.
 - **Low stock**: items with `qty < min_qty` per warehouse, with the reorder quantity; also the dashboard; a PR can be started from it.
-- Others: waste by reason, count variances, stock sold below zero (with the source: POS or amenities), received and not invoiced (the GRNI detail), POS lines with a recipe and no deduction, price variances by supplier, **transfers without an SR**, **staff meals and entertainment** by department and period (cost per meal), the **amenities by month** (rooms, guests, cost per occupied room), documents waiting in the approval chain and their age.
+- Others: waste by reason, count variances, stock sold below zero (with the source: POS or amenities), received and not invoiced (the GRNI detail), POS lines **and banquet lines** with a recipe and no deduction (Banquet PR 4), price variances by supplier, **transfers without an SR**, **staff meals and entertainment** by department and period (cost per meal), the **amenities by month** (rooms, guests, cost per occupied room), documents waiting in the approval chain and their age.
 
 ## 13. Tests (real PostgreSQL; races with two goroutines and a barrier, as `05` 4)
 

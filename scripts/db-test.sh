@@ -118,7 +118,10 @@ M85="$(ls "$ROOT"/migrations/00085_*.sql)"
 M86="$(ls "$ROOT"/migrations/00086_*.sql)"
 M87="$(ls "$ROOT"/migrations/00087_*.sql)"
 M88="$(ls "$ROOT"/migrations/00088_*.sql)"
+M92="$(ls "$ROOT"/migrations/00092_*.sql)"
+# 00092 (the stock of the banquet) stands on the inventory tables of 00084, 00087 and 00088, so it goes first and comes back after 00088 does
 # 00088 stands on 00087, 00087 on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
+section down "$M92" | psql_run
 section down "$M88" | psql_run
 section down "$M87" | psql_run
 section down "$M86" | psql_run
@@ -196,6 +199,9 @@ psql_run -c "DELETE FROM inv_cost_targets"
 section down "$M88" | psql_run >/dev/null
 psql_run < "$ROOT/db/tests/migration_00088_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M88" | psql_run >/dev/null
+
+echo "==> migration 00092 (the stock and the reports of the banquet) comes back on the inventory it stands on"
+section up "$M92" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

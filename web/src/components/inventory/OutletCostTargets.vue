@@ -12,10 +12,10 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
 /**
- * The target cost % of food and of beverage of an outlet (docs/architecture/35-inventory.md 12.2). An outlet without its own target takes the property's, which is shown beside the field. Saved on its own, by who
+ * The target cost % of food and of beverage of an outlet (docs/architecture/35-inventory.md 12.2). An outlet without its own target takes the property's, which is shown beside the field. With `banquet` it is the target of the banquet, which has no outlet (docs/architecture/36-banquet.md 4.9). Saved on its own, by who
  * manages the inventory: the daily cost and the reports mark the days above it. Nothing is shown to a person who may not read the inventory.
  */
-const props = defineProps<{ outletId: number }>()
+const props = withDefaults(defineProps<{ outletId?: number; banquet?: boolean }>(), { outletId: undefined, banquet: false })
 const property = usePropertyStore()
 const auth = useAuthStore()
 const pid = computed(() => property.currentId)
@@ -31,7 +31,9 @@ const saving = ref(false)
 const error = ref<ApiError | null>(null)
 const notice = ref('')
 
-const inherited = (c: Class): string | null => targets.value.find((x) => x.outlet_id === null && x.class === c)?.target_pct ?? null
+const source = computed(() => (props.banquet ? 'BANQUET' : 'POS'))
+const ownOf = (c: Class): InventoryCostTarget | undefined => targets.value.find((x) => x.source === source.value && x.class === c && (props.banquet ? x.outlet_id === null : x.outlet_id === props.outletId))
+const inherited = (c: Class): string | null => targets.value.find((x) => x.source === 'POS' && x.outlet_id === null && x.class === c)?.target_pct ?? null
 const dirty = computed(() => classes.some((c) => own[c].trim() !== saved[c]))
 const valid = computed(() => classes.every((c) => own[c].trim() === '' || (/^\d{1,3}(\.\d{1,2})?$/.test(own[c].trim()) && Number(own[c]) > 0 && Number(own[c]) <= 100)))
 
@@ -45,7 +47,7 @@ async function load(): Promise<void> {
     targets.value = data?.data ?? []
     available.value = true
     for (const c of classes) {
-      own[c] = saved[c] = targets.value.find((x) => x.outlet_id === props.outletId && x.class === c)?.target_pct ?? ''
+      own[c] = saved[c] = ownOf(c)?.target_pct ?? ''
     }
   } catch {
     available.value = false // the person may not read the inventory: nothing to show
@@ -63,8 +65,8 @@ async function save(): Promise<void> {
     for (const c of classes) {
       const value = own[c].trim()
       if (value === saved[c]) continue
-      if (value === '') await api.DELETE('/api/v1/properties/{propertyId}/inventory/cost-targets', { params: { path: { propertyId }, query: { outlet_id: props.outletId, class: c } } })
-      else await api.PUT('/api/v1/properties/{propertyId}/inventory/cost-targets', { params: { path: { propertyId } }, body: { outlet_id: props.outletId, class: c, target_pct: value } })
+      if (value === '') await api.DELETE('/api/v1/properties/{propertyId}/inventory/cost-targets', { params: { path: { propertyId }, query: props.banquet ? { source: 'BANQUET', class: c } : { outlet_id: props.outletId, class: c } } })
+      else await api.PUT('/api/v1/properties/{propertyId}/inventory/cost-targets', { params: { path: { propertyId } }, body: props.banquet ? { source: 'BANQUET', outlet_id: null, class: c, target_pct: value } : { outlet_id: props.outletId ?? null, class: c, target_pct: value } })
     }
     notice.value = t('inventory.targets.saved')
     await load()

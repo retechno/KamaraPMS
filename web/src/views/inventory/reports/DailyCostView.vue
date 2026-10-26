@@ -116,7 +116,7 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
           <tr v-for="d in rows" :key="d.date" class="border-t border-border" :data-testid="`daily-${d.date}`">
             <td class="py-2 pr-2"><button type="button" class="underline print:no-underline" :aria-expanded="openDay === d.date" :data-testid="`daily-open-${d.date}`" @click="openDay = openDay === d.date ? null : d.date">{{ dayLabel(d) }}</button></td>
             <td class="py-2 pr-2 text-right">{{ money(fbCost(d)) }}</td>
-            <td class="py-2 pr-2 text-right">{{ pct(d.fb.pct) }}<span v-if="d.fb.no_recipe_days > 0" class="block text-xs font-normal text-muted-foreground" :data-testid="`norecipe-${d.date}`">{{ t('inventory.reports.noRecipe') }}</span></td>
+            <td class="py-2 pr-2 text-right">{{ pct(d.fb.pct) }}<span v-if="d.fb.no_recipe_days > 0" class="block text-xs font-normal text-muted-foreground" :data-testid="`norecipe-${d.date}`">{{ t('inventory.reports.noRecipe') }}</span><span v-if="Number(d.banquet.revenue) > 0" class="block text-xs font-normal text-muted-foreground" :data-testid="`banquet-${d.date}`">{{ t('inventory.reports.daily.ofBanquet', { pct: pct(d.banquet.pct), revenue: money(d.banquet.revenue) }) }}</span></td>
             <td class="py-2 pr-2 text-right">{{ money(kind(d, 'WASTE')) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(sum(d, 'STAFF_MEAL', 'ENTERTAINMENT')) }}</td>
             <td class="py-2 pr-2 text-right">{{ money(kind(d, 'AMENITY')) }}</td>

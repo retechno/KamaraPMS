@@ -235,6 +235,14 @@ func (s *Service) postOne(ctx context.Context, p auth.Principal, propertyID int6
 	if err != nil {
 		return PostResult{}, false, err
 	}
+	wh, err := s.stockWarehouse(ctx, p.TenantID, propertyID)
+	if err != nil {
+		return PostResult{}, false, err
+	}
+	lineOf := make(map[int64]Line, len(lines))
+	for _, l := range lines {
+		lineOf[l.ID] = l
+	}
 	res := PostResult{Posting: Posting{SessionID: t.sessionID, BusinessDate: bd, PaxBilled: pax, PaxBasis: basis, Auto: o.auto, OnGuarantee: onGuarantee}, Charges: []PostedCharge{}}
 	for _, c := range PlanSession(plans, pax, decimals) {
 		desc := truncate(hdr.Name+" · "+sn.Name+" · "+c.Description, 200)
@@ -251,7 +259,11 @@ func (s *Service) postOne(ctx context.Context, p auth.Principal, propertyID int6
 		if c.ComponentID != 0 {
 			comp = ptr(c.ComponentID)
 		}
-		if err := q.InsertPostingItem(ctx, banquetdb.InsertPostingItemParams{PropertyID: propertyID, PostingID: posting, LineID: c.LineID, ComponentItemID: comp, FolioItemID: line.ItemID}); err != nil {
+		itemID, err := q.InsertPostingItem(ctx, banquetdb.InsertPostingItemParams{PropertyID: propertyID, PostingID: posting, LineID: c.LineID, ComponentItemID: comp, FolioItemID: line.ItemID})
+		if err != nil {
+			return PostResult{}, false, err
+		}
+		if err := s.queueStock(ctx, p.TenantID, propertyID, wh, itemID, lineOf[c.LineID], c, pax, bd); err != nil {
 			return PostResult{}, false, err
 		}
 		res.Charges = append(res.Charges, PostedCharge{LineID: c.LineID, ComponentID: c.ComponentID, FolioItemID: line.ItemID, Description: desc, Net: line.Net, Service: line.Service, Tax: line.Tax,

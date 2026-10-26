@@ -39,6 +39,7 @@ Wiring is in `internal/app/app.go` (and `internal/rooms/roomstest/roomstest.go` 
 | `shifts` | Cashier shifts, the cash drawer, drops, pay-in and pay-out, cash over and short | (00047) | `billing/` CashierShift | 11 |
 | `budget` | Budgets per fiscal year (versions, grid, spread, CSV, approval), statistics, budget against actual, by department | (00049, 00050, 00053) | `budget/` | 11, 12 |
 | `departments` | Departments and sub-departments, the accounting dimension | departments (00051) | `accounting/` Departments | 12 |
+| `banquet` | Meeting rooms, events and sessions, the EVENT folio, the BEO, documents; PR 4: the banquet warehouse, one stock-queue row per posted line with a recipe, banquet revenue and cost in the F&B reports (35 12), and the six reports of 36 4.10 (forecast, rooms, guests, sales, lost, schedule) with CSV | banquet_* (00089 to 00092) | `banquet/` Reports, Settings, PostDialog | 36, 35 |
 | `reports`, `documents` | Operational and money reports (JSON, CSV, PDF); printed documents, confirmation e-mail, banquet proposal, contract and BEO (36, 00091) | none own (00021) | `reports/` | 04, 07 |
 | `audit`, `auditlog`, `notifications` | Append-only audit trail (writer, reader), e-mail outbox (reservation confirmation, banquet proposal and contract) | audit_logs (00011, 00021) | `audit/` | 01 |
 | `app` | Composition root, HTTP routing, end-to-end API tests | none | none | 06 |

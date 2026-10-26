@@ -23,6 +23,7 @@ import (
 //	items       a few menus, a drink package, equipment, decoration and the rental of a room
 //	packages    "Fullday Meeting" at 363,000 nett per guest, four components (PR 2)
 //	policy      the template STANDARD (default): deposits 30% at signature, 50% at H-30, 20% at H-7; cancellation tiers 0/25/50/100% of the net revenue (PR 2)
+//	stock       the lunch and the coffee break linked to the POS products Nasi Goreng and Kopi Bali (they have a recipe), and the kitchen warehouse set for the banquet, when the POS and inventory demos are there (PR 4)
 //	beo         the department that reads each section of the BEO (kitchen and F&B service: FB; housekeeping and front office: ROOMS; engineering: POM; security: AG), where the section has none and the
 //	            department exists; and a sample text for each section of each session of a Definite event whose BEO is still empty (PR 3)
 
@@ -81,7 +82,10 @@ var bqRuleCodes = []string{"BQT_FB", "BQT_ROOM", "BQT_EQUIPMENT", "BQT_DECOR", "
 func seedBanquet(e *env, dryRun bool) error {
 	svc := banquet.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, nil, e.bc, nil) // the seed makes masters and templates only: no folio, no approval
 	deps := departments.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
-	_, err := seedBanquetWith(e.ctx, svc, deps, e.bc, e.propertyID, dryRun, os.Stdout)
+	if _, err := seedBanquetWith(e.ctx, svc, deps, e.bc, e.propertyID, dryRun, os.Stdout); err != nil {
+		return err
+	}
+	_, err := seedBanquetStock(e.ctx, svc, e.txm.DB(e.ctx), e.propertyID, dryRun, os.Stdout)
 	return err
 }
 
