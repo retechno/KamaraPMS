@@ -141,6 +141,7 @@ describe('the daily cost', () => {
     expect(body('[data-testid=daily-2026-09-30]').text()).toContain('running')
     expect(body('[data-testid=daily-2026-09-28]').text()).not.toContain('running')
     expect(has('[data-testid=daily-period]')).toBe(true)
+    expect(body('[data-testid=daily-note]').text()).toContain('POS and of the banquet') // the revenue is of both
     expect(body('[data-testid=daily-mtd]').text()).toContain('9,000,000')
     expect(body('[data-testid=kpi-food]').text()).toContain('30%')
     expect(body('[data-testid=kpi-food]').text()).toContain('2.0 points below')

@@ -522,7 +522,7 @@ func (s *Service) Confirm(ctx context.Context, propertyID, eventID int64, in Con
 			return err
 		}
 		now := s.clock.Now()
-		if err := q.SetEventStatus(ctx, banquetdb.SetEventStatusParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID, Status: StatusDefinite, DefiniteAt: &now, ActorID: p.ActorID()}); err != nil {
+		if err := q.SetEventStatus(ctx, banquetdb.SetEventStatusParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID, Status: StatusDefinite, DefiniteAt: &now, DefiniteOn: &bd, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
 		// the options queued behind lose their room: their salespeople are told, once for each event (the holds stay, the screen flags "room taken")

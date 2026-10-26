@@ -940,7 +940,7 @@ func (s *Service) CompleteEvent(ctx context.Context, propertyID, eventID int64) 
 			return apperr.Conflict("SESSIONS_NOT_POSTED", "every active session must be posted or cancelled first").WithContext("sessions", n)
 		}
 		now := s.clock.Now()
-		if err := q.SetEventStatus(ctx, banquetdb.SetEventStatusParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID, Status: StatusCompleted, ClosedAt: &now, ActorID: p.ActorID()}); err != nil {
+		if err := q.SetEventStatus(ctx, banquetdb.SetEventStatusParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID, Status: StatusCompleted, ClosedAt: &now, ClosedOn: &bd, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
 		out, err = s.event(ctx, p.TenantID, propertyID, eventID)

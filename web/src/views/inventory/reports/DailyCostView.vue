@@ -200,6 +200,6 @@ const summaryRows = computed(() => (r.data.value ? [{ id: 'period', label: t('in
         </tbody>
       </table>
     </div>
-    <p v-if="rows.length" class="mt-3 text-xs text-muted-foreground">{{ t('inventory.reports.daily.note') }}</p>
+    <p v-if="rows.length" class="mt-3 text-xs text-muted-foreground" data-testid="daily-note">{{ t('inventory.reports.daily.note') }}</p>
   </template>
 </template>

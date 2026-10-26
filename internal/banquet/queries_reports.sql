@@ -52,32 +52,30 @@ WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.status IN 
 ORDER BY s.session_date, e.id, s.session_no;
 
 -- ---------------------------------------------------------------- production by sales and the lost reasons
--- The events of the period by the three dates that matter, in the date of the property: created, made definite, lost. The date is read in the time zone of the property.
+-- The events of the period by the three dates that matter, in BUSINESS dates: opened, made definite, lost. They are kept when the change is made (an event made after midnight, before the night audit, is of the open day).
 -- name: ReportSalesEvents :many
 SELECT e.id AS event_id, e.status, e.sales_user_id, u.full_name AS sales_name, e.contract_value_estimate,
-       COALESCE(to_char(e.inquiry_at AT TIME ZONE p.timezone, 'YYYY-MM-DD'), '')::text AS created_on,
-       COALESCE(to_char(e.definite_at AT TIME ZONE p.timezone, 'YYYY-MM-DD'), '')::text AS definite_on,
-       (CASE WHEN e.status = 'LOST' THEN COALESCE(to_char(e.closed_at AT TIME ZONE p.timezone, 'YYYY-MM-DD'), '') ELSE '' END)::text AS lost_on
+       to_char(e.inquiry_on, 'YYYY-MM-DD')::text AS created_on,
+       COALESCE(to_char(e.definite_on, 'YYYY-MM-DD'), '')::text AS definite_on,
+       (CASE WHEN e.status = 'LOST' THEN COALESCE(to_char(e.closed_on, 'YYYY-MM-DD'), '') ELSE '' END)::text AS lost_on
 FROM banquet_events e
-JOIN properties p ON p.tenant_id = e.tenant_id AND p.id = e.property_id
 JOIN users u ON u.tenant_id = e.tenant_id AND u.id = e.sales_user_id
 WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id
-  AND ((e.inquiry_at AT TIME ZONE p.timezone)::date BETWEEN @from_date::date AND @to_date::date
-    OR (e.definite_at AT TIME ZONE p.timezone)::date BETWEEN @from_date::date AND @to_date::date
-    OR (e.status = 'LOST' AND (e.closed_at AT TIME ZONE p.timezone)::date BETWEEN @from_date::date AND @to_date::date))
+  AND (e.inquiry_on BETWEEN @from_date::date AND @to_date::date
+    OR e.definite_on BETWEEN @from_date::date AND @to_date::date
+    OR (e.status = 'LOST' AND e.closed_on BETWEEN @from_date::date AND @to_date::date))
 ORDER BY e.id;
 
 -- name: ReportLostEvents :many
 SELECT e.id AS event_id, e.number AS event_number, e.name AS event_name, e.status, e.sales_user_id, u.full_name AS sales_name, e.contract_value_estimate,
        COALESCE(r.code, '')::text AS reason_code, COALESCE(r.name, '')::text AS reason_name, e.reason_note,
-       COALESCE(to_char(e.closed_at AT TIME ZONE p.timezone, 'YYYY-MM-DD'), '')::text AS closed_on
+       COALESCE(to_char(e.closed_on, 'YYYY-MM-DD'), '')::text AS closed_on
 FROM banquet_events e
-JOIN properties p ON p.tenant_id = e.tenant_id AND p.id = e.property_id
 JOIN users u ON u.tenant_id = e.tenant_id AND u.id = e.sales_user_id
 LEFT JOIN banquet_reasons r ON r.property_id = e.property_id AND r.id = e.reason_id
 WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.status IN ('LOST', 'CANCELLED')
-  AND (e.closed_at AT TIME ZONE p.timezone)::date BETWEEN @from_date::date AND @to_date::date
-ORDER BY e.closed_at DESC, e.id DESC;
+  AND e.closed_on BETWEEN @from_date::date AND @to_date::date
+ORDER BY e.closed_on DESC, e.closed_at DESC, e.id DESC;
 
 -- ---------------------------------------------------------------- the daily schedule
 -- name: ReportSchedule :many

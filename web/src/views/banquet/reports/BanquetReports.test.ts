@@ -81,6 +81,9 @@ describe('the forecast', () => {
     await setup(BanquetForecastView, read, forecast)
     expect(GET).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/banquet/reports/forecast', { params: { path: { propertyId: 7 }, query: { from: '2026-11-01', to: '2027-04-30', with_tax: false } } })
     expect(body('[data-testid=forecast-months-2026-11-definite]').text()).toContain('9,000,000')
+    // the month is written as a month, not as the ISO key (which stays the key of the row and of the CSV)
+    expect(body('[data-testid=forecast-months-2026-11-definite]').text()).toContain('Nov 2026')
+    expect(body('[data-testid=forecast-months-2026-11-definite]').text()).not.toContain('2026-11')
     expect(body('[data-testid=forecast-months-2026-11-tentative]').text()).toContain('4,000,000')
     expect(body('[data-testid=forecast-types-WED-definite]').text()).toContain('Wedding')
     expect(body('[data-testid=forecast-sales-5-definite]').text()).toContain('Dewi')
@@ -110,10 +113,18 @@ describe('the other reports', () => {
     await setup(BanquetRoomsReportView, read, () => ({
       data: {
         from: '2026-11-01', to: '2026-11-10', operating_from: '07:00:00', operating_to: '23:00:00', days: 10, revenue: '5000000',
-        rooms: [{ room_id: 1, code: 'SA', name: 'Saraswati A', is_combo: false, sessions: 3, hours: '12', available_hours: '160', occupancy_pct: '7.5', posted_sessions: 2, revenue: '5000000', revenue_per_hour: '416666.667' }],
+        rooms: [
+          { room_id: 1, code: 'SA', name: 'Saraswati A', is_combo: false, sessions: 3, hours: '12', locked_hours: '0', available_hours: '160', occupancy_pct: '7.5', posted_sessions: 2, revenue: '5000000', revenue_per_hour: '416666.667' },
+          { room_id: 2, code: 'SAB', name: 'Saraswati A+B', is_combo: true, sessions: 1, hours: '4', locked_hours: '6.5', available_hours: '160', occupancy_pct: '2.5', posted_sessions: 0, revenue: '0', revenue_per_hour: null },
+        ],
       },
     }))
     expect(body('[data-testid=room-SA]').text()).toContain('7.5')
+    // the hours another room took are in a column of their own, and are not held hours or occupancy
+    expect(body('[data-testid=room-SA-locked]').text()).toBe('–')
+    expect(body('[data-testid=room-SAB-locked]').text()).toBe('6.5')
+    expect(body('[data-testid=room-SAB]').text()).toContain('2.5')
+    expect(body('[data-testid=rooms-table]').text()).toContain('Locked by another room')
     expect(body('[data-testid=room-SA]').text()).toContain('5,000,000')
     expect(body('[data-testid=rooms-total]').text()).toContain('5,000,000')
     expect(body('[data-testid=rooms-hours]').text()).toContain('10 days')

@@ -124,9 +124,9 @@ func (h *Handler) reportRooms(w http.ResponseWriter, r *http.Request) error {
 	if !wantsCSV(r) {
 		return httpx.WriteJSON(w, http.StatusOK, v)
 	}
-	rows := [][]string{{"room_code", "room", "sessions", "hours", "available_hours", "occupancy_pct", "posted_sessions", "revenue", "revenue_per_hour"}}
+	rows := [][]string{{"room_code", "room", "sessions", "hours", "locked_hours", "available_hours", "occupancy_pct", "posted_sessions", "revenue", "revenue_per_hour"}}
 	for _, x := range v.Rooms {
-		rows = append(rows, []string{x.Code, x.Name, strconv.Itoa(x.Sessions), dec(x.Hours), dec(x.AvailableHours), decp(x.OccupancyPct), strconv.Itoa(x.PostedSessions), dec(x.Revenue), decp(x.RevenuePerHour)})
+		rows = append(rows, []string{x.Code, x.Name, strconv.Itoa(x.Sessions), dec(x.Hours), dec(x.LockedHours), dec(x.AvailableHours), decp(x.OccupancyPct), strconv.Itoa(x.PostedSessions), dec(x.Revenue), decp(x.RevenuePerHour)})
 	}
 	return csvlang.Write(w, r, "banquet-rooms-"+v.From.String()+"-"+v.To.String()+".csv", rows)
 }

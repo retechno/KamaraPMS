@@ -306,7 +306,7 @@ func TestTheDeferredGuardRefusesADefiniteSessionWithoutHolds(t *testing.T) {
 	must(t, err)
 	_, err = tx.Exec(ctx, `DELETE FROM banquet_holds WHERE event_id = $1`, ev.ID)
 	must(t, err)
-	_, err = tx.Exec(ctx, `UPDATE banquet_events SET status = 'DEFINITE', definite_at = now(), option_until = NULL WHERE id = $1`, ev.ID)
+	_, err = tx.Exec(ctx, `UPDATE banquet_events SET status = 'DEFINITE', definite_at = now(), definite_on = CURRENT_DATE, option_until = NULL WHERE id = $1`, ev.ID)
 	must(t, err)
 	err = tx.Commit(ctx)
 	var pg *pgconn.PgError

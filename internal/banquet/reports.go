@@ -203,7 +203,8 @@ type RoomRow struct {
 	Name           string           `json:"name"`
 	IsCombo        bool             `json:"is_combo"`
 	Sessions       int              `json:"sessions"`        // definite and completed sessions held in the room
-	Hours          decimal.Decimal  `json:"hours"`           // the hours it was held, inside the hours of operation (a combination and its parts block each other)
+	Hours          decimal.Decimal  `json:"hours"`           // the hours its own sessions held it, inside the hours of operation
+	LockedHours    decimal.Decimal  `json:"locked_hours"`    // the hours it could not be used because a combined room or a part of it was held; they are not held hours and not in the occupancy
 	AvailableHours decimal.Decimal  `json:"available_hours"` // the hours of operation x the days of the period
 	OccupancyPct   *decimal.Decimal `json:"occupancy_pct"`
 	PostedSessions int              `json:"posted_sessions"`
@@ -263,7 +264,8 @@ func (s *Service) Rooms(ctx context.Context, propertyID int64, from, to civil.Da
 		room int64
 		day  civil.Date
 	}
-	spans := map[key][]Span{}
+	spans := map[key][]Span{}  // the sessions of the room itself
+	locked := map[key][]Span{} // the sessions of another room that blocks it (a combination and its parts block each other)
 	direct := map[int64]int{}
 	for _, r := range sessions {
 		if r.RoomID == nil || r.StartTime == nil || r.EndTime == nil {
@@ -273,19 +275,35 @@ func (s *Service) Rooms(ctx context.Context, propertyID int64, from, to civil.Da
 		sp := SessionSpan(*r.StartTime, *r.EndTime, r.EndsNextDay)
 		for _, blocked := range block[*r.RoomID] {
 			k := key{blocked, r.SessionDate}
-			spans[k] = append(spans[k], sp)
+			if blocked == *r.RoomID {
+				spans[k] = append(spans[k], sp)
+			} else {
+				locked[k] = append(locked[k], sp)
+			}
 		}
 	}
 	available := decimal.NewFromInt(int64((opTo - opFrom) * days)).Div(decimal.NewFromInt(60))
 	for _, rm := range rooms {
 		row := RoomRow{RoomID: rm.ID, Code: rm.Code, Name: rm.Name, IsCombo: rm.IsCombo, Sessions: direct[rm.ID], AvailableHours: available.Round(2)}
-		minutes := 0
+		// the locked hours are the ones that only the other rooms took: a minute its own session holds is held, not locked
+		minutes, both := 0, 0
 		for k, v := range spans {
 			if k.room == rm.ID {
 				minutes += OccupiedMinutes(v, opFrom, opTo)
 			}
 		}
+		for k, v := range locked {
+			if k.room == rm.ID {
+				both += OccupiedMinutes(append(append([]Span{}, v...), spans[k]...), opFrom, opTo)
+			}
+		}
+		for k, v := range spans {
+			if k.room == rm.ID && locked[k] == nil {
+				both += OccupiedMinutes(v, opFrom, opTo)
+			}
+		}
 		row.Hours = decimal.NewFromInt(int64(minutes)).Div(decimal.NewFromInt(60)).Round(2)
+		row.LockedHours = decimal.NewFromInt(int64(both - minutes)).Div(decimal.NewFromInt(60)).Round(2)
 		row.OccupancyPct = Percent(row.Hours, available)
 		for _, r := range rev {
 			if r.RoomID != nil && *r.RoomID == rm.ID {

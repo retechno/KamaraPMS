@@ -12,7 +12,7 @@ import { formatMoney, formatPercent } from '@/utils/format'
 
 /**
  * Revenue and occupancy by room (docs/architecture/36-banquet.md 4.10, mockup 50): the hours a room was held by definite and completed sessions against the hours of operation x the days, and the net revenue of
- * the sessions posted in the period. A combined room and its parts block each other, so their hours are counted once.
+ * the sessions posted in the period. A combined room and its parts block each other: the hours another room took are shown apart, as locked, and are not held hours or occupancy.
  */
 const r = useInventoryReport<BanquetRoomsReport>('/api/v1/properties/{propertyId}/banquet/reports/rooms', 'banquet-rooms.csv', async (propertyId, p) => {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/banquet/reports/rooms', { params: { path: { propertyId }, query: { from: p.from, to: p.to } } })
@@ -36,7 +36,7 @@ const money = (v: string | null | undefined): string => (v === null || v === und
         <thead>
           <tr class="text-left text-xs text-muted-foreground">
             <th class="py-1 pr-2 font-medium">{{ t('banquet.reports.rooms.room') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.sessions') }}</th>
-            <th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.held') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.available') }}</th>
+            <th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.held') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.locked') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.available') }}</th>
             <th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.occupancy') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.posted') }}</th>
             <th class="py-1 pr-2 text-right font-medium">{{ t('banquet.reports.rooms.revenue') }}</th><th class="py-1 text-right font-medium">{{ t('banquet.reports.rooms.perHour') }}</th>
           </tr>
@@ -44,12 +44,12 @@ const money = (v: string | null | undefined): string => (v === null || v === und
         <tbody>
           <tr v-for="x in r.data.value.rooms" :key="x.room_id" class="border-t border-border" :data-testid="`room-${x.code}`">
             <td class="py-1.5 pr-2 font-medium">{{ x.name }}<span v-if="x.is_combo" class="ml-1 text-xs font-normal text-muted-foreground">{{ t('banquet.reports.rooms.combo') }}</span></td>
-            <td class="py-1.5 pr-2 text-right">{{ x.sessions }}</td><td class="py-1.5 pr-2 text-right">{{ x.hours }}</td><td class="py-1.5 pr-2 text-right text-muted-foreground">{{ x.available_hours }}</td>
+            <td class="py-1.5 pr-2 text-right">{{ x.sessions }}</td><td class="py-1.5 pr-2 text-right">{{ x.hours }}</td><td class="py-1.5 pr-2 text-right text-muted-foreground" :data-testid="`room-${x.code}-locked`">{{ Number(x.locked_hours) === 0 ? '–' : x.locked_hours }}</td><td class="py-1.5 pr-2 text-right text-muted-foreground">{{ x.available_hours }}</td>
             <td class="py-1.5 pr-2 text-right">{{ x.occupancy_pct === null ? '–' : formatPercent(x.occupancy_pct) }}</td><td class="py-1.5 pr-2 text-right">{{ x.posted_sessions }}</td>
             <td class="py-1.5 pr-2 text-right">{{ money(x.revenue) }}</td><td class="py-1.5 text-right text-muted-foreground">{{ money(x.revenue_per_hour) }}</td>
           </tr>
         </tbody>
-        <tfoot><tr class="border-t border-border font-semibold"><td class="py-1.5 pr-2" colspan="6">{{ t('banquet.reports.total') }}</td><td class="py-1.5 pr-2 text-right" data-testid="rooms-total">{{ money(r.data.value.revenue) }}</td><td /></tr></tfoot>
+        <tfoot><tr class="border-t border-border font-semibold"><td class="py-1.5 pr-2" colspan="7">{{ t('banquet.reports.total') }}</td><td class="py-1.5 pr-2 text-right" data-testid="rooms-total">{{ money(r.data.value.revenue) }}</td><td /></tr></tfoot>
       </table>
       <p class="mt-3 text-xs text-muted-foreground">{{ t('banquet.reports.rooms.note') }}</p>
     </div>

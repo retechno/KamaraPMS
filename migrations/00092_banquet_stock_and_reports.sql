@@ -6,6 +6,7 @@
 --   inv_consumption_queue     widened: a row comes from a POS line or from a line of a banquet posting, exactly one (F12)
 --   inv_fb_cost_days          a source (POS or BANQUET): the revenue and the cost of the banquet sit beside the outlets (F13)
 --   inv_cost_targets          a source, so the banquet can have a target of its own
+--   banquet_events            the business date of the inquiry, of the confirmation and of the close (the reports of sales and lost events read the business date, not the clock)
 --   indexes                   for the reports of 4.10
 
 -- 1. The warehouse of the banquet -----------------------------------------------------------------------------------------------------------------
@@ -56,9 +57,24 @@ DELETE FROM inv_cost_days d    WHERE EXISTS (SELECT 1 FROM banquet_session_posti
 DELETE FROM inv_snapshot_days d WHERE EXISTS (SELECT 1 FROM banquet_session_postings p WHERE p.property_id = d.property_id AND p.business_date = d.business_date);
 
 -- 5. The reports of 4.10 --------------------------------------------------------------------------------------------------------------------------
-CREATE INDEX banquet_events_created_idx  ON banquet_events (property_id, created_at);
-CREATE INDEX banquet_events_definite_idx ON banquet_events (property_id, definite_at) WHERE definite_at IS NOT NULL;
-CREATE INDEX banquet_events_closed_idx   ON banquet_events (property_id, closed_at)   WHERE closed_at IS NOT NULL;
+-- The reports of the sales team and of the lost events say on which BUSINESS day an event was opened, made definite and closed: an event made after midnight, before the night audit, belongs to the day that is still
+-- open. The date is kept when the change is made. Events that exist already get the date of the clock in the time zone of the property, the best that is known of them.
+ALTER TABLE banquet_events
+    ADD COLUMN inquiry_on  date,
+    ADD COLUMN definite_on date,
+    ADD COLUMN closed_on   date;
+UPDATE banquet_events e SET inquiry_on  = (e.inquiry_at AT TIME ZONE p.timezone)::date,
+                            definite_on = (e.definite_at AT TIME ZONE p.timezone)::date,
+                            closed_on   = (e.closed_at AT TIME ZONE p.timezone)::date
+  FROM properties p WHERE p.tenant_id = e.tenant_id AND p.id = e.property_id;
+ALTER TABLE banquet_events
+    ALTER COLUMN inquiry_on SET NOT NULL,
+    ADD CONSTRAINT banquet_events_definite_on_ck CHECK ((definite_at IS NULL) = (definite_on IS NULL)),
+    ADD CONSTRAINT banquet_events_closed_on_ck   CHECK ((closed_at IS NULL) = (closed_on IS NULL));
+
+CREATE INDEX banquet_events_created_idx  ON banquet_events (property_id, inquiry_on);
+CREATE INDEX banquet_events_definite_idx ON banquet_events (property_id, definite_on) WHERE definite_on IS NOT NULL;
+CREATE INDEX banquet_events_closed_idx   ON banquet_events (property_id, closed_on)   WHERE closed_on IS NOT NULL;
 
 -- +goose Down
 -- Refused while the stock of the banquet holds anything: a warehouse set, a queue row or a cost row of the banquet, or a target of its own. Nothing is changed then.
@@ -77,6 +93,7 @@ $$;
 DROP INDEX banquet_events_closed_idx;
 DROP INDEX banquet_events_definite_idx;
 DROP INDEX banquet_events_created_idx;
+ALTER TABLE banquet_events DROP CONSTRAINT banquet_events_closed_on_ck, DROP CONSTRAINT banquet_events_definite_on_ck, DROP COLUMN closed_on, DROP COLUMN definite_on, DROP COLUMN inquiry_on;
 
 DROP INDEX inv_cost_targets_uk;
 ALTER TABLE inv_cost_targets DROP CONSTRAINT inv_cost_targets_source_ck, DROP COLUMN source;

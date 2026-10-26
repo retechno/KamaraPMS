@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"kamarapms/internal/banquet"
 )
@@ -69,7 +70,7 @@ func (r *rfx) scenario(t *testing.T) {
 	_, err = r.svc.CancelEvent(r.mgr, r.propID, cancelled, banquet.CloseInput{ReasonID: r.cancelReason})
 	must(t, err)
 	// the events were opened on a known day, whatever day the test runs on
-	_, err = r.Pool.Exec(t.Context(), `UPDATE banquet_events SET inquiry_at = '2026-09-10T03:00:00Z' WHERE property_id = $1`, r.propID)
+	_, err = r.Pool.Exec(t.Context(), `UPDATE banquet_events SET inquiry_at = '2026-09-10T03:00:00Z', inquiry_on = '2026-09-10' WHERE property_id = $1`, r.propID)
 	must(t, err)
 }
 
@@ -143,7 +144,7 @@ func TestTheForecastKeepsTheDefiniteAndTheTentativeOnTheirOwnRows(t *testing.T) 
 	}
 }
 
-func TestTheRoomReportCountsTheHoursOnceAndTheRevenueOfWhatWasPosted(t *testing.T) {
+func TestTheRoomReportSeparatesTheHoursHeldFromTheHoursAnotherRoomLocked(t *testing.T) {
 	r := newReportsFx(t)
 	r.scenario(t)
 	v, err := r.svc.Rooms(r.reader, r.propID, day("2026-09-01"), day("2026-09-30"))
@@ -155,14 +156,24 @@ func TestTheRoomReportCountsTheHoursOnceAndTheRevenueOfWhatWasPosted(t *testing.
 	for _, x := range v.Rooms {
 		by[x.Code] = x
 	}
-	// A: Rapat 4 hours + Gala (the Ballroom holds A) 3 hours; B: 3; the Ballroom: its own 3 + A's 4; C: none; the Garden (B + C) shares B with the Ballroom: 3
-	for code, want := range map[string]string{"A": "7", "B": "3", "BALL": "7", "C": "0", "GARDEN": "3"} {
+	// Held: the sessions of the room itself. A: Rapat 4 hours; the Ballroom (A + B): Gala 3 hours; B, C and the Garden (B + C): none.
+	for code, want := range map[string]string{"A": "4", "B": "0", "BALL": "3", "C": "0", "GARDEN": "0"} {
 		if got := by[code].Hours; !got.Equal(dec(want)) {
-			t.Errorf("room %s: %s hours, want %s", code, got, want)
+			t.Errorf("room %s: %s hours held, want %s", code, got, want)
 		}
 	}
-	if !by["A"].AvailableHours.Equal(dec("480")) || by["A"].OccupancyPct == nil || !by["A"].OccupancyPct.Equal(dec("1.5")) {
-		t.Fatalf("7 of 480 hours is 1.5%%: %+v", by["A"])
+	// Locked: the hours a room could not be used because another room held it. A: the Ballroom's 3 (18:00-21:00); B: the same 3; the Ballroom: A's 4; the Garden shares B with the Ballroom: 3; C: nothing.
+	for code, want := range map[string]string{"A": "3", "B": "3", "BALL": "4", "C": "0", "GARDEN": "3"} {
+		if got := by[code].LockedHours; !got.Equal(dec(want)) {
+			t.Errorf("room %s: %s hours locked, want %s", code, got, want)
+		}
+	}
+	// the occupancy counts what was held, not what was locked: 4 of 480 hours is 0.8%
+	if !by["A"].AvailableHours.Equal(dec("480")) || by["A"].OccupancyPct == nil || !by["A"].OccupancyPct.Equal(dec("0.8")) {
+		t.Fatalf("4 of 480 hours is 0.8%%: %+v", by["A"])
+	}
+	if by["B"].OccupancyPct == nil || !by["B"].OccupancyPct.IsZero() {
+		t.Fatalf("a room that was only locked is not occupied: %+v", by["B"])
 	}
 	if by["A"].Sessions != 1 || by["BALL"].Sessions != 1 {
 		t.Fatalf("sessions held in the room itself: A %d BALL %d", by["A"].Sessions, by["BALL"].Sessions)
@@ -171,14 +182,14 @@ func TestTheRoomReportCountsTheHoursOnceAndTheRevenueOfWhatWasPosted(t *testing.
 	if !by["A"].Revenue.Equal(dec("16335000")) || by["A"].PostedSessions != 1 || !v.Revenue.Equal(dec("16335000")) {
 		t.Fatalf("revenue of room A %s, total %s", by["A"].Revenue, v.Revenue)
 	}
-	if by["A"].RevenuePerHour == nil || !by["A"].RevenuePerHour.Equal(dec("2333571.43")) {
+	if by["A"].RevenuePerHour == nil || !by["A"].RevenuePerHour.Equal(dec("4083750")) {
 		t.Fatalf("revenue per hour %v", by["A"].RevenuePerHour)
 	}
-	if by["B"].RevenuePerHour == nil || !by["B"].Revenue.IsZero() {
-		t.Fatalf("B sold nothing yet: %+v", by["B"])
+	if by["B"].RevenuePerHour != nil || !by["B"].Revenue.IsZero() {
+		t.Fatalf("B sold nothing and held nothing: %+v", by["B"])
 	}
 	rows := r.csvOf(t, func(q *http.Request) *http.Request { return q.WithContext(r.reader) }, "rooms", "from=2026-09-01&to=2026-09-30")
-	if rows[0][0] != "room_code" || rows[1][0] != "A" || !dec(rows[1][3]).Equal(dec("7")) || !dec(rows[1][7]).Equal(dec("16335000")) {
+	if rows[0][0] != "room_code" || rows[0][4] != "locked_hours" || rows[1][0] != "A" || !dec(rows[1][3]).Equal(dec("4")) || !dec(rows[1][4]).Equal(dec("3")) || !dec(rows[1][8]).Equal(dec("16335000")) {
 		t.Fatalf("csv: %v", rows[:2])
 	}
 }
@@ -325,5 +336,55 @@ func TestTheReportsAreForWhoWorksWithEventsOrReadsAndForNoOneElse(t *testing.T) 
 	r.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/properties/%d/banquet/reports/forecast", r.propID+999), nil).WithContext(r.reader))
 	if rec.Code != http.StatusNotFound && rec.Code != http.StatusForbidden {
 		t.Fatalf("another property: %d", rec.Code)
+	}
+}
+
+// The sales team and the lost events are read by BUSINESS day: an event made after midnight, before the night audit, belongs to the day that is still open, not to the date of the clock.
+func TestTheProductionOfSalesAndTheLostReasonsAreOfTheBusinessDay(t *testing.T) {
+	r := newReportsFx(t)
+	d, err := r.Tenancy.CurrentBusinessDay(r.admin, r.propID)
+	must(t, err)
+	bd := d.BusinessDate
+	// 18:00 UTC is after midnight in the time zone of the property: the clock is on the next date, the business day has not closed
+	r.Clock.Set(time.Date(bd.Year(), bd.Month(), bd.Day(), 18, 0, 0, 0, time.UTC))
+	session := bd.AddDays(5).String()
+	won, _ := r.book(t, "After midnight", session, r.a.ID, "12:00", "16:00", 30)
+	r.confirm(t, won)
+	lost, _ := r.book(t, "Lost after midnight", session, r.c.ID, "12:00", "16:00", 30)
+	_, err = r.svc.MarkLost(r.mgr, r.propID, lost, banquet.CloseInput{ReasonID: r.lostReason})
+	must(t, err)
+
+	// the premise: by the clock (inquiry_at is the time of the database) the event was opened on another date than the business day
+	var clockDate, openedOn, definiteOn, closedOn string
+	must(t, r.Pool.QueryRow(t.Context(), `SELECT (e.inquiry_at AT TIME ZONE p.timezone)::date::text, e.inquiry_on::text FROM banquet_events e JOIN properties p ON p.id = e.property_id WHERE e.id = $1`, won).Scan(&clockDate, &openedOn))
+	if openedOn != bd.String() || clockDate == openedOn {
+		t.Fatalf("the clock says %s, the business day is %s, the event says %s", clockDate, bd, openedOn)
+	}
+	must(t, r.Pool.QueryRow(t.Context(), `SELECT definite_on::text FROM banquet_events WHERE id = $1`, won).Scan(&definiteOn))
+	must(t, r.Pool.QueryRow(t.Context(), `SELECT closed_on::text FROM banquet_events WHERE id = $1`, lost).Scan(&closedOn))
+	if definiteOn != bd.String() || closedOn != bd.String() {
+		t.Fatalf("made definite on %s and lost on %s, want the business day %s", definiteOn, closedOn, bd)
+	}
+
+	// the business day itself holds them; the date of the clock holds nothing
+	v, err := r.svc.Sales(r.reader, r.propID, bd, bd)
+	must(t, err)
+	if len(v.Rows) != 1 || v.Rows[0].Created != 2 || v.Rows[0].Definite != 1 || v.Rows[0].Lost != 1 {
+		t.Fatalf("the business day %s: %+v", bd, v.Rows)
+	}
+	next, err := r.svc.Sales(r.reader, r.propID, bd.AddDays(1), bd.AddDays(1))
+	must(t, err)
+	if len(next.Rows) != 0 {
+		t.Fatalf("the date of the clock has nothing of the sales: %+v", next.Rows)
+	}
+	l, err := r.svc.Lost(r.reader, r.propID, bd, bd)
+	must(t, err)
+	if l.Lost != 1 || len(l.Rows) != 1 || l.Rows[0].ClosedOn != bd {
+		t.Fatalf("the lost event is of the business day: %+v", l)
+	}
+	l, err = r.svc.Lost(r.reader, r.propID, bd.AddDays(1), bd.AddDays(1))
+	must(t, err)
+	if l.Lost != 0 || len(l.Rows) != 0 {
+		t.Fatalf("not of the date of the clock: %+v", l)
 	}
 }

@@ -202,9 +202,9 @@ SELECT status, booking_group_id, version FROM banquet_events WHERE property_id =
 
 -- name: InsertEvent :one
 INSERT INTO banquet_events (tenant_id, property_id, number, status, name, event_type_id, booker_guest_id, booker_company_id, contact_name, contact_phone, contact_email,
-                            sales_user_id, booking_group_id, notes, created_by, updated_by)
+                            sales_user_id, booking_group_id, notes, inquiry_on, created_by, updated_by)
 VALUES (@tenant_id, @property_id, @number, 'INQUIRY', @name, sqlc.narg(event_type_id), sqlc.narg(booker_guest_id), sqlc.narg(booker_company_id), sqlc.narg(contact_name),
-        sqlc.narg(contact_phone), sqlc.narg(contact_email), @sales_user_id, sqlc.narg(booking_group_id), sqlc.narg(notes), sqlc.narg(actor_id), sqlc.narg(actor_id))
+        sqlc.narg(contact_phone), sqlc.narg(contact_email), @sales_user_id, sqlc.narg(booking_group_id), sqlc.narg(notes), @inquiry_on, sqlc.narg(actor_id), sqlc.narg(actor_id))
 RETURNING id;
 
 -- name: UpdateEvent :execrows
@@ -215,7 +215,7 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND ver
 
 -- name: SetEventStatus :exec
 UPDATE banquet_events SET status = @status, option_until = sqlc.narg(option_until), reason_id = sqlc.narg(reason_id), reason_note = sqlc.narg(reason_note),
-       definite_at = COALESCE(sqlc.narg(definite_at), definite_at), closed_at = sqlc.narg(closed_at), version = version + 1, updated_by = sqlc.narg(actor_id)
+       definite_at = COALESCE(sqlc.narg(definite_at), definite_at), definite_on = COALESCE(sqlc.narg(definite_on), definite_on), closed_at = sqlc.narg(closed_at), closed_on = sqlc.narg(closed_on), version = version + 1, updated_by = sqlc.narg(actor_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- ---------------------------------------------------------------- sessions

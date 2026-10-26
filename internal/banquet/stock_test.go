@@ -2,6 +2,7 @@ package banquet_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -641,5 +642,86 @@ func TestTheSetupCheckWarnsWhenTheClassAndTheRevenueAccountOfALineDisagree(t *te
 	}
 	if banquetHits != 4 {
 		t.Fatalf("four banquet items (LUNCH, COFFEE, SLUNCH, SPLAIN) are FOOD on 4220: %+v", hits)
+	}
+}
+
+// A warehouse that belongs to an outlet gives its movements that outlet by default. The goods of the banquet leave such a warehouse, but no outlet sold them: they are the row of the banquet in every report,
+// live and stored, and never the cost of the outlet (36-banquet.md F13).
+func TestTheCostOfTheBanquetIsNotTheCostOfTheOutletWhoseWarehouseItLeaves(t *testing.T) {
+	s := newStockFx(t)
+	ctx := context.Background()
+	var dept, profile, list, outlet int64
+	must(t, s.Pool.QueryRow(ctx, `SELECT id FROM departments WHERE property_id = $1 ORDER BY id LIMIT 1`, s.propID).Scan(&dept))
+	must(t, s.Pool.QueryRow(ctx, `INSERT INTO pos_rule_profiles (tenant_id, property_id, code, name) VALUES ($1, $2, 'P1', 'Profile') RETURNING id`, s.tenantID, s.propID).Scan(&profile))
+	must(t, s.Pool.QueryRow(ctx, `INSERT INTO pos_price_lists (tenant_id, property_id, code, name) VALUES ($1, $2, 'L1', 'List') RETURNING id`, s.tenantID, s.propID).Scan(&list))
+	must(t, s.Pool.QueryRow(ctx, `INSERT INTO pos_outlets (tenant_id, property_id, code, name, outlet_type, order_mode, department_id, rule_profile_id, price_list_id)
+		VALUES ($1, $2, 'RESTO', 'Resto', 'RESTAURANT', 'PRINT', $3, $4, $5) RETURNING id`, s.tenantID, s.propID, dept, profile, list).Scan(&outlet))
+	// the warehouse of the banquet is the kitchen of the restaurant
+	_, err := s.Pool.Exec(ctx, `UPDATE inv_warehouses SET kind = 'OUTLET', outlet_id = $2 WHERE id = $1`, s.wh, outlet)
+	must(t, err)
+	s.setWarehouse(t, &s.wh)
+	ev, sid, _ := s.scenario(t, "Kitchen of an outlet", "2026-09-30", true)
+	_, err = s.svc.PostSession(s.office, s.propID, ev, sid, banquet.PostInput{})
+	must(t, err)
+	_, err = s.inv.RunQueue(ctx)
+	must(t, err)
+	var onOutlet int
+	must(t, s.Pool.QueryRow(ctx, `SELECT count(*) FROM inv_movements WHERE property_id = $1 AND source_type = 'POS_QUEUE' AND outlet_id = $2`, s.propID, outlet).Scan(&onOutlet))
+	if onOutlet == 0 {
+		t.Fatal("the premise: the movements of the banquet carry the outlet of the warehouse")
+	}
+
+	check := func(when string) {
+		t.Helper()
+		bd := day("2026-09-30")
+		oc, err := s.inv.OutletCost(s.admin, s.propID, &bd, &bd)
+		must(t, err)
+		banquetRows, banquetTheory := 0, decimal.Zero
+		for _, r := range oc.Rows {
+			switch r.Source {
+			case inventory.SourceBanquet:
+				banquetRows++
+				banquetTheory = banquetTheory.Add(r.Theory)
+				if r.OutletID != nil || r.OutletCode != "BANQUET" {
+					t.Errorf("%s: the banquet row has no outlet: %+v", when, r)
+				}
+			default:
+				if !r.Theory.IsZero() || !r.Actual.IsZero() {
+					t.Errorf("%s: the restaurant did not sell this: %+v", when, r)
+				}
+			}
+		}
+		// one row for each class (food, beverage), never a second one for the outlet of the warehouse
+		if banquetRows != 2 || !banquetTheory.Equal(dec("435000")) {
+			t.Fatalf("%s: %d rows of the banquet with the cost %s in %+v", when, banquetRows, banquetTheory, oc.Rows)
+		}
+		// the cost of the department is the one of the charge code of the lines, not the one of the outlet
+		rep, err := s.inv.DailyCost(s.admin, s.propID, &bd, &bd)
+		must(t, err)
+		var chargeDept int64
+		must(t, s.Pool.QueryRow(ctx, `SELECT department_id FROM charge_codes WHERE id = $1`, s.fb).Scan(&chargeDept))
+		total := decimal.Zero
+		for _, v := range rep.Period.Departments {
+			total = total.Add(v)
+		}
+		if !rep.Period.Banquet.Cost.IsPositive() || !total.Equal(rep.Period.Banquet.Cost) || !rep.Period.Departments[fmt.Sprint(chargeDept)].Equal(total) {
+			t.Errorf("%s: the cost %s is all of the department %d of the charge code: %v", when, rep.Period.Banquet.Cost, chargeDept, rep.Period.Departments)
+		}
+	}
+	check("live")
+
+	// stored: the day closes and the rows of inv_fb_cost_days say the same
+	must(t, s.closeStock(t))
+	check("stored")
+	var banquetRows, onRestaurant int
+	must(t, s.Pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE source = 'BANQUET' AND sale_cost > 0), count(*) FILTER (WHERE outlet_id = $2 AND sale_cost > 0) FROM inv_fb_cost_days WHERE property_id = $1`,
+		s.propID, outlet).Scan(&banquetRows, &onRestaurant))
+	if banquetRows != 2 || onRestaurant != 0 {
+		t.Fatalf("inv_fb_cost_days: %d rows of the banquet with a cost, %d of the outlet (want 2 and 0)", banquetRows, onRestaurant)
+	}
+	var withOutlet int
+	must(t, s.Pool.QueryRow(ctx, `SELECT count(*) FROM inv_fb_cost_days WHERE property_id = $1 AND source = 'BANQUET' AND outlet_id IS NOT NULL`, s.propID).Scan(&withOutlet))
+	if withOutlet != 0 {
+		t.Fatalf("%d stored rows of the banquet have an outlet", withOutlet)
 	}
 }

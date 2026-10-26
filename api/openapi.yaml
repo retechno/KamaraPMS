@@ -25417,14 +25417,15 @@ components:
         conversion_pct: { type: [string, "null"], description: "Definite / (definite + lost) over the 90 days before the end of the period." }
     BanquetRoomRow:
       type: object
-      required: [room_id, code, name, is_combo, sessions, hours, available_hours, occupancy_pct, posted_sessions, revenue, revenue_per_hour]
+      required: [room_id, code, name, is_combo, sessions, hours, locked_hours, available_hours, occupancy_pct, posted_sessions, revenue, revenue_per_hour]
       properties:
         room_id: { type: integer, format: int64 }
         code: { type: string }
         name: { type: string }
         is_combo: { type: boolean }
         sessions: { type: integer }
-        hours: { type: string, description: "The hours the room was held by definite and completed sessions, inside the hours of operation; a combination and its parts block each other." }
+        hours: { type: string, description: "The hours the sessions of the room itself held it (definite and completed), inside the hours of operation." }
+        locked_hours: { type: string, description: "The hours the room could not be used because a combined room that contains it, or a part of it, was held. They are not held hours and not in the occupancy." }
         available_hours: { type: string }
         occupancy_pct: { type: [string, "null"] }
         posted_sessions: { type: integer }

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { useInventoryReport } from '@/composables/useInventoryReport'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
-import { formatMoney, formatPercent } from '@/utils/format'
+import { formatMoney, formatMonth, formatPercent } from '@/utils/format'
 
 /**
  * The forecast of revenue (docs/architecture/36-banquet.md 4.10, mockup 50): the net revenue the sessions of the period are expected to bring, by month, by kind of event and by sales person. The definite
@@ -46,7 +46,7 @@ const groups = computed<{ key: string; title: string; rows: BanquetForecastGroup
     { key: 'sales', title: t('banquet.reports.forecast.bySales'), rows: d.by_sales },
   ] : []
 })
-const label = (key: string, g: BanquetForecastGroup): string => (key === 'months' ? g.key : g.name || t('banquet.reports.forecast.noType'))
+const label = (key: string, g: BanquetForecastGroup): string => (key === 'months' ? formatMonth(g.key) : g.name || t('banquet.reports.forecast.noType'))
 </script>
 
 <template>

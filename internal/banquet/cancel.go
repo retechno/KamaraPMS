@@ -227,7 +227,7 @@ func (s *Service) closeEvent(ctx context.Context, propertyID, eventID int64, in 
 		}
 		closed := s.clock.Now()
 		if err := q.SetEventStatus(ctx, banquetdb.SetEventStatusParams{TenantID: p.TenantID, PropertyID: propertyID, ID: eventID, Status: target, ReasonID: &in.ReasonID, ReasonNote: note,
-			ClosedAt: &closed, ActorID: p.ActorID()}); err != nil {
+			ClosedAt: &closed, ClosedOn: &bd, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
 		ev, err := s.event(ctx, p.TenantID, propertyID, eventID)

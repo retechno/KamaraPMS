@@ -23949,8 +23949,10 @@ export interface components {
             name: string;
             is_combo: boolean;
             sessions: number;
-            /** @description The hours the room was held by definite and completed sessions, inside the hours of operation; a combination and its parts block each other. */
+            /** @description The hours the sessions of the room itself held it (definite and completed), inside the hours of operation. */
             hours: string;
+            /** @description The hours the room could not be used because a combined room that contains it, or a part of it, was held. They are not held hours and not in the occupancy. */
+            locked_hours: string;
             available_hours: string;
             occupancy_pct: string | null;
             posted_sessions: number;
