@@ -25156,7 +25156,12 @@ export interface components {
             row_no: number;
             field?: string;
             code: string;
+            /** @description English text for logs and API clients; the screen words the finding by `code`, `field` and `params`. */
             message: string;
+            /** @description The figures the finding is made of (max, decimals, month, number). */
+            params?: {
+                [key: string]: string;
+            };
         };
         AssetOpeningRowResult: {
             row_no: number;

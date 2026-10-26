@@ -6163,15 +6163,102 @@ export const id: Messages = {
     locationKind: { ROOM: 'Kamar hotel', BANQUET_ROOM: 'Ruang pertemuan', WAREHOUSE: 'Gudang', AREA: 'Area bebas' },
     severity: { ERROR: 'Kesalahan', WARNING: 'Peringatan' },
     findings: {
-      FISCAL_ACCUMULATED_ESTIMATED: 'Akumulasi fiskal dihitung, periksa dengan SPT tahun lalu.',
+      OPENING_ACCOUNT_MISSING: 'Saldo awal dibukukan ke akun 3900 "Ekuitas saldo awal", yang tidak ada atau tidak bisa dipakai di properti ini.',
+      OPENING_GL_MISMATCH: 'Jumlah dalam berkas tidak sama dengan saldo akun buku besar: lihat selisih per kategori.',
       DUPLICATE_ROW: 'Baris lain di berkas punya nama, kategori, harga, dan nomor seri yang sama.',
-      DUPLICATE_ASSET: 'Register sudah punya aset dengan nama, kategori, harga, dan nomor seri yang sama.',
+      DUPLICATE_ASSET: 'Register sudah punya aset dengan nama, kategori, harga, dan nomor seri yang sama: {number}.',
+      INVALID_DATE: 'Tulis tanggal sebagai tahun-bulan-hari.',
+      INVALID_NUMBER: 'Tulis angka dengan titik sebagai pemisah desimal.',
+      INVALID_INTEGER: 'Tulis bilangan bulat.',
+      REQUIRED: 'Wajib diisi.',
+      as_of: {
+        INVALID_VALUE: 'Akhir bulan ini jatuh setelah tanggal bisnis.',
+        AS_OF_MISMATCH: 'Register dimulai pada {month}: saldo awal adalah posisi akhir bulan sebelumnya.',
+      },
+      journal_date: {
+        INVALID_VALUE: 'Tanggal jurnal jatuh setelah tanggal bisnis.',
+      },
+      name: {
+        INVALID_VALUE: 'Nama terdiri dari 1 sampai {max} karakter.',
+      },
+      category: {
+        NOT_FOUND: 'Kategori tidak ada di properti ini.',
+        INACTIVE: 'Kategori dinonaktifkan.',
+      },
+      in_service_date: {
+        REQUIRED: 'Tanggal mulai dipakai wajib diisi.',
+        INVALID_VALUE: 'Aset mulai dipakai setelah akhir bulan saldo awal.',
+      },
+      acquisition_date: {
+        INVALID_VALUE: 'Tanggal perolehan jatuh setelah tanggal mulai dipakai.',
+      },
+      cost: {
+        INVALID_VALUE: 'Harga perolehan di atas nol, paling banyak {decimals} desimal.',
+      },
+      residual_value: {
+        INVALID_VALUE: 'Nilai sisa dari nol sampai harga perolehan, sesuai desimal mata uang.',
+        NOT_ALLOWED: 'Aset yang tidak disusutkan tidak punya nilai sisa.',
+      },
+      life_months: {
+        OUT_OF_RANGE: 'Umur manfaat 1 sampai 1200 bulan.',
+        NOT_ALLOWED: 'Kategori ini tidak disusutkan: tanpa umur, metode, atau bulan berjalan.',
+      },
+      method: {
+        INVALID_VALUE: 'Metode adalah garis lurus atau saldo menurun.',
+      },
+      start_rule: {
+        INVALID_VALUE: 'Awal penyusutan adalah bulan mulai dipakai atau bulan berikutnya.',
+      },
+      months_done: {
+        OUT_OF_RANGE: 'Bulan berjalan dari nol sampai umur manfaat aset.',
+        INVALID_VALUE: 'Akumulasi penyusutan diisi tanpa bulan berjalan.',
+      },
+      accumulated_depreciation: {
+        OUT_OF_RANGE: 'Akumulasi penyusutan dari nol sampai harga perolehan dikurangi nilai sisa.',
+        NOT_ALLOWED: 'Kategori ini tidak disusutkan.',
+        ACCUMULATED_ESTIMATED: 'Akumulasi penyusutan tidak diisi: dipakai garis lurus menurut bulan berjalan.',
+        LIFE_OVER_WITH_VALUE: 'Umur manfaat sudah habis tetapi nilai masih di atas nilai sisa: beri umur yang lebih panjang atau nilai sisa.',
+        ACCUMULATED_DIFFERS_FROM_SL: 'Akumulasi penyusutan tidak sama dengan hasil garis lurus untuk bulan berjalan.',
+      },
+      unit_count: {
+        OUT_OF_RANGE: 'Jumlah unit 1 atau lebih.',
+        NOT_ALLOWED: 'Hanya batch peralatan operasional yang boleh lebih dari satu unit.',
+      },
+      location: {
+        NOT_FOUND: 'Lokasi, kamar, ruang pertemuan, atau gudang tidak ditemukan.',
+      },
+      department: {
+        NOT_FOUND: 'Departemen tidak ada di properti ini.',
+      },
+      supplier: {
+        NOT_FOUND: 'Pemasok tidak ada di properti ini.',
+      },
+      serial_no: {
+        INVALID_VALUE: 'Nomor seri paling banyak {max} karakter.',
+      },
+      fiscal_group: {
+        INVALID_VALUE: 'Kelompok fiskal: tanpa kelompok, kelompok 1 sampai 4, atau bangunan permanen atau tidak permanen.',
+        NOT_FOUND: 'Properti belum punya tarif untuk kelompok fiskal ini.',
+      },
+      fiscal_method: {
+        INVALID_VALUE: 'Metode fiskal adalah garis lurus atau saldo menurun.',
+        NOT_ALLOWED: 'Bangunan hanya memakai garis lurus.',
+      },
+      fiscal_accumulated_depreciation: {
+        NOT_ALLOWED: 'Aset tidak punya kelompok fiskal: tidak disusutkan untuk pajak.',
+        OUT_OF_RANGE: 'Akumulasi fiskal dari nol sampai harga perolehan.',
+        FISCAL_ACCUMULATED_ESTIMATED: 'Akumulasi fiskal dihitung dari tarif kelompoknya: periksa dengan SPT tahun lalu.',
+      },
+      fiscal_months_done: {
+        OUT_OF_RANGE: 'Bulan fiskal berjalan nol atau lebih.',
+      },
     },
     life: { notDepreciated: 'tidak disusutkan', notInUse: 'belum dipakai', fullyDepreciated: 'habis disusutkan', months: '{n} bln' },
     col: { asset: 'Aset', category: 'Kategori', place: 'Lokasi', department: 'Departemen', inService: 'Mulai pakai', cost: 'Harga', accum: 'Akumulasi', carrying: 'Nilai buku', life: 'Sisa umur', status: 'Status' },
     tiles: { cost: 'Harga perolehan', count: '{n} aset', accum: 'Akumulasi penyusutan', carrying: 'Nilai buku' },
     filter: { allCategories: 'Semua kategori', allLocations: 'Semua lokasi', allDepartments: 'Semua departemen', anyStatus: 'Semua status', search: 'Cari nomor, nama, seri' },
     register: {
+      countOf: '{n} dari {total} aset',
       title: 'Register aset tetap',
       intro: 'Semua aset milik properti, dengan harga perolehan, akumulasi penyusutan, dan nilai bukunya.',
       csv: 'Ekspor CSV', print: 'Cetak label QR', printSelected: 'Cetak label ({n})', opening: 'Aset lama (saldo awal)',

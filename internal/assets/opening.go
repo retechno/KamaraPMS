@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -41,6 +42,17 @@ type Finding struct {
 	Field   string `json:"field,omitempty"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	// Params are the figures the message is made of (a length, a month, an asset number), so that the screen words it in its own language.
+	Params map[string]string `json:"params,omitempty"`
+}
+
+// params makes the Params of a finding from key, value pairs.
+func params(kv ...string) map[string]string {
+	m := make(map[string]string, len(kv)/2)
+	for i := 0; i+1 < len(kv); i += 2 {
+		m[kv[i]] = kv[i+1]
+	}
+	return m
 }
 
 // OpeningRowResult says what became of a row.
@@ -260,8 +272,8 @@ func (s *Service) importOpening(ctx context.Context, p auth.Principal, propertyI
 		return res, err
 	}
 	decimals := prop.CurrencyDecimals
-	global := func(code, field, msg string) {
-		res.Errors = append(res.Errors, Finding{Code: code, Field: field, Message: msg})
+	global := func(code, field, msg string, kv ...string) {
+		res.Errors = append(res.Errors, Finding{Code: code, Field: field, Message: msg, Params: params(kv...)})
 	}
 
 	if in.AsOf.After(day) {
@@ -270,7 +282,7 @@ func (s *Service) importOpening(ctx context.Context, p auth.Principal, propertyI
 	registerFrom := AddMonths(MonthStart(in.AsOf), 1)
 	res.RegisterFrom = &registerFrom
 	if cfg.RegisterFrom != nil && !cfg.RegisterFrom.Equal(registerFrom) {
-		global("AS_OF_MISMATCH", "as_of", fmt.Sprintf("the register starts in %s: the opening balances are as at the end of the month before it", cfg.RegisterFrom.String()[:7]))
+		global("AS_OF_MISMATCH", "as_of", fmt.Sprintf("the register starts in %s: the opening balances are as at the end of the month before it", cfg.RegisterFrom.String()[:7]), "month", cfg.RegisterFrom.String()[:7])
 		res.RegisterFrom = cfg.RegisterFrom
 	}
 	journalDate := in.AsOf.AddDays(1)
@@ -344,7 +356,7 @@ func (s *Service) importOpening(ctx context.Context, p auth.Principal, propertyI
 			if dup, err := q.FindDuplicateAssets(ctx, assetsdb.FindDuplicateAssetsParams{TenantID: p.TenantID, PropertyID: propertyID, CategoryID: pr.cat.ID, Name: pr.arg.Name, Cost: pr.arg.Cost, SerialNo: pr.arg.SerialNo}); err != nil {
 				return res, err
 			} else if len(dup) > 0 {
-				rr.Warnings = append(rr.Warnings, Finding{RowNo: no, Code: "DUPLICATE_ASSET", Message: "the register has an asset with the same name, category, cost and serial number: " + dup[0].Number})
+				rr.Warnings = append(rr.Warnings, Finding{RowNo: no, Code: "DUPLICATE_ASSET", Message: "the register has an asset with the same name, category, cost and serial number: " + dup[0].Number, Params: params("number", dup[0].Number)})
 			}
 			rr.Accum, rr.MonthsDone, rr.FullyDepreciated = pr.accum, pr.months, pr.fullDone
 			if pr.arg.FiscalAccumOpening != nil {
@@ -596,15 +608,15 @@ func (s *Service) tieOutToLedger(ctx context.Context, p auth.Principal, property
 func (s *Service) prepareRow(ctx context.Context, p auth.Principal, propertyID int64, day, asOf civil.Date, no int, row OpeningRow, cats map[string]assetsdb.ListCategoriesRow, groups map[string]FiscalRate,
 	taxYear int, decimals int32, defaultStart string, rr *OpeningRowResult) (*prepared, error) {
 	q := s.q(ctx)
-	bad := func(field, code, msg string) {
-		rr.Errors = append(rr.Errors, Finding{RowNo: no, Field: field, Code: code, Message: msg})
+	bad := func(field, code, msg string, kv ...string) {
+		rr.Errors = append(rr.Errors, Finding{RowNo: no, Field: field, Code: code, Message: msg, Params: params(kv...)})
 	}
-	warn := func(field, code, msg string) {
-		rr.Warnings = append(rr.Warnings, Finding{RowNo: no, Field: field, Code: code, Message: msg})
+	warn := func(field, code, msg string, kv ...string) {
+		rr.Warnings = append(rr.Warnings, Finding{RowNo: no, Field: field, Code: code, Message: msg, Params: params(kv...)})
 	}
 	name := trimmed(row.Name)
 	if n := len([]rune(name)); n < 1 || n > maxName {
-		bad("name", "INVALID_VALUE", fmt.Sprintf("1 to %d characters", maxName))
+		bad("name", "INVALID_VALUE", fmt.Sprintf("1 to %d characters", maxName), "max", strconv.Itoa(maxName))
 	}
 	cat, ok := cats[normalCode(row.Category)]
 	switch {
@@ -633,7 +645,7 @@ func (s *Service) prepareRow(ctx context.Context, p auth.Principal, propertyID i
 		bad("in_service_date", "INVALID_VALUE", "the asset was put in service after the month end of the opening balances")
 	}
 	if !row.Cost.IsPositive() || !moneyOK(row.Cost, decimals) {
-		bad("cost", "INVALID_VALUE", fmt.Sprintf("above zero, %d decimals at most", decimals))
+		bad("cost", "INVALID_VALUE", fmt.Sprintf("above zero, %d decimals at most", decimals), "decimals", strconv.Itoa(int(decimals)))
 	}
 	// residual, life, method, start
 	residual := decimal.Zero
@@ -787,7 +799,7 @@ func (s *Service) prepareRow(ctx context.Context, p auth.Principal, propertyID i
 	}
 	serial := optional(&row.SerialNo)
 	if serial != nil && len([]rune(*serial)) > maxSerial {
-		bad("serial_no", "INVALID_VALUE", fmt.Sprintf("%d characters at most", maxSerial))
+		bad("serial_no", "INVALID_VALUE", fmt.Sprintf("%d characters at most", maxSerial), "max", strconv.Itoa(maxSerial))
 	}
 	// the fiscal book (A9, 4.9)
 	group, fmethod := cat.FiscalGroup, cat.FiscalMethod

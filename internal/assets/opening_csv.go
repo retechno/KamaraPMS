@@ -100,7 +100,7 @@ func parseOpeningCSV(text string) ([]OpeningRow, map[int][]apperr.FieldError, er
 			}
 			return trimmed(rec[i])
 		}
-		bad := func(col, msg string) { problems[no] = append(problems[no], fieldErr(col, "INVALID_FORMAT", msg)) }
+		bad := func(col, code, msg string) { problems[no] = append(problems[no], fieldErr(col, code, msg)) }
 		row := OpeningRow{Name: cell("name"), Category: cell("category"), Location: cell("location"), Department: cell("department"), Supplier: cell("supplier"), Method: strings.ToUpper(cell("method")),
 			SerialNo: cell("serial_no"), StartRule: strings.ToUpper(cell("start_rule")), FiscalGroup: strings.ToUpper(cell("fiscal_group")), FiscalMethod: strings.ToUpper(cell("fiscal_method"))}
 		date := func(col string) *civil.Date {
@@ -110,7 +110,7 @@ func parseOpeningCSV(text string) ([]OpeningRow, map[int][]apperr.FieldError, er
 			}
 			d, err := civil.ParseDate(v)
 			if err != nil {
-				bad(col, "YYYY-MM-DD")
+				bad(col, "INVALID_DATE", "YYYY-MM-DD")
 				return nil
 			}
 			return &d
@@ -122,7 +122,7 @@ func parseOpeningCSV(text string) ([]OpeningRow, map[int][]apperr.FieldError, er
 			}
 			d, err := decimal.NewFromString(v)
 			if err != nil {
-				bad(col, "a number with a dot as the decimal mark")
+				bad(col, "INVALID_NUMBER", "a number with a dot as the decimal mark")
 				return nil
 			}
 			return &d
@@ -134,7 +134,7 @@ func parseOpeningCSV(text string) ([]OpeningRow, map[int][]apperr.FieldError, er
 			}
 			n, err := strconv.Atoi(v)
 			if err != nil {
-				bad(col, "a whole number")
+				bad(col, "INVALID_INTEGER", "a whole number")
 				return nil
 			}
 			return &n
@@ -143,7 +143,7 @@ func parseOpeningCSV(text string) ([]OpeningRow, map[int][]apperr.FieldError, er
 		if c := money("cost"); c != nil {
 			row.Cost = *c
 		} else if cell("cost") == "" {
-			bad("cost", "needed")
+			bad("cost", "REQUIRED", "needed")
 		}
 		row.ResidualValue, row.AccumulatedDepreciation, row.FiscalAccumulatedDepreciation = money("residual_value"), money("accumulated_depreciation"), money("fiscal_accumulated_depreciation")
 		row.LifeMonths, row.MonthsDone, row.UnitCount, row.FiscalMonthsDone = count("life_months"), count("months_done"), count("unit_count"), count("fiscal_months_done")

@@ -18,7 +18,7 @@ import (
 
 // Layouts of the sheet.
 const (
-	LabelLayoutA4    = "A4_24"      // an A4 sheet of 3 x 8 labels of 70 x 37 mm
+	LabelLayoutA4    = "A4_24"      // an A4 sheet of 3 x 8 labels of 66 x 35 mm, inside a margin of 6 mm at the sides and 8.5 mm above and below
 	LabelLayoutRoll  = "ROLL_50x30" // a roll of labels of 50 x 30 mm, one to a page
 	labelsPerA4Sheet = 24
 )
@@ -76,11 +76,13 @@ func RenderAssetLabels(labels []assets.Label, layout string) ([]byte, error) {
 	var p *fpdf.Fpdf
 	var w, h float64
 	var cols, perPage int
+	var ox, oy float64 // where the first label starts: the margin of the paper
 	if layout == LabelLayoutRoll {
 		w, h, cols, perPage = 50, 30, 1, 1
 		p = fpdf.NewCustom(&fpdf.InitType{OrientationStr: "L", UnitStr: "mm", Size: fpdf.SizeType{Wd: w, Ht: h}})
 	} else {
-		w, h, cols, perPage = 70, 37.125, 3, labelsPerA4Sheet
+		w, h, cols, perPage = 66, 35, 3, labelsPerA4Sheet
+		ox, oy = 6, 8.5
 		p = fpdf.New("P", "mm", "A4", "")
 	}
 	p.SetMargins(0, 0, 0)
@@ -98,7 +100,7 @@ func RenderAssetLabels(labels []assets.Label, layout string) ([]byte, error) {
 		if slot == 0 {
 			p.AddPage()
 		}
-		x, y := float64(slot%cols)*w, float64(slot/cols)*h
+		x, y := ox+float64(slot%cols)*w, oy+float64(slot/cols)*h
 		m, err := QRMatrix(l.Code)
 		if err != nil {
 			return nil, err
@@ -118,18 +120,22 @@ func RenderAssetLabels(labels []assets.Label, layout string) ([]byte, error) {
 			}
 		}
 		tx, tw := qx+qr+2, w-qr-6
+		const nameLines, nameLH = 2, 3.6
+		top := y + (h-(5+nameLines*nameLH+4+3))/2
 		p.SetTextColor(0, 0, 0)
 		p.SetFont("Helvetica", "B", 10)
-		p.SetXY(tx, y+h/2-9)
+		p.SetXY(tx, top)
 		p.CellFormat(tw, 5, clip(p, text(l.Title), tw), "", 0, "L", false, 0, "")
 		p.SetFont("Helvetica", "", 8)
-		for n, line := range []string{l.Name, l.Subtitle} {
-			p.SetXY(tx, y+h/2-3+float64(n)*4)
-			p.CellFormat(tw, 4, clip(p, text(line), tw), "", 0, "L", false, 0, "")
+		for n, line := range wrap(p, text(l.Name), tw, nameLines) {
+			p.SetXY(tx, top+5+float64(n)*nameLH)
+			p.CellFormat(tw, nameLH, line, "", 0, "L", false, 0, "")
 		}
+		p.SetXY(tx, top+5+nameLines*nameLH)
+		p.CellFormat(tw, 4, clip(p, text(l.Subtitle), tw), "", 0, "L", false, 0, "")
 		p.SetFont("Helvetica", "", 6)
 		p.SetTextColor(110, 110, 110)
-		p.SetXY(tx, y+h/2+6)
+		p.SetXY(tx, top+9+nameLines*nameLH)
 		p.CellFormat(tw, 3, strings.TrimPrefix(strings.TrimPrefix(l.Code, "FA:"), "FL:"), "", 0, "L", false, 0, "")
 	}
 	var buf bytes.Buffer
@@ -145,4 +151,40 @@ func clip(p *fpdf.Fpdf, s string, w float64) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// wrap breaks s into at most n lines of w mm in the current font, at the spaces (a word wider than a line is cut). What does not fit ends the last line with "...".
+func wrap(p *fpdf.Fpdf, s string, w float64, n int) []string {
+	var pieces []string
+	for _, word := range strings.Fields(s) {
+		for len(word) > 1 && p.GetStringWidth(word) > w {
+			cut := clip(p, word, w)
+			pieces = append(pieces, cut)
+			word = word[len(cut):]
+		}
+		pieces = append(pieces, word)
+	}
+	var lines []string
+	cur := ""
+	for _, piece := range pieces {
+		if cand := strings.TrimSpace(cur + " " + piece); cur == "" || p.GetStringWidth(cand) <= w {
+			cur = cand
+			continue
+		}
+		lines = append(lines, cur)
+		cur = piece
+	}
+	if cur != "" {
+		lines = append(lines, cur)
+	}
+	if len(lines) <= n {
+		return lines
+	}
+	last := lines[n-1]
+	for len(last) > 0 && p.GetStringWidth(last+"...") > w {
+		last = last[:len(last)-1]
+	}
+	lines = lines[:n]
+	lines[n-1] = strings.TrimRight(last, " ") + "..."
+	return lines
 }

@@ -146,7 +146,7 @@ async function cancelAsset(): Promise<void> {
           <dt class="text-muted-foreground">{{ t('assets.asset.serial') }}</dt><dd class="m-0">{{ asset.serial_no ?? '–' }}</dd>
           <dt class="text-muted-foreground">{{ t('assets.asset.acquired') }}</dt><dd class="m-0">{{ formatDate(asset.acquisition_date) }}</dd>
           <dt class="text-muted-foreground">{{ t('assets.col.inService') }}</dt><dd class="m-0">{{ formatDate(asset.in_service_date) }}</dd>
-          <dt class="text-muted-foreground">{{ t('assets.asset.depStart') }}</dt><dd class="m-0">{{ noDepreciation ? '–' : asset.first_dep_month ? formatMonth(asset.first_dep_month) : '–' }}</dd>
+          <dt class="text-muted-foreground">{{ t('assets.asset.depStart') }}</dt><dd class="m-0">{{ noDepreciation ? '–' : asset.first_dep_month ? formatMonth(asset.first_dep_month.slice(0, 7)) : '–' }}</dd>
           <dt class="text-muted-foreground">{{ t('assets.asset.warranty') }}</dt><dd class="m-0">{{ asset.warranty_until ? formatDate(asset.warranty_until) : '–' }}</dd>
           <template v-if="asset.notes"><dt class="text-muted-foreground">{{ t('assets.asset.notes') }}</dt><dd class="m-0">{{ asset.notes }}</dd></template>
         </dl>

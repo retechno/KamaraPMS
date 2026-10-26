@@ -26700,7 +26700,8 @@ components:
         row_no: { type: integer, description: "0 for the import as a whole." }
         field: { type: string }
         code: { type: string }
-        message: { type: string }
+        message: { type: string, description: "English text for logs and API clients; the screen words the finding by `code`, `field` and `params`." }
+        params: { type: object, additionalProperties: { type: string }, description: "The figures the finding is made of (max, decimals, month, number)." }
     AssetOpeningRowResult:
       type: object
       required: [row_no, name, category_code, cost, accum, months_done, fully_depreciated, warnings, errors]

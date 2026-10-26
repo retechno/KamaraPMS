@@ -276,7 +276,7 @@ func locationFrom(r assetsdb.ListLocationsRow) Location {
 		IsActive: r.IsActive, AssetCount: int(r.AssetCount)}
 	switch {
 	case r.RoomNumber != nil:
-		l.ReferenceLabel = ptr("Room " + *r.RoomNumber)
+		l.ReferenceLabel = r.RoomNumber
 	case r.BanquetRoomName != nil:
 		l.ReferenceLabel = r.BanquetRoomName
 	case r.WarehouseName != nil:
@@ -447,7 +447,8 @@ func (s *Service) ensureLocation(ctx context.Context, p auth.Principal, property
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return 0, err
 		}
-		code, name, arg.RoomID = "ROOM-"+r.RoomNumber, "Room "+r.RoomNumber, &r.ID
+		// the name of a room is its number: no word of a language (the kind of the location says it is a room)
+		code, name, arg.RoomID = "ROOM-"+r.RoomNumber, r.RoomNumber, &r.ID
 	case "BANQUET_ROOM":
 		var r assetsdb.GetBanquetRoomRefRow
 		var err error

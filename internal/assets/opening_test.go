@@ -238,3 +238,31 @@ func TestEveryImportUseCaseTakesItsLocksInOrder(t *testing.T) {
 		t.Error("the import did not lock fa_settings")
 	}
 }
+
+// A finding carries the figures it is made of, so that the screen words it in its own language.
+func TestFindingsCarryTheirParams(t *testing.T) {
+	f := newFx(t)
+	long := row(strings.Repeat("x", 151), "FFE", "1000000", "", 0)
+	long.SerialNo = strings.Repeat("s", 101)
+	res, err := f.importRows(t, "2026-09-30", true, true, long, row("Sofa", "FFE", "1000000", "", 0))
+	must(t, err)
+	got := map[string]string{}
+	for _, e := range res.Rows[0].Errors {
+		got[e.Field+"."+e.Code] = e.Params["max"]
+	}
+	if got["name.INVALID_VALUE"] == "" || got["serial_no.INVALID_VALUE"] == "" {
+		t.Fatalf("the findings of the long name and serial number have no max: %v", got)
+	}
+}
+
+// A room made by the import is named by its number, not by an English word.
+func TestEnsuredRoomLocationHasNoEnglishWord(t *testing.T) {
+	f := newFx(t)
+	rt := f.RoomType(t, f.admin, f.propID, "STD")
+	room := f.Room(t, f.admin, f.propID, rt.ID, "101")
+	loc, err := f.svc.EnsureLocation(f.admin, f.propID, assets.EnsureLocationInput{Kind: "ROOM", RefID: room.ID})
+	must(t, err)
+	if loc.Name != "101" || loc.Code != "ROOM-101" {
+		t.Fatalf("location %q (%s)", loc.Name, loc.Code)
+	}
+}

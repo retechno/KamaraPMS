@@ -94,6 +94,8 @@ const props = withDefaults(
     loadingMore?: boolean
     /** How many rows there are in all, when the API says (shown as "50 of about N"); otherwise "50 loaded". */
     total?: number | null
+    /** The whole footer text, when the page knows the exact count and its noun ("13 assets"); it replaces the default wording. */
+    countLabel?: string
     loadMoreLabel?: string
     /** A card for each row on a phone. */
     cards?: boolean
@@ -106,7 +108,7 @@ const props = withDefaults(
     loading: false, emptyTitle: '', emptyDescription: '', clickable: false, caption: '', rowTestId: undefined, rowClass: undefined, isExpanded: undefined, detailTestId: undefined, manual: false,
     sort: undefined,
     defaultSort: undefined,
-    hasMore: undefined, loadingMore: false, total: null, loadMoreLabel: '', cards: false, rowTo: undefined, rowActions: undefined,
+    hasMore: undefined, loadingMore: false, total: null, countLabel: '', loadMoreLabel: '', cards: false, rowTo: undefined, rowActions: undefined,
   },
 )
 const emit = defineEmits<{
@@ -333,7 +335,7 @@ const cardParts = computed(() => {
     lines: shown.filter((c) => !c.card),
   }
 })
-const countText = computed(() => (props.total ? t('dataTable.loadedOf', { n: props.rows.length, total: props.total }) : t('dataTable.loaded', { n: props.rows.length })))
+const countText = computed(() => props.countLabel || (props.total ? t('dataTable.loadedOf', { n: props.rows.length, total: props.total }) : t('dataTable.loaded', { n: props.rows.length })))
 </script>
 
 <template>

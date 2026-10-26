@@ -16,7 +16,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { t } from '@/i18n'
 import { downloadFile } from '@/utils/documents'
-import { formatMoney, formatMonth } from '@/utils/format'
+import { formatDate, formatMoney } from '@/utils/format'
 
 /** The register of fixed assets (docs/architecture/37-fixed-assets.md 4.12, mockup 51): a list that fills the screen, filters, the sums of the filter, and the choice of assets to print labels for. */
 const PAGE = 100
@@ -89,6 +89,7 @@ function setCategory(id: number): void {
   void load()
 }
 
+const countLabel = computed(() => (rows.value.length >= total.value ? t('assets.tiles.count', { n: total.value }) : t('assets.register.countOf', { n: rows.value.length, total: total.value })))
 const hasMore = computed(() => rows.value.length < total.value)
 const allSelected = computed(() => rows.value.length > 0 && rows.value.every((r) => selected.value.has(r.id)))
 function toggle(id: number): void {
@@ -176,7 +177,7 @@ const columns = computed<Column<Asset>[]>(() => [
     </form>
     <DataTable
       :columns="columns" :rows="rows" row-key="id" :loading="!loaded" :empty-title="t('assets.register.empty')" :empty-description="t('assets.register.emptyHint')"
-      :row-test-id="(r) => `asset-${r.number}`" :has-more="hasMore" :loading-more="loadingMore" :total="total" cards data-testid="asset-table" @load-more="load(true)"
+      :row-test-id="(r) => `asset-${r.number}`" :has-more="hasMore" :loading-more="loadingMore" :total="total" :count-label="countLabel" cards data-testid="asset-table" @load-more="load(true)"
     >
       <template #header-select><input type="checkbox" class="size-4 accent-primary" :checked="allSelected" :aria-label="t('assets.register.selectAll')" data-testid="select-all" @change="toggleAll" /></template>
       <template #cell-select="{ row }"><input type="checkbox" class="size-4 accent-primary" :checked="selected.has(row.id)" :aria-label="t('assets.register.select', { number: row.number })" :data-testid="`select-${row.number}`" @change="toggle(row.id)" /></template>
@@ -185,7 +186,7 @@ const columns = computed<Column<Asset>[]>(() => [
         <div class="text-xs text-muted-foreground">{{ row.number }}<template v-if="row.serial_no"> · {{ row.serial_no }}</template><template v-if="row.source === 'OPENING'"> · {{ t('assets.register.fromOpening') }}</template><template v-if="row.unit_count > 1"> · {{ t('assets.register.units', { n: row.unit_count }) }}</template></div>
       </template>
       <template #cell-location_name="{ row }">{{ row.location_name ?? '–' }}<div class="text-xs text-muted-foreground">{{ row.department_name ?? '' }}</div></template>
-      <template #cell-in_service_date="{ row }">{{ row.category_kind === 'CIP' ? '–' : formatMonth(row.in_service_date) }}</template>
+      <template #cell-in_service_date="{ row }">{{ row.category_kind === 'CIP' ? '–' : formatDate(row.in_service_date) }}</template>
       <template #cell-cost="{ row }"><span class="tabular-nums">{{ formatMoney(row.cost) }}</span></template>
       <template #cell-accum_depr="{ row }"><span class="tabular-nums">{{ noDepreciation(row) ? '–' : formatMoney(row.accum_depr) }}</span></template>
       <template #cell-carrying_value="{ row }"><span class="tabular-nums">{{ formatMoney(row.carrying_value) }}</span></template>

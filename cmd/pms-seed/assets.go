@@ -24,7 +24,8 @@ import (
 //	locations   free areas (lobby, technical store, back garden); rooms, meeting rooms and warehouses are made by the import itself when the demo of rooms, banquet or inventory is there
 //	opening     one import WITH journal, as at the last day of the month before the business date: thirteen old assets in Indonesian across the categories, among them land and a building under
 //	            construction (not depreciated), two assets already depreciated down to their residual value, and the wardrobe of docs/architecture/37-fixed-assets.md 10.15 (the commercial book still
-//	            runs, the fiscal one is finished). The import also sets the start of the register (register_from).
+//	            runs, the fiscal one is finished). The import also sets the start of the register (register_from). Its journal is dated the month end when the books allow, and one more journal
+//	            books a plot of land (750000000) in the ledger only, so that a REGISTER_ONLY import of that plot ties out (and any other file does not).
 //
 // Safe to run again: locations that exist (by code) are left alone and the import is skipped once the register has one.
 
@@ -81,7 +82,7 @@ func seedAssets(e *env, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	_, err = seedAssetsWith(e.ctx, svc, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
+	_, err = seedAssetsWith(e.ctx, svc, acct, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
 	return err
 }
 
@@ -97,7 +98,7 @@ func monthEndBefore(d civil.Date) civil.Date {
 }
 
 // seedAssetsWith does the work; the return value is the number of rows created (or that would be).
-func seedAssetsWith(ctx context.Context, svc *assets.Service, pid int64, businessDate civil.Date, dryRun bool, out io.Writer) (int, error) {
+func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.Service, pid int64, businessDate civil.Date, dryRun bool, out io.Writer) (int, error) {
 	made := 0
 	existing, err := svc.ListLocations(ctx, pid, "", nil)
 	if err != nil {
@@ -132,6 +133,12 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, pid int64, busines
 	}
 
 	asOf, journalDate := pickAsOf(ctx, svc, pid, businessDate)
+	if journalDate == nil {
+		// the journal is dated the month end itself, so that the ledger at the month end holds the assets: a later import in the mode REGISTER_ONLY can then tie out to it
+		if jd := asOf; tryAsOf(ctx, svc, pid, asOf, &jd) {
+			journalDate = &jd
+		}
+	}
 	if dryRun && made > 0 { // the areas the rows name do not exist yet, so the import cannot be tried: say what the real run does
 		_, _ = fmt.Fprintf(out, "opening balances as at %s: %d assets to import\n", asOf, len(assetSpecs))
 		_, _ = fmt.Fprintln(out, "dry run: would create the import above")
@@ -161,7 +168,54 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, pid int64, busines
 		return made, err
 	}
 	_, _ = fmt.Fprintln(out, "opening balances imported")
+	if journalDate != nil && !journalDate.After(asOf) {
+		if err := seedUnregisteredLand(ctx, svc, acct, pid, *journalDate, out); err != nil {
+			return made, err
+		}
+	}
 	return made, nil
+}
+
+// unregisteredLandCost is the cost of the plot that the ledger holds but the register does not (yet): an import in the mode REGISTER_ONLY with that one plot (category LAND, cost 750000000,
+// in service before the month end) ties out to the ledger, while any other file shows the differences.
+const unregisteredLandCost = 750_000_000
+
+// seedUnregisteredLand books the cost of a plot of land in the ledger on its own (Dr the cost account of LAND, Cr 3900), dated the month end of the opening balances, for the demo of the
+// register-only import.
+func seedUnregisteredLand(ctx context.Context, svc *assets.Service, acct *accounting.Service, pid int64, date civil.Date, out io.Writer) error {
+	cats, err := svc.ListCategories(ctx, pid)
+	if err != nil {
+		return err
+	}
+	var land int64
+	for _, c := range cats {
+		if c.Code == "LAND" {
+			land = c.CostAccountID
+		}
+	}
+	accts, err := acct.Accounts(ctx, pid, accounting.AccountFilter{Query: "3900"})
+	if err != nil {
+		return err
+	}
+	var equity int64
+	for _, a := range accts {
+		if a.Code == "3900" {
+			equity = a.ID
+		}
+	}
+	if land == 0 || equity == 0 {
+		_, _ = fmt.Fprintln(out, "no LAND category or account 3900: the plot of the register-only demo is not booked")
+		return nil
+	}
+	amount := decimal.NewFromInt(unregisteredLandCost)
+	if _, err := acct.PostManual(ctx, pid, accounting.ManualInput{Date: date, Description: "Tanah parkir (demo saldo awal, hanya register)", Reference: "DEMO-LAND", Lines: []accounting.LineInput{
+		{AccountID: land, Debit: amount},
+		{AccountID: equity, Credit: amount},
+	}}, "pms-seed-assets-land"); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(out, "ledger holds a plot of land worth %s that the register does not: a REGISTER_ONLY import of it ties out\n", amount)
+	return nil
 }
 
 // assetRows turns the specs into the rows of an import as at asOf. A location that names a room, a meeting room or a warehouse falls back to a free area when that master is not there.

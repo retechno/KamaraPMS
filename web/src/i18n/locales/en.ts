@@ -6165,15 +6165,102 @@ export const en = {
     locationKind: { ROOM: 'Hotel room', BANQUET_ROOM: 'Meeting room', WAREHOUSE: 'Warehouse', AREA: 'Free area' },
     severity: { ERROR: 'Error', WARNING: 'Warning' },
     findings: {
-      FISCAL_ACCUMULATED_ESTIMATED: 'The fiscal accumulation was computed: check it against last year\'s annual return (SPT).',
+      OPENING_ACCOUNT_MISSING: 'The opening balances are booked against account 3900 "Opening balance equity", which is missing or cannot be used in this property.',
+      OPENING_GL_MISMATCH: 'The sums of the file do not equal the balances of the general ledger accounts: see the differences by category.',
       DUPLICATE_ROW: 'Another row of the file has the same name, category, cost and serial number.',
-      DUPLICATE_ASSET: 'The register already has an asset with the same name, category, cost and serial number.',
+      DUPLICATE_ASSET: 'The register has an asset with the same name, category, cost and serial number: {number}.',
+      INVALID_DATE: 'Write the date as year-month-day.',
+      INVALID_NUMBER: 'Write a number with a dot as the decimal mark.',
+      INVALID_INTEGER: 'Write a whole number.',
+      REQUIRED: 'This is needed.',
+      as_of: {
+        INVALID_VALUE: 'The month end is after the business date.',
+        AS_OF_MISMATCH: 'The register starts in {month}: the opening balances are as at the end of the month before it.',
+      },
+      journal_date: {
+        INVALID_VALUE: 'The journal date is after the business date.',
+      },
+      name: {
+        INVALID_VALUE: 'The name is 1 to {max} characters.',
+      },
+      category: {
+        NOT_FOUND: 'No such category in this property.',
+        INACTIVE: 'The category is switched off.',
+      },
+      in_service_date: {
+        REQUIRED: 'The date the asset was put in service is needed.',
+        INVALID_VALUE: 'The asset was put in service after the month end of the opening balances.',
+      },
+      acquisition_date: {
+        INVALID_VALUE: 'The acquisition date is after the date in service.',
+      },
+      cost: {
+        INVALID_VALUE: 'The cost is above zero, with {decimals} decimals at most.',
+      },
+      residual_value: {
+        INVALID_VALUE: 'The residual value is zero up to the cost, at the decimals of the currency.',
+        NOT_ALLOWED: 'An asset that is not depreciated has no residual value.',
+      },
+      life_months: {
+        OUT_OF_RANGE: 'The life is 1 to 1200 months.',
+        NOT_ALLOWED: 'This category is not depreciated: no life, method or months done.',
+      },
+      method: {
+        INVALID_VALUE: 'The method is straight line or declining balance.',
+      },
+      start_rule: {
+        INVALID_VALUE: 'The start is the month in service or the month after.',
+      },
+      months_done: {
+        OUT_OF_RANGE: 'The months done are zero up to the life of the asset.',
+        INVALID_VALUE: 'Accumulated depreciation was given with no months done.',
+      },
+      accumulated_depreciation: {
+        OUT_OF_RANGE: 'The accumulated depreciation is zero up to the cost less the residual value.',
+        NOT_ALLOWED: 'This category is not depreciated.',
+        ACCUMULATED_ESTIMATED: 'No accumulated depreciation was given: the straight line of the months done was used.',
+        LIFE_OVER_WITH_VALUE: 'The life is over and value is left above the residual: give a longer life, or a residual value.',
+        ACCUMULATED_DIFFERS_FROM_SL: 'The accumulated depreciation is not what the straight line gives for the months done.',
+      },
+      unit_count: {
+        OUT_OF_RANGE: 'The number of units is 1 or more.',
+        NOT_ALLOWED: 'Only a batch of operating equipment has more than one unit.',
+      },
+      location: {
+        NOT_FOUND: 'No such location, room, meeting room or warehouse.',
+      },
+      department: {
+        NOT_FOUND: 'No such department in this property.',
+      },
+      supplier: {
+        NOT_FOUND: 'No such supplier in this property.',
+      },
+      serial_no: {
+        INVALID_VALUE: 'The serial number is {max} characters at most.',
+      },
+      fiscal_group: {
+        INVALID_VALUE: 'The fiscal group is none, group 1 to 4, or a permanent or non-permanent building.',
+        NOT_FOUND: 'The property has no rates for this fiscal group.',
+      },
+      fiscal_method: {
+        INVALID_VALUE: 'The fiscal method is straight line or declining balance.',
+        NOT_ALLOWED: 'A building has the straight line only.',
+      },
+      fiscal_accumulated_depreciation: {
+        NOT_ALLOWED: 'The asset has no fiscal group: it is not depreciated for tax.',
+        OUT_OF_RANGE: 'The fiscal accumulation is zero up to the cost.',
+        FISCAL_ACCUMULATED_ESTIMATED: 'The fiscal accumulation was computed from the rate of the group: check it against last year\'s annual return (SPT).',
+      },
+      fiscal_months_done: {
+        OUT_OF_RANGE: 'The fiscal months done are zero or more.',
+      },
     },
     life: { notDepreciated: 'not depreciated', notInUse: 'not in use yet', fullyDepreciated: 'fully depreciated', months: '{n} mo' },
     col: { asset: 'Asset', category: 'Category', place: 'Location', department: 'Department', inService: 'In use since', cost: 'Cost', accum: 'Accumulated', carrying: 'Book value', life: 'Life left', status: 'Status' },
     tiles: { cost: 'Cost', count: '{n} assets', accum: 'Accumulated depreciation', carrying: 'Book value' },
     filter: { allCategories: 'All categories', allLocations: 'All locations', allDepartments: 'All departments', anyStatus: 'Any status', search: 'Search number, name, serial' },
     register: {
+      countOf: '{n} of {total} assets',
       title: 'Fixed asset register',
       intro: 'Every asset the property owns, with its cost, accumulated depreciation and book value.',
       csv: 'Export CSV', print: 'Print QR labels', printSelected: 'Print labels ({n})', opening: 'Old assets (opening balances)',

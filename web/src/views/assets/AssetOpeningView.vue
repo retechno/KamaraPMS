@@ -16,7 +16,7 @@ import { useAssetAccess } from '@/composables/useAssetAccess'
 import { loadDepartments } from '@/composables/useDepartments'
 import { toast } from '@/composables/useToast'
 import { t, te } from '@/i18n'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate, formatMoney, formatMonth } from '@/utils/format'
 
 /**
  * The opening balances of the register (docs/architecture/37-fixed-assets.md 4.4, mockup 55): old assets from a file or one by one, with the dry run before anything is written, the mode (with a
@@ -130,7 +130,13 @@ async function run(dry: boolean): Promise<void> {
 // a change of the input is a new request
 watch([as_of, journal_date, mode, csv, single, () => ({ ...row })], () => { result.value = null; key = crypto.randomUUID() })
 
-const finding = (f: { code: string; message: string }): string => (te(`assets.findings.${f.code}`) ? t(`assets.findings.${f.code}`) : f.message)
+/** A finding of the import in the language of the page: by its field and code, then by its code, then as an error of the API. The figures it is made of come from the server. */
+const finding = (f: { field?: string; code: string; message: string; params?: Record<string, string> }): string => {
+  const params: Record<string, string> = { ...(f.params ?? {}) }
+  if (params.month) params.month = formatMonth(params.month)
+  for (const key of [`assets.findings.${f.field ?? ''}.${f.code}`, `assets.findings.${f.code}`, `errors.${f.code}`, `fieldErrors.${f.code}`]) if (te(key)) return t(key, params)
+  return f.message
+}
 const canImport = computed(() => !!result.value && result.value.valid && result.value.dry_run && result.value.rows.length > 0)
 </script>
 

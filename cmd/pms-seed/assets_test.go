@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/assets"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/iam"
@@ -24,7 +26,7 @@ func TestSeedAssets(t *testing.T) {
 	}
 	run := func(dry bool) (int, string) {
 		var out bytes.Buffer
-		n, err := seedAssetsWith(ctx, svc, p.ID, day.BusinessDate, dry, &out)
+		n, err := seedAssetsWith(ctx, svc, e.Accounting, p.ID, day.BusinessDate, dry, &out)
 		if err != nil {
 			t.Fatalf("%v\n%s", err, out.String())
 		}
@@ -56,6 +58,26 @@ func TestSeedAssets(t *testing.T) {
 	settings, _ := svc.GetSettings(ctx, p.ID)
 	if settings.RegisterFrom == nil {
 		t.Fatal("the import did not start the register")
+	}
+
+	// the register-only demo: the plot that only the ledger holds ties out, any other file does not
+	settingsNow, _ := svc.GetSettings(ctx, p.ID)
+	asOf := settingsNow.RegisterFrom.AddDays(-1)
+	inService := asOf.AddDays(-400)
+	noJournal := false
+	try := func(cost string) assets.OpeningResult {
+		res, err := svc.ImportOpening(ctx, p.ID, assets.OpeningInput{AsOf: asOf, PostJournal: &noJournal, DryRun: true,
+			Rows: []assets.OpeningRow{{Name: "Tanah parkir", Category: "LAND", Cost: decimal.RequireFromString(cost), InServiceDate: &inService}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	if res := try("750000000"); !res.Valid {
+		t.Fatalf("the plot of the register-only demo does not tie out: %+v", res.Errors)
+	}
+	if res := try("750000001"); res.Valid {
+		t.Fatal("a file that differs from the ledger tied out")
 	}
 
 	again, out := run(false)

@@ -704,3 +704,10 @@ Masters, register, opening balances and labels, as `1. Masters, register, openin
 - **Web:** the register has no "waiting list" button, no "depreciation of the month" tile and the asset page no Move / Add value / Dispose buttons (PR 2 and 3); mockup 58 is one page instead of tabs; the preview card of 61 with sample QR images is not built. Start rule names and OE policy names are those of the migration (`IN_SERVICE_MONTH`, `NEXT_MONTH`; `EXPENSE`, `BATCH`).
 
 **Checks:** `go build`, `go vet`, `scripts/lint.sh` (0 issues), `scripts/sqlc.sh diff`, `scripts/db-test.sh`, the tests of the packages above, and the web suite; the full Go suite is proved by CI.
+
+**Review round of PR 1 (2026-10-27)**
+- **Findings of an import carry figures, not sentences.** `Finding` has `params` (max, decimals, month, number); the screen words a finding by `assets.findings.<field>.<CODE>`, then `assets.findings.<CODE>`, then the table of API errors, in the language of the page. The `message` stays English for logs and API clients. The CSV problems have their own codes (`INVALID_DATE`, `INVALID_NUMBER`, `INVALID_INTEGER`, `REQUIRED`) instead of one `INVALID_FORMAT`.
+- **A location made from a master** is named by the master: the room number, the name of the meeting room or of the warehouse. No word of a language is written into the name (the kind of the location says it is a room).
+- **Dates** of the asset pages are shown as the rest of the application does ("14 Feb 2025", "Okt 2026"); the footer of the register counts exactly ("13 aset").
+- **Labels:** the A4 sheet is 3 x 8 labels of 66 x 35 mm inside a margin of 6 mm at the sides and 8.5 mm above and below; the name takes two lines and then ends with "...".
+- **Demo:** `pms-seed assets` dates the journal of the opening balances the month end itself and books one plot of land (750000000) in the ledger only, so that a REGISTER_ONLY import of that plot ties out; any other file shows the differences.

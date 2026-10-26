@@ -31,7 +31,7 @@ const locations = [
 ]
 const base = {
   category_id: 2, category_code: 'FFE', category_name: 'FF&E', category_kind: 'FFE', source: 'JOURNAL', status: 'ACTIVE', acquisition_date: '2026-03-01', in_service_date: '2026-03-01', start_rule: 'IN_SERVICE_MONTH', residual_value: '0', life_months: 96, method: 'SL',
-  fully_depreciated: false, unit_count: 1, fiscal_group: 'G2', fiscal_method: 'SL', fiscal_opening_estimated: false, version: 3, dep_months_done: 0,
+  first_dep_month: '2026-03-01', fully_depreciated: false, unit_count: 1, fiscal_group: 'G2', fiscal_method: 'SL', fiscal_opening_estimated: false, version: 3, dep_months_done: 0,
 }
 const assets = [
   { ...base, id: 1, number: 'FA-000001', name: 'Hotel land', category_id: 1, category_code: 'LAND', category_name: 'Land', category_kind: 'LAND', cost: '5000000000', accum_depr: '0', carrying_value: '5000000000', life_months: null, method: null, location_name: 'Lobby', department_name: 'Admin' },
@@ -47,7 +47,7 @@ const settings = { register_from: null, capitalization_threshold: '2500000', sta
 const fiscalGroups = [{ code: 'G1', life_years: 4, sl_rate: '25.000', db_rate: '50.000' }, { code: 'BLD_PERMANENT', life_years: 20, sl_rate: '5.000', db_rate: null }]
 const dry = {
   dry_run: true, valid: true, replayed: false, mode: 'WITH_JOURNAL', as_of: '2026-09-30', journal_date: '2026-09-30', register_from: '2026-10-01',
-  rows: [{ row_no: 1, name: 'Wooden wardrobe', category_code: 'FFE', cost: '36000000', accum: '30375000', months_done: 81, fiscal_accum: '36000000', fully_depreciated: false, warnings: [{ row_no: 1, code: 'FISCAL_ACCUMULATED_ESTIMATED', message: 'computed' }], errors: [] }],
+  rows: [{ row_no: 1, name: 'Wooden wardrobe', category_code: 'FFE', cost: '36000000', accum: '30375000', months_done: 81, fiscal_accum: '36000000', fully_depreciated: false, warnings: [{ row_no: 1, field: 'fiscal_accumulated_depreciation', code: 'FISCAL_ACCUMULATED_ESTIMATED', message: 'computed' }], errors: [] }],
   totals: [{ category_code: 'FFE', category_name: 'FF&E', count: 1, cost: '36000000', accum: '30375000', net: '5625000' }], total_cost: '36000000', total_accum: '30375000', net_to_equity: '5625000',
   journal_preview: [
     { account_code: '1530', account_name: 'FF&E', debit: '36000000', credit: '0' }, { account_code: '1592', account_name: 'Accumulated depreciation FF&E', debit: '0', credit: '30375000' }, { account_code: '3900', account_name: 'Opening balance equity', debit: '0', credit: '5625000' },
@@ -168,9 +168,17 @@ describe('the register', () => {
     expect(GET.mock.calls.filter((c) => String(c[0]).includes('/assets')).length).toBe(0)
   })
 
+  it('counts the assets exactly in the footer, and shows the date in service as a date of the page', async () => {
+    await setup(AssetRegisterView)
+    expect(body('[data-testid=table-count]').text()).toBe('4 assets')
+    expect(body('[data-testid="asset-FA-000012"]').text()).toMatch(/\d{1,2} \w{3} 20\d\d/)
+    expect(body('[data-testid="asset-FA-000012"]').text()).not.toMatch(/20\d\d-\d\d-\d\d/)
+  })
+
   it('speaks Indonesian with its own separators', async () => {
     setLocale('id')
     await setup(AssetRegisterView)
+    expect(body('[data-testid=table-count]').text()).toBe('4 aset')
     expect(document.body.textContent).toContain('Register aset tetap')
     expect(body('[data-testid=asset-tiles]').text()).toContain('6.386.000.000')
     expect(body('[data-testid="asset-FA-000090"]').text()).toContain('habis disusutkan')
@@ -188,6 +196,7 @@ describe('an asset', () => {
     expect(body('[data-testid=value-carrying]').text()).toBe('23,000,000')
     expect(body('[data-testid=asset-fiscal]').text()).toContain('36,000,000')
     expect(has('[data-testid=fiscal-estimated]')).toBe(true)
+    expect(document.body.textContent).toContain('Mar 2026')
     expect(body('[data-testid=ledger-5]').text()).toContain('Brought in (opening balance)')
   })
 
@@ -237,6 +246,22 @@ describe('the opening balances', () => {
     expect(body('[data-testid=result-row-1]').text()).toContain('fiscal accumulation was computed')
     expect(body('[data-testid=result-journal]').text()).toContain('3900')
     expect(body('[data-testid=result-journal]').text()).toContain('5,625,000')
+  })
+
+  it('words the findings in the language of the page from their code, field and figures', async () => {
+    setLocale('id')
+    await setup(AssetOpeningView)
+    POST = vi.fn().mockResolvedValue({ data: { ...dry, valid: false, mode: 'REGISTER_ONLY', journal_preview: [],
+      errors: [{ row_no: 0, field: 'as_of', code: 'AS_OF_MISMATCH', message: 'the register starts in 2026-10', params: { month: '2026-10' } }, { row_no: 0, code: 'OPENING_GL_MISMATCH', message: 'the sums differ' }],
+      rows: [{ ...dry.rows[0], errors: [{ row_no: 1, field: 'name', code: 'INVALID_VALUE', message: '1 to 150 characters', params: { max: '150' } }], warnings: [] }] } })
+    await fill()
+    await click('input[name=mode][value=REGISTER_ONLY]')
+    await click('[data-testid=dry-run]')
+    const errors = body('[data-testid=result-errors]').text()
+    expect(errors).toContain('Register dimulai pada Okt 2026')
+    expect(errors).toContain('Jumlah dalam berkas tidak sama dengan saldo akun buku besar')
+    expect(errors).not.toContain('the register starts')
+    expect(body('[data-testid=result-row-1]').text()).toContain('Nama terdiri dari 1 sampai 150 karakter.')
   })
 
   it('imports only after a dry run that is valid, with a key, and tells where the journal goes', async () => {
