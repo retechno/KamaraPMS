@@ -15,6 +15,7 @@ import (
 	"kamarapms/internal/assets"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/civil"
 )
 
@@ -46,6 +47,7 @@ type assetSpec struct {
 	age                      int // months already depreciated at the month end (the start month counts)
 	units                    int
 	serial                   string
+	dept                     string // code of the department; empty for none (the demo leaves one asset without, so that the depreciation shows its blocker)
 	fiscal                   *assetFiscal
 }
 
@@ -57,18 +59,18 @@ type assetFiscal struct {
 
 var assetSpecs = []assetSpec{
 	{name: "Tanah hotel", category: "LAND", location: "KEBUN", cost: 2_500_000_000},
-	{name: "Gedung utama", category: "BUILDING", location: "LOBI", cost: 12_000_000_000, life: 240, age: 60},
-	{name: "Sofa lobi", category: "FFE", location: "LOBI", cost: 36_000_000, life: 96, age: 56, serial: "SF-LB-001"},
-	{name: "Lemari kayu kamar 101", category: "FFE", location: "ROOM:101", cost: 36_000_000, life: 96, age: 81, serial: "LK-101",
+	{name: "Gedung utama", dept: "POM", category: "BUILDING", location: "LOBI", cost: 12_000_000_000, life: 240, age: 60},
+	{name: "Sofa lobi", dept: "POM", category: "FFE", location: "LOBI", cost: 36_000_000, life: 96, age: 56, serial: "SF-LB-001"},
+	{name: "Lemari kayu kamar 101", dept: "ROOMS", category: "FFE", location: "ROOM:101", cost: 36_000_000, life: 96, age: 81, serial: "LK-101",
 		fiscal: &assetFiscal{group: "G1", method: "SL", accum: 36_000_000, months: 48}},
-	{name: "Tempat tidur kamar 102", category: "FFE", location: "ROOM:102", cost: 18_000_000, life: 96, age: 40},
-	{name: "AC split kamar 201", category: "FFE", location: "ROOM:201", cost: 9_500_000, life: 96, age: 100, serial: "AC-201"},
-	{name: "Genset 250 kVA", category: "FFE", location: "GUDTEK", cost: 150_000_000, life: 96, age: 30, serial: "GS-250-01"},
-	{name: "Sound system ballroom", category: "FFE", location: "BQ:BALL", cost: 85_000_000, life: 96, age: 36},
-	{name: "Toyota Innova antar-jemput", category: "VEHICLE", location: "KEBUN", cost: 420_000_000, residual: 42_000_000, life: 96, age: 24, serial: "DK 1234 AB"},
+	{name: "Tempat tidur kamar 102", dept: "ROOMS", category: "FFE", location: "ROOM:102", cost: 18_000_000, life: 96, age: 40},
+	{name: "AC split kamar 201", dept: "ROOMS", category: "FFE", location: "ROOM:201", cost: 9_500_000, life: 96, age: 100, serial: "AC-201"},
+	{name: "Genset 250 kVA", dept: "POM", category: "FFE", location: "GUDTEK", cost: 150_000_000, life: 96, age: 30, serial: "GS-250-01"},
+	{name: "Sound system ballroom", dept: "FB", category: "FFE", location: "BQ:BALL", cost: 85_000_000, life: 96, age: 36},
+	{name: "Toyota Innova antar-jemput", dept: "AG", category: "VEHICLE", location: "KEBUN", cost: 420_000_000, residual: 42_000_000, life: 96, age: 24, serial: "DK 1234 AB"},
 	{name: "Laptop front office", category: "IT", location: "KANTOR", cost: 14_500_000, life: 48, age: 20, serial: "LT-FO-07"},
-	{name: "Server reservasi", category: "IT", location: "KANTOR", cost: 48_000_000, life: 48, age: 52, serial: "SRV-01"},
-	{name: "Linen kamar (batch)", category: "OE", location: "GUDTEK", cost: 36_000_000, life: 24, age: 6, units: 200},
+	{name: "Server reservasi", dept: "AG", category: "IT", location: "KANTOR", cost: 48_000_000, life: 48, age: 52, serial: "SRV-01"},
+	{name: "Linen kamar (batch)", dept: "ROOMS", category: "OE", location: "GUDTEK", cost: 36_000_000, life: 24, age: 6, units: 200},
 	{name: "Vila baru (dalam pembangunan)", category: "CIP", location: "KEBUN", cost: 1_200_000_000},
 }
 
@@ -78,11 +80,13 @@ func seedAssets(e *env, dryRun bool) error {
 	deps := departments.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
 	svc := assets.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, deps)
 	acct.SetAssetSource(svc)
+	pay := payables.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc, nil)
+	pay.SetAssetGuard(svc)
 	day, err := e.ten.CurrentBusinessDay(e.ctx, e.propertyID)
 	if err != nil {
 		return err
 	}
-	_, err = seedAssetsWith(e.ctx, svc, acct, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
+	_, err = seedAssetsWith(e.ctx, svc, acct, &seedDeps{pay: pay, txm: e.txm, days: e.ten, depts: deps}, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
 	return err
 }
 
@@ -98,8 +102,12 @@ func monthEndBefore(d civil.Date) civil.Date {
 }
 
 // seedAssetsWith does the work; the return value is the number of rows created (or that would be).
-func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.Service, pid int64, businessDate civil.Date, dryRun bool, out io.Writer) (int, error) {
+func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.Service, d *seedDeps, pid int64, businessDate civil.Date, dryRun bool, out io.Writer) (int, error) {
 	made := 0
+	deptCodes, err := departmentCodes(ctx, d, pid)
+	if err != nil {
+		return 0, err
+	}
 	existing, err := svc.ListLocations(ctx, pid, "", nil)
 	if err != nil {
 		return 0, err
@@ -129,7 +137,8 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 	}
 	if len(imports) > 0 {
 		_, _ = fmt.Fprintf(out, "opening balances exist (%s)\n", imports[0].Number)
-		return made, nil
+		n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, dryRun, out)
+		return made + n, err
 	}
 
 	asOf, journalDate := pickAsOf(ctx, svc, pid, businessDate)
@@ -142,9 +151,10 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 	if dryRun && made > 0 { // the areas the rows name do not exist yet, so the import cannot be tried: say what the real run does
 		_, _ = fmt.Fprintf(out, "opening balances as at %s: %d assets to import\n", asOf, len(assetSpecs))
 		_, _ = fmt.Fprintln(out, "dry run: would create the import above")
-		return made + len(assetSpecs), nil
+		n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, true, out)
+		return made + len(assetSpecs) + n, err
 	}
-	rows, err := assetRows(ctx, svc, pid, asOf)
+	rows, err := assetRows(ctx, svc, pid, asOf, deptCodes)
 	if err != nil {
 		return made, err
 	}
@@ -162,7 +172,8 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 	made += len(res.Rows)
 	if dryRun {
 		_, _ = fmt.Fprintln(out, "dry run: would create the import above")
-		return made, nil
+		n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, true, out)
+		return made + n, err
 	}
 	if _, err := svc.ImportOpening(ctx, pid, assets.OpeningInput{AsOf: asOf, JournalDate: journalDate, Rows: rows, IdempotencyKey: "pms-seed-assets-opening"}); err != nil {
 		return made, err
@@ -173,7 +184,8 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 			return made, err
 		}
 	}
-	return made, nil
+	n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, false, out)
+	return made + n, err
 }
 
 // unregisteredLandCost is the cost of the plot that the ledger holds but the register does not (yet): an import in the mode REGISTER_ONLY with that one plot (category LAND, cost 750000000,
@@ -219,7 +231,7 @@ func seedUnregisteredLand(ctx context.Context, svc *assets.Service, acct *accoun
 }
 
 // assetRows turns the specs into the rows of an import as at asOf. A location that names a room, a meeting room or a warehouse falls back to a free area when that master is not there.
-func assetRows(ctx context.Context, svc *assets.Service, pid int64, asOf civil.Date) ([]assets.OpeningRow, error) {
+func assetRows(ctx context.Context, svc *assets.Service, pid int64, asOf civil.Date, deptCodes map[string]bool) ([]assets.OpeningRow, error) {
 	rows := make([]assets.OpeningRow, 0, len(assetSpecs))
 	for _, s := range assetSpecs {
 		start := monthsBefore(asOf, s.age-1)
@@ -229,6 +241,9 @@ func assetRows(ctx context.Context, svc *assets.Service, pid int64, asOf civil.D
 			// a free area: nothing to resolve
 		} else if !masterExists(ctx, svc, pid, asOf, s.location) {
 			r.Location = "LOBI"
+		}
+		if deptCodes[s.dept] {
+			r.Department = s.dept
 		}
 		if s.residual > 0 {
 			r.ResidualValue = ptr(decimal.NewFromInt(s.residual))
@@ -290,6 +305,12 @@ func pickAsOf(ctx context.Context, svc *assets.Service, pid int64, bd civil.Date
 	candidates := []civil.Date{monthEndBefore(bd)}
 	if bd.AddDays(1).Day() == 1 {
 		candidates = append(candidates, bd)
+	}
+	// the journal dated the month end itself comes first: the ledger at the month end then holds the assets, which the register-only demo needs
+	for _, c := range candidates {
+		if jd := c; tryAsOf(ctx, svc, pid, c, &jd) {
+			return c, &jd
+		}
 	}
 	for _, c := range candidates {
 		if tryAsOf(ctx, svc, pid, c, nil) {
