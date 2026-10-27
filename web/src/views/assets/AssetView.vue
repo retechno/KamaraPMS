@@ -131,9 +131,18 @@ function historyText(e: AssetHistoryEntry): string {
       return `${t('assets.history.kind.CAPITALIZE')}${detail(e, 'amount') !== '–' ? `: ${formatMoney(detail(e, 'amount'))}` : ''}`
     case 'DEPRECIATION':
       return `${t('assets.history.kind.DEPRECIATION')} ${detail(e, 'month') !== '–' ? formatMonth(detail(e, 'month').slice(0, 7)) : ''}: ${formatMoney(detail(e, 'amount'))}${Number(detail(e, 'months')) > 1 ? ` (${t('assets.schedule.months', { n: detail(e, 'months') })})` : ''}`
+    case 'DISPOSAL': case 'DISPOSAL_REQUEST': {
+      const k = detail(e, 'kind')
+      return `${t(`assets.history.kind.${e.kind}`)}${te(`assets.dispose.kindShort.${k}`) ? `: ${t(`assets.dispose.kindShort.${k}`)}` : ''}`
+    }
     default:
       return te(`assets.history.kind.${e.kind}`) ? t(`assets.history.kind.${e.kind}`) : e.kind
   }
+}
+/** The reason of an entry: a disposal keeps a code (SOLD, DAMAGED...), shown only when it has a text. */
+function historyReason(e: AssetHistoryEntry): string {
+  if (e.kind === 'DISPOSAL' || e.kind === 'DISPOSAL_REQUEST') return e.reason && te(`assets.dispose.reasonCode.${e.reason}`) ? t(`assets.dispose.reasonCode.${e.reason}`) : ''
+  return e.reason ?? ''
 }
 
 const kindText = (kind: string): string => (te(`assets.ledger.kind.${kind}`) ? t(`assets.ledger.kind.${kind}`) : kind)
@@ -350,7 +359,7 @@ async function disposed(): Promise<void> {
       <ul v-if="history.length" class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="history-list">
         <li v-for="(e, i) in history" :key="`${e.kind}-${e.at}-${i}`" class="flex flex-wrap items-baseline gap-x-3 border-b border-border py-1" :data-testid="`history-${i}`">
           <b class="w-28 font-medium">{{ formatDate(e.date) }}</b>
-          <span class="flex-1">{{ historyText(e) }}<span v-if="e.reason" class="text-muted-foreground"> · {{ e.reason }}</span></span>
+          <span class="flex-1">{{ historyText(e) }}<span v-if="historyReason(e)" class="text-muted-foreground"> · {{ historyReason(e) }}</span></span>
           <span v-if="e.journal_number" class="text-xs text-muted-foreground">{{ e.journal_number }}</span>
           <span v-if="e.by" class="text-xs text-muted-foreground">{{ e.by }}</span>
         </li>
