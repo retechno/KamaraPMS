@@ -727,6 +727,14 @@ var constraintErrors = map[string]mapped{
 	"fa_disposals_number_uk":               {apperr.KindConflict, "DUPLICATE_REQUEST", "the number of the disposal is taken"},
 	"fa_disposals_account_fk":              {apperr.KindInvalid, "ACCOUNT_NOT_FOUND", "the account of the proceeds does not exist in this property"},
 	"fa_disposals_kept":                    {apperr.KindConflict, "LEDGER_IMMUTABLE", "a disposal is kept; only its reversal is written"},
+	"fa_disposal_requests_kind_ck":         {apperr.KindInvalid, "INVALID_VALUE", "a disposal is a sale or a write-off"},
+	"fa_disposal_requests_reason_code_ck":  {apperr.KindInvalid, "INVALID_VALUE", "an unknown reason of disposal"},
+	"fa_disposal_requests_units_ck":        {apperr.KindInvalid, "UNITS_INVALID", "a disposal is of one unit or more"},
+	"fa_disposal_requests_proceeds_ck":     {apperr.KindInvalid, "INVALID_VALUE", "the proceeds of a disposal are not negative"},
+	"fa_disposal_requests_sale_ck":         {apperr.KindInvalid, "INVALID_VALUE", "a sale names the account it is received into; a write-off brings in nothing"},
+	"fa_disposal_requests_account_fk":      {apperr.KindInvalid, "ACCOUNT_NOT_FOUND", "the account of the proceeds does not exist in this property"},
+	"fa_disposal_requests_pending_uk":      {apperr.KindConflict, "DISPOSAL_PENDING", "this asset has a disposal that waits for an approver"},
+	"fa_disposal_requests_idempotency_uk":  {apperr.KindConflict, "DUPLICATE_REQUEST", "this request was made already"},
 }
 
 // MappedConstraintNames lists every constraint name with a dedicated API error

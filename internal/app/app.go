@@ -176,6 +176,7 @@ func New(d Deps) *App {
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	assetsSvc := assets.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, departmentsSvc)
+	assetsSvc.SetApprover(iamSvc)            // the approval of a disposal (kind ASSET_DISPOSAL, 37-fixed-assets.md 7.2)
 	accountingSvc.SetAssetSource(assetsSvc)  // the accumulated depreciation accounts of the categories are the register's own (37-fixed-assets.md F5)
 	accountingSvc.SetJournalGuard(assetsSvc) // a journal with a line made an asset is not reversed (37-fixed-assets.md F8)
 	accountingSvc.SetPeriodGuard(assetsSvc)  // a month closes only when its depreciation is run; reopening it reverses the run (37-fixed-assets.md 4.3, F4)

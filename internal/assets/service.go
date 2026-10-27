@@ -35,6 +35,8 @@ type Service struct {
 	days  *tenancy.Service
 	acct  *accounting.Service
 	depts DepartmentChecker
+	// approver verifies the approval of a disposal (internal/app wires iam)
+	approver Approver
 }
 
 // NewService wires the service.

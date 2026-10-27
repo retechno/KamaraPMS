@@ -139,6 +139,22 @@ func (s *Service) CashFlow(ctx context.Context, propertyID int64, from, to *civi
 		}
 	}
 
+	// The result of the disposal of fixed assets (the account of the key ASSET_DISPOSAL, docs/architecture/37-fixed-assets.md F10, Q11) is not an operating item: the gain is taken out of the
+	// operating activities and shown with the proceeds under investing, a loss is added back there. Its movement is debit minus credit, so a loss is positive and a gain negative.
+	disposal := decimal.Zero
+	mapped, err := q.ListAccountMap(ctx, accountingdb.ListAccountMapParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return CashFlow{}, err
+	}
+	for _, m := range mapped {
+		if m.MapKey != KeyAssetDisposal {
+			continue
+		}
+		if a := byID[m.AccountID]; a != nil {
+			disposal = a.closed.Sub(a.open)
+		}
+	}
+
 	var lines []StatementLine
 	heading := func(key, title string) {
 		lines = append(lines, StatementLine{Key: key, Title: title, Kind: "HEADING", Accounts: []StatementAccount{}})
@@ -173,12 +189,16 @@ func (s *Service) CashFlow(ctx context.Context, propertyID int64, from, to *civi
 		item("DEPRECIATION", "Depreciation and amortization (not paid in cash)", depreciation, nil)
 		op = op.Add(depreciation)
 	}
+	if !disposal.IsZero() {
+		item("DISPOSAL_RESULT", "Loss (gain) on the disposal of fixed assets (shown under investing)", disposal, nil)
+		op = op.Add(disposal)
+	}
 	op = op.Add(section(operatingGroups, nil))
 	op = total("OPERATING", "Net cash from operating activities", "SUBTOTAL", op)
 
 	heading("H_INVESTING", "Investing activities")
 	// The fixed assets carry the accumulated depreciation: what the depreciation took off them is not an outflow, it was added back above.
-	inv := section(investingGroups, map[string]decimal.Decimal{"FIXED_ASSETS": depreciation.Neg()})
+	inv := section(investingGroups, map[string]decimal.Decimal{"FIXED_ASSETS": depreciation.Neg().Sub(disposal)})
 	inv = total("INVESTING", "Net cash from investing activities", "SUBTOTAL", inv)
 
 	heading("H_FINANCING", "Financing activities")

@@ -23,7 +23,7 @@ func assetFrom(r assetsdb.GetAssetRow) Asset {
 		CarryingValue: r.Cost.Sub(r.AccumDepr), LifeMonths: r.LifeMonths, MonthsDone: r.DepMonthsDone, LastDepMonth: r.LastDepMonth, Method: r.Method, DBFactor: r.DbFactor,
 		UnitCount: r.UnitCount, SerialNo: r.SerialNo, WarrantyUntil: r.WarrantyUntil, Notes: r.Notes, FiscalGroup: r.FiscalGroup, FiscalMethod: r.FiscalMethod,
 		FiscalAccumOpening: r.FiscalAccumOpening, FiscalMonthsDoneOpening: r.FiscalMonthsDoneOpening, FiscalOpeningAsOf: r.FiscalOpeningAsOf,
-		FiscalOpeningEstimated: r.FiscalOpeningEstimated, Version: r.Version}
+		FiscalOpeningEstimated: r.FiscalOpeningEstimated, DisposalPending: r.DisposalPending, Version: r.Version}
 	if r.LifeMonths != nil {
 		left := *r.LifeMonths - r.DepMonthsDone
 		a.RemainingMonths = &left
@@ -190,6 +190,9 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 		if cur.Status != statusActive {
 			return apperr.Conflict("ASSET_STATUS_INVALID", "only an active asset is changed").WithContext("status", cur.Status)
 		}
+		if cur.DisposalPending {
+			return disposalPending(cur.Number)
+		}
 		start, err := s.newStart(cur, in, cfg, day)
 		if err != nil {
 			return err
@@ -308,6 +311,9 @@ func (s *Service) CancelAsset(ctx context.Context, propertyID, id int64, in Canc
 		}
 		if cur.Status != statusActive {
 			return apperr.Conflict("ASSET_STATUS_INVALID", "only an active asset is cancelled").WithContext("status", cur.Status)
+		}
+		if cur.DisposalPending {
+			return disposalPending(cur.Number)
 		}
 		if has, err := q.AssetHasRegisterEvents(ctx, assetsdb.AssetHasRegisterEventsParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: id}); err != nil {
 			return err

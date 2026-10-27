@@ -57,6 +57,7 @@ func newFx(t *testing.T) *fx {
 	p := e.PropertyIn(t, tn.ID, "BALI", "IDR", 0)
 	f := &fx{Env: e, tenantID: tn.ID, propID: p.ID, admin: roomstest.Admin(tn.ID), accounts: map[string]int64{}}
 	f.svc = assets.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, e.Accounting, e.Departments)
+	f.svc.SetApprover(e.IAM) // the approval of a disposal
 	e.Accounting.SetAssetSource(f.svc)
 	e.Accounting.SetJournalGuard(f.svc) // like internal/app: a journal or a bill with a line made an asset is not undone
 	e.Accounting.SetPeriodGuard(f.svc)  // and a month closes only when its depreciation is run

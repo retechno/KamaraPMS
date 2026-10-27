@@ -1944,7 +1944,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('fa_source_links', 'CHILD', 'of fa_assets: the cost of each unit made from a journal line, which the journal already holds'),
     ('fa_depr_runs', 'CHILD', 'of fa_ledger: the total of a month of depreciation, whose journal and ledger rows hold the money'),
     ('fa_depr_lines', 'CHILD', 'of fa_ledger: the amount of an asset in a run'),
-    ('fa_disposals', 'CHILD', 'of fa_ledger: the amounts of a disposal, whose journal and ledger rows hold the money');
+    ('fa_disposals', 'CHILD', 'of fa_ledger: the amounts of a disposal, whose journal and ledger rows hold the money'),
+    ('fa_disposal_requests', 'CHILD', 'of fa_disposals: what was asked of a disposal that waits for an approver; the money is in the disposal once it is approved');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -3027,6 +3028,20 @@ SELECT expect_ok('a posted disposal is reversed once', $q$SELECT pms_test.fa_bas
 SELECT expect_error('a reversed disposal is kept as it is', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
     $q$SELECT pms_test.fa_disposal()$q$, $q$UPDATE fa_disposals SET status = 'REVERSED', reversal_journal_id = journal_id, reversed_at = now(), reversal_reason = 'wrong asset'$q$,
     $q$UPDATE fa_disposals SET reversal_reason = 'other'$q$);
+
+CREATE FUNCTION pms_test.fa_dreq(p_status text DEFAULT 'PENDING', p_kind text DEFAULT 'WRITE_OFF', p_note text DEFAULT NULL, p_decided boolean DEFAULT false) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_disposal_requests (tenant_id, property_id, asset_id, kind, disposal_date, reason_code, approval_amount, status, decided_at, decision_note)
+    SELECT tn('ABC'), pr('BALI'), (SELECT id FROM fa_assets WHERE property_id = pr('BALI') AND number = 'FA-000001'), p_kind, DATE '2026-10-05', CASE WHEN p_kind = 'SALE' THEN 'SOLD' ELSE 'DAMAGED' END, 100,
+           p_status, CASE WHEN p_decided THEN now() END, p_note
+$$;
+SELECT expect_ok('a disposal request waits', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq()$q$);
+SELECT expect_error('one request waits for an asset at a time', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq()$q$, $q$SELECT pms_test.fa_dreq()$q$);
+SELECT expect_error('a request waiting has no decision time', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('PENDING', 'WRITE_OFF', NULL, true)$q$);
+SELECT expect_error('a rejected request says why', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('REJECTED', 'WRITE_OFF', NULL, true)$q$);
+SELECT expect_ok('a rejected request is followed by another', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('REJECTED', 'WRITE_OFF', 'not now', true)$q$, $q$SELECT pms_test.fa_dreq()$q$);
+SELECT expect_error('an approved request points to its disposal', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('APPROVED', 'WRITE_OFF', NULL, true)$q$);
+SELECT expect_error('a sale request names the account it is received into', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('PENDING', 'SALE')$q$);
+SELECT expect_error('a request is never deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq()$q$, $q$DELETE FROM fa_disposal_requests$q$);
 
 ------------------------------------------------------------------------------------------
 -- Summary

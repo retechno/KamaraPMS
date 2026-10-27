@@ -80,6 +80,7 @@ func seedAssets(e *env, dryRun bool) error {
 	acct := accounting.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, iamSvc)
 	deps := departments.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
 	svc := assets.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, deps)
+	svc.SetApprover(iamSvc)
 	acct.SetAssetSource(svc)
 	tax := taxfiling.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc)
 	pay := payables.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc, tax)

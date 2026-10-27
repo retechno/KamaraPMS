@@ -12745,6 +12745,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/assets/{id}/dispose/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Work out a disposal without making it: the amounts, the journal and the amount of the approval (asset.dispose) */
+        post: operations["previewAssetDisposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}/dispose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sell, write off or lose an asset, or some pieces of a batch (asset.dispose)
+         * @description `Idempotency-Key` is required. The months before the month of the disposal must have been run (409 `DEPRECIATION_NOT_RUN`) and the month of the disposal is not depreciated (409 `DISPOSAL_MONTH_DEPRECIATED`). The approval follows the rule of the kind `ASSET_DISPOSAL` (the amount is the larger of the carrying value written off and the proceeds). With the credentials of an approver (`approval`) or when the rule lets the caller, the disposal is posted at once (201, `status` POSTED); otherwise a request is made and nothing is posted (201, `status` PENDING) until another user approves it (`approveAssetDisposal`). A sale takes `proceeds` above zero and a cash or bank account (or 1230 for a sale on credit). The VAT of a sale is not computed.
+         */
+        post: operations["disposeAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/disposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The disposals of the property, newest first, up to 200 (any asset permission) */
+        get: operations["listAssetDisposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/disposals/{id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a disposal while the month of it is open (asset.dispose; the same approval)
+         * @description The journal is reversed and the asset is active again. 409 `DISPOSAL_ALREADY_REVERSED`, or `DISPOSAL_NOT_REVERSIBLE` when the asset was depreciated, changed or disposed of again after it.
+         */
+        post: operations["reverseAssetDisposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/disposal-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The disposals that wait for an approver, or were decided, newest first, up to 200 (any asset permission) */
+        get: operations["listAssetDisposalRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/disposal-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a disposal that waits: it is planned again and posted (asset.dispose; a user other than the requester when the rule says so)
+         * @description 409 `DISPOSAL_REQUEST_DECIDED` when it was decided already, `APPROVAL_SAME_USER` for the person who asked.
+         */
+        post: operations["approveAssetDisposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/disposal-requests/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refuse a disposal that waits, or withdraw it, with the reason (asset.dispose) */
+        post: operations["rejectAssetDisposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -13743,7 +13890,7 @@ export interface components {
          * @description A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
          * @enum {string}
          */
-        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "INV_BILL_VARIANCE" | "BANQUET_DISCOUNT";
+        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "INV_BILL_VARIANCE" | "BANQUET_DISCOUNT" | "ASSET_DISPOSAL";
         /** @enum {string} */
         ApprovalRuleType: "FREE" | "DISTINCT" | "DISTINCT_ABOVE";
         ApprovalRuleInForce: {
@@ -25325,6 +25472,8 @@ export interface components {
             db_factor?: string | null;
             fully_depreciated: boolean;
             unit_count: number;
+            /** @description A disposal of the asset waits for an approver: the asset is left alone (no move, change, cancel or depreciation) until it is decided. */
+            disposal_pending?: boolean;
             serial_no?: string | null;
             /** Format: date */
             warranty_until?: string | null;
@@ -25871,9 +26020,155 @@ export interface components {
             journal_number: string | null;
             replayed: boolean;
         };
+        AssetDisposeRequest: {
+            /** @enum {string} */
+            kind: "SALE" | "WRITE_OFF";
+            /**
+             * @description SOLD for a sale; one of the others for a write-off (OTHER needs a note).
+             * @enum {string}
+             */
+            reason_code: "SOLD" | "DAMAGED" | "LOST" | "OBSOLETE" | "DONATED" | "OTHER";
+            /**
+             * Format: date
+             * @description Not after the open business day; the open day by default.
+             */
+            disposal_date?: string | null;
+            /**
+             * Format: int32
+             * @description The pieces of a batch to dispose of (all by default).
+             */
+            units?: number | null;
+            /** @description A sale: the price, above zero. */
+            proceeds?: string | null;
+            /**
+             * Format: int64
+             * @description A sale: the cash or bank account, or 1230.
+             */
+            proceeds_account_id?: number | null;
+            note?: string;
+            approval?: components["schemas"]["Approval"];
+        };
+        AssetDisposalLine: {
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            debit: string;
+            credit: string;
+            /** Format: int64 */
+            department_id: number | null;
+        };
+        AssetDisposalPreview: {
+            /** Format: int64 */
+            asset_id: number;
+            asset_number: string;
+            asset_name: string;
+            kind: string;
+            reason_code: string;
+            /** Format: date */
+            disposal_date: string;
+            /** Format: int32 */
+            units: number;
+            /** Format: int32 */
+            unit_count: number;
+            cost_removed: string;
+            accum_removed: string;
+            carrying_removed: string;
+            proceeds: string;
+            /** @description Positive is a gain, negative a loss. */
+            gain_loss: string;
+            /** @description The larger of the carrying value written off and the proceeds. */
+            approval_amount: string;
+            /** @description The property is a VAT-registered business on the date: the screen says the VAT of the sale is not computed. */
+            pkp_on_date: boolean;
+            lines: components["schemas"]["AssetDisposalLine"][];
+        };
+        AssetDisposal: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** Format: int64 */
+            asset_id: number;
+            asset_number: string;
+            asset_name: string;
+            /** @enum {string} */
+            kind: "SALE" | "WRITE_OFF";
+            reason_code: string;
+            /** Format: date */
+            disposal_date: string;
+            /** Format: int32 */
+            units: number;
+            cost_removed: string;
+            accum_removed: string;
+            carrying_removed: string;
+            proceeds: string;
+            /** Format: int64 */
+            proceeds_account_id?: number | null;
+            proceeds_account_code?: string | null;
+            proceeds_account_name?: string | null;
+            gain_loss: string;
+            note?: string | null;
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            /** Format: int64 */
+            reversal_journal_id?: number | null;
+            reversal_journal_number?: string | null;
+            reversal_reason?: string | null;
+            reversed_by_name?: string | null;
+            approved_by_name?: string | null;
+            created_by_name?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AssetDisposalRequest: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            asset_id: number;
+            asset_number: string;
+            asset_name: string;
+            /** @enum {string} */
+            kind: "SALE" | "WRITE_OFF";
+            reason_code: string;
+            /** Format: date */
+            disposal_date: string;
+            /** Format: int32 */
+            units: number;
+            proceeds: string;
+            /** Format: int64 */
+            proceeds_account_id?: number | null;
+            proceeds_account_code?: string | null;
+            proceeds_account_name?: string | null;
+            note?: string | null;
+            approval_amount: string;
+            /** @enum {string} */
+            status: "PENDING" | "APPROVED" | "REJECTED";
+            /** Format: int64 */
+            requested_by?: number | null;
+            requested_by_name?: string | null;
+            /** Format: date-time */
+            requested_at: string;
+            decided_by_name?: string | null;
+            /** Format: date-time */
+            decided_at?: string | null;
+            decision_note?: string | null;
+            /** Format: int64 */
+            disposal_id?: number | null;
+            disposal_number?: string | null;
+        };
+        AssetDisposeResult: {
+            /** @enum {string} */
+            status: "POSTED" | "PENDING";
+            disposal: components["schemas"]["AssetDisposal"] | null;
+            request: components["schemas"]["AssetDisposalRequest"] | null;
+            replayed: boolean;
+        };
         AssetHistoryEntry: {
             /** @enum {string} */
-            kind: "MOVE" | "LIFE" | "RESIDUAL" | "METHOD" | "CAPITALIZE" | "CATEGORY" | "DEPRECIATION" | "DISPOSAL";
+            kind: "MOVE" | "LIFE" | "RESIDUAL" | "METHOD" | "CAPITALIZE" | "CATEGORY" | "DEPRECIATION" | "DISPOSAL" | "DISPOSAL_REQUEST";
             /** Format: date */
             date: string;
             reason: string | null;
@@ -46837,6 +47132,229 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    previewAssetDisposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetDisposeRequest"];
+            };
+        };
+        responses: {
+            /** @description The disposal worked out. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposalPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    disposeAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetDisposeRequest"];
+            };
+        };
+        responses: {
+            /** @description The answer of an earlier request with the same key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposeResult"];
+                };
+            };
+            /** @description The disposal posted, or the request that waits. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposeResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listAssetDisposals: {
+        parameters: {
+            query?: {
+                asset_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The disposals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposal"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    reverseAssetDisposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    approval?: components["schemas"]["Approval"];
+                };
+            };
+        };
+        responses: {
+            /** @description The disposal, reversed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposal"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listAssetDisposalRequests: {
+        parameters: {
+            query?: {
+                status?: "PENDING" | "APPROVED" | "REJECTED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposalRequest"][];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    approveAssetDisposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The disposal posted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposeResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    rejectAssetDisposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The request, rejected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDisposalRequest"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

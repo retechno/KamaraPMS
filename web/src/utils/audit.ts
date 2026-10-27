@@ -11,6 +11,10 @@ export const AUDIT_ACTIONS = [
   'asset.line_restored',
   'asset.made_from_line',
   'asset.moved',
+  'asset.disposed',
+  'asset.disposal_requested',
+  'asset.disposal_rejected',
+  'asset.disposal_reversed',
   'asset.life_revised',
   'asset.residual_revised',
   'asset.method_revised',
@@ -382,6 +386,8 @@ export const AUDIT_ACTIONS = [
 
 export const AUDIT_ENTITIES = [
   'fa_depr_run',
+  'fa_disposal',
+  'fa_disposal_request',
   'gl_journal_line',
   'fa_asset',
   'fa_category',

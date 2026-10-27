@@ -228,6 +228,9 @@ func (s *Service) MoveAssets(ctx context.Context, propertyID int64, in MoveInput
 			if cur.Status != statusActive {
 				return apperr.Conflict("ASSET_STATUS_INVALID", "only an active asset is moved").WithContext("asset", cur.Number).WithContext("status", cur.Status)
 			}
+			if cur.DisposalPending {
+				return disposalPending(cur.Number)
+			}
 			loc, dept := cur.LocationID, cur.DepartmentID
 			if in.ChangeLocation {
 				loc = in.LocationID
@@ -410,6 +413,9 @@ func (s *Service) ReviseAsset(ctx context.Context, propertyID, id int64, in Revi
 		}
 		if cur.Status != statusActive {
 			return apperr.Conflict("ASSET_STATUS_INVALID", "only an active asset is changed").WithContext("status", cur.Status)
+		}
+		if cur.DisposalPending {
+			return disposalPending(cur.Number)
 		}
 		if err := requireRunThrough(cur, cfg, day, prop.CurrencyDecimals); err != nil {
 			return err
@@ -665,6 +671,11 @@ func (s *Service) planCategory(ctx context.Context, p auth.Principal, propertyID
 	if err != nil {
 		return revision{}, nil, err
 	}
+	if n, err := q.CountPostedDisposals(ctx, assetsdb.CountPostedDisposalsParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: cur.ID}); err != nil {
+		return revision{}, nil, err
+	} else if n > 0 {
+		return revision{}, nil, apperr.Conflict("ASSET_HAS_DISPOSAL", "an asset that part of which was disposed of keeps its category").WithContext("asset", cur.Number)
+	}
 	if cur.UnitCount > 1 && to.Kind != KindOE {
 		return revision{}, nil, invalid("revision", fieldErr("category_id", "NOT_ALLOWED", "a batch of operating equipment stays in a category of operating equipment"))
 	}
@@ -822,6 +833,29 @@ func (s *Service) GetHistory(ctx context.Context, propertyID, id int64) ([]Histo
 		jn := l.JournalNumber
 		out = append(out, HistoryEntry{Kind: historyKindDepreciation, Date: MonthEnd(l.PeriodMonth), Details: map[string]any{"month": monthLabel(l.PeriodMonth), "months": l.Months, "amount": l.Amount,
 			"accum_after": l.AccumAfter, "carrying_after": l.CarryingAfter}, JournalNumber: &jn})
+	}
+	disposals, err := q.ListDisposals(ctx, assetsdb.ListDisposalsParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: &id})
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range disposals {
+		jn := d.JournalNumber
+		reason := d.ReasonCode
+		out = append(out, HistoryEntry{Kind: "DISPOSAL", Date: d.DisposalDate, Reason: &reason, By: d.CreatedByName, At: d.CreatedAt, JournalID: &d.JournalID, JournalNumber: &jn, Details: map[string]any{
+			"number": d.Number, "kind": d.Kind, "units": d.Units, "cost_removed": d.CostRemoved, "accum_removed": d.AccumRemoved, "carrying_removed": d.CarryingRemoved, "proceeds": d.Proceeds,
+			"gain_loss": d.GainLoss, "status": d.Status, "approved_by": d.ApprovedByName, "reversal_journal_number": d.ReversalJournalNumber, "reversal_reason": d.ReversalReason}})
+	}
+	reqs, err := q.ListDisposalRequests(ctx, assetsdb.ListDisposalRequestsParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range reqs {
+		if r.AssetID != id || r.Status == RequestApproved { // an approved one is the disposal above
+			continue
+		}
+		reason := r.ReasonCode
+		out = append(out, HistoryEntry{Kind: "DISPOSAL_REQUEST", Date: r.DisposalDate, Reason: &reason, By: r.RequestedByName, At: r.RequestedAt, Details: map[string]any{
+			"kind": r.Kind, "units": r.Units, "proceeds": r.Proceeds, "approval_amount": r.ApprovalAmount, "status": r.Status, "decided_by": r.DecidedByName, "decision_note": r.DecisionNote}})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if !out[i].Date.Equal(out[j].Date) {
