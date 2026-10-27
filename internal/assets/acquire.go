@@ -265,6 +265,11 @@ func (s *Service) MakeAssetFromLine(ctx context.Context, propertyID int64, in Ma
 		if err != nil {
 			return err
 		}
+		// READ COMMITTED: a void or a reversal that committed while we waited for the locks is not in the row read above, so the line is read again now that nothing can change it under us
+		line, err = q.GetJournalLineForAsset(ctx, assetsdb.GetJournalLineForAssetParams{TenantID: p.TenantID, PropertyID: propertyID, LineID: in.JournalLineID})
+		if err != nil {
+			return orNotFound(err, notFound("JOURNAL_LINE_NOT_FOUND", "journal line"))
+		}
 		if links, err := q.ListLinksByKey(ctx, assetsdb.ListLinksByKeyParams{PropertyID: propertyID, IdempotencyKey: &key}); err != nil {
 			return err
 		} else if len(links) > 0 {
