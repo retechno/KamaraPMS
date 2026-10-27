@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"kamarapms/internal/platform/apperr"
+	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/csvlang"
 	"kamarapms/internal/platform/httpx"
@@ -623,9 +624,13 @@ func (h *Handler) listDepreciation(w http.ResponseWriter, r *http.Request) error
 	return httpx.WriteJSON(w, http.StatusOK, v)
 }
 
-func monthOf(r *http.Request) (int64, civil.Date, error) {
+// monthOf checks the permission before it reads the month, so a user without it gets 403 whatever the path says.
+func (h *Handler) monthOf(r *http.Request) (int64, civil.Date, error) {
 	pid, err := tenancy.PropertyID(r)
 	if err != nil {
+		return 0, civil.Date{}, err
+	}
+	if _, err := h.svc.require(r.Context(), pid, auth.PermAssetDepreciate); err != nil {
 		return 0, civil.Date{}, err
 	}
 	m, err := ParseMonth(r.PathValue("month"))
@@ -633,7 +638,7 @@ func monthOf(r *http.Request) (int64, civil.Date, error) {
 }
 
 func (h *Handler) previewDepreciation(w http.ResponseWriter, r *http.Request) error {
-	pid, m, err := monthOf(r)
+	pid, m, err := h.monthOf(r)
 	if err != nil {
 		return err
 	}
@@ -645,7 +650,7 @@ func (h *Handler) previewDepreciation(w http.ResponseWriter, r *http.Request) er
 }
 
 func (h *Handler) runDepreciation(w http.ResponseWriter, r *http.Request) error {
-	pid, m, err := monthOf(r)
+	pid, m, err := h.monthOf(r)
 	if err != nil {
 		return err
 	}
@@ -660,7 +665,7 @@ func (h *Handler) runDepreciation(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (h *Handler) reverseDepreciation(w http.ResponseWriter, r *http.Request) error {
-	pid, m, err := monthOf(r)
+	pid, m, err := h.monthOf(r)
 	if err != nil {
 		return err
 	}
