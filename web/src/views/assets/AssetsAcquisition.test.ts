@@ -134,7 +134,8 @@ describe('the cost divided into units', () => {
     expect(splitCost('100', 3, 0)).toEqual(['33', '33', '34'])
     expect(splitCost('22000000', 4, 0)).toEqual(['5500000', '5500000', '5500000', '5500000'])
     expect(splitCost('10.00', 3, 2)).toEqual(['3.33', '3.33', '3.34'])
-    expect(splitCost('101', 2, 0)).toEqual(['51', '50']) // the share is rounded half up
+    expect(splitCost('101', 2, 0)).toEqual(['50', '51']) // the share is rounded down, as the server does
+    expect(splitCost('18000000', 7, 0)).toEqual(['2571428', '2571428', '2571428', '2571428', '2571428', '2571428', '2571432'])
   })
 })
 

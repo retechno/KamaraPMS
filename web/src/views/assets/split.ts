@@ -1,5 +1,5 @@
 /**
- * The cost of a journal line divided into units (docs/architecture/37-fixed-assets.md 4.2.3): every unit but the last takes the rounded share, the last takes what is left. Done in whole units of
+ * The cost of a journal line divided into units (docs/architecture/37-fixed-assets.md 4.2.3): every unit but the last takes the share rounded down, the last takes what is left. Done in whole units of
  * the smallest money step with BigInt, never with a float; the server does the same sum and has the last word.
  */
 export function toMinor(value: string, decimals: number): bigint {
@@ -18,12 +18,12 @@ export function fromMinor(minor: bigint, decimals: number): string {
   return `${neg ? '-' : ''}${whole}${frac}`
 }
 
-/** The cost of each unit: the rounded share (half up) for all but the last, the rest for the last. */
+/** The cost of each unit: the share rounded down for all but the last, the rest for the last (the server does the same with RoundFloor). */
 export function splitCost(cost: string, units: number, decimals: number): string[] {
   const n = Math.max(1, Math.floor(units))
   const total = toMinor(cost, decimals)
   const big = BigInt(n)
-  const share = (total * 2n + big) / (2n * big)
+  const share = total / big
   const out: bigint[] = Array.from({ length: n - 1 }, () => share)
   out.push(total - share * BigInt(n - 1))
   return out.map((v) => fromMinor(v, decimals))
