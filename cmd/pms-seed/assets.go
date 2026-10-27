@@ -17,6 +17,7 @@ import (
 	"kamarapms/internal/iam"
 	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/taxfiling"
 )
 
 // pms-seed assets: demo data of the fixed asset register (docs/architecture/37-fixed-assets.md, PR 1) for a DEVELOPMENT database, through the services of the application. The default categories
@@ -80,7 +81,8 @@ func seedAssets(e *env, dryRun bool) error {
 	deps := departments.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
 	svc := assets.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, deps)
 	acct.SetAssetSource(svc)
-	pay := payables.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc, nil)
+	tax := taxfiling.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc)
+	pay := payables.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc, tax)
 	pay.SetAssetGuard(svc)
 	day, err := e.ten.CurrentBusinessDay(e.ctx, e.propertyID)
 	if err != nil {
