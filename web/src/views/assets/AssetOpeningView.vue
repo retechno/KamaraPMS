@@ -137,6 +137,26 @@ const finding = (f: { field?: string; code: string; message: string; params?: Re
   for (const key of [`assets.findings.${f.field ?? ''}.${f.code}`, `assets.findings.${f.code}`, `errors.${f.code}`, `fieldErrors.${f.code}`]) if (te(key)) return t(key, params)
   return f.message
 }
+/**
+ * The summary above the table: one line for each kind of finding with the number of rows it touches ("2 rows: ..."), so that the sentence of every row is not repeated here: it stays in the column
+ * "Check" of the table. A finding of the whole file (no row) is written as it is.
+ */
+interface Summary { text: string; rows: number }
+function summarise(list: { row_no?: number; field?: string; code: string; message: string; params?: Record<string, string> }[]): Summary[] {
+  const by = new Map<string, { text: string; rows: Set<number>; whole: boolean }>()
+  for (const f of list) {
+    const text = finding(f)
+    const e = by.get(text) ?? { text, rows: new Set<number>(), whole: false }
+    if (f.row_no && f.row_no > 0) e.rows.add(f.row_no)
+    else e.whole = true
+    by.set(text, e)
+  }
+  return [...by.values()].map((e) => ({ text: e.text, rows: e.whole ? 0 : e.rows.size }))
+}
+const errorSummary = computed(() => summarise(result.value?.errors ?? []))
+const warningSummary = computed(() => summarise(result.value?.warnings ?? []))
+const summaryText = (s: Summary): string => (s.rows > 0 ? t('assets.opening.rowsWith', { n: s.rows, text: s.text }) : s.text)
+const categoryName = (code: string): string => categories.value.find((c) => c.code === code)?.name ?? code
 const canImport = computed(() => !!result.value && result.value.valid && result.value.dry_run && result.value.rows.length > 0)
 </script>
 
@@ -211,9 +231,9 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
     </Card>
 
     <section v-if="result" class="flex flex-col gap-3" data-testid="opening-result">
-      <p v-if="!result.valid" class="notice" role="alert" data-testid="result-invalid">{{ t('assets.opening.invalid') }}</p>
-      <ul v-if="result.errors.length" class="m-0 flex list-none flex-col gap-1 p-0 text-sm text-destructive" data-testid="result-errors"><li v-for="(f, i) in result.errors" :key="i">{{ finding(f) }}</li></ul>
-      <ul v-if="result.warnings.length" class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="result-warnings"><li v-for="(f, i) in result.warnings" :key="i">{{ finding(f) }}</li></ul>
+      <p v-if="!result.valid" class="alert" role="alert" data-testid="result-invalid">{{ t('assets.opening.invalid') }}</p>
+      <ul v-if="errorSummary.length" class="m-0 flex list-none flex-col gap-1 p-0 text-sm text-destructive" data-testid="result-errors"><li v-for="(f, i) in errorSummary" :key="i">{{ summaryText(f) }}</li></ul>
+      <ul v-if="warningSummary.length" class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="result-warnings"><li v-for="(f, i) in warningSummary" :key="i">{{ summaryText(f) }}</li></ul>
       <Card class="overflow-x-auto p-0">
         <table class="w-full border-collapse text-sm" data-testid="result-rows">
           <thead><tr class="text-left text-xs uppercase text-muted-foreground">
@@ -224,7 +244,7 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
             <tr v-for="r in result.rows" :key="r.row_no" class="border-t border-border" :data-testid="`result-row-${r.row_no}`">
               <td class="p-2">{{ r.row_no }}</td>
               <td class="p-2 font-medium">{{ r.name }}<Badge v-if="r.fully_depreciated" variant="outline" class="ml-2">{{ t('assets.life.fullyDepreciated') }}</Badge><div v-if="r.asset_number" class="text-xs text-muted-foreground">{{ r.asset_number }}</div></td>
-              <td class="p-2">{{ r.category_code }}</td>
+              <td class="p-2" :data-testid="`result-category-${r.row_no}`">{{ categoryName(r.category_code) }}</td>
               <td class="p-2 text-right tabular-nums">{{ formatMoney(r.cost) }}</td>
               <td class="p-2 text-right tabular-nums">{{ formatMoney(r.accum) }}</td>
               <td class="p-2 text-right tabular-nums">{{ r.months_done }}</td>
