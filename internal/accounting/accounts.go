@@ -46,6 +46,7 @@ type Service struct {
 	stock  StockSource
 	asset  AssetSource
 	jguard JournalGuard
+	pguard PeriodGuard
 }
 
 // NewService wires the service.
@@ -109,6 +110,23 @@ func (s *Service) checkReverse(ctx context.Context, tenantID, propertyID, journa
 	}
 	return s.jguard.CheckReverse(ctx, tenantID, propertyID, journalID)
 }
+
+// PeriodBlocker is a reason a month cannot be closed that the books themselves do not know: another module has work to do first (the depreciation of the fixed assets, for instance).
+type PeriodBlocker struct {
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Params  map[string]string `json:"params,omitempty"`
+}
+
+// PeriodGuard is the fixed asset register at the month close (docs/architecture/37-fixed-assets.md 4.3, F4): CloseBlockers says what stops a month from closing (DEPRECIATION_NOT_RUN), and OnReopen is
+// called inside the transaction of ReopenPeriod, after the month is open again, to reverse the depreciation runs of that month and of the months after it.
+type PeriodGuard interface {
+	CloseBlockers(ctx context.Context, tenantID, propertyID int64, month civil.Date) ([]PeriodBlocker, error)
+	OnReopen(ctx context.Context, tenantID, propertyID int64, month civil.Date, reason string) error
+}
+
+// SetPeriodGuard wires the fixed asset register; without one a month closes when its days are closed, as before.
+func (s *Service) SetPeriodGuard(g PeriodGuard) { s.pguard = g }
 
 // SetAssetSource wires the fixed asset register; without it no account is the register's own.
 func (s *Service) SetAssetSource(src AssetSource) { s.asset = src }

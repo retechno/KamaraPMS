@@ -286,6 +286,9 @@ func (s *Service) importOpening(ctx context.Context, p auth.Principal, propertyI
 		res.RegisterFrom = cfg.RegisterFrom
 	}
 	journalDate := in.AsOf.AddDays(1)
+	if start := po.BooksStart(); journalDate.Before(start) { // a hotel whose books start today: the balances are the first journal
+		journalDate = start
+	}
 	if journalDate.After(day) {
 		journalDate = day
 	}

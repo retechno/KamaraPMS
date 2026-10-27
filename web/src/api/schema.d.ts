@@ -12467,6 +12467,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/assets/depreciation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The months of the register with their runs, and the month to run next (asset.depreciate) */
+        get: operations["listAssetDepreciation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/depreciation/{month}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description YYYY-MM. */
+                month: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * The run of a month computed, and written nowhere (asset.depreciate)
+         * @description Lists the assets, the amount of each (a catch-up has `months` above 1), the groups of the journal and the blockers (REGISTER_NOT_STARTED, DEPRECIATION_MONTH_INVALID, DEPRECIATION_ALREADY_RUN, PERIOD_CLOSED, ACCOUNTING_NOT_SET_UP, DEPARTMENT_REQUIRED, ACCOUNT_INACTIVE, ...).
+         */
+        get: operations["previewAssetDepreciation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/depreciation/{month}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description YYYY-MM. */
+                month: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the depreciation of a month: one journal dated its last day (asset.depreciate)
+         * @description `Idempotency-Key` is required; the same key replays the first answer (200). Months are run in order and once they have ended. 409 `DEPRECIATION_ALREADY_RUN`, `DEPRECIATION_MONTH_INVALID` (reason NOT_NEXT, NOT_ENDED, BEFORE_REGISTER), `PERIOD_CLOSED`, `DEPRECIATION_BLOCKED` (the blockers in the context).
+         */
+        post: operations["runAssetDepreciation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/depreciation/{month}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description YYYY-MM. */
+                month: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse the latest run while its month is open (asset.depreciate)
+         * @description A mirror journal dated the last day of the month; the state of the assets goes back. 404 `DEPRECIATION_RUN_NOT_FOUND`, 409 `DEPRECIATION_MONTH_INVALID` (reason NOT_LATEST), `PERIOD_CLOSED`, `DEPRECIATION_NOT_REVERSIBLE`.
+         */
+        post: operations["reverseAssetDepreciation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/assets": {
         parameters: {
             query?: never;
@@ -12540,6 +12631,26 @@ export interface paths {
         put?: never;
         /** Cancel an asset that the register has not depreciated (asset.manage); ASSET_HAS_DEPRECIATION otherwise */
         post: operations["cancelAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The commercial depreciation schedule of an asset: the opening balances, the months posted (and the run that booked each) and the months projected (any asset permission) */
+        get: operations["getAssetSchedule"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18462,6 +18573,14 @@ export interface components {
             /** @description Of those */
             posted_days: number;
             closable: boolean;
+            /** @description What other modules have to do before the month closes (DEPRECIATION_NOT_RUN: the fixed assets are not depreciated). Empty when nothing stops it. Close answers 409 PERIOD_NOT_READY with them in the context. */
+            blockers: {
+                code: string;
+                message: string;
+                params?: {
+                    [key: string]: string;
+                };
+            }[];
             reopenable: boolean;
             /** Format: date-time */
             closed_at: string | null;
@@ -25444,6 +25563,166 @@ export interface components {
             asset_count: number;
             total_cost: string;
             total_accum: string;
+        };
+        AssetDepreciationBlocker: {
+            code: string;
+            /** @description English text for logs and API clients; the screen words the blocker by `code` and `params`. */
+            message: string;
+            params?: {
+                [key: string]: string;
+            };
+        };
+        AssetDepreciationLine: {
+            /** Format: int64 */
+            asset_id: number;
+            asset_number: string;
+            asset_name: string;
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            /** Format: int64 */
+            expense_account_id: number;
+            expense_account_code: string;
+            /** Format: int64 */
+            department_id?: number | null;
+            department_code?: string | null;
+            department_name?: string | null;
+            /** @description 1, or more for a catch-up (an asset registered late). */
+            months: number;
+            /** Format: date */
+            from_month: string;
+            catch_up: boolean;
+            amount: string;
+            accum_after: string;
+            carrying_after: string;
+            months_done_after: number;
+        };
+        AssetDepreciationGroup: {
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            /** Format: int64 */
+            expense_account_id: number;
+            expense_account_code: string;
+            /** Format: int64 */
+            accumulated_account_id: number;
+            accumulated_account_code: string;
+            /** Format: int64 */
+            department_id?: number | null;
+            department_code?: string | null;
+            department_name?: string | null;
+            assets: number;
+            amount: string;
+        };
+        AssetDepreciationPreview: {
+            /** Format: date */
+            month: string;
+            /** Format: date */
+            journal_date: string;
+            /** @enum {string} */
+            status: "NOT_RUN" | "POSTED";
+            /** Format: date */
+            next_month?: string | null;
+            lines: components["schemas"]["AssetDepreciationLine"][];
+            groups: components["schemas"]["AssetDepreciationGroup"][];
+            total: string;
+            asset_count: number;
+            catch_up_count: number;
+            blockers: components["schemas"]["AssetDepreciationBlocker"][];
+            can_run: boolean;
+        };
+        AssetDepreciationRun: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date */
+            month: string;
+            /** @enum {string} */
+            status: "POSTED" | "REVERSED";
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: int64 */
+            reversal_journal_id?: number | null;
+            reversal_journal_number?: string | null;
+            total: string;
+            asset_count: number;
+            /** Format: int64 */
+            run_by?: number | null;
+            /** Format: date-time */
+            run_at: string;
+            /** Format: int64 */
+            reversed_by?: number | null;
+            /** Format: date-time */
+            reversed_at?: string | null;
+            reversal_reason?: string | null;
+        };
+        AssetDepreciationRunResult: {
+            run: components["schemas"]["AssetDepreciationRun"];
+            lines: components["schemas"]["AssetDepreciationLine"][];
+            groups: components["schemas"]["AssetDepreciationGroup"][];
+            replayed: boolean;
+        };
+        AssetDepreciationMonth: {
+            /** Format: date */
+            month: string;
+            /** @enum {string} */
+            status: "NOT_RUN" | "POSTED" | "REVERSED";
+            /** Format: int64 */
+            run_id?: number | null;
+            journal_number?: string | null;
+            reversal_journal_number?: string | null;
+            total: string;
+            asset_count: number;
+            /** Format: date-time */
+            run_at?: string | null;
+            /** @description The month is closed in the books. */
+            period_closed: boolean;
+            is_next: boolean;
+            /** @description The next month, and it has ended. */
+            runnable: boolean;
+            /** @description The latest live run, in a month that is open. */
+            reversible: boolean;
+        };
+        AssetDepreciationOverview: {
+            /** Format: date */
+            register_from?: string | null;
+            /** Format: date */
+            next_month?: string | null;
+            /** Format: date */
+            business_date: string;
+            months: components["schemas"]["AssetDepreciationMonth"][];
+        };
+        AssetScheduleRow: {
+            /** Format: date */
+            month: string;
+            /** @enum {string} */
+            kind: "OPENING" | "POSTED" | "PROJECTED";
+            /** @description 1, or the months an opening balance brought. */
+            months: number;
+            amount: string;
+            accum_after: string;
+            carrying_after: string;
+            months_done: number;
+            /**
+             * Format: date
+             * @description The month of the run that booked it: later than `month` for a catch-up.
+             */
+            run_month?: string | null;
+            journal_number?: string | null;
+        };
+        AssetSchedule: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            depreciable: boolean;
+            cost: string;
+            residual_value: string;
+            life_months?: number | null;
+            method?: string | null;
+            rows: components["schemas"]["AssetScheduleRow"][];
         };
     };
     responses: {
@@ -45924,6 +46203,133 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    listAssetDepreciation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The overview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDepreciationOverview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewAssetDepreciation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description YYYY-MM. */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDepreciationPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    runAssetDepreciation: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description YYYY-MM. */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The answer of an earlier request with the same key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDepreciationRunResult"];
+                };
+            };
+            /** @description The run. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDepreciationRunResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reverseAssetDepreciation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description YYYY-MM. */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The reversed run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDepreciationRunResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     listAssets: {
         parameters: {
             query?: {
@@ -46086,6 +46492,31 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    getAssetSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetSchedule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

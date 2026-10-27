@@ -71,6 +71,9 @@ func (s *Service) BeginPosting(ctx context.Context, propertyID int64) (*Poster, 
 	return &Poster{svc: s, p: p, propertyID: propertyID, cfg: cfg, today: today}, nil
 }
 
+// BooksStart is the day the books start: no journal is dated before it.
+func (po *Poster) BooksStart() civil.Date { return po.cfg.StartDate }
+
 func (po *Poster) load(ctx context.Context) error {
 	if po.res != nil {
 		return nil

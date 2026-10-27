@@ -183,6 +183,34 @@ func (q *Queries) ControlAccountIDs(ctx context.Context, arg ControlAccountIDsPa
 	return items, nil
 }
 
+const countAssetsDueIn = `-- name: CountAssetsDueIn :one
+SELECT count(*)::int
+  FROM fa_assets a
+ WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.dep_months_done < a.life_months
+   AND a.cost - a.accum_depr > a.residual_value
+   AND GREATEST(CASE WHEN a.dep_months_done > 0 THEN (a.last_dep_month + INTERVAL '1 month')::date ELSE a.first_dep_month END, $3::date) <= $4::date
+`
+
+type CountAssetsDueInParams struct {
+	TenantID     int64
+	PropertyID   int64
+	RegisterFrom civil.Date
+	Month        civil.Date
+}
+
+// The assets a run of the month would depreciate (the month close asks): active, months left, a carrying value above the residual value, and a first due month at or before the month.
+func (q *Queries) CountAssetsDueIn(ctx context.Context, arg CountAssetsDueInParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countAssetsDueIn,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RegisterFrom,
+		arg.Month,
+	)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countLiveLinksOfLine = `-- name: CountLiveLinksOfLine :one
 SELECT count(*)::int FROM fa_source_links WHERE property_id = $1 AND journal_line_id = $2 AND released_at IS NULL
 `
@@ -197,6 +225,41 @@ func (q *Queries) CountLiveLinksOfLine(ctx context.Context, arg CountLiveLinksOf
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const departmentNames = `-- name: DepartmentNames :many
+SELECT id, code, name FROM departments WHERE property_id = $1 AND id = ANY($2::bigint[])
+`
+
+type DepartmentNamesParams struct {
+	PropertyID int64
+	Ids        []int64
+}
+
+type DepartmentNamesRow struct {
+	ID   int64
+	Code string
+	Name string
+}
+
+func (q *Queries) DepartmentNames(ctx context.Context, arg DepartmentNamesParams) ([]DepartmentNamesRow, error) {
+	rows, err := q.db.Query(ctx, departmentNames, arg.PropertyID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DepartmentNamesRow{}
+	for rows.Next() {
+		var i DepartmentNamesRow
+		if err := rows.Scan(&i.ID, &i.Code, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ensureSettings = `-- name: EnsureSettings :one
@@ -829,6 +892,39 @@ func (q *Queries) GetLiveLinkOfAsset(ctx context.Context, arg GetLiveLinkOfAsset
 	return i, err
 }
 
+const getLiveRunByMonth = `-- name: GetLiveRunByMonth :one
+SELECT id, tenant_id, property_id, period_month, status, journal_id, reversal_journal_id, total, asset_count, idempotency_key, run_by, run_at, reversed_by, reversed_at, reversal_reason FROM fa_depr_runs WHERE tenant_id = $1 AND property_id = $2 AND period_month = $3 AND status = 'POSTED'
+`
+
+type GetLiveRunByMonthParams struct {
+	TenantID    int64
+	PropertyID  int64
+	PeriodMonth civil.Date
+}
+
+func (q *Queries) GetLiveRunByMonth(ctx context.Context, arg GetLiveRunByMonthParams) (FaDeprRun, error) {
+	row := q.db.QueryRow(ctx, getLiveRunByMonth, arg.TenantID, arg.PropertyID, arg.PeriodMonth)
+	var i FaDeprRun
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.PeriodMonth,
+		&i.Status,
+		&i.JournalID,
+		&i.ReversalJournalID,
+		&i.Total,
+		&i.AssetCount,
+		&i.IdempotencyKey,
+		&i.RunBy,
+		&i.RunAt,
+		&i.ReversedBy,
+		&i.ReversedAt,
+		&i.ReversalReason,
+	)
+	return i, err
+}
+
 const getLocation = `-- name: GetLocation :one
 SELECT id, tenant_id, property_id, code, name, kind, room_id, banquet_room_id, warehouse_id, label_code, is_active, created_at, created_by, updated_at, updated_by FROM fa_locations WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -1101,6 +1197,93 @@ func (q *Queries) GetRoomRefByNumber(ctx context.Context, arg GetRoomRefByNumber
 	row := q.db.QueryRow(ctx, getRoomRefByNumber, arg.TenantID, arg.PropertyID, arg.RoomNumber)
 	var i GetRoomRefByNumberRow
 	err := row.Scan(&i.ID, &i.RoomNumber, &i.IsActive)
+	return i, err
+}
+
+const getRun = `-- name: GetRun :one
+SELECT r.id, r.period_month, r.status, r.journal_id, j.journal_number, r.reversal_journal_id, rj.journal_number AS reversal_journal_number, r.total, r.asset_count, r.run_by, r.run_at,
+       r.reversed_by, r.reversed_at, r.reversal_reason
+  FROM fa_depr_runs r
+  JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = r.property_id AND rj.id = r.reversal_journal_id
+ WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.id = $3
+`
+
+type GetRunParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetRunRow struct {
+	ID                    int64
+	PeriodMonth           civil.Date
+	Status                string
+	JournalID             int64
+	JournalNumber         string
+	ReversalJournalID     *int64
+	ReversalJournalNumber *string
+	Total                 decimal.Decimal
+	AssetCount            int32
+	RunBy                 *int64
+	RunAt                 time.Time
+	ReversedBy            *int64
+	ReversedAt            *time.Time
+	ReversalReason        *string
+}
+
+func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (GetRunRow, error) {
+	row := q.db.QueryRow(ctx, getRun, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetRunRow
+	err := row.Scan(
+		&i.ID,
+		&i.PeriodMonth,
+		&i.Status,
+		&i.JournalID,
+		&i.JournalNumber,
+		&i.ReversalJournalID,
+		&i.ReversalJournalNumber,
+		&i.Total,
+		&i.AssetCount,
+		&i.RunBy,
+		&i.RunAt,
+		&i.ReversedBy,
+		&i.ReversedAt,
+		&i.ReversalReason,
+	)
+	return i, err
+}
+
+const getRunByKey = `-- name: GetRunByKey :one
+SELECT id, tenant_id, property_id, period_month, status, journal_id, reversal_journal_id, total, asset_count, idempotency_key, run_by, run_at, reversed_by, reversed_at, reversal_reason FROM fa_depr_runs WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetRunByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) GetRunByKey(ctx context.Context, arg GetRunByKeyParams) (FaDeprRun, error) {
+	row := q.db.QueryRow(ctx, getRunByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i FaDeprRun
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.PeriodMonth,
+		&i.Status,
+		&i.JournalID,
+		&i.ReversalJournalID,
+		&i.Total,
+		&i.AssetCount,
+		&i.IdempotencyKey,
+		&i.RunBy,
+		&i.RunAt,
+		&i.ReversedBy,
+		&i.ReversedAt,
+		&i.ReversalReason,
+	)
 	return i, err
 }
 
@@ -1528,6 +1711,82 @@ func (q *Queries) InsertOpeningImport(ctx context.Context, arg InsertOpeningImpo
 	return i, err
 }
 
+const insertRun = `-- name: InsertRun :one
+INSERT INTO fa_depr_runs (tenant_id, property_id, period_month, status, journal_id, total, asset_count, idempotency_key, run_by)
+VALUES ($1, $2, $3, 'POSTED', $4, $5, $6, $7, $8)
+RETURNING id
+`
+
+type InsertRunParams struct {
+	TenantID       int64
+	PropertyID     int64
+	PeriodMonth    civil.Date
+	JournalID      int64
+	Total          decimal.Decimal
+	AssetCount     int32
+	IdempotencyKey *string
+	ActorID        *int64
+}
+
+func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertRun,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.PeriodMonth,
+		arg.JournalID,
+		arg.Total,
+		arg.AssetCount,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertRunLine = `-- name: InsertRunLine :one
+INSERT INTO fa_depr_lines (tenant_id, property_id, run_id, asset_id, category_id, expense_account_id, department_id, months, from_month, amount, accum_after, carrying_after, months_done_after)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id
+`
+
+type InsertRunLineParams struct {
+	TenantID         int64
+	PropertyID       int64
+	RunID            int64
+	AssetID          int64
+	CategoryID       int64
+	ExpenseAccountID int64
+	DepartmentID     *int64
+	Months           int32
+	FromMonth        civil.Date
+	Amount           decimal.Decimal
+	AccumAfter       decimal.Decimal
+	CarryingAfter    decimal.Decimal
+	MonthsDoneAfter  int32
+}
+
+func (q *Queries) InsertRunLine(ctx context.Context, arg InsertRunLineParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertRunLine,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.RunID,
+		arg.AssetID,
+		arg.CategoryID,
+		arg.ExpenseAccountID,
+		arg.DepartmentID,
+		arg.Months,
+		arg.FromMonth,
+		arg.Amount,
+		arg.AccumAfter,
+		arg.CarryingAfter,
+		arg.MonthsDoneAfter,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertSourceLink = `-- name: InsertSourceLink :exec
 INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -1579,6 +1838,79 @@ func (q *Queries) JournalDebitsCostAccount(ctx context.Context, arg JournalDebit
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const lastLiveRun = `-- name: LastLiveRun :one
+SELECT id, tenant_id, property_id, period_month, status, journal_id, reversal_journal_id, total, asset_count, idempotency_key, run_by, run_at, reversed_by, reversed_at, reversal_reason FROM fa_depr_runs WHERE tenant_id = $1 AND property_id = $2 AND status = 'POSTED' ORDER BY period_month DESC LIMIT 1
+`
+
+type LastLiveRunParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+func (q *Queries) LastLiveRun(ctx context.Context, arg LastLiveRunParams) (FaDeprRun, error) {
+	row := q.db.QueryRow(ctx, lastLiveRun, arg.TenantID, arg.PropertyID)
+	var i FaDeprRun
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.PeriodMonth,
+		&i.Status,
+		&i.JournalID,
+		&i.ReversalJournalID,
+		&i.Total,
+		&i.AssetCount,
+		&i.IdempotencyKey,
+		&i.RunBy,
+		&i.RunAt,
+		&i.ReversedBy,
+		&i.ReversedAt,
+		&i.ReversalReason,
+	)
+	return i, err
+}
+
+const laterAssetEvents = `-- name: LaterAssetEvents :many
+SELECT DISTINCT a.number
+  FROM fa_ledger e JOIN fa_assets a ON a.property_id = e.property_id AND a.id = e.asset_id
+ WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.asset_id = ANY($3::bigint[]) AND e.kind IN ('DISPOSE', 'RECLASS_OUT', 'RECLASS_IN') AND e.event_date > $4
+   AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id)
+ ORDER BY a.number
+`
+
+type LaterAssetEventsParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetIds   []int64
+	MonthEnd   civil.Date
+}
+
+// The assets of a run that were disposed of or moved to another category after the month end: their depreciation of the month cannot be reversed (F9).
+func (q *Queries) LaterAssetEvents(ctx context.Context, arg LaterAssetEventsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, laterAssetEvents,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AssetIds,
+		arg.MonthEnd,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var number string
+		if err := rows.Scan(&number); err != nil {
+			return nil, err
+		}
+		items = append(items, number)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ledgerDrift = `-- name: LedgerDrift :many
@@ -1639,6 +1971,43 @@ func (q *Queries) LedgerDrift(ctx context.Context, arg LedgerDriftParams) ([]Led
 		return nil, err
 	}
 	return items, nil
+}
+
+const ledgerEntryOfRunLine = `-- name: LedgerEntryOfRunLine :one
+SELECT id, tenant_id, property_id, asset_id, category_id, kind, event_date, book_month, cost_delta, accum_delta, months_delta, journal_id, source_type, source_id, source_line, reverses_id, created_at, created_by FROM fa_ledger WHERE tenant_id = $1 AND property_id = $2 AND source_type = 'FA_DEPR' AND source_id = $3 AND kind = 'DEPRECIATE'
+`
+
+type LedgerEntryOfRunLineParams struct {
+	TenantID   int64
+	PropertyID int64
+	LineID     int64
+}
+
+// The row of the ledger that a line of a run wrote; a reversal of the run negates it.
+func (q *Queries) LedgerEntryOfRunLine(ctx context.Context, arg LedgerEntryOfRunLineParams) (FaLedger, error) {
+	row := q.db.QueryRow(ctx, ledgerEntryOfRunLine, arg.TenantID, arg.PropertyID, arg.LineID)
+	var i FaLedger
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AssetID,
+		&i.CategoryID,
+		&i.Kind,
+		&i.EventDate,
+		&i.BookMonth,
+		&i.CostDelta,
+		&i.AccumDelta,
+		&i.MonthsDelta,
+		&i.JournalID,
+		&i.SourceType,
+		&i.SourceID,
+		&i.SourceLine,
+		&i.ReversesID,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
 }
 
 const ledgerInsertAsset = `-- name: LedgerInsertAsset :one
@@ -2643,6 +3012,146 @@ func (q *Queries) ListCategories(ctx context.Context, arg ListCategoriesParams) 
 	return items, nil
 }
 
+const listDeprLinesOfAsset = `-- name: ListDeprLinesOfAsset :many
+SELECT l.id, l.run_id, r.period_month, j.journal_number, l.from_month, l.months, l.amount, l.accum_after, l.carrying_after, l.months_done_after
+  FROM fa_depr_lines l
+  JOIN fa_depr_runs r ON r.property_id = l.property_id AND r.id = l.run_id AND r.status = 'POSTED'
+  JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+ WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.asset_id = $3
+ ORDER BY r.period_month
+`
+
+type ListDeprLinesOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+type ListDeprLinesOfAssetRow struct {
+	ID              int64
+	RunID           int64
+	PeriodMonth     civil.Date
+	JournalNumber   string
+	FromMonth       civil.Date
+	Months          int32
+	Amount          decimal.Decimal
+	AccumAfter      decimal.Decimal
+	CarryingAfter   decimal.Decimal
+	MonthsDoneAfter int32
+}
+
+// The lines of the live runs for one asset: what the schedule shows as posted.
+func (q *Queries) ListDeprLinesOfAsset(ctx context.Context, arg ListDeprLinesOfAssetParams) ([]ListDeprLinesOfAssetRow, error) {
+	rows, err := q.db.Query(ctx, listDeprLinesOfAsset, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDeprLinesOfAssetRow{}
+	for rows.Next() {
+		var i ListDeprLinesOfAssetRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.PeriodMonth,
+			&i.JournalNumber,
+			&i.FromMonth,
+			&i.Months,
+			&i.Amount,
+			&i.AccumAfter,
+			&i.CarryingAfter,
+			&i.MonthsDoneAfter,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDepreciationAssets = `-- name: ListDepreciationAssets :many
+
+SELECT a.id, a.number, a.name, a.category_id, a.department_id, a.cost, a.residual_value, a.accum_depr, a.life_months, a.method, a.db_factor, a.dep_months_done, a.last_dep_month, a.first_dep_month,
+       c.code AS category_code, c.name AS category_name, c.expense_account_id, c.accumulated_account_id, c.department_id AS category_department_id
+  FROM fa_assets a
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+ WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.method IS NOT NULL AND a.dep_months_done < a.life_months
+ ORDER BY a.id
+`
+
+type ListDepreciationAssetsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListDepreciationAssetsRow struct {
+	ID                   int64
+	Number               string
+	Name                 string
+	CategoryID           int64
+	DepartmentID         *int64
+	Cost                 decimal.Decimal
+	ResidualValue        decimal.Decimal
+	AccumDepr            decimal.Decimal
+	LifeMonths           *int32
+	Method               *string
+	DbFactor             *decimal.Decimal
+	DepMonthsDone        int32
+	LastDepMonth         *civil.Date
+	FirstDepMonth        *civil.Date
+	CategoryCode         string
+	CategoryName         string
+	ExpenseAccountID     *int64
+	AccumulatedAccountID *int64
+	CategoryDepartmentID *int64
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Depreciation: the runs, their lines and the month close (depreciation.go)
+// The active assets that have months left to depreciate, with what the run needs of their category. The run decides who is due in its month.
+func (q *Queries) ListDepreciationAssets(ctx context.Context, arg ListDepreciationAssetsParams) ([]ListDepreciationAssetsRow, error) {
+	rows, err := q.db.Query(ctx, listDepreciationAssets, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDepreciationAssetsRow{}
+	for rows.Next() {
+		var i ListDepreciationAssetsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Name,
+			&i.CategoryID,
+			&i.DepartmentID,
+			&i.Cost,
+			&i.ResidualValue,
+			&i.AccumDepr,
+			&i.LifeMonths,
+			&i.Method,
+			&i.DbFactor,
+			&i.DepMonthsDone,
+			&i.LastDepMonth,
+			&i.FirstDepMonth,
+			&i.CategoryCode,
+			&i.CategoryName,
+			&i.ExpenseAccountID,
+			&i.AccumulatedAccountID,
+			&i.CategoryDepartmentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFiscalGroups = `-- name: ListFiscalGroups :many
 
 SELECT tenant_id, property_id, code, life_years, sl_rate, db_rate, updated_at, updated_by FROM fa_fiscal_groups WHERE tenant_id = $1 AND property_id = $2 ORDER BY code
@@ -2717,6 +3226,53 @@ func (q *Queries) ListLinksByKey(ctx context.Context, arg ListLinksByKeyParams) 
 			&i.ReleasedBy,
 			&i.CreatedAt,
 			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLiveRunsFrom = `-- name: ListLiveRunsFrom :many
+SELECT id, tenant_id, property_id, period_month, status, journal_id, reversal_journal_id, total, asset_count, idempotency_key, run_by, run_at, reversed_by, reversed_at, reversal_reason FROM fa_depr_runs WHERE tenant_id = $1 AND property_id = $2 AND status = 'POSTED' AND period_month >= $3 ORDER BY period_month DESC
+`
+
+type ListLiveRunsFromParams struct {
+	TenantID    int64
+	PropertyID  int64
+	PeriodMonth civil.Date
+}
+
+// The posted runs of a month and of the months after it, the latest first (the reopen of a month reverses them in that order).
+func (q *Queries) ListLiveRunsFrom(ctx context.Context, arg ListLiveRunsFromParams) ([]FaDeprRun, error) {
+	rows, err := q.db.Query(ctx, listLiveRunsFrom, arg.TenantID, arg.PropertyID, arg.PeriodMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FaDeprRun{}
+	for rows.Next() {
+		var i FaDeprRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.PeriodMonth,
+			&i.Status,
+			&i.JournalID,
+			&i.ReversalJournalID,
+			&i.Total,
+			&i.AssetCount,
+			&i.IdempotencyKey,
+			&i.RunBy,
+			&i.RunAt,
+			&i.ReversedBy,
+			&i.ReversedAt,
+			&i.ReversalReason,
 		); err != nil {
 			return nil, err
 		}
@@ -2871,6 +3427,186 @@ func (q *Queries) ListOpeningImports(ctx context.Context, arg ListOpeningImports
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.JournalNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPeriodStates = `-- name: ListPeriodStates :many
+SELECT period_start, status FROM gl_periods WHERE tenant_id = $1 AND property_id = $2
+`
+
+type ListPeriodStatesParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListPeriodStatesRow struct {
+	PeriodStart civil.Date
+	Status      string
+}
+
+func (q *Queries) ListPeriodStates(ctx context.Context, arg ListPeriodStatesParams) ([]ListPeriodStatesRow, error) {
+	rows, err := q.db.Query(ctx, listPeriodStates, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPeriodStatesRow{}
+	for rows.Next() {
+		var i ListPeriodStatesRow
+		if err := rows.Scan(&i.PeriodStart, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunLines = `-- name: ListRunLines :many
+SELECT l.id, l.asset_id, a.number AS asset_number, a.name AS asset_name, l.category_id, c.code AS category_code, c.name AS category_name, l.expense_account_id, ea.code AS expense_account_code,
+       l.department_id, d.code AS department_code, d.name AS department_name, l.months, l.from_month, l.amount, l.accum_after, l.carrying_after, l.months_done_after
+  FROM fa_depr_lines l
+  JOIN fa_assets a ON a.property_id = l.property_id AND a.id = l.asset_id
+  JOIN fa_categories c ON c.property_id = l.property_id AND c.id = l.category_id
+  JOIN gl_accounts ea ON ea.property_id = l.property_id AND ea.id = l.expense_account_id
+  LEFT JOIN departments d ON d.property_id = l.property_id AND d.id = l.department_id
+ WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.run_id = $3
+ ORDER BY l.asset_id
+`
+
+type ListRunLinesParams struct {
+	TenantID   int64
+	PropertyID int64
+	RunID      int64
+}
+
+type ListRunLinesRow struct {
+	ID                 int64
+	AssetID            int64
+	AssetNumber        string
+	AssetName          string
+	CategoryID         int64
+	CategoryCode       string
+	CategoryName       string
+	ExpenseAccountID   int64
+	ExpenseAccountCode string
+	DepartmentID       *int64
+	DepartmentCode     *string
+	DepartmentName     *string
+	Months             int32
+	FromMonth          civil.Date
+	Amount             decimal.Decimal
+	AccumAfter         decimal.Decimal
+	CarryingAfter      decimal.Decimal
+	MonthsDoneAfter    int32
+}
+
+func (q *Queries) ListRunLines(ctx context.Context, arg ListRunLinesParams) ([]ListRunLinesRow, error) {
+	rows, err := q.db.Query(ctx, listRunLines, arg.TenantID, arg.PropertyID, arg.RunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRunLinesRow{}
+	for rows.Next() {
+		var i ListRunLinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AssetID,
+			&i.AssetNumber,
+			&i.AssetName,
+			&i.CategoryID,
+			&i.CategoryCode,
+			&i.CategoryName,
+			&i.ExpenseAccountID,
+			&i.ExpenseAccountCode,
+			&i.DepartmentID,
+			&i.DepartmentCode,
+			&i.DepartmentName,
+			&i.Months,
+			&i.FromMonth,
+			&i.Amount,
+			&i.AccumAfter,
+			&i.CarryingAfter,
+			&i.MonthsDoneAfter,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRuns = `-- name: ListRuns :many
+SELECT r.id, r.period_month, r.status, r.journal_id, j.journal_number, r.reversal_journal_id, rj.journal_number AS reversal_journal_number, r.total, r.asset_count, r.run_by, r.run_at,
+       r.reversed_by, r.reversed_at, r.reversal_reason
+  FROM fa_depr_runs r
+  JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = r.property_id AND rj.id = r.reversal_journal_id
+ WHERE r.tenant_id = $1 AND r.property_id = $2
+ ORDER BY r.period_month DESC, r.id DESC
+ LIMIT 600
+`
+
+type ListRunsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListRunsRow struct {
+	ID                    int64
+	PeriodMonth           civil.Date
+	Status                string
+	JournalID             int64
+	JournalNumber         string
+	ReversalJournalID     *int64
+	ReversalJournalNumber *string
+	Total                 decimal.Decimal
+	AssetCount            int32
+	RunBy                 *int64
+	RunAt                 time.Time
+	ReversedBy            *int64
+	ReversedAt            *time.Time
+	ReversalReason        *string
+}
+
+func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]ListRunsRow, error) {
+	rows, err := q.db.Query(ctx, listRuns, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRunsRow{}
+	for rows.Next() {
+		var i ListRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PeriodMonth,
+			&i.Status,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.ReversalJournalID,
+			&i.ReversalJournalNumber,
+			&i.Total,
+			&i.AssetCount,
+			&i.RunBy,
+			&i.RunAt,
+			&i.ReversedBy,
+			&i.ReversedAt,
+			&i.ReversalReason,
 		); err != nil {
 			return nil, err
 		}
@@ -3040,6 +3776,23 @@ func (q *Queries) ListWaitingLines(ctx context.Context, arg ListWaitingLinesPara
 	return items, nil
 }
 
+const liveRunFrom = `-- name: LiveRunFrom :one
+SELECT count(*)::int FROM fa_depr_runs WHERE tenant_id = $1 AND property_id = $2 AND status = 'POSTED' AND period_month >= $3
+`
+
+type LiveRunFromParams struct {
+	TenantID    int64
+	PropertyID  int64
+	PeriodMonth civil.Date
+}
+
+func (q *Queries) LiveRunFrom(ctx context.Context, arg LiveRunFromParams) (int32, error) {
+	row := q.db.QueryRow(ctx, liveRunFrom, arg.TenantID, arg.PropertyID, arg.PeriodMonth)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const lookupAssets = `-- name: LookupAssets :many
 SELECT a.id, a.number, a.name, a.status, l.name AS location_name
   FROM fa_assets a
@@ -3088,6 +3841,34 @@ func (q *Queries) LookupAssets(ctx context.Context, arg LookupAssetsParams) ([]L
 		return nil, err
 	}
 	return items, nil
+}
+
+const markRunReversed = `-- name: MarkRunReversed :exec
+UPDATE fa_depr_runs SET status = 'REVERSED', reversal_journal_id = $1, reversed_by = $2, reversed_at = $3, reversal_reason = $4
+ WHERE tenant_id = $5 AND property_id = $6 AND id = $7 AND status = 'POSTED'
+`
+
+type MarkRunReversedParams struct {
+	ReversalJournalID *int64
+	ActorID           *int64
+	ReversedAt        *time.Time
+	Reason            *string
+	TenantID          int64
+	PropertyID        int64
+	ID                int64
+}
+
+func (q *Queries) MarkRunReversed(ctx context.Context, arg MarkRunReversedParams) error {
+	_, err := q.db.Exec(ctx, markRunReversed,
+		arg.ReversalJournalID,
+		arg.ActorID,
+		arg.ReversedAt,
+		arg.Reason,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
 }
 
 const registerTotalsByCategory = `-- name: RegisterTotalsByCategory :many

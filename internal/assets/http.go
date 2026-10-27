@@ -44,10 +44,15 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/waiting/dismiss", httpx.HandlerFunc(h.dismissLine))
 	mux.Handle("POST "+p+"/waiting/restore", httpx.HandlerFunc(h.restoreLine))
 	mux.Handle("POST "+p+"/from-line", httpx.HandlerFunc(h.makeAsset))
+	mux.Handle("GET "+p+"/depreciation", httpx.HandlerFunc(h.listDepreciation))
+	mux.Handle("GET "+p+"/depreciation/{month}/preview", httpx.HandlerFunc(h.previewDepreciation))
+	mux.Handle("POST "+p+"/depreciation/{month}/run", httpx.HandlerFunc(h.runDepreciation))
+	mux.Handle("POST "+p+"/depreciation/{month}/reverse", httpx.HandlerFunc(h.reverseDepreciation))
 	mux.Handle("GET "+p, httpx.HandlerFunc(h.listAssets))
 	mux.Handle("GET "+p+"/{id}", httpx.HandlerFunc(h.getAsset))
 	mux.Handle("PATCH "+p+"/{id}", httpx.HandlerFunc(h.updateAsset))
 	mux.Handle("POST "+p+"/{id}/cancel", httpx.HandlerFunc(h.cancelAsset))
+	mux.Handle("GET "+p+"/{id}/schedule", httpx.HandlerFunc(h.assetSchedule))
 }
 
 func pathID(r *http.Request) (int64, error) {
@@ -604,4 +609,80 @@ func (h *Handler) restoreLine(w http.ResponseWriter, r *http.Request) error {
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+func (h *Handler) listDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.ListDepreciation(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func monthOf(r *http.Request) (int64, civil.Date, error) {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return 0, civil.Date{}, err
+	}
+	m, err := ParseMonth(r.PathValue("month"))
+	return pid, m, err
+}
+
+func (h *Handler) previewDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, m, err := monthOf(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.PreviewDepreciation(r.Context(), pid, m)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) runDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, m, err := monthOf(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.RunDepreciation(r.Context(), pid, m, strings.TrimSpace(r.Header.Get("Idempotency-Key")))
+	if err != nil {
+		return err
+	}
+	if v.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, v)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, v)
+}
+
+func (h *Handler) reverseDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, m, err := monthOf(r)
+	if err != nil {
+		return err
+	}
+	var in ReverseRunInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	v, err := h.svc.ReverseDepreciation(r.Context(), pid, m, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) assetSchedule(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.AssetSchedule(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
 }

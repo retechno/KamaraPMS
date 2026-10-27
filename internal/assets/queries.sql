@@ -502,3 +502,109 @@ SELECT count(*) FILTER (WHERE NOT dismissed)::int AS waiting, COALESCE(sum(cost)
        AND st.register_from IS NOT NULL AND j.journal_date >= st.register_from AND NOT (c.kind = 'OE' AND st.oe_policy = 'EXPENSE')
        AND NOT EXISTS (SELECT 1 FROM fa_source_links k WHERE k.property_id = l.property_id AND k.journal_line_id = l.id AND k.released_at IS NULL)
   ) x;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Depreciation: the runs, their lines and the month close (depreciation.go)
+
+-- name: ListDepreciationAssets :many
+-- The active assets that have months left to depreciate, with what the run needs of their category. The run decides who is due in its month.
+SELECT a.id, a.number, a.name, a.category_id, a.department_id, a.cost, a.residual_value, a.accum_depr, a.life_months, a.method, a.db_factor, a.dep_months_done, a.last_dep_month, a.first_dep_month,
+       c.code AS category_code, c.name AS category_name, c.expense_account_id, c.accumulated_account_id, c.department_id AS category_department_id
+  FROM fa_assets a
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.method IS NOT NULL AND a.dep_months_done < a.life_months
+ ORDER BY a.id;
+
+-- name: LastLiveRun :one
+SELECT * FROM fa_depr_runs WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'POSTED' ORDER BY period_month DESC LIMIT 1;
+
+-- name: GetLiveRunByMonth :one
+SELECT * FROM fa_depr_runs WHERE tenant_id = @tenant_id AND property_id = @property_id AND period_month = @period_month AND status = 'POSTED';
+
+-- name: GetRunByKey :one
+SELECT * FROM fa_depr_runs WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: ListLiveRunsFrom :many
+-- The posted runs of a month and of the months after it, the latest first (the reopen of a month reverses them in that order).
+SELECT * FROM fa_depr_runs WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'POSTED' AND period_month >= @period_month ORDER BY period_month DESC;
+
+-- name: ListRuns :many
+SELECT r.id, r.period_month, r.status, r.journal_id, j.journal_number, r.reversal_journal_id, rj.journal_number AS reversal_journal_number, r.total, r.asset_count, r.run_by, r.run_at,
+       r.reversed_by, r.reversed_at, r.reversal_reason
+  FROM fa_depr_runs r
+  JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = r.property_id AND rj.id = r.reversal_journal_id
+ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id
+ ORDER BY r.period_month DESC, r.id DESC
+ LIMIT 600;
+
+-- name: GetRun :one
+SELECT r.id, r.period_month, r.status, r.journal_id, j.journal_number, r.reversal_journal_id, rj.journal_number AS reversal_journal_number, r.total, r.asset_count, r.run_by, r.run_at,
+       r.reversed_by, r.reversed_at, r.reversal_reason
+  FROM fa_depr_runs r
+  JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = r.property_id AND rj.id = r.reversal_journal_id
+ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.id = @id;
+
+-- name: InsertRun :one
+INSERT INTO fa_depr_runs (tenant_id, property_id, period_month, status, journal_id, total, asset_count, idempotency_key, run_by)
+VALUES (@tenant_id, @property_id, @period_month, 'POSTED', @journal_id, @total, @asset_count, sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: InsertRunLine :one
+INSERT INTO fa_depr_lines (tenant_id, property_id, run_id, asset_id, category_id, expense_account_id, department_id, months, from_month, amount, accum_after, carrying_after, months_done_after)
+VALUES (@tenant_id, @property_id, @run_id, @asset_id, @category_id, @expense_account_id, sqlc.narg(department_id), @months, @from_month, @amount, @accum_after, @carrying_after, @months_done_after)
+RETURNING id;
+
+-- name: MarkRunReversed :exec
+UPDATE fa_depr_runs SET status = 'REVERSED', reversal_journal_id = @reversal_journal_id, reversed_by = sqlc.narg(actor_id), reversed_at = @reversed_at, reversal_reason = @reason
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'POSTED';
+
+-- name: ListRunLines :many
+SELECT l.id, l.asset_id, a.number AS asset_number, a.name AS asset_name, l.category_id, c.code AS category_code, c.name AS category_name, l.expense_account_id, ea.code AS expense_account_code,
+       l.department_id, d.code AS department_code, d.name AS department_name, l.months, l.from_month, l.amount, l.accum_after, l.carrying_after, l.months_done_after
+  FROM fa_depr_lines l
+  JOIN fa_assets a ON a.property_id = l.property_id AND a.id = l.asset_id
+  JOIN fa_categories c ON c.property_id = l.property_id AND c.id = l.category_id
+  JOIN gl_accounts ea ON ea.property_id = l.property_id AND ea.id = l.expense_account_id
+  LEFT JOIN departments d ON d.property_id = l.property_id AND d.id = l.department_id
+ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.run_id = @run_id
+ ORDER BY l.asset_id;
+
+-- name: LedgerEntryOfRunLine :one
+-- The row of the ledger that a line of a run wrote; a reversal of the run negates it.
+SELECT * FROM fa_ledger WHERE tenant_id = @tenant_id AND property_id = @property_id AND source_type = 'FA_DEPR' AND source_id = @line_id AND kind = 'DEPRECIATE';
+
+-- name: LaterAssetEvents :many
+-- The assets of a run that were disposed of or moved to another category after the month end: their depreciation of the month cannot be reversed (F9).
+SELECT DISTINCT a.number
+  FROM fa_ledger e JOIN fa_assets a ON a.property_id = e.property_id AND a.id = e.asset_id
+ WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.asset_id = ANY(@asset_ids::bigint[]) AND e.kind IN ('DISPOSE', 'RECLASS_OUT', 'RECLASS_IN') AND e.event_date > @month_end
+   AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id)
+ ORDER BY a.number;
+
+-- name: DepartmentNames :many
+SELECT id, code, name FROM departments WHERE property_id = @property_id AND id = ANY(@ids::bigint[]);
+
+-- name: ListPeriodStates :many
+SELECT period_start, status FROM gl_periods WHERE tenant_id = @tenant_id AND property_id = @property_id;
+
+-- name: CountAssetsDueIn :one
+-- The assets a run of the month would depreciate (the month close asks): active, months left, a carrying value above the residual value, and a first due month at or before the month.
+SELECT count(*)::int
+  FROM fa_assets a
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.dep_months_done < a.life_months
+   AND a.cost - a.accum_depr > a.residual_value
+   AND GREATEST(CASE WHEN a.dep_months_done > 0 THEN (a.last_dep_month + INTERVAL '1 month')::date ELSE a.first_dep_month END, @register_from::date) <= @month::date;
+
+-- name: LiveRunFrom :one
+SELECT count(*)::int FROM fa_depr_runs WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'POSTED' AND period_month >= @period_month;
+
+-- name: ListDeprLinesOfAsset :many
+-- The lines of the live runs for one asset: what the schedule shows as posted.
+SELECT l.id, l.run_id, r.period_month, j.journal_number, l.from_month, l.months, l.amount, l.accum_after, l.carrying_after, l.months_done_after
+  FROM fa_depr_lines l
+  JOIN fa_depr_runs r ON r.property_id = l.property_id AND r.id = l.run_id AND r.status = 'POSTED'
+  JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.asset_id = @asset_id
+ ORDER BY r.period_month;

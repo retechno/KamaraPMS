@@ -178,6 +178,7 @@ func New(d Deps) *App {
 	assetsSvc := assets.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, departmentsSvc)
 	accountingSvc.SetAssetSource(assetsSvc)  // the accumulated depreciation accounts of the categories are the register's own (37-fixed-assets.md F5)
 	accountingSvc.SetJournalGuard(assetsSvc) // a journal with a line made an asset is not reversed (37-fixed-assets.md F8)
+	accountingSvc.SetPeriodGuard(assetsSvc)  // a month closes only when its depreciation is run; reopening it reverses the run (37-fixed-assets.md 4.3, F4)
 	payablesSvc.SetAssetGuard(assetsSvc)     // nor a bill or a credit note on a line made an asset
 	documentsSvc.SetAssets(assetsSvc)
 	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})                 // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own

@@ -5,6 +5,11 @@
  */
 export const AUDIT_ACTIONS = [
   'asset.cancelled',
+  'asset.depreciation_reversed',
+  'asset.depreciation_run',
+  'asset.line_dismissed',
+  'asset.line_restored',
+  'asset.made_from_line',
   'asset.category_created',
   'asset.category_updated',
   'asset.fiscal_group_updated',
@@ -370,6 +375,8 @@ export const AUDIT_ACTIONS = [
 ] as const
 
 export const AUDIT_ENTITIES = [
+  'fa_depr_run',
+  'gl_journal_line',
   'fa_asset',
   'fa_category',
   'fa_fiscal_group',

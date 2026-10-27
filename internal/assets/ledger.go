@@ -97,3 +97,32 @@ func (s *Service) setStart(ctx context.Context, p auth.Principal, propertyID, as
 	return s.q(ctx).LedgerUpdateStart(ctx, assetsdb.LedgerUpdateStartParams{TenantID: p.TenantID, PropertyID: propertyID, ID: assetID, InServiceDate: inService, StartRule: rule,
 		FirstDepMonth: firstDep, ActorID: p.ActorID()})
 }
+
+// depreciateAsset writes the line of a run into the ledger (kind DEPRECIATE, keyed by the line, dated the last day of the month and carrying the book month of the last month it depreciates) and
+// restates the asset from its ledger. The caller has locked the asset.
+func (s *Service) depreciateAsset(ctx context.Context, p auth.Principal, propertyID, assetID, categoryID, lineID int64, lastMonth civil.Date, amount decimal.Decimal, months int32, journalID int64) error {
+	if _, err := s.q(ctx).LedgerInsertEntry(ctx, assetsdb.LedgerInsertEntryParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: assetID, CategoryID: categoryID, Kind: LedgerDepreciate,
+		EventDate: MonthEnd(lastMonth), BookMonth: &lastMonth, CostDelta: decimal.Zero, AccumDelta: amount, MonthsDelta: months, JournalID: &journalID, SourceType: sourceTypeDepr, SourceID: lineID,
+		ActorID: p.ActorID()}); err != nil {
+		return err
+	}
+	_, err := s.restateAsset(ctx, p, propertyID, assetID)
+	return err
+}
+
+// reverseDepreciation negates the ledger row that a line of a run wrote (a REVERSAL row dated the last day of its month, carrying the journal that reverses the run) and restates the asset: its
+// accumulated depreciation, its months done and its last month go back to what they were. The caller has locked the asset.
+func (s *Service) reverseDepreciation(ctx context.Context, p auth.Principal, propertyID, lineID, reversalJournalID int64) error {
+	q := s.q(ctx)
+	e, err := q.LedgerEntryOfRunLine(ctx, assetsdb.LedgerEntryOfRunLineParams{TenantID: p.TenantID, PropertyID: propertyID, LineID: lineID})
+	if err != nil {
+		return err
+	}
+	if _, err := q.LedgerInsertEntry(ctx, assetsdb.LedgerInsertEntryParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: e.AssetID, CategoryID: e.CategoryID, Kind: LedgerReversal,
+		EventDate: e.EventDate, BookMonth: e.BookMonth, CostDelta: e.CostDelta.Neg(), AccumDelta: e.AccumDelta.Neg(), MonthsDelta: -e.MonthsDelta, JournalID: &reversalJournalID,
+		SourceType: sourceTypeDepr, SourceID: lineID, ReversesID: &e.ID, ActorID: p.ActorID()}); err != nil {
+		return err
+	}
+	_, err = s.restateAsset(ctx, p, propertyID, e.AssetID)
+	return err
+}
