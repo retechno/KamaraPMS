@@ -8,6 +8,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/assets"
 	"kamarapms/internal/banquet"
 	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
@@ -50,6 +51,8 @@ type Service struct {
 	shifts *shifts.Service
 	// banquet is set by the application (SetBanquet): the banquet is built after the documents.
 	banquet *banquet.Service
+	// assets is set by the application (SetAssets): the register prints its labels.
+	assets *assets.Service
 }
 
 // NewService wires the service.

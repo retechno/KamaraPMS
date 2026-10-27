@@ -146,6 +146,13 @@ const (
 	PermBanquetManage  Permission = "banquet.manage"
 	PermBanquetConfirm Permission = "banquet.confirm"
 	PermBanquetSetup   Permission = "banquet.setup"
+
+	// Fixed assets (docs/architecture/37-fixed-assets.md 7.1). Granted to no role by the migration: the tenant gives them to the roles it wants.
+	PermAssetRead       Permission = "asset.read"
+	PermAssetManage     Permission = "asset.manage"
+	PermAssetDepreciate Permission = "asset.depreciate"
+	PermAssetDispose    Permission = "asset.dispose"
+	PermAssetSetup      Permission = "asset.setup"
 )
 
 // Catalogue is the complete, ordered list of permissions (the only valid codes).
@@ -276,6 +283,12 @@ var Catalogue = []PermissionInfo{
 	{PermBanquetManage, "Banquet", "Create and change events (inquiry and tentative), their sessions and options, and mark an event lost", "S6"},
 	{PermBanquetConfirm, "Banquet", "Confirm an event (definite) and cancel a definite event", "S6"},
 	{PermBanquetSetup, "Banquet", "Set up the meeting rooms, their combinations and set-ups, the items, the packages, the event types, the reasons and the banquet settings", "S6"},
+
+	{PermAssetRead, "Fixed assets", "See the asset register, its schedules and reports, the waiting list and the labels", "FA1"},
+	{PermAssetManage, "Fixed assets", "Make assets from journal lines, change the details of an asset, move assets, change the life or the residual value, add value, and count assets", "FA1"},
+	{PermAssetDepreciate, "Fixed assets", "Run and reverse the depreciation of a month", "FA1"},
+	{PermAssetDispose, "Fixed assets", "Sell or write off an asset and reverse a disposal; approve a disposal as the second person", "FA1"},
+	{PermAssetSetup, "Fixed assets", "Set up the asset categories and their accounts, the locations, the settings, the fiscal rates and the opening balances", "FA1"},
 
 	{PermAuditRead, "Administration", "Read the audit trail", "M15"},
 }

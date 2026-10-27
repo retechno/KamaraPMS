@@ -33,6 +33,7 @@ const (
 	LevelStock        LockLevel = 45 // L4: stock, shared with the booking groups (a booking never touches stock; the lock-order test holds it): documents, then the warehouse, then the balances ascending (docs/architecture/35-inventory.md 5.1)
 	LevelAccounting   LockLevel = 46 // L4: a property's accounting settings row (the chart, the system accounts and the periods are edited under it)
 	LevelPayables     LockLevel = 47 // L4: a supplier (serialises its bills, payments and what they settle; taken after the accounting settings)
+	LevelAssets       LockLevel = 47 // L4: the fixed asset register, shared with the suppliers: suppliers, then the register settings, then the assets, then the stock-takes (assetRank, docs/architecture/37-fixed-assets.md 6)
 	LevelBank         LockLevel = 48 // L4: a bank account (serialises the matching and reconciling of its statements; taken after the accounting settings)
 	LevelTax          LockLevel = 49 // L4: a tax filing profile (serialises the returns and payments of one tax; taken after the accounting settings and the bank accounts)
 	LevelBudget       LockLevel = 49 // L4: a budget (serialises its edits and the activation of a version of a fiscal year; taken after the accounting settings)
@@ -110,6 +111,22 @@ func (t LockTable) eventRank() int {
 	return 0
 }
 
+// assetRank is the order of the tables inside LevelAssets, which the fixed asset register shares with the payables suppliers: the suppliers first, then the settings row of the register (the lock target
+// of its runs, imports and mutations), then the assets (ascending, in one call), then the stock-takes (docs/architecture/37-fixed-assets.md 6). 0 for every other table.
+func (t LockTable) assetRank() int {
+	switch t.name {
+	case "suppliers":
+		return 1
+	case "fa_settings":
+		return 2
+	case "fa_assets":
+		return 3
+	case "fa_audits":
+		return 4
+	}
+	return 0
+}
+
 var (
 	RoomTypes        = LockTable{"room_types", LevelRoomTypes}
 	Rooms            = LockTable{"rooms", LevelRooms}
@@ -142,10 +159,14 @@ var (
 	StockBalances     = LockTable{"inv_balances", LevelStock}          // last, all the balance rows the use case touches, in one call
 	Accounting        = LockTable{"accounting_settings", LevelAccounting}
 	Suppliers         = LockTable{"suppliers", LevelPayables}
-	BankAccounts      = LockTable{"bank_accounts", LevelBank}
-	TaxProfiles       = LockTable{"tax_filing_profiles", LevelTax}
-	TaxSettings       = LockTable{"property_tax_settings", LevelTax}
-	Budgets           = LockTable{"budgets", LevelBudget}
+	// The fixed asset register, LevelAssets (= LevelPayables), after the suppliers: its settings row (FOR SHARE for a mutation, FOR UPDATE for a run, an import or a "make asset"), the assets, the stock-takes.
+	FASettings   = LockTable{"fa_settings", LevelAssets}
+	FAAssets     = LockTable{"fa_assets", LevelAssets}
+	FAAudits     = LockTable{"fa_audits", LevelAssets}
+	BankAccounts = LockTable{"bank_accounts", LevelBank}
+	TaxProfiles  = LockTable{"tax_filing_profiles", LevelTax}
+	TaxSettings  = LockTable{"property_tax_settings", LevelTax}
+	Budgets      = LockTable{"budgets", LevelBudget}
 )
 
 // EnterLockLevel records that the caller is about to take a lock at level with
@@ -163,6 +184,7 @@ func EnterLockLevel(ctx context.Context, level LockLevel) error {
 	if level > st.level {
 		st.stockRank = 0 // a new level: the order inside LevelStock starts again if it is entered again
 		st.eventRank = 0
+		st.assetRank = 0
 	}
 	st.level = level
 	return nil
@@ -209,6 +231,13 @@ func LockRows(ctx context.Context, table LockTable, mode LockMode, propertyID in
 			return fmt.Errorf("%w: %s requested after a later table of the events level", ErrLockOrder, table.name)
 		}
 		st.eventRank = rank
+	}
+	if rank := table.assetRank(); rank > 0 {
+		st := stateFrom(ctx)
+		if rank < st.assetRank {
+			return fmt.Errorf("%w: %s requested after a later table of the assets level", ErrLockOrder, table.name)
+		}
+		st.assetRank = rank
 	}
 	traceLock(ctx, table.name, table.level)
 	ids = slices.Clone(ids)

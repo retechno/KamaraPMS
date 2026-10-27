@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"kamarapms/internal/accounting"
+	"kamarapms/internal/assets"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlog"
 	"kamarapms/internal/availability"
@@ -174,6 +175,9 @@ func New(d Deps) *App {
 	notifierSvc.SetBanquet(banquetSvc)
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
+	assetsSvc := assets.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, departmentsSvc)
+	accountingSvc.SetAssetSource(assetsSvc) // the accumulated depreciation accounts of the categories are the register's own (37-fixed-assets.md F5)
+	documentsSvc.SetAssets(assetsSvc)
 	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})                 // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
 	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc})                // and the close asks the stock whether its books agree
 	inventorySvc.SetPayables(payablesSvc)                                       // the bills of the purchasing are posted by the payables, on goods received not invoiced
@@ -208,6 +212,7 @@ func New(d Deps) *App {
 	departments.NewHandler(departmentsSvc).Register(api)
 	pos.NewHandler(posSvc).Register(api)
 	inventory.NewHandler(inventorySvc).Register(api)
+	assets.NewHandler(assetsSvc).Register(api)
 	banquet.NewHandler(banquetSvc).Register(api)
 	reports.NewHandler(reportsSvc).Register(api)
 	documents.NewHandler(documentsSvc).Register(api)

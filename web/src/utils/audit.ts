@@ -4,6 +4,16 @@
  * adds later still shows in the list (in readable words, see `labelOf`) but is not offered as a filter until it is added here.
  */
 export const AUDIT_ACTIONS = [
+  'asset.cancelled',
+  'asset.category_created',
+  'asset.category_updated',
+  'asset.fiscal_group_updated',
+  'asset.location_created',
+  'asset.location_updated',
+  'asset.opening_imported',
+  'asset.settings_updated',
+  'asset.state_rebuilt',
+  'asset.updated',
   'banquet.beo_read',
   'banquet.beo_recipients_changed',
   'banquet.beo_revised',
@@ -360,6 +370,12 @@ export const AUDIT_ACTIONS = [
 ] as const
 
 export const AUDIT_ENTITIES = [
+  'fa_asset',
+  'fa_category',
+  'fa_fiscal_group',
+  'fa_location',
+  'fa_opening_import',
+  'fa_settings',
   'banquet_beo_recipients',
   'banquet_document',
   'banquet_event',

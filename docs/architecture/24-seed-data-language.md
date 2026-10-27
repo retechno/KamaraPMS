@@ -69,7 +69,7 @@ Kode, kode induk, tipe, sisi normal, kelompok laporan, `is_postable` dan `map_ke
 | 1540 | Operating equipment (china, glass, linen) | Peralatan operasional (porselen, gelas, linen) |
 | 1550 | Vehicles | Kendaraan |
 | 1560 | Construction in progress | Aset dalam penyelesaian |
-| 1590 | Accumulated depreciation | Akumulasi penyusutan |
+| 1590 | Accumulated depreciation (header; the accounts 1591-1595 hold it by category, migration 00093) | Akumulasi penyusutan |
 | 1600 | Other assets | Aset lain-lain |
 | 1610 | Pre-opening costs | Biaya pra-operasi |
 | 1620 | Licences and intangible assets | Izin dan aset takberwujud |

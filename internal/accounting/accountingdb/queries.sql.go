@@ -1961,6 +1961,22 @@ func (q *Queries) SeedChart(ctx context.Context, arg SeedChartParams) (int32, er
 	return created, err
 }
 
+const seedFixedAssets = `-- name: SeedFixedAssets :exec
+SELECT seed_fa_categories($1::bigint, $2::bigint, $3::text)::int
+`
+
+type SeedFixedAssetsParams struct {
+	TenantID     int64
+	PropertyID   int64
+	DataLanguage string
+}
+
+// The settings, the fiscal groups and the default categories of the fixed asset register (37-fixed-assets.md 4.1), made once the chart exists.
+func (q *Queries) SeedFixedAssets(ctx context.Context, arg SeedFixedAssetsParams) error {
+	_, err := q.db.Exec(ctx, seedFixedAssets, arg.TenantID, arg.PropertyID, arg.DataLanguage)
+	return err
+}
+
 const seedPosRoundingAccount = `-- name: SeedPosRoundingAccount :exec
 UPDATE charge_codes c SET gl_account_code = '4591'
  WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.code = 'POS_ROUNDING' AND c.gl_account_code IS NULL

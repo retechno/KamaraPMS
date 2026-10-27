@@ -46,7 +46,7 @@ authorization matrix) and fails when one is not classified, so a new route has t
 | `HOUSEKEEPING` | `P/housekeeping/bulk`, `P/housekeeping/tasks*` (the task workflow and "my tasks"), `P/maintenance-*`, `P/lost-found`, `P/reports/housekeeping-*`, `P/reports/maintenance` |
 | `ACCOUNTING` | `P/accounting/*`, `P/payables*`, `P/bank*`, `P/tax*` (filing and tax invoices), `P/budgets*`, `P/departments*`, and their PDFs |
 | `POS` | `P/pos/*`, `P/outlet-charges*`, `P/folios/{id}/outlet-lock`, the print agents (`/api/v1/device/*`) |
-| `INVENTORY` | `P/inventory/*` (the recipe routes of the POS belong to the POS and ask the entitlement of `INVENTORY` themselves) |
+| `INVENTORY` | `P/inventory/*`, `P/assets/*` (the fixed asset register, `37-fixed-assets.md`; no module of its own) (the recipe routes of the POS belong to the POS and ask the entitlement of `INVENTORY` themselves) |
 | `BANQUET` | `P/banquet/*`: the meeting rooms, events and sessions, the calendar and the masters (`36-banquet.md`). The folio of an event, its payments and its invoice are `CORE`. |
 
 Rules:

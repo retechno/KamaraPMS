@@ -36,6 +36,8 @@ var moduleRules = []struct {
 
 	// Inventory: stock, warehouses and the opening stock (docs/architecture/35-inventory.md). The recipe routes of the POS belong to the POS and ask the entitlement of INVENTORY themselves.
 	{"inventory", Inventory},
+	// Fixed assets are part of the inventory module (docs/architecture/37-fixed-assets.md A17): the register, the opening balances, the labels, the depreciation, the movements and the stock-take.
+	{"assets", Inventory},
 
 	// Banquet: the meeting rooms, the events and their sessions (docs/architecture/36-banquet.md 7.3). The folio of an event belongs to CORE, as the folio of a POS bill does.
 	{"banquet", Banquet},

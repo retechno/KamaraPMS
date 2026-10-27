@@ -66,6 +66,10 @@ A transaction may skip levels, but it may **never take a lower-numbered lock aft
 | **Closing a folio while a charge posts** | Check-out while the restaurant posts a charge | Both lock the folio (L4). A charge after the close sees CLOSED and is rejected. |
 | **Currency change after transactions** | An admin edits the currency | 🛡 The currency-lock trigger. |
 
+### Fixed assets share level 47 (docs/architecture/37-fixed-assets.md, section 6)
+
+The fixed asset register takes lock level 47 together with the suppliers (`db.LevelAssets` = `db.LevelPayables`). Inside the level the inner order is fixed and enforced at runtime (`assetRank` in `internal/platform/db/locks.go`): suppliers, then `fa_settings`, then `fa_assets`, then `fa_audits`. The accounting settings (level 46) are always taken first, through `Poster.BeginPosting`, so a use case that posts an asset journal never inverts the order.
+
 ## 4. Testing the guarantees
 - Integration tests run against real PostgreSQL (testcontainers). Every race above has a test that starts two goroutines with a barrier and asserts exactly one success and a defined error for the other.
 - Constraint tests insert violating rows directly through SQL, to prove the backstops work without the application.

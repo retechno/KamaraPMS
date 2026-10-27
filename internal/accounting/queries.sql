@@ -493,6 +493,10 @@ SELECT EXISTS (SELECT 1 FROM audit_logs a WHERE a.tenant_id = @tenant_id AND a.p
 -- name: FirstFolioItemOf :one
 SELECT i.id, i.business_date FROM folio_items i WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id ORDER BY i.id LIMIT 1;
 
+-- name: SeedFixedAssets :exec
+-- The settings, the fiscal groups and the default categories of the fixed asset register (37-fixed-assets.md 4.1), made once the chart exists.
+SELECT seed_fa_categories(@tenant_id::bigint, @property_id::bigint, @data_language::text)::int;
+
 -- The revenue accounts of the banquet (36-banquet.md 5.3): the system codes BQT_* of a new property get their accounts once the chart exists (F&B 4240, rooms and equipment 4410, the rest 4590, a forfeited
 -- deposit 4520). An account that does not exist leaves the code without one, as for POS_ROUNDING.
 -- name: SeedBanquetAccounts :exec

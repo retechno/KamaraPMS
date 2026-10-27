@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { BedDouble, BookOpen, Boxes, CalendarRange, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Store, Truck } from 'lucide-vue-next'
+import { Armchair, BedDouble, BookOpen, Boxes, CalendarRange, ConciergeBell, Landmark, MoonStar, PiggyBank, Percent, Receipt, Settings, Store, Truck } from 'lucide-vue-next'
 
 /**
  * Application navigation. Labels are translation keys (`nav.items.<id>`, `nav.sections.<id>`), so the menu follows the
@@ -96,6 +96,16 @@ export const navigation: NavSection[] = [
       { id: 'posMenuSetup', to: '/pos/menu', permission: 'pos.manage', module: 'POS' },
       { id: 'posFloorPlan', to: '/pos/floor-plan', permission: 'pos.manage', module: 'POS' },
       { id: 'posStations', to: '/pos/stations', permission: 'pos.manage', module: 'POS' },
+    ],
+  },
+  {
+    id: 'assets',
+    icon: Armchair,
+    items: [
+      { id: 'assetRegister', to: '/assets', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
+      { id: 'assetOpening', to: '/assets/opening', permission: 'asset.setup', module: 'INVENTORY' },
+      { id: 'assetLabels', to: '/assets/labels', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
+      { id: 'assetSettings', to: '/assets/settings', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
     ],
   },
   {

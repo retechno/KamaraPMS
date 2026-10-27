@@ -33,6 +33,8 @@ type txState struct {
 	stockRank int
 	// eventRank is the highest table of the events group of LevelGroups taken so far (groups, meeting rooms, events: see LockTable.eventRank)
 	eventRank int
+	// assetRank is the highest table of the assets group of LevelAssets taken so far (suppliers, register settings, assets, stock-takes: see LockTable.assetRank)
+	assetRank int
 }
 
 func stateFrom(ctx context.Context) *txState {

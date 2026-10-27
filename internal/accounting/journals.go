@@ -34,6 +34,8 @@ const (
 	JournalReceivables = "RECEIVABLES"
 	// JournalCashier is the over or short of a cashier shift, a pay-in or a pay-out of the drawer.
 	JournalCashier = "CASHIER"
+	// JournalAsset is a journal of the fixed asset register: the opening balances, a month of depreciation, a change of category, a disposal and their reversals (docs/architecture/37-fixed-assets.md F3).
+	JournalAsset = "ASSET"
 )
 
 const (
@@ -660,6 +662,13 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 		for id := range stockControl {
 			control[id] = "INVENTORY"
 		}
+		assetControl, err := s.assetControlAccounts(ctx, p.TenantID, propertyID)
+		if err != nil {
+			return err
+		}
+		for id := range assetControl {
+			control[id] = "FIXED_ASSETS"
+		}
 		var lineErrs []apperr.FieldError
 		for i, l := range in.Lines {
 			at := fmt.Sprintf("lines[%d].account_id", i)
@@ -672,7 +681,11 @@ func (s *Service) postManual(ctx context.Context, p auth.Principal, propertyID i
 			case !a.IsActive:
 				lineErrs = append(lineErrs, fieldErr(at, "INACTIVE", "the account is inactive"))
 			case control[a.ID] != "":
-				lineErrs = append(lineErrs, fieldErr(at, "CONTROL_ACCOUNT", "only the day close posts to the "+strings.ToLower(strings.ReplaceAll(control[a.ID], "_", " "))+" account"))
+				who := "the day close"
+				if control[a.ID] == "FIXED_ASSETS" {
+					who = "the fixed assets"
+				}
+				lineErrs = append(lineErrs, fieldErr(at, "CONTROL_ACCOUNT", "only "+who+" posts to the "+strings.ToLower(strings.ReplaceAll(control[a.ID], "_", " "))+" account"))
 			}
 		}
 		depts := make([]*int64, len(in.Lines)) // what each line is posted with: the department it names or the default of its account

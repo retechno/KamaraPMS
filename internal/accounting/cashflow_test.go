@@ -9,7 +9,7 @@ import (
 // books of 30 Sep 2026, worked out by hand:
 //
 //	sale on credit 1,000,000; payroll paid 200,000; 300,000 of the receivable collected; equipment bought for 5,000,000;
-//	a bank loan of 8,000,000 and capital of 2,000,000 received; depreciation of 100,000 (accumulated depreciation, 1590).
+//	a bank loan of 8,000,000 and capital of 2,000,000 received; depreciation of 100,000 (accumulated depreciation, 1592).
 //
 // net income 700,000; cash: front desk -4,900,000, bank +10,000,000, so the cash grew by 5,100,000.
 func cashFlowBooks(t *testing.T) *hotel {
@@ -20,7 +20,7 @@ func cashFlowBooks(t *testing.T) *hotel {
 	h.manual(t, "2026-09-30", "1530", "1110", "5000000", "equipment")
 	h.manual(t, "2026-09-30", "1130", "2610", "8000000", "loan")
 	h.manual(t, "2026-09-30", "1130", "3100", "2000000", "capital")
-	h.manual(t, "2026-09-30", "7520", "1590", "100000", "depreciation")
+	h.manual(t, "2026-09-30", "7520", "1592", "100000", "depreciation")
 	return h
 }
 

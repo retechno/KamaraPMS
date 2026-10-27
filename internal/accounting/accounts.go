@@ -44,6 +44,7 @@ type Service struct {
 	iam   *iam.Service
 	depts *departments.Service
 	stock StockSource
+	asset AssetSource
 }
 
 // NewService wires the service.
@@ -80,6 +81,28 @@ func (s *Service) stockControlAccounts(ctx context.Context, tenantID, propertyID
 		return out, nil
 	}
 	ids, err := s.stock.ControlAccountIDs(ctx, tenantID, propertyID)
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, err
+}
+
+// AssetSource is what the fixed asset register gives the accounting (internal/assets through an adapter in internal/app): the accounts that only the register may post to, the accumulated
+// depreciation accounts of its categories (docs/architecture/37-fixed-assets.md F5). The cost accounts stay open to a bill line and to a manual journal.
+type AssetSource interface {
+	ControlAccountIDs(ctx context.Context, tenantID, propertyID int64) ([]int64, error)
+}
+
+// SetAssetSource wires the fixed asset register; without it no account is the register's own.
+func (s *Service) SetAssetSource(src AssetSource) { s.asset = src }
+
+// assetControlAccounts are the accumulated depreciation accounts that a manual journal or a bill line may not post to.
+func (s *Service) assetControlAccounts(ctx context.Context, tenantID, propertyID int64) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	if s.asset == nil {
+		return out, nil
+	}
+	ids, err := s.asset.ControlAccountIDs(ctx, tenantID, propertyID)
 	for _, id := range ids {
 		out[id] = true
 	}
@@ -140,6 +163,9 @@ func (s *Service) SeedProperty(ctx context.Context, in tenancy.PropertyCreated) 
 		return err
 	}
 	if err := s.q(ctx).SeedBanquetAccounts(ctx, accountingdb.SeedBanquetAccountsParams{TenantID: in.TenantID, PropertyID: in.PropertyID}); err != nil {
+		return err
+	}
+	if err := s.q(ctx).SeedFixedAssets(ctx, accountingdb.SeedFixedAssetsParams{TenantID: in.TenantID, PropertyID: in.PropertyID, DataLanguage: in.DataLanguage}); err != nil {
 		return err
 	}
 	bd := in.BusinessDate

@@ -12091,6 +12091,379 @@ export interface paths {
         patch: operations["updateBanquetPolicyTemplate"];
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/assets/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The settings of the asset register (any asset permission) */
+        get: operations["getAssetSettings"];
+        /** Change the settings (asset.setup); the start of the register is fixed once an asset exists (REGISTER_FROM_LOCKED) */
+        put: operations["updateAssetSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/fiscal-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The groups of the income tax law with their rates (any asset permission) */
+        get: operations["listAssetFiscalGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/fiscal-groups/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                code: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Correct the rates of a group when the law changes (asset.setup) */
+        put: operations["updateAssetFiscalGroup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The categories of assets with their accounts and the number of assets (any asset permission, or payables) */
+        get: operations["listAssetCategories"];
+        put?: never;
+        /** Add a category (asset.setup) */
+        post: operations["createAssetCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a category (asset.setup); with assets, its kind and accounts do not change (CATEGORY_IN_USE) */
+        patch: operations["updateAssetCategory"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The places where assets stand (any asset permission) */
+        get: operations["listAssetLocations"];
+        put?: never;
+        /** Add a free area (asset.manage) */
+        post: operations["createAssetLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/locations/ensure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The location of a hotel room, a banquet room or a warehouse, made on first use (asset.manage) */
+        post: operations["ensureAssetLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/locations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename a location or switch it off (asset.manage) */
+        patch: operations["updateAssetLocation"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Assets for a picker: number, name and place, no value (any asset permission, or maintenance.report) */
+        get: operations["lookupAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The accounts a category may use (asset.setup) */
+        get: operations["listAssetAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/setup-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The register against itself and against the general ledger (any asset permission) */
+        get: operations["getAssetSetupCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/rebuild-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restate the value of every active asset from its ledger (asset.setup) */
+        post: operations["rebuildAssetState"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/opening/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The imports of opening balances made, newest first (any asset permission) */
+        get: operations["listAssetOpeningImports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/opening/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bring old assets into the register from a file or rows (asset.setup); a dry run reports what the real run would do and changes nothing
+         * @description `Idempotency-Key` is required unless `dry_run` is true. With errors a dry run answers 200 with `valid` false; a real run answers 422 `OPENING_ROW_INVALID`, or 409 `OPENING_GL_MISMATCH` in the mode REGISTER_ONLY when the sums by category differ from the ledger.
+         */
+        post: operations["importAssetOpening"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/opening/single": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add one existing asset (asset.setup): the form of the same import */
+        post: operations["importAssetOpeningSingle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The register of assets with the summary of the filter (any asset permission); `format=csv` downloads it */
+        get: operations["listAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/labels.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The QR labels of assets or of places as a PDF (any asset permission); the QR holds the code only (`FA:` or `FL:`) */
+        get: operations["getAssetLabelsPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** An asset with its ledger (any asset permission) */
+        get: operations["getAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the data of an asset that is not money (asset.manage) */
+        patch: operations["updateAsset"];
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an asset that the register has not depreciated (asset.manage); ASSET_HAS_DEPRECIATION otherwise */
+        post: operations["cancelAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -24436,6 +24809,436 @@ export interface components {
              * @enum {string}
              */
             posting_mode?: "AUTO" | "MANUAL" | "";
+        };
+        AssetSettings: {
+            /**
+             * Format: date
+             * @description The first month the register depreciates (the first of a month); null until the opening balances or the first asset.
+             */
+            register_from: string | null;
+            capitalization_threshold: string;
+            /** @enum {string} */
+            start_rule: "IN_SERVICE_MONTH" | "NEXT_MONTH";
+            /** @enum {string} */
+            oe_policy: "EXPENSE" | "BATCH";
+            oe_default_months: number;
+            /** Format: date */
+            oe_policy_changed_on: string | null;
+            tax_year_start_month: number | null;
+            started: boolean;
+            version: number;
+        };
+        AssetSettingsInput: {
+            /** Format: date */
+            register_from?: string | null;
+            capitalization_threshold: string;
+            /** @enum {string} */
+            start_rule: "IN_SERVICE_MONTH" | "NEXT_MONTH";
+            /** @enum {string} */
+            oe_policy: "EXPENSE" | "BATCH";
+            oe_default_months?: number;
+            tax_year_start_month?: number | null;
+            version: number;
+        };
+        AssetFiscalGroup: {
+            code: string;
+            life_years: number;
+            /** @description Percent a year. */
+            sl_rate: string;
+            db_rate: string | null;
+        };
+        AssetFiscalGroupInput: {
+            life_years: number;
+            sl_rate: string;
+            db_rate?: string | null;
+        };
+        AssetCategory: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            kind: "LAND" | "BUILDING" | "FFE" | "OE" | "VEHICLE" | "IT" | "CIP" | "LICENSE" | "OTHER";
+            /** Format: int64 */
+            cost_account_id: number;
+            cost_account_code: string;
+            cost_account_name: string;
+            /** Format: int64 */
+            accumulated_account_id?: number | null;
+            accumulated_account_code?: string | null;
+            accumulated_account_name?: string | null;
+            /** Format: int64 */
+            expense_account_id?: number | null;
+            expense_account_code?: string | null;
+            expense_account_name?: string | null;
+            /** Format: int64 */
+            department_id?: number | null;
+            department_code?: string | null;
+            department_name?: string | null;
+            /** @enum {string|null} */
+            method?: "SL" | "DB" | null;
+            life_months?: number | null;
+            residual_pct: string;
+            db_factor?: string | null;
+            fiscal_group: string;
+            fiscal_method?: string | null;
+            is_depreciable: boolean;
+            is_active: boolean;
+            sort_order: number;
+            asset_count: number;
+            version: number;
+        };
+        AssetCategoryInput: {
+            code: string;
+            name: string;
+            /** @enum {string} */
+            kind: "LAND" | "BUILDING" | "FFE" | "OE" | "VEHICLE" | "IT" | "CIP" | "LICENSE" | "OTHER";
+            /** Format: int64 */
+            cost_account_id: number;
+            /** Format: int64 */
+            accumulated_account_id?: number | null;
+            /** Format: int64 */
+            expense_account_id?: number | null;
+            /** Format: int64 */
+            department_id?: number | null;
+            /** @enum {string|null} */
+            method?: "SL" | "DB" | null;
+            life_months?: number | null;
+            residual_pct?: string;
+            db_factor?: string | null;
+            fiscal_group: string;
+            fiscal_method?: string | null;
+            is_active?: boolean | null;
+            sort_order?: number;
+            /** @description The version read; needed on a change. */
+            version?: number;
+        };
+        AssetLocation: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            kind: "ROOM" | "BANQUET_ROOM" | "WAREHOUSE" | "AREA";
+            /** Format: int64 */
+            room_id?: number | null;
+            /** Format: int64 */
+            banquet_room_id?: number | null;
+            /** Format: int64 */
+            warehouse_id?: number | null;
+            /** @description The code of the QR label of the place (FL:...). */
+            label_code: string;
+            is_active: boolean;
+            asset_count: number;
+            reference_label?: string | null;
+        };
+        AssetLocationInput: {
+            code: string;
+            name: string;
+        };
+        AssetLocationPatch: {
+            name?: string;
+            is_active?: boolean | null;
+        };
+        AssetEnsureLocationInput: {
+            /** @enum {string} */
+            kind: "ROOM" | "BANQUET_ROOM" | "WAREHOUSE";
+            /** Format: int64 */
+            ref_id: number;
+        };
+        AssetLookup: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            name: string;
+            location_name?: string | null;
+        };
+        AssetAccountOption: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            account_type: string;
+            statement_group?: string;
+        };
+        AssetSetupIssue: {
+            code: string;
+            /** @enum {string} */
+            severity: "ERROR" | "WARNING";
+            message: string;
+            context?: {
+                [key: string]: unknown;
+            };
+        };
+        AssetReconciliation: {
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            cost_account_code: string;
+            register_cost: string;
+            ledger_cost: string;
+            cost_difference: string;
+            accumulated_account_code?: string | null;
+            register_accum: string;
+            ledger_accum: string;
+            accum_difference: string;
+        };
+        AssetSetupCheck: {
+            issues: components["schemas"]["AssetSetupIssue"][];
+            reconciliation: components["schemas"]["AssetReconciliation"][];
+            /** Format: date */
+            as_of: string;
+        };
+        Asset: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            name: string;
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            category_kind: string;
+            /** Format: int64 */
+            location_id?: number | null;
+            location_code?: string | null;
+            location_name?: string | null;
+            /** Format: int64 */
+            department_id?: number | null;
+            department_code?: string | null;
+            department_name?: string | null;
+            /** Format: int64 */
+            supplier_id?: number | null;
+            supplier_name?: string | null;
+            /** @enum {string} */
+            source: "OPENING" | "JOURNAL";
+            /** Format: int64 */
+            opening_import_id?: number | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "DISPOSED" | "CANCELLED";
+            /** Format: date */
+            acquisition_date: string;
+            /** Format: date */
+            in_service_date: string;
+            start_rule: string;
+            /** Format: date */
+            first_dep_month?: string | null;
+            cost: string;
+            residual_value: string;
+            accum_depr: string;
+            carrying_value: string;
+            life_months?: number | null;
+            dep_months_done: number;
+            remaining_months?: number | null;
+            /** Format: date */
+            last_dep_month?: string | null;
+            method?: string | null;
+            db_factor?: string | null;
+            fully_depreciated: boolean;
+            unit_count: number;
+            serial_no?: string | null;
+            /** Format: date */
+            warranty_until?: string | null;
+            notes?: string | null;
+            fiscal_group: string;
+            fiscal_method?: string | null;
+            fiscal_accum_opening?: string | null;
+            fiscal_months_done_opening?: number | null;
+            /** Format: date */
+            fiscal_opening_as_of?: string | null;
+            fiscal_opening_estimated: boolean;
+            version: number;
+        };
+        AssetLedgerEntry: {
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            /** Format: date */
+            event_date: string;
+            /** Format: date */
+            book_month?: string | null;
+            cost_delta: string;
+            accum_delta: string;
+            months_delta: number;
+            /** Format: int64 */
+            journal_id?: number | null;
+            source_type: string;
+            /** Format: int64 */
+            source_id: number;
+            /** Format: int64 */
+            reverses_id?: number | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AssetDetail: components["schemas"]["Asset"] & {
+            opening_import_number?: string | null;
+            ledger: components["schemas"]["AssetLedgerEntry"][];
+        };
+        AssetPage: {
+            data: components["schemas"]["Asset"][];
+            total: number;
+            summary: {
+                count: number;
+                cost: string;
+                accum_depr: string;
+                carrying_value: string;
+            };
+        };
+        AssetPatch: {
+            name: string;
+            /** Format: int64 */
+            location_id?: number | null;
+            /** Format: int64 */
+            department_id?: number | null;
+            /** Format: int64 */
+            supplier_id?: number | null;
+            serial_no?: string | null;
+            /** Format: date */
+            warranty_until?: string | null;
+            notes?: string | null;
+            version: number;
+        };
+        /** @description One old asset. Blank fields follow the category; what the register can compute it computes, with a warning. */
+        AssetOpeningRow: {
+            name: string;
+            /** @description The code of the category. */
+            category: string;
+            /** @description A code of a location, or ROOM:101, BQ:CODE, WH:CODE. */
+            location?: string;
+            department?: string;
+            supplier?: string;
+            /** Format: date */
+            acquisition_date?: string | null;
+            /** Format: date */
+            in_service_date?: string | null;
+            cost: string;
+            residual_value?: string | null;
+            life_months?: number | null;
+            method?: string;
+            accumulated_depreciation?: string | null;
+            months_done?: number | null;
+            unit_count?: number | null;
+            serial_no?: string;
+            /** Format: date */
+            warranty_until?: string | null;
+            start_rule?: string;
+            fiscal_group?: string;
+            fiscal_method?: string;
+            fiscal_accumulated_depreciation?: string | null;
+            fiscal_months_done?: number | null;
+        };
+        AssetOpeningRequest: {
+            /**
+             * Format: date
+             * @description The month end the accumulated depreciation is as at.
+             */
+            as_of: string;
+            /** Format: date */
+            journal_date?: string | null;
+            /** @description True (the default): the mode WITH_JOURNAL. False: REGISTER_ONLY, the ledger already holds the balances. */
+            post_journal?: boolean | null;
+            dry_run?: boolean;
+            /** @description The file as text (UTF-8, comma or semicolon). Either `csv` or `rows`. */
+            csv?: string;
+            rows?: components["schemas"]["AssetOpeningRow"][];
+        };
+        AssetOpeningSingleRequest: {
+            /** Format: date */
+            as_of: string;
+            /** Format: date */
+            journal_date?: string | null;
+            post_journal?: boolean | null;
+            dry_run?: boolean;
+            row: components["schemas"]["AssetOpeningRow"];
+        };
+        AssetOpeningFinding: {
+            /** @description 0 for the import as a whole. */
+            row_no: number;
+            field?: string;
+            code: string;
+            /** @description English text for logs and API clients; the screen words the finding by `code`, `field` and `params`. */
+            message: string;
+            /** @description The figures the finding is made of (max, decimals, month, number). */
+            params?: {
+                [key: string]: string;
+            };
+        };
+        AssetOpeningRowResult: {
+            row_no: number;
+            name: string;
+            category_code: string;
+            cost: string;
+            accum: string;
+            months_done: number;
+            fiscal_accum?: string | null;
+            fully_depreciated: boolean;
+            /** Format: int64 */
+            asset_id?: number | null;
+            asset_number?: string | null;
+            warnings: components["schemas"]["AssetOpeningFinding"][];
+            errors: components["schemas"]["AssetOpeningFinding"][];
+        };
+        AssetOpeningResult: {
+            dry_run: boolean;
+            valid: boolean;
+            replayed: boolean;
+            /** @enum {string} */
+            mode: "WITH_JOURNAL" | "REGISTER_ONLY";
+            /** Format: date */
+            as_of: string;
+            /** Format: date */
+            journal_date?: string | null;
+            /** Format: date */
+            register_from?: string | null;
+            /** Format: int64 */
+            import_id?: number | null;
+            number?: string | null;
+            /** Format: int64 */
+            journal_id?: number | null;
+            journal_number?: string | null;
+            rows: components["schemas"]["AssetOpeningRowResult"][];
+            totals: {
+                category_code: string;
+                category_name: string;
+                count: number;
+                cost: string;
+                accum: string;
+                net: string;
+            }[];
+            total_cost: string;
+            total_accum: string;
+            net_to_equity: string;
+            journal_preview: {
+                account_code: string;
+                account_name: string;
+                debit: string;
+                credit: string;
+            }[];
+            gl_check: {
+                category_code: string;
+                cost_account_code: string;
+                register_cost: string;
+                ledger_cost: string;
+                cost_difference: string;
+                accumulated_account_code?: string | null;
+                register_accum: string;
+                ledger_accum: string;
+                accum_difference: string;
+            }[];
+            errors: components["schemas"]["AssetOpeningFinding"][];
+            warnings: components["schemas"]["AssetOpeningFinding"][];
+        };
+        AssetOpeningImport: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** Format: date */
+            as_of: string;
+            mode: string;
+            journal_number?: string | null;
+            asset_count: number;
+            total_cost: string;
+            total_accum: string;
         };
     };
     responses: {
@@ -44232,6 +45035,706 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BanquetPolicyTemplate"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetSettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateAssetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetSettings"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listAssetFiscalGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssetFiscalGroup"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateAssetFiscalGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetFiscalGroupInput"];
+            };
+        };
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetFiscalGroup"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listAssetCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The categories. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssetCategory"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createAssetCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetCategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The category. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetCategory"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateAssetCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetCategoryInput"];
+            };
+        };
+        responses: {
+            /** @description The category. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetCategory"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listAssetLocations: {
+        parameters: {
+            query?: {
+                kind?: "ROOM" | "BANQUET_ROOM" | "WAREHOUSE" | "AREA";
+                active?: boolean;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The locations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssetLocation"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createAssetLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetLocationInput"];
+            };
+        };
+        responses: {
+            /** @description The location. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetLocation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    ensureAssetLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetEnsureLocationInput"];
+            };
+        };
+        responses: {
+            /** @description The location. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetLocation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    updateAssetLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetLocationPatch"];
+            };
+        };
+        responses: {
+            /** @description The location. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetLocation"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    lookupAssets: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 20 assets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssetLookup"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAssetAccounts: {
+        parameters: {
+            query?: {
+                type?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssetAccountOption"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getAssetSetupCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The findings and the reconciliation by category. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetSetupCheck"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    rebuildAssetState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many assets were checked and repaired. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        checked: number;
+                        repaired: number;
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAssetOpeningImports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The imports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AssetOpeningImport"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    importAssetOpening: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetOpeningRequest"];
+            };
+        };
+        responses: {
+            /** @description A dry run, or the answer of an earlier request with the same key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOpeningResult"];
+                };
+            };
+            /** @description The import. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOpeningResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    importAssetOpeningSingle: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetOpeningSingleRequest"];
+            };
+        };
+        responses: {
+            /** @description A dry run, or the answer of an earlier request with the same key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOpeningResult"];
+                };
+            };
+            /** @description The import. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOpeningResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listAssets: {
+        parameters: {
+            query?: {
+                category_id?: number;
+                location_id?: number;
+                department_id?: number;
+                status?: "ACTIVE" | "DISPOSED" | "CANCELLED";
+                /** @description Number, name or serial number */
+                q?: string;
+                warranty_before?: string;
+                fully_depreciated?: boolean;
+                format?: "json" | "csv";
+                limit?: number;
+                offset?: number;
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the register, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetPage"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetLabelsPdf: {
+        parameters: {
+            query?: {
+                kind?: "asset" | "place";
+                /** @description Ids of assets (or of places), separated by commas; blank is every active one */
+                ids?: string;
+                location_id?: number;
+                category_id?: number;
+                layout?: "A4_24" | "ROLL_50x30";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The asset. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetPatch"];
+            };
+        };
+        responses: {
+            /** @description The asset. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    cancelAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The asset. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
                 };
             };
             403: components["responses"]["Problem"];

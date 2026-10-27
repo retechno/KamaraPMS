@@ -64,6 +64,29 @@ export async function downloadExport(path: string, body: unknown): Promise<{ inv
   return { invoices: res.headers.get('X-Export-Invoices'), sha256: res.headers.get('X-Export-Sha256') }
 }
 
+/** Downloads a file that a GET produces (a CSV of a list): saved under the name the server gives. */
+export async function downloadFile(path: string, accept = 'text/csv'): Promise<void> {
+  const res = await authFetch(new Request(new URL(path, window.location.origin).href, { headers: { Accept: accept } }))
+  if (!res.ok) {
+    let problem: unknown
+    try {
+      problem = await res.json()
+    } catch {
+      problem = undefined
+    }
+    throw toApiError(problem, res.status)
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'download.csv'
+  const url = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: accept }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 60 * 1000)
+}
+
 /** The path of a document of a property. */
 export const documentPath = {
   /** The invoice or bill of a folio: the whole folio, or the lines of one transaction group of it (`group` A to D). */
@@ -96,6 +119,13 @@ export const documentPath = {
     if (to) q.set('to', to)
     const qs = q.toString()
     return `/api/v1/properties/${propertyId}/companies/${companyId}/statement.pdf${qs ? `?${qs}` : ''}`
+  },
+  /** The QR labels of assets or places (docs/architecture/37-fixed-assets.md 4.13). The language is added by `openPdf`. */
+  assetLabels: (propertyId: number, query: Record<string, string | undefined>) => {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(query)) if (v) q.set(k, v)
+    const qs = q.toString()
+    return `/api/v1/properties/${propertyId}/assets/labels.pdf${qs ? `?${qs}` : ''}`
   },
   banquetProposal: (propertyId: number, eventId: number) => `/api/v1/properties/${propertyId}/banquet/events/${eventId}/documents/proposal.pdf`,
   banquetContract: (propertyId: number, eventId: number) => `/api/v1/properties/${propertyId}/banquet/events/${eventId}/documents/contract.pdf`,

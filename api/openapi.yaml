@@ -13888,6 +13888,501 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/settings:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetSettings
+      summary: "The settings of the asset register (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetSettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateAssetSettings
+      summary: "Change the settings (asset.setup); the start of the register is fixed once an asset exists (REGISTER_FROM_LOCKED)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetSettingsInput" }
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetSettings" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/fiscal-groups:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetFiscalGroups
+      summary: "The groups of the income tax law with their rates (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AssetFiscalGroup" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/fiscal-groups/{code}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: code, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: updateAssetFiscalGroup
+      summary: "Correct the rates of a group when the law changes (asset.setup)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetFiscalGroupInput" }
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetFiscalGroup" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/categories:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetCategories
+      summary: "The categories of assets with their accounts and the number of assets (any asset permission, or payables)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AssetCategory" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createAssetCategory
+      summary: "Add a category (asset.setup)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetCategoryInput" }
+      responses:
+        "201":
+          description: The category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetCategory" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateAssetCategory
+      summary: "Change a category (asset.setup); with assets, its kind and accounts do not change (CATEGORY_IN_USE)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetCategoryInput" }
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetCategory" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/locations:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetLocations
+      summary: "The places where assets stand (any asset permission)"
+      tags: [assets]
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [ROOM, BANQUET_ROOM, WAREHOUSE, AREA] } }
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: The locations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AssetLocation" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createAssetLocation
+      summary: "Add a free area (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetLocationInput" }
+      responses:
+        "201":
+          description: The location.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetLocation" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/locations/ensure:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: ensureAssetLocation
+      summary: "The location of a hotel room, a banquet room or a warehouse, made on first use (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetEnsureLocationInput" }
+      responses:
+        "200":
+          description: The location.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetLocation" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/locations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateAssetLocation
+      summary: "Rename a location or switch it off (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetLocationPatch" }
+      responses:
+        "200":
+          description: The location.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetLocation" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/lookup:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: lookupAssets
+      summary: "Assets for a picker: number, name and place, no value (any asset permission, or maintenance.report)"
+      tags: [assets]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Up to 20 assets.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AssetLookup" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/accounts:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetAccounts
+      summary: "The accounts a category may use (asset.setup)"
+      tags: [assets]
+      parameters:
+        - { name: type, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The accounts.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AssetAccountOption" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/setup-check:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetSetupCheck
+      summary: "The register against itself and against the general ledger (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The findings and the reconciliation by category.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetSetupCheck" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/rebuild-state:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: rebuildAssetState
+      summary: "Restate the value of every active asset from its ledger (asset.setup)"
+      tags: [assets]
+      responses:
+        "200":
+          description: How many assets were checked and repaired.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checked, repaired]
+                properties:
+                  checked: { type: integer }
+                  repaired: { type: integer }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/opening/imports:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetOpeningImports
+      summary: "The imports of opening balances made, newest first (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The imports.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AssetOpeningImport" } }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/opening/import:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: importAssetOpening
+      summary: "Bring old assets into the register from a file or rows (asset.setup); a dry run reports what the real run would do and changes nothing"
+      description: "`Idempotency-Key` is required unless `dry_run` is true. With errors a dry run answers 200 with `valid` false; a real run answers 422 `OPENING_ROW_INVALID`, or 409 `OPENING_GL_MISMATCH` in the mode REGISTER_ONLY when the sums by category differ from the ledger."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string } }
+        - { name: dry_run, in: query, schema: { type: boolean } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetOpeningRequest" }
+      responses:
+        "200":
+          description: A dry run, or the answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetOpeningResult" }
+        "201":
+          description: The import.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetOpeningResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/opening/single:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: importAssetOpeningSingle
+      summary: "Add one existing asset (asset.setup): the form of the same import"
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string } }
+        - { name: dry_run, in: query, schema: { type: boolean } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetOpeningSingleRequest" }
+      responses:
+        "200":
+          description: A dry run, or the answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetOpeningResult" }
+        "201":
+          description: The import.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetOpeningResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssets
+      summary: "The register of assets with the summary of the filter (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: category_id, in: query, schema: { type: integer } }
+        - { name: location_id, in: query, schema: { type: integer } }
+        - { name: department_id, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string, enum: [ACTIVE, DISPOSED, CANCELLED] } }
+        - { name: q, in: query, description: "Number, name or serial number", schema: { type: string } }
+        - { name: warranty_before, in: query, schema: { type: string, format: date } }
+        - { name: fully_depreciated, in: query, schema: { type: boolean } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: A page of the register, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetPage" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/labels.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetLabelsPdf
+      summary: "The QR labels of assets or of places as a PDF (any asset permission); the QR holds the code only (`FA:` or `FL:`)"
+      tags: [assets]
+      parameters:
+        - { name: kind, in: query, schema: { type: string, enum: [asset, place], default: asset } }
+        - { name: ids, in: query, description: "Ids of assets (or of places), separated by commas; blank is every active one", schema: { type: string } }
+        - { name: location_id, in: query, schema: { type: integer } }
+        - { name: category_id, in: query, schema: { type: integer } }
+        - { name: layout, in: query, schema: { type: string, enum: [A4_24, ROLL_50x30], default: A4_24 } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The PDF.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getAsset
+      summary: "An asset with its ledger (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The asset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateAsset
+      summary: "Change the data of an asset that is not money (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetPatch" }
+      responses:
+        "200":
+          description: The asset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelAsset
+      summary: "Cancel an asset that the register has not depreciated (asset.manage); ASSET_HAS_DEPRECIATION otherwise"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 300 }
+      responses:
+        "200":
+          description: The asset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -25887,3 +26382,409 @@ components:
       type: object
       properties:
         posting_mode: { type: string, enum: [AUTO, MANUAL, ""], description: "Empty goes back to the setting of the property." }
+    AssetSettings:
+      type: object
+      required: [register_from, capitalization_threshold, start_rule, oe_policy, oe_default_months, oe_policy_changed_on, tax_year_start_month, started, version]
+      properties:
+        register_from: { type: [string, "null"], format: date, description: "The first month the register depreciates (the first of a month); null until the opening balances or the first asset." }
+        capitalization_threshold: { type: string }
+        start_rule: { type: string, enum: [IN_SERVICE_MONTH, NEXT_MONTH] }
+        oe_policy: { type: string, enum: [EXPENSE, BATCH] }
+        oe_default_months: { type: integer }
+        oe_policy_changed_on: { type: [string, "null"], format: date }
+        tax_year_start_month: { type: [integer, "null"] }
+        started: { type: boolean }
+        version: { type: integer }
+    AssetSettingsInput:
+      type: object
+      required: [capitalization_threshold, start_rule, oe_policy, version]
+      properties:
+        register_from: { type: [string, "null"], format: date }
+        capitalization_threshold: { type: string }
+        start_rule: { type: string, enum: [IN_SERVICE_MONTH, NEXT_MONTH] }
+        oe_policy: { type: string, enum: [EXPENSE, BATCH] }
+        oe_default_months: { type: integer }
+        tax_year_start_month: { type: [integer, "null"] }
+        version: { type: integer }
+    AssetFiscalGroup:
+      type: object
+      required: [code, life_years, sl_rate, db_rate]
+      properties:
+        code: { type: string }
+        life_years: { type: integer }
+        sl_rate: { type: string, description: "Percent a year." }
+        db_rate: { type: [string, "null"] }
+    AssetFiscalGroupInput:
+      type: object
+      required: [life_years, sl_rate]
+      properties:
+        life_years: { type: integer }
+        sl_rate: { type: string }
+        db_rate: { type: [string, "null"] }
+    AssetCategory:
+      type: object
+      required: [id, code, name, kind, cost_account_id, cost_account_code, cost_account_name, residual_pct, fiscal_group, is_depreciable, is_active, sort_order, asset_count, version]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [LAND, BUILDING, FFE, OE, VEHICLE, IT, CIP, LICENSE, OTHER] }
+        cost_account_id: { type: integer, format: int64 }
+        cost_account_code: { type: string }
+        cost_account_name: { type: string }
+        accumulated_account_id: { type: [integer, "null"], format: int64 }
+        accumulated_account_code: { type: [string, "null"] }
+        accumulated_account_name: { type: [string, "null"] }
+        expense_account_id: { type: [integer, "null"], format: int64 }
+        expense_account_code: { type: [string, "null"] }
+        expense_account_name: { type: [string, "null"] }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: [string, "null"] }
+        department_name: { type: [string, "null"] }
+        method: { type: [string, "null"], enum: [SL, DB, null] }
+        life_months: { type: [integer, "null"] }
+        residual_pct: { type: string }
+        db_factor: { type: [string, "null"] }
+        fiscal_group: { type: string }
+        fiscal_method: { type: [string, "null"] }
+        is_depreciable: { type: boolean }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+        asset_count: { type: integer }
+        version: { type: integer }
+    AssetCategoryInput:
+      type: object
+      required: [code, name, kind, cost_account_id, fiscal_group]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [LAND, BUILDING, FFE, OE, VEHICLE, IT, CIP, LICENSE, OTHER] }
+        cost_account_id: { type: integer, format: int64 }
+        accumulated_account_id: { type: [integer, "null"], format: int64 }
+        expense_account_id: { type: [integer, "null"], format: int64 }
+        department_id: { type: [integer, "null"], format: int64 }
+        method: { type: [string, "null"], enum: [SL, DB, null] }
+        life_months: { type: [integer, "null"] }
+        residual_pct: { type: string }
+        db_factor: { type: [string, "null"] }
+        fiscal_group: { type: string }
+        fiscal_method: { type: [string, "null"] }
+        is_active: { type: [boolean, "null"] }
+        sort_order: { type: integer }
+        version: { type: integer, description: "The version read; needed on a change." }
+    AssetLocation:
+      type: object
+      required: [id, code, name, kind, label_code, is_active, asset_count]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [ROOM, BANQUET_ROOM, WAREHOUSE, AREA] }
+        room_id: { type: [integer, "null"], format: int64 }
+        banquet_room_id: { type: [integer, "null"], format: int64 }
+        warehouse_id: { type: [integer, "null"], format: int64 }
+        label_code: { type: string, description: "The code of the QR label of the place (FL:...)." }
+        is_active: { type: boolean }
+        asset_count: { type: integer }
+        reference_label: { type: [string, "null"] }
+    AssetLocationInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+    AssetLocationPatch:
+      type: object
+      properties:
+        name: { type: string }
+        is_active: { type: [boolean, "null"] }
+    AssetEnsureLocationInput:
+      type: object
+      required: [kind, ref_id]
+      properties:
+        kind: { type: string, enum: [ROOM, BANQUET_ROOM, WAREHOUSE] }
+        ref_id: { type: integer, format: int64 }
+    AssetLookup:
+      type: object
+      required: [id, number, name]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        location_name: { type: [string, "null"] }
+    AssetAccountOption:
+      type: object
+      required: [id, code, name, account_type]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        account_type: { type: string }
+        statement_group: { type: string }
+    AssetSetupIssue:
+      type: object
+      required: [code, severity, message]
+      properties:
+        code: { type: string }
+        severity: { type: string, enum: [ERROR, WARNING] }
+        message: { type: string }
+        context: { type: object, additionalProperties: true }
+    AssetReconciliation:
+      type: object
+      required: [category_id, category_code, cost_account_code, register_cost, ledger_cost, cost_difference, register_accum, ledger_accum, accum_difference]
+      properties:
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        cost_account_code: { type: string }
+        register_cost: { type: string }
+        ledger_cost: { type: string }
+        cost_difference: { type: string }
+        accumulated_account_code: { type: [string, "null"] }
+        register_accum: { type: string }
+        ledger_accum: { type: string }
+        accum_difference: { type: string }
+    AssetSetupCheck:
+      type: object
+      required: [issues, reconciliation, as_of]
+      properties:
+        issues: { type: array, items: { $ref: "#/components/schemas/AssetSetupIssue" } }
+        reconciliation: { type: array, items: { $ref: "#/components/schemas/AssetReconciliation" } }
+        as_of: { type: string, format: date }
+    Asset:
+      type: object
+      required: [id, number, name, category_id, category_code, category_name, category_kind, source, status, acquisition_date, in_service_date, start_rule, cost, residual_value, accum_depr, carrying_value, dep_months_done, fully_depreciated, unit_count, fiscal_group, fiscal_opening_estimated, version]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        category_kind: { type: string }
+        location_id: { type: [integer, "null"], format: int64 }
+        location_code: { type: [string, "null"] }
+        location_name: { type: [string, "null"] }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: [string, "null"] }
+        department_name: { type: [string, "null"] }
+        supplier_id: { type: [integer, "null"], format: int64 }
+        supplier_name: { type: [string, "null"] }
+        source: { type: string, enum: [OPENING, JOURNAL] }
+        opening_import_id: { type: [integer, "null"], format: int64 }
+        status: { type: string, enum: [ACTIVE, DISPOSED, CANCELLED] }
+        acquisition_date: { type: string, format: date }
+        in_service_date: { type: string, format: date }
+        start_rule: { type: string }
+        first_dep_month: { type: [string, "null"], format: date }
+        cost: { type: string }
+        residual_value: { type: string }
+        accum_depr: { type: string }
+        carrying_value: { type: string }
+        life_months: { type: [integer, "null"] }
+        dep_months_done: { type: integer }
+        remaining_months: { type: [integer, "null"] }
+        last_dep_month: { type: [string, "null"], format: date }
+        method: { type: [string, "null"] }
+        db_factor: { type: [string, "null"] }
+        fully_depreciated: { type: boolean }
+        unit_count: { type: integer }
+        serial_no: { type: [string, "null"] }
+        warranty_until: { type: [string, "null"], format: date }
+        notes: { type: [string, "null"] }
+        fiscal_group: { type: string }
+        fiscal_method: { type: [string, "null"] }
+        fiscal_accum_opening: { type: [string, "null"] }
+        fiscal_months_done_opening: { type: [integer, "null"] }
+        fiscal_opening_as_of: { type: [string, "null"], format: date }
+        fiscal_opening_estimated: { type: boolean }
+        version: { type: integer }
+    AssetLedgerEntry:
+      type: object
+      required: [id, kind, event_date, cost_delta, accum_delta, months_delta, source_type, source_id, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string }
+        event_date: { type: string, format: date }
+        book_month: { type: [string, "null"], format: date }
+        cost_delta: { type: string }
+        accum_delta: { type: string }
+        months_delta: { type: integer }
+        journal_id: { type: [integer, "null"], format: int64 }
+        source_type: { type: string }
+        source_id: { type: integer, format: int64 }
+        reverses_id: { type: [integer, "null"], format: int64 }
+        created_at: { type: string, format: date-time }
+    AssetDetail:
+      allOf:
+        - $ref: "#/components/schemas/Asset"
+        - type: object
+          required: [ledger]
+          properties:
+            opening_import_number: { type: [string, "null"] }
+            ledger: { type: array, items: { $ref: "#/components/schemas/AssetLedgerEntry" } }
+    AssetPage:
+      type: object
+      required: [data, total, summary]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Asset" } }
+        total: { type: integer }
+        summary:
+          type: object
+          required: [count, cost, accum_depr, carrying_value]
+          properties:
+            count: { type: integer }
+            cost: { type: string }
+            accum_depr: { type: string }
+            carrying_value: { type: string }
+    AssetPatch:
+      type: object
+      required: [name, version]
+      properties:
+        name: { type: string }
+        location_id: { type: [integer, "null"], format: int64 }
+        department_id: { type: [integer, "null"], format: int64 }
+        supplier_id: { type: [integer, "null"], format: int64 }
+        serial_no: { type: [string, "null"] }
+        warranty_until: { type: [string, "null"], format: date }
+        notes: { type: [string, "null"] }
+        version: { type: integer }
+    AssetOpeningRow:
+      type: object
+      required: [name, category, cost]
+      description: "One old asset. Blank fields follow the category; what the register can compute it computes, with a warning."
+      properties:
+        name: { type: string }
+        category: { type: string, description: "The code of the category." }
+        location: { type: string, description: "A code of a location, or ROOM:101, BQ:CODE, WH:CODE." }
+        department: { type: string }
+        supplier: { type: string }
+        acquisition_date: { type: [string, "null"], format: date }
+        in_service_date: { type: [string, "null"], format: date }
+        cost: { type: string }
+        residual_value: { type: [string, "null"] }
+        life_months: { type: [integer, "null"] }
+        method: { type: string }
+        accumulated_depreciation: { type: [string, "null"] }
+        months_done: { type: [integer, "null"] }
+        unit_count: { type: [integer, "null"] }
+        serial_no: { type: string }
+        warranty_until: { type: [string, "null"], format: date }
+        start_rule: { type: string }
+        fiscal_group: { type: string }
+        fiscal_method: { type: string }
+        fiscal_accumulated_depreciation: { type: [string, "null"] }
+        fiscal_months_done: { type: [integer, "null"] }
+    AssetOpeningRequest:
+      type: object
+      required: [as_of]
+      properties:
+        as_of: { type: string, format: date, description: "The month end the accumulated depreciation is as at." }
+        journal_date: { type: [string, "null"], format: date }
+        post_journal: { type: [boolean, "null"], description: "True (the default): the mode WITH_JOURNAL. False: REGISTER_ONLY, the ledger already holds the balances." }
+        dry_run: { type: boolean }
+        csv: { type: string, description: "The file as text (UTF-8, comma or semicolon). Either `csv` or `rows`." }
+        rows: { type: array, items: { $ref: "#/components/schemas/AssetOpeningRow" } }
+    AssetOpeningSingleRequest:
+      type: object
+      required: [as_of, row]
+      properties:
+        as_of: { type: string, format: date }
+        journal_date: { type: [string, "null"], format: date }
+        post_journal: { type: [boolean, "null"] }
+        dry_run: { type: boolean }
+        row: { $ref: "#/components/schemas/AssetOpeningRow" }
+    AssetOpeningFinding:
+      type: object
+      required: [row_no, code, message]
+      properties:
+        row_no: { type: integer, description: "0 for the import as a whole." }
+        field: { type: string }
+        code: { type: string }
+        message: { type: string, description: "English text for logs and API clients; the screen words the finding by `code`, `field` and `params`." }
+        params: { type: object, additionalProperties: { type: string }, description: "The figures the finding is made of (max, decimals, month, number)." }
+    AssetOpeningRowResult:
+      type: object
+      required: [row_no, name, category_code, cost, accum, months_done, fully_depreciated, warnings, errors]
+      properties:
+        row_no: { type: integer }
+        name: { type: string }
+        category_code: { type: string }
+        cost: { type: string }
+        accum: { type: string }
+        months_done: { type: integer }
+        fiscal_accum: { type: [string, "null"] }
+        fully_depreciated: { type: boolean }
+        asset_id: { type: [integer, "null"], format: int64 }
+        asset_number: { type: [string, "null"] }
+        warnings: { type: array, items: { $ref: "#/components/schemas/AssetOpeningFinding" } }
+        errors: { type: array, items: { $ref: "#/components/schemas/AssetOpeningFinding" } }
+    AssetOpeningResult:
+      type: object
+      required: [dry_run, valid, replayed, mode, as_of, rows, totals, total_cost, total_accum, net_to_equity, journal_preview, gl_check, errors, warnings]
+      properties:
+        dry_run: { type: boolean }
+        valid: { type: boolean }
+        replayed: { type: boolean }
+        mode: { type: string, enum: [WITH_JOURNAL, REGISTER_ONLY] }
+        as_of: { type: string, format: date }
+        journal_date: { type: [string, "null"], format: date }
+        register_from: { type: [string, "null"], format: date }
+        import_id: { type: [integer, "null"], format: int64 }
+        number: { type: [string, "null"] }
+        journal_id: { type: [integer, "null"], format: int64 }
+        journal_number: { type: [string, "null"] }
+        rows: { type: array, items: { $ref: "#/components/schemas/AssetOpeningRowResult" } }
+        totals:
+          type: array
+          items:
+            type: object
+            required: [category_code, category_name, count, cost, accum, net]
+            properties:
+              category_code: { type: string }
+              category_name: { type: string }
+              count: { type: integer }
+              cost: { type: string }
+              accum: { type: string }
+              net: { type: string }
+        total_cost: { type: string }
+        total_accum: { type: string }
+        net_to_equity: { type: string }
+        journal_preview:
+          type: array
+          items:
+            type: object
+            required: [account_code, account_name, debit, credit]
+            properties:
+              account_code: { type: string }
+              account_name: { type: string }
+              debit: { type: string }
+              credit: { type: string }
+        gl_check:
+          type: array
+          items:
+            type: object
+            required: [category_code, cost_account_code, register_cost, ledger_cost, cost_difference, register_accum, ledger_accum, accum_difference]
+            properties:
+              category_code: { type: string }
+              cost_account_code: { type: string }
+              register_cost: { type: string }
+              ledger_cost: { type: string }
+              cost_difference: { type: string }
+              accumulated_account_code: { type: [string, "null"] }
+              register_accum: { type: string }
+              ledger_accum: { type: string }
+              accum_difference: { type: string }
+        errors: { type: array, items: { $ref: "#/components/schemas/AssetOpeningFinding" } }
+        warnings: { type: array, items: { $ref: "#/components/schemas/AssetOpeningFinding" } }
+    AssetOpeningImport:
+      type: object
+      required: [id, number, as_of, mode, asset_count, total_cost, total_accum]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        as_of: { type: string, format: date }
+        mode: { type: string }
+        journal_number: { type: [string, "null"] }
+        asset_count: { type: integer }
+        total_cost: { type: string }
+        total_accum: { type: string }

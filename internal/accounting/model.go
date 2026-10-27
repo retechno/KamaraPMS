@@ -57,7 +57,9 @@ const (
 	KeyFolioTransfer    = "FOLIO_TRANSFER"
 	KeyComp             = "COMP"
 	// The keys of the stock (docs/architecture/35-inventory.md 3.1, F14). KeyInventory is not a map key: it names the right of the inventory path to post to its control accounts.
-	KeyInventory        = "INVENTORY"
+	KeyInventory = "INVENTORY"
+	// KeyFixedAssets is not a map key either: it names the right of the fixed asset register to post to the accumulated depreciation accounts of its categories (docs/architecture/37-fixed-assets.md F5).
+	KeyFixedAssets      = "FIXED_ASSETS"
 	KeyInvGRNI          = "INV_GRNI"
 	KeyInvPPV           = "INV_PPV"
 	KeyInvWaste         = "INV_WASTE"
