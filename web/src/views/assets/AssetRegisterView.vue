@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Asset, AssetCategory, AssetDepreciationOverview, AssetLocation, AssetPage, AssetWaitingPage } from '@/api/types'
+import type { Asset, AssetCategory, AssetDepreciationOverview, AssetDisposalRequest, AssetLocation, AssetPage, AssetWaitingPage } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
@@ -85,10 +85,12 @@ async function loadMasters(): Promise<void> {
 
 // the waiting list (its count) and the depreciation (the month to run) beside the register; a failure here never hides the register
 const waiting = ref(0)
+const pendingDisposals = ref(0)
 const overview = ref<AssetDepreciationOverview | null>(null)
 async function loadSide(): Promise<void> {
   const propertyId = pid.value
   waiting.value = 0
+  pendingDisposals.value = 0
   overview.value = null
   if (propertyId === null || !canRead.value) return
   try {
@@ -96,6 +98,12 @@ async function loadSide(): Promise<void> {
     waiting.value = (data as AssetWaitingPage | undefined)?.counts?.waiting ?? 0
   } catch {
     waiting.value = 0
+  }
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/disposal-requests', { params: { path: { propertyId }, query: { status: 'PENDING' } } })
+    pendingDisposals.value = ((data ?? []) as AssetDisposalRequest[]).length
+  } catch {
+    pendingDisposals.value = 0
   }
   if (!canDepreciate.value) return
   try {
@@ -173,6 +181,7 @@ const columns = computed<Column<Asset>[]>(() => [
       <Button variant="outline" :disabled="!canRead" data-testid="export-csv" @click="exportCsv">{{ t('assets.register.csv') }}</Button>
       <Button variant="outline" data-testid="print-labels" @click="printLabels">{{ selected.size ? t('assets.register.printSelected', { n: selected.size }) : t('assets.register.print') }}</Button>
       <Button as-child variant="outline"><RouterLink to="/assets/waiting" data-testid="go-waiting">{{ waiting ? t('assets.register.waitingN', { n: waiting }) : t('assets.register.waiting') }}</RouterLink></Button>
+      <Button as-child variant="outline"><RouterLink to="/assets/disposals" data-testid="go-disposals">{{ pendingDisposals ? t('assets.register.disposalsN', { n: pendingDisposals }) : t('assets.register.disposals') }}</RouterLink></Button>
       <Button v-if="canSetup" as-child variant="outline"><RouterLink to="/assets/opening" data-testid="go-opening">{{ t('assets.register.opening') }}</RouterLink></Button>
     </template>
   </PageHeader>
@@ -221,7 +230,10 @@ const columns = computed<Column<Asset>[]>(() => [
       <template #cell-accum_depr="{ row }"><span class="tabular-nums">{{ noDepreciation(row) ? '–' : formatMoney(row.accum_depr) }}</span></template>
       <template #cell-carrying_value="{ row }"><span class="tabular-nums">{{ formatMoney(row.carrying_value) }}</span></template>
       <template #cell-remaining_months="{ row }"><span :class="row.fully_depreciated || noDepreciation(row) ? 'text-xs text-muted-foreground' : 'tabular-nums'">{{ life(row) }}</span></template>
-      <template #cell-status="{ row }"><Badge :variant="statusVariant(row.status)">{{ t(`assets.status.${row.status}`) }}</Badge></template>
+      <template #cell-status="{ row }">
+        <Badge :variant="statusVariant(row.status)">{{ t(`assets.status.${row.status}`) }}</Badge>
+        <Badge v-if="row.disposal_pending" variant="warning" class="ml-1" :data-testid="`pending-${row.number}`">{{ t('assets.dispose.pendingBadge') }}</Badge>
+      </template>
     </DataTable>
   </template>
 </template>

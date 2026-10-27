@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { AssetCategory, AssetLocation, AssetWaitingLine, AssetWaitingPage } from '@/api/types'
@@ -17,6 +17,7 @@ import { useAssetAccess } from '@/composables/useAssetAccess'
 import { toast } from '@/composables/useToast'
 import { t, te } from '@/i18n'
 import { formatDate, formatMoney } from '@/utils/format'
+import AssetAddValueDialog from './AssetAddValueDialog.vue'
 import AssetMakeDialog from './AssetMakeDialog.vue'
 
 /** The waiting list of "make an asset" (docs/architecture/37-fixed-assets.md 4.2.1, mockup 53): the journal lines that debit a cost account and no asset covers yet. */
@@ -32,6 +33,10 @@ const error = ref<ApiError | null>(null)
 const tab = ref<'waiting' | 'dismissed'>('waiting')
 const filter = ref({ source: '', category_id: 0, q: '' })
 const making = ref<AssetWaitingLine | null>(null)
+const adding = ref<AssetWaitingLine | null>(null)
+/** The asset page sends here with the asset to add value to (`?addTo=`): the dialog opens with it chosen. */
+const route = useRoute()
+const addTo = computed(() => Number(route.query.addTo) || null)
 
 function query(offset: number): Record<string, string | number | boolean> {
   const f = filter.value
@@ -143,6 +148,7 @@ async function restore(r: AssetWaitingLine): Promise<void> {
 
 async function made(): Promise<void> {
   making.value = null
+  adding.value = null
   await load()
 }
 </script>
@@ -191,6 +197,7 @@ async function made(): Promise<void> {
         <div v-if="canManage" class="flex justify-end gap-2">
           <template v-if="!row.dismissed">
             <Button size="sm" :data-testid="`make-${row.line_id}`" @click="making = row">{{ row.category_kind === 'OE' ? t('assets.waiting.makeBatch') : t('assets.waiting.make') }}</Button>
+            <Button v-if="row.category_kind !== 'OE'" size="sm" variant="outline" :data-testid="`add-${row.line_id}`" @click="adding = row">{{ t('assets.waiting.addTo') }}</Button>
             <Button size="sm" variant="outline" :data-testid="`dismiss-${row.line_id}`" @click="openDismiss(row)">{{ t('assets.waiting.notAsset') }}</Button>
           </template>
           <Button v-else size="sm" variant="outline" :data-testid="`restore-${row.line_id}`" @click="restore(row)">{{ t('assets.waiting.restore') }}</Button>
@@ -205,6 +212,8 @@ async function made(): Promise<void> {
   </template>
 
   <AssetMakeDialog v-if="pid !== null" :line="making" :categories="categories" :locations="locations" :threshold="page?.capitalization_threshold ?? '0'" :property-id="pid" @close="making = null" @done="made" />
+
+  <AssetAddValueDialog v-if="pid !== null" :line="adding" :property-id="pid" :preset-asset-id="addTo" @close="adding = null" @done="made" />
 
   <Dialog :open="!!dismissing" @update:open="(v) => { if (!v) dismissing = null }">
     <DialogContent class="max-w-md p-5" data-testid="dismiss-dialog" @interact-outside.prevent>

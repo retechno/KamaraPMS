@@ -279,7 +279,7 @@ func TestAccountMap(t *testing.T) {
 	bank2, err := f.Accounting.CreateAccount(f.admin, f.propID, accounting.AccountInput{Code: "1135", Name: "Bank - USD account", AccountType: "ASSET", StatementGroup: "CASH"})
 	must(t, err)
 	m, err := f.Accounting.SetAccountMap(f.admin, f.propID, []accounting.MapInput{{Key: "BANK_TRANSFER", AccountID: bank2.ID}})
-	if err != nil || len(m) != 25 {
+	if err != nil || len(m) != 26 {
 		t.Fatalf("set: %+v %v", m, err)
 	}
 	for _, e := range m {

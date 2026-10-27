@@ -78,8 +78,10 @@ type DepreciationGroup struct {
 	CategoryName           string          `json:"category_name"`
 	ExpenseAccountID       int64           `json:"expense_account_id"`
 	ExpenseAccountCode     string          `json:"expense_account_code"`
+	ExpenseAccountName     string          `json:"expense_account_name"`
 	AccumulatedAccountID   int64           `json:"accumulated_account_id"`
 	AccumulatedAccountCode string          `json:"accumulated_account_code"`
+	AccumulatedAccountName string          `json:"accumulated_account_name"`
 	DepartmentID           *int64          `json:"department_id"`
 	DepartmentCode         *string         `json:"department_code"`
 	DepartmentName         *string         `json:"department_name"`
@@ -415,6 +417,13 @@ func (s *Service) groupPlan(ctx context.Context, propertyID int64, po *accountin
 		c, _, _, _, _ := po.AccountInfo(ctx, id)
 		return c
 	}
+	nameOf := func(id int64) string {
+		if po == nil {
+			return ""
+		}
+		_, n, _, _, _ := po.AccountInfo(ctx, id)
+		return n
+	}
 	type gkey struct {
 		cat  int64
 		dept int64
@@ -434,7 +443,8 @@ func (s *Service) groupPlan(ctx context.Context, propertyID int64, po *accountin
 		g := groups[k]
 		if g == nil {
 			g = &DepreciationGroup{CategoryID: a.line.CategoryID, CategoryCode: a.line.CategoryCode, CategoryName: a.line.CategoryName, ExpenseAccountID: a.line.ExpenseAccountID,
-				ExpenseAccountCode: a.line.ExpenseAccountCode, AccumulatedAccountID: a.accumulated, AccumulatedAccountCode: code(a.accumulated), DepartmentID: a.dept,
+				ExpenseAccountCode: a.line.ExpenseAccountCode, ExpenseAccountName: nameOf(a.line.ExpenseAccountID), AccumulatedAccountID: a.accumulated, AccumulatedAccountCode: code(a.accumulated),
+				AccumulatedAccountName: nameOf(a.accumulated), DepartmentID: a.dept,
 				DepartmentCode: a.line.DepartmentCode, DepartmentName: a.line.DepartmentName, Amount: decimal.Zero}
 			groups[k] = g
 		}

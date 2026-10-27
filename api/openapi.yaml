@@ -14134,7 +14134,7 @@ paths:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: listAssetAccounts
-      summary: "The accounts a category may use (asset.setup)"
+      summary: "The accounts a category may use (asset.setup), or that take the price of a disposal (asset.dispose)"
       tags: [assets]
       parameters:
         - { name: type, in: query, schema: { type: string } }
@@ -27421,15 +27421,17 @@ components:
         months_done_after: { type: integer }
     AssetDepreciationGroup:
       type: object
-      required: [category_id, category_code, category_name, expense_account_id, expense_account_code, accumulated_account_id, accumulated_account_code, assets, amount]
+      required: [category_id, category_code, category_name, expense_account_id, expense_account_code, expense_account_name, accumulated_account_id, accumulated_account_code, accumulated_account_name, assets, amount]
       properties:
         category_id: { type: integer, format: int64 }
         category_code: { type: string }
         category_name: { type: string }
         expense_account_id: { type: integer, format: int64 }
         expense_account_code: { type: string }
+        expense_account_name: { type: string }
         accumulated_account_id: { type: integer, format: int64 }
         accumulated_account_code: { type: string }
+        accumulated_account_name: { type: string }
         department_id: { type: [integer, "null"], format: int64 }
         department_code: { type: [string, "null"] }
         department_name: { type: [string, "null"] }

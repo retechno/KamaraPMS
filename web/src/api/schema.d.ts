@@ -12277,7 +12277,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** The accounts a category may use (asset.setup) */
+        /** The accounts a category may use (asset.setup), or that take the price of a disposal (asset.dispose) */
         get: operations["listAssetAccounts"];
         put?: never;
         post?: never;
@@ -25843,9 +25843,11 @@ export interface components {
             /** Format: int64 */
             expense_account_id: number;
             expense_account_code: string;
+            expense_account_name: string;
             /** Format: int64 */
             accumulated_account_id: number;
             accumulated_account_code: string;
+            accumulated_account_name: string;
             /** Format: int64 */
             department_id?: number | null;
             department_code?: string | null;

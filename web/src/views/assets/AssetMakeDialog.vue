@@ -53,7 +53,8 @@ const nextMonth = computed(() => {
   const idx = Number(m[1]) * 12 + Number(m[2]) // the month after, 1-based month in 0-based arithmetic
   return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`
 })
-const belowThreshold = computed(() => costs.value.some((c) => Number(c) < Number(props.threshold)))
+const hasThreshold = computed(() => Number(props.threshold) > 0)
+const belowThreshold = computed(() => hasThreshold.value && costs.value.some((c) => Number(c) < Number(props.threshold)))
 const depreciable = computed(() => !!category.value?.is_depreciable)
 const valid = computed(() => form.value.name.trim() !== '' && form.value.in_service_date !== '' && form.value.category_id > 0)
 
@@ -138,7 +139,7 @@ async function submit(): Promise<void> {
           <FormField :label="t('assets.asset.notes')"><template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" maxlength="500" /></template></FormField>
         </div>
         <p v-if="belowThreshold" class="alert warning m-0" role="status" data-testid="make-threshold">{{ t('assets.make.belowThreshold', { threshold: formatMoney(threshold) }) }}</p>
-        <p v-else class="m-0 text-xs text-muted-foreground">{{ t('assets.make.noJournal', { account: line.account_code }) }} <Badge variant="outline">{{ t('assets.make.aboveThreshold', { threshold: formatMoney(threshold) }) }}</Badge></p>
+        <p v-else class="m-0 text-xs text-muted-foreground">{{ t('assets.make.noJournal', { account: line.account_code }) }} <Badge v-if="hasThreshold" variant="outline" data-testid="make-above">{{ t('assets.make.aboveThreshold', { threshold: formatMoney(threshold) }) }}</Badge></p>
         <div class="flex justify-end gap-2">
           <Button type="button" variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
           <Button type="submit" :disabled="busy || !valid" data-testid="make-confirm">{{ units > 1 ? t('assets.make.createN', { n: units }) : t('assets.make.create') }}</Button>
