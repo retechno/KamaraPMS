@@ -184,8 +184,8 @@ VALUES (@tenant_id, @property_id, @journal_number, @journal_type, @journal_date,
 RETURNING id;
 
 -- name: InsertJournalLine :exec
-INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref, department_id)
-VALUES (@tenant_id, @property_id, @journal_id, @line_no, @account_id, @debit, @credit, sqlc.narg(description), sqlc.narg(source_type), sqlc.narg(source_ref), sqlc.narg(department_id));
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref, department_id, source_line)
+VALUES (@tenant_id, @property_id, @journal_id, @line_no, @account_id, @debit, @credit, sqlc.narg(description), sqlc.narg(source_type), sqlc.narg(source_ref), sqlc.narg(department_id), sqlc.narg(source_line));
 
 -- name: ListJournals :many
 SELECT j.id, j.journal_number, j.journal_type, j.journal_date, j.description, j.reference, j.reverses_journal_id, j.reason, j.posted_at, j.posted_by,

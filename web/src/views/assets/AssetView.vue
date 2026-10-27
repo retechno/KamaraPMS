@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AssetDetail, AssetLocation } from '@/api/types'
+import type { AssetDetail, AssetLocation, AssetSchedule } from '@/api/types'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -17,11 +17,15 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { toast } from '@/composables/useToast'
 import { t, te } from '@/i18n'
+import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney, formatMonth } from '@/utils/format'
+import { fromMinor, toMinor } from './split'
 
 /** One asset (docs/architecture/37-fixed-assets.md 9, mockup 52, the part of PR 1): its data, its values, its fiscal group and the history of the register. The schedule comes with the depreciation. */
 const route = useRoute()
 const { pid, canRead, canManage } = useAssetAccess()
+const property = usePropertyStore()
+const decimals = computed(() => property.current?.currency_decimals ?? 0)
 const assetId = computed(() => Number(route.params.id))
 const asset = ref<AssetDetail | null>(null)
 const locations = ref<AssetLocation[]>([])
@@ -43,8 +47,47 @@ async function load(): Promise<void> {
   } finally {
     loaded.value = true
   }
+  await loadSchedule()
 }
 watch([pid, assetId], load, { immediate: true })
+
+// the commercial depreciation schedule: the months posted and the months projected, summed by year
+const schedule = ref<AssetSchedule | null>(null)
+const tab = ref<'schedule' | 'history'>('schedule')
+const monthly = ref(false)
+async function loadSchedule(): Promise<void> {
+  const propertyId = pid.value
+  schedule.value = null
+  if (propertyId === null || !canRead.value || !asset.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/{id}/schedule', { params: { path: { propertyId, id: assetId.value } } })
+    schedule.value = data ?? null
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+interface YearRow { year: string; months: number; amount: string; accum: string; carrying: string; label: 'POSTED' | 'CURRENT' | 'PROJECTED' | 'OPENING' }
+const years = computed<YearRow[]>(() => {
+  const out: YearRow[] = []
+  const by = new Map<string, { rows: AssetSchedule['rows']; amount: bigint; months: number }>()
+  for (const r of schedule.value?.rows ?? []) {
+    const y = r.month.slice(0, 4)
+    const e = by.get(y) ?? { rows: [], amount: 0n, months: 0 }
+    e.rows.push(r)
+    if (r.kind !== 'OPENING') e.amount += toMinor(r.amount, decimals.value)
+    e.months += r.kind === 'OPENING' ? 0 : r.months
+    by.set(y, e)
+  }
+  for (const [year, e] of by) {
+    const last = e.rows[e.rows.length - 1]
+    if (!last) continue
+    const kinds = new Set(e.rows.map((r) => r.kind))
+    const label = kinds.size === 1 && kinds.has('OPENING') ? 'OPENING' : kinds.has('PROJECTED') ? (kinds.has('POSTED') ? 'CURRENT' : 'PROJECTED') : 'POSTED'
+    out.push({ year, months: e.months, amount: fromMinor(e.amount, decimals.value), accum: last.accum_after, carrying: last.carrying_after, label })
+  }
+  return out
+})
+const yearLabel = (r: YearRow): string => t(`assets.schedule.label.${r.label}`)
 
 const noDepreciation = computed(() => asset.value?.category_kind === 'LAND' || asset.value?.category_kind === 'CIP')
 const statusVariant = computed(() => (asset.value?.status === 'ACTIVE' ? 'success' : 'outline'))
@@ -59,12 +102,14 @@ const kindText = (kind: string): string => (te(`assets.ledger.kind.${kind}`) ? t
 const editing = ref(false)
 const busy = ref(false)
 const formError = ref<ApiError | null>(null)
-const form = ref({ name: '', location_id: 0, department_id: null as number | null, serial_no: '', warranty_until: '', notes: '' })
+const form = ref({ name: '', location_id: 0, department_id: null as number | null, serial_no: '', warranty_until: '', notes: '', in_service_date: '', start_rule: 'IN_SERVICE_MONTH' })
+/** The start of the depreciation can change until the first month has been posted. */
+const startEditable = computed(() => !!asset.value && !noDepreciation.value && asset.value.dep_months_done === 0)
 async function openEdit(): Promise<void> {
   const a = asset.value
   const propertyId = pid.value
   if (!a || propertyId === null) return
-  form.value = { name: a.name, location_id: a.location_id ?? 0, department_id: a.department_id ?? null, serial_no: a.serial_no ?? '', warranty_until: a.warranty_until ?? '', notes: a.notes ?? '' }
+  form.value = { name: a.name, location_id: a.location_id ?? 0, department_id: a.department_id ?? null, serial_no: a.serial_no ?? '', warranty_until: a.warranty_until ?? '', notes: a.notes ?? '', in_service_date: a.in_service_date, start_rule: a.start_rule }
   formError.value = null
   editing.value = true
   try {
@@ -84,7 +129,10 @@ async function save(): Promise<void> {
     const f = form.value
     const { data } = await api.PATCH('/api/v1/properties/{propertyId}/assets/{id}', {
       params: { path: { propertyId, id: a.id } },
-      body: { name: f.name.trim(), location_id: f.location_id || null, department_id: f.department_id, serial_no: f.serial_no.trim() || null, warranty_until: f.warranty_until || null, notes: f.notes.trim() || null, version: a.version },
+      body: { name: f.name.trim(), location_id: f.location_id || null, department_id: f.department_id, serial_no: f.serial_no.trim() || null, warranty_until: f.warranty_until || null, notes: f.notes.trim() || null, version: a.version,
+        ...(startEditable.value && f.in_service_date !== a.in_service_date ? { in_service_date: f.in_service_date } : {}),
+        ...(startEditable.value && f.start_rule !== a.start_rule ? { start_rule: f.start_rule } : {}),
+      },
     })
     if (data) asset.value = data
     editing.value = false
@@ -134,6 +182,8 @@ async function cancelAsset(): Promise<void> {
     </PageHeader>
     <p class="text-sm text-muted-foreground" data-testid="asset-source">
       <template v-if="asset.source === 'OPENING'">{{ t('assets.asset.fromOpening', { number: asset.opening_import_number ?? '' }) }}</template>
+      <template v-else-if="asset.source_link?.bill_number">{{ t('assets.asset.fromBill', { bill: asset.source_link.bill_number, line: asset.source_link.bill_line_no ?? '', journal: asset.source_link.journal_number }) }}</template>
+      <template v-else-if="asset.source_link">{{ t('assets.asset.fromJournalNumber', { journal: asset.source_link.journal_number }) }}</template>
       <template v-else>{{ t('assets.asset.fromJournal') }}</template>
     </p>
     <div class="grid gap-4 lg:grid-cols-2">
@@ -172,7 +222,40 @@ async function cancelAsset(): Promise<void> {
         </dl>
       </Card>
     </div>
-    <Card class="flex flex-col gap-2 p-4" data-testid="asset-history">
+    <div class="flex gap-2" role="tablist">
+      <button type="button" role="tab" :aria-selected="tab === 'schedule'" class="min-h-9 rounded-full border px-3 text-sm" :class="tab === 'schedule' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'" data-testid="tab-schedule" @click="tab = 'schedule'">{{ t('assets.schedule.tab') }}</button>
+      <button type="button" role="tab" :aria-selected="tab === 'history'" class="min-h-9 rounded-full border px-3 text-sm" :class="tab === 'history' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'" data-testid="tab-history" @click="tab = 'history'">{{ t('assets.asset.history') }}</button>
+    </div>
+    <Card v-if="tab === 'schedule'" class="flex flex-col gap-2 p-4" data-testid="asset-schedule">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="m-0 text-base font-semibold">{{ t('assets.schedule.title') }}</h2>
+        <Button v-if="schedule?.depreciable" size="sm" variant="outline" :aria-pressed="monthly" data-testid="schedule-toggle" @click="monthly = !monthly">{{ monthly ? t('assets.schedule.byYear') : t('assets.schedule.byMonth') }}</Button>
+      </div>
+      <p v-if="!schedule || !schedule.depreciable" class="muted m-0" data-testid="schedule-none">{{ t('assets.schedule.none') }}</p>
+      <div v-else class="overflow-x-auto">
+        <table v-if="!monthly" class="w-full border-collapse text-sm tabular-nums" data-testid="schedule-years">
+          <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.schedule.year') }}</th><th class="p-2 text-right">{{ t('assets.schedule.depreciation') }}</th><th class="p-2 text-right">{{ t('assets.col.accum') }}</th><th class="p-2 text-right">{{ t('assets.col.carrying') }}</th></tr></thead>
+          <tbody>
+            <tr v-for="r in years" :key="r.year" class="border-t border-border" :data-testid="`schedule-year-${r.year}`">
+              <td class="p-2">{{ r.year }}<span class="text-xs text-muted-foreground"> · {{ r.label === 'OPENING' ? '' : t('assets.schedule.months', { n: r.months }) }} {{ yearLabel(r) }}</span></td>
+              <td class="p-2 text-right">{{ formatMoney(r.amount) }}</td><td class="p-2 text-right">{{ formatMoney(r.accum) }}</td><td class="p-2 text-right">{{ formatMoney(r.carrying) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <table v-else class="w-full border-collapse text-sm tabular-nums" data-testid="schedule-months">
+          <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.schedule.month') }}</th><th class="p-2">{{ t('assets.col.status') }}</th><th class="p-2 text-right">{{ t('assets.schedule.depreciation') }}</th><th class="p-2 text-right">{{ t('assets.col.accum') }}</th><th class="p-2 text-right">{{ t('assets.col.carrying') }}</th></tr></thead>
+          <tbody>
+            <tr v-for="r in schedule.rows" :key="`${r.kind}-${r.month}`" class="border-t border-border" :data-testid="`schedule-month-${r.month.slice(0, 7)}`">
+              <td class="p-2">{{ formatMonth(r.month.slice(0, 7)) }}<span v-if="r.months > 1" class="text-xs text-muted-foreground"> · {{ t('assets.schedule.months', { n: r.months }) }}</span></td>
+              <td class="p-2"><Badge :variant="r.kind === 'PROJECTED' ? 'outline' : 'success'">{{ t(`assets.schedule.kind.${r.kind}`) }}</Badge><span v-if="r.journal_number" class="ml-2 text-xs text-muted-foreground">{{ r.journal_number }}</span></td>
+              <td class="p-2 text-right">{{ formatMoney(r.amount) }}</td><td class="p-2 text-right">{{ formatMoney(r.accum_after) }}</td><td class="p-2 text-right">{{ formatMoney(r.carrying_after) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="schedule?.depreciable" class="m-0 text-xs text-muted-foreground">{{ t('assets.schedule.note', { residual: formatMoney(schedule.residual_value) }) }}</p>
+    </Card>
+    <Card v-else class="flex flex-col gap-2 p-4" data-testid="asset-history">
       <h2 class="m-0 text-base font-semibold">{{ t('assets.asset.history') }}</h2>
       <p v-if="!asset.ledger.length" class="muted m-0">{{ t('assets.asset.noHistory') }}</p>
       <ul v-else class="m-0 flex list-none flex-col gap-1 p-0 text-sm">
@@ -208,6 +291,12 @@ async function cancelAsset(): Promise<void> {
           <FormField :label="t('assets.asset.warranty')" :error="formError?.fieldMessage('warranty_until')"><template #default="{ id }"><Input :id="id" v-model="form.warranty_until" name="warranty_until" type="date" /></template></FormField>
         </div>
         <FormField :label="t('assets.asset.notes')"><template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" maxlength="500" /></template></FormField>
+        <div v-if="startEditable" class="grid gap-3 sm:grid-cols-2" data-testid="edit-start">
+          <FormField :label="t('assets.col.inService')" :error="formError?.fieldMessage('in_service_date')"><template #default="{ id }"><Input :id="id" v-model="form.in_service_date" name="in_service_date" type="date" /></template></FormField>
+          <FormField :label="t('assets.make.startRule')" :hint="t('assets.make.startHint')" :error="formError?.fieldMessage('start_rule')">
+            <template #default="{ id }"><NativeSelect :id="id" v-model="form.start_rule" name="start_rule"><option v-for="r in ['IN_SERVICE_MONTH', 'NEXT_MONTH']" :key="r" :value="r">{{ t(`assets.startRule.${r}`) }}</option></NativeSelect></template>
+          </FormField>
+        </div>
         <div class="flex justify-end gap-2"><Button type="button" variant="outline" @click="editing = false">{{ t('common.cancel') }}</Button><Button type="submit" :disabled="busy || !form.name.trim()" data-testid="edit-save">{{ t('common.save') }}</Button></div>
       </form>
     </DialogContent>

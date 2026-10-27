@@ -38,6 +38,24 @@ type FaCategory struct {
 	UpdatedBy            *int64
 }
 
+type FaDeprRun struct {
+	ID                int64
+	TenantID          int64
+	PropertyID        int64
+	PeriodMonth       civil.Date
+	Status            string
+	JournalID         int64
+	ReversalJournalID *int64
+	Total             decimal.Decimal
+	AssetCount        int32
+	IdempotencyKey    *string
+	RunBy             *int64
+	RunAt             time.Time
+	ReversedBy        *int64
+	ReversedAt        *time.Time
+	ReversalReason    *string
+}
+
 type FaFiscalGroup struct {
 	TenantID   int64
 	PropertyID int64
@@ -121,4 +139,21 @@ type FaSetting struct {
 	CreatedBy               *int64
 	UpdatedAt               time.Time
 	UpdatedBy               *int64
+}
+
+type FaSourceLink struct {
+	ID             int64
+	TenantID       int64
+	PropertyID     int64
+	JournalLineID  int64
+	UnitNo         int32
+	AssetID        int64
+	Cost           decimal.Decimal
+	BillID         *int64
+	BillLineNo     *int32
+	IdempotencyKey *string
+	ReleasedAt     *time.Time
+	ReleasedBy     *int64
+	CreatedAt      time.Time
+	CreatedBy      *int64
 }

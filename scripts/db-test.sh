@@ -120,9 +120,11 @@ M87="$(ls "$ROOT"/migrations/00087_*.sql)"
 M88="$(ls "$ROOT"/migrations/00088_*.sql)"
 M92="$(ls "$ROOT"/migrations/00092_*.sql)"
 M93="$(ls "$ROOT"/migrations/00093_*.sql)"
+M94="$(ls "$ROOT"/migrations/00094_*.sql)"
 # 00092 (the stock of the banquet) stands on the inventory tables of 00084, 00087 and 00088, so it goes first and comes back after 00088 does
 # 00088 stands on 00087, 00087 on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
-# 00093 (the fixed assets) has a foreign key to the warehouses of 00084, so it goes first of all and comes back last
+# 00093 (the fixed assets) has a foreign key to the warehouses of 00084, so it goes first of all and comes back last, and 00094 (their acquisition and depreciation) stands on 00093: it goes before it
+section down "$M94" | psql_run
 section down "$M93" | psql_run
 section down "$M92" | psql_run
 section down "$M88" | psql_run
@@ -224,6 +226,22 @@ psql_run -c "DELETE FROM fa_opening_imports"
 section down "$M93" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
 psql_run < "$ROOT/db/tests/migration_00093_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M93" | psql_run >/dev/null
+
+echo "==> migration 00094 (acquisition and depreciation) on bills posted before it: the line numbers of their journals"
+psql_run < "$ROOT/db/tests/migration_00094_pre.sql"
+section up "$M94" | psql_run 2>&1 | sed -E -n 's/^(psql:[^ ]* )?NOTICE:  /    /p'
+psql_run < "$ROOT/db/tests/migration_00094_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+# the Down is refused while the register holds a dismissal, and changes nothing
+psql_run -c "INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason) SELECT l.tenant_id, l.property_id, l.id, 'test' FROM gl_journal_lines l JOIN gl_journals j ON j.id = l.journal_id WHERE j.journal_number = 'JV-94A' AND l.line_no = 1"
+if section down "$M94" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m94-down.err"; then echo "FAIL: the Down of 00094 ran while the register held a dismissal" >&2; exit 1; fi
+grep -q "cannot roll back 00094" "${TMPDIR:-/tmp}/m94-down.err" || { echo "FAIL: the Down of 00094 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m94-down.err" >&2; exit 1; }
+echo "    down refused while the register holds data"
+psql_run -c "DELETE FROM fa_source_dismissals"
+section down "$M94" | psql_run
+psql_run < "$ROOT/db/tests/migration_00094_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M94" | psql_run >/dev/null
+# the bills of the test are removed (the journals are append-only, so the triggers are switched off for this one clean-up): the Down of an earlier migration would refuse their journal type
+psql_run -c "SET session_replication_role = replica; DELETE FROM supplier_bill_lines; DELETE FROM supplier_bills; DELETE FROM gl_journal_lines WHERE journal_id IN (SELECT id FROM gl_journals WHERE journal_number IN ('JV-94A', 'JV-94B', 'JV-94M')); DELETE FROM gl_journals WHERE journal_number IN ('JV-94A', 'JV-94B', 'JV-94M'); DELETE FROM suppliers WHERE code = 'SUP94'"
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

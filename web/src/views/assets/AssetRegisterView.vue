@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Asset, AssetCategory, AssetLocation, AssetPage } from '@/api/types'
+import type { Asset, AssetCategory, AssetDepreciationOverview, AssetLocation, AssetPage, AssetWaitingPage } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
@@ -16,12 +16,12 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { t } from '@/i18n'
 import { downloadFile } from '@/utils/documents'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate, formatMoney, formatMonth } from '@/utils/format'
 
 /** The register of fixed assets (docs/architecture/37-fixed-assets.md 4.12, mockup 51): a list that fills the screen, filters, the sums of the filter, and the choice of assets to print labels for. */
 const PAGE = 100
 const router = useRouter()
-const { pid, canRead, canSetup } = useAssetAccess()
+const { pid, canRead, canSetup, canDepreciate } = useAssetAccess()
 const rows = ref<Asset[]>([])
 const total = ref(0)
 const summary = ref({ count: 0, cost: '0', accum_depr: '0', carrying_value: '0' })
@@ -82,7 +82,33 @@ async function loadMasters(): Promise<void> {
   }
 }
 
-watch(pid, () => { void loadMasters(); void load() }, { immediate: true })
+
+// the waiting list (its count) and the depreciation (the month to run) beside the register; a failure here never hides the register
+const waiting = ref(0)
+const overview = ref<AssetDepreciationOverview | null>(null)
+async function loadSide(): Promise<void> {
+  const propertyId = pid.value
+  waiting.value = 0
+  overview.value = null
+  if (propertyId === null || !canRead.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/waiting', { params: { path: { propertyId }, query: { limit: 1 } as never } })
+    waiting.value = (data as AssetWaitingPage | undefined)?.counts?.waiting ?? 0
+  } catch {
+    waiting.value = 0
+  }
+  if (!canDepreciate.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/depreciation', { params: { path: { propertyId } } })
+    overview.value = data ?? null
+  } catch {
+    overview.value = null
+  }
+}
+const nextMonth = computed(() => overview.value?.months.find((m) => m.is_next) ?? null)
+const lastPosted = computed(() => [...(overview.value?.months ?? [])].reverse().find((m) => m.status === 'POSTED') ?? null)
+
+watch(pid, () => { void loadMasters(); void load(); void loadSide() }, { immediate: true })
 
 function setCategory(id: number): void {
   filter.value.category_id = id
@@ -146,6 +172,7 @@ const columns = computed<Column<Asset>[]>(() => [
     <template #actions>
       <Button variant="outline" :disabled="!canRead" data-testid="export-csv" @click="exportCsv">{{ t('assets.register.csv') }}</Button>
       <Button variant="outline" data-testid="print-labels" @click="printLabels">{{ selected.size ? t('assets.register.printSelected', { n: selected.size }) : t('assets.register.print') }}</Button>
+      <Button as-child variant="outline"><RouterLink to="/assets/waiting" data-testid="go-waiting">{{ waiting ? t('assets.register.waitingN', { n: waiting }) : t('assets.register.waiting') }}</RouterLink></Button>
       <Button v-if="canSetup" as-child variant="outline"><RouterLink to="/assets/opening" data-testid="go-opening">{{ t('assets.register.opening') }}</RouterLink></Button>
     </template>
   </PageHeader>
@@ -153,10 +180,13 @@ const columns = computed<Column<Asset>[]>(() => [
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('assets.noAccess') }}</p>
   <template v-else>
-    <div class="grid gap-3 sm:grid-cols-3" data-testid="asset-tiles">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="asset-tiles">
       <KpiCard :label="t('assets.tiles.cost')" :value="formatMoney(summary.cost)" :hint="t('assets.tiles.count', { n: summary.count })" />
       <KpiCard :label="t('assets.tiles.accum')" :value="formatMoney(summary.accum_depr)" />
       <KpiCard :label="t('assets.tiles.carrying')" :value="formatMoney(summary.carrying_value)" />
+      <RouterLink v-if="canDepreciate && overview" to="/assets/depreciation" class="no-underline" data-testid="tile-depreciation">
+        <KpiCard :label="t('assets.tiles.depreciation')" :value="nextMonth ? formatMonth(nextMonth.month.slice(0, 7)) : lastPosted ? formatMonth(lastPosted.month.slice(0, 7)) : '–'" :hint="nextMonth ? (nextMonth.runnable ? t('assets.tiles.readyToRun') : t('assets.tiles.notEnded')) : lastPosted ? t('assets.tiles.lastRun', { amount: formatMoney(lastPosted.total) }) : t('assets.tiles.notStarted')" />
+      </RouterLink>
     </div>
     <form class="flex flex-wrap items-center gap-2" data-testid="asset-filters" @submit.prevent="load()">
       <div class="flex flex-wrap gap-2" role="group" :aria-label="t('assets.col.category')">

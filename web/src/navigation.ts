@@ -103,6 +103,8 @@ export const navigation: NavSection[] = [
     icon: Armchair,
     items: [
       { id: 'assetRegister', to: '/assets', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
+      { id: 'assetWaiting', to: '/assets/waiting', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
+      { id: 'assetDepreciation', to: '/assets/depreciation', permission: 'asset.depreciate', module: 'INVENTORY' },
       { id: 'assetOpening', to: '/assets/opening', permission: 'asset.setup', module: 'INVENTORY' },
       { id: 'assetLabels', to: '/assets/labels', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
       { id: 'assetSettings', to: '/assets/settings', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },

@@ -197,6 +197,7 @@ describe('an asset', () => {
     expect(body('[data-testid=asset-fiscal]').text()).toContain('36,000,000')
     expect(has('[data-testid=fiscal-estimated]')).toBe(true)
     expect(document.body.textContent).toContain('Mar 2026')
+    await click('[data-testid=tab-history]')
     expect(body('[data-testid=ledger-5]').text()).toContain('Brought in (opening balance)')
   })
 

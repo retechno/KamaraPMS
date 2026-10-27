@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
@@ -1070,8 +1071,8 @@ func (q *Queries) InsertJournal(ctx context.Context, arg InsertJournalParams) (i
 }
 
 const insertJournalLine = `-- name: InsertJournalLine :exec
-INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref, department_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description, source_type, source_ref, department_id, source_line)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 `
 
 type InsertJournalLineParams struct {
@@ -1086,6 +1087,7 @@ type InsertJournalLineParams struct {
 	SourceType   *string
 	SourceRef    *string
 	DepartmentID *int64
+	SourceLine   pgtype.Int4
 }
 
 func (q *Queries) InsertJournalLine(ctx context.Context, arg InsertJournalLineParams) error {
@@ -1101,6 +1103,7 @@ func (q *Queries) InsertJournalLine(ctx context.Context, arg InsertJournalLinePa
 		arg.SourceType,
 		arg.SourceRef,
 		arg.DepartmentID,
+		arg.SourceLine,
 	)
 	return err
 }

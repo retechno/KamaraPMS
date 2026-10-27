@@ -15,17 +15,19 @@ import (
 // Period is a calendar month of the books. A month can be closed once every business day of it is closed and has its
 // journal; a closed month takes no journals. Months close in order and only the latest closed month reopens.
 type Period struct {
-	Start        civil.Date `json:"period_start"`
-	End          civil.Date `json:"period_end"`
-	Status       string     `json:"status"`
-	Days         int        `json:"days"`
-	PostedDays   int        `json:"posted_days"`
-	Closable     bool       `json:"closable"`
-	Reopenable   bool       `json:"reopenable"`
-	ClosedAt     *time.Time `json:"closed_at"`
-	ClosedBy     *int64     `json:"closed_by"`
-	ReopenedAt   *time.Time `json:"reopened_at"`
-	ReopenReason string     `json:"reopen_reason,omitempty"`
+	Start      civil.Date `json:"period_start"`
+	End        civil.Date `json:"period_end"`
+	Status     string     `json:"status"`
+	Days       int        `json:"days"`
+	PostedDays int        `json:"posted_days"`
+	Closable   bool       `json:"closable"`
+	// Blockers are what the other modules have to do before the month closes (the depreciation of the fixed assets): empty when nothing stops it.
+	Blockers     []PeriodBlocker `json:"blockers"`
+	Reopenable   bool            `json:"reopenable"`
+	ClosedAt     *time.Time      `json:"closed_at"`
+	ClosedBy     *int64          `json:"closed_by"`
+	ReopenedAt   *time.Time      `json:"reopened_at"`
+	ReopenReason string          `json:"reopen_reason,omitempty"`
 }
 
 const maxPeriods = 240
@@ -60,7 +62,7 @@ func (s *Service) periods(ctx context.Context, tenantID, propertyID int64, cfg a
 		if err != nil {
 			return nil, err
 		}
-		per := Period{Start: start, End: end, Status: "OPEN", Days: from.DaysUntil(end) + 1, PostedDays: int(posted)}
+		per := Period{Start: start, End: end, Status: "OPEN", Days: from.DaysUntil(end) + 1, PostedDays: int(posted), Blockers: []PeriodBlocker{}}
 		if r, ok := closed[start]; ok {
 			per.Status, per.ClosedAt, per.ClosedBy, per.ReopenedAt, per.ReopenReason = r.Status, r.ClosedAt, r.ClosedBy, r.ReopenedAt, deref(r.ReopenReason)
 		}
@@ -70,7 +72,15 @@ func (s *Service) periods(ctx context.Context, tenantID, propertyID int64, cfg a
 			prev, ok := closed[periodStart(start.AddDays(-1))]
 			prevClosed = ok && prev.Status == "CLOSED"
 		}
-		per.Closable = per.Status == "OPEN" && prevClosed && end.Before(today) && per.PostedDays == per.Days
+		if per.Status == "OPEN" && s.pguard != nil && end.Before(today) {
+			if per.Blockers, err = s.pguard.CloseBlockers(ctx, tenantID, propertyID, start); err != nil {
+				return nil, err
+			}
+			if per.Blockers == nil {
+				per.Blockers = []PeriodBlocker{}
+			}
+		}
+		per.Closable = per.Status == "OPEN" && prevClosed && end.Before(today) && per.PostedDays == per.Days && len(per.Blockers) == 0
 		out = append(out, per)
 		start = civil.NewDate(start.Year(), start.Month()+1, 1)
 	}
@@ -135,8 +145,12 @@ func (s *Service) ClosePeriod(ctx context.Context, propertyID int64, start civil
 		case per.Status == "CLOSED":
 			return apperr.Conflict("PERIOD_ALREADY_CLOSED", "the period is closed already")
 		case !per.Closable:
-			return apperr.Conflict("PERIOD_NOT_READY", "a period closes when it has ended, the month before it is closed and every business day of it is closed with its journal").
+			e := apperr.Conflict("PERIOD_NOT_READY", "a period closes when it has ended, the month before it is closed, every business day of it is closed with its journal and the fixed assets are depreciated").
 				WithContext("days", per.Days).WithContext("posted_days", per.PostedDays)
+			if len(per.Blockers) > 0 {
+				e = e.WithContext("blockers", per.Blockers)
+			}
+			return e
 		}
 		if err := s.q(ctx).ClosePeriod(ctx, accountingdb.ClosePeriodParams{TenantID: p.TenantID, PropertyID: propertyID, PeriodStart: start, Now: ptr(s.clock.Now()), ActorID: p.ActorID()}); err != nil {
 			return err
@@ -185,6 +199,11 @@ func (s *Service) ReopenPeriod(ctx context.Context, propertyID int64, start civi
 		}
 		if err := s.q(ctx).ReopenPeriod(ctx, accountingdb.ReopenPeriodParams{TenantID: p.TenantID, PropertyID: propertyID, PeriodStart: start, Now: ptr(s.clock.Now()), ActorID: p.ActorID(), Reason: &reason}); err != nil {
 			return err
+		}
+		if s.pguard != nil { // the month is open again: the fixed assets reverse the depreciation of it and of the months after it, in this transaction (37-fixed-assets.md 4.3)
+			if err := s.pguard.OnReopen(ctx, p.TenantID, propertyID, start, reason); err != nil {
+				return err
+			}
 		}
 		if err := s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "accounting.period_reopened", "gl_period", propertyID, start.String(), nil, map[string]any{"period": start.String(), "reason": reason})); err != nil {
 			return err

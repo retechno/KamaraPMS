@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/accounting/accountingdb"
@@ -23,6 +24,8 @@ type SystemLine struct {
 	Description string
 	SourceType  string
 	SourceRef   string
+	// SourceLine is the number of the bill line a cost line of a bill came from (SourceType AP_BILL); 0 for every other line. It is what lets the fixed assets trace a journal line to its bill line.
+	SourceLine int32
 	// DepartmentID is the department or sub-department of the line, when it has one (a bill line of an expense).
 	DepartmentID *int64
 }
@@ -67,6 +70,9 @@ func (s *Service) BeginPosting(ctx context.Context, propertyID int64) (*Poster, 
 	}
 	return &Poster{svc: s, p: p, propertyID: propertyID, cfg: cfg, today: today}, nil
 }
+
+// BooksStart is the day the books start: no journal is dated before it.
+func (po *Poster) BooksStart() civil.Date { return po.cfg.StartDate }
 
 func (po *Poster) load(ctx context.Context) error {
 	if po.res != nil {
@@ -255,7 +261,7 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 	for i, l := range in.Lines {
 		if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 			TenantID: po.p.TenantID, PropertyID: po.propertyID, JournalID: id, LineNo: int32(i + 1), AccountID: l.AccountID, Debit: l.Debit, Credit: l.Credit,
-			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef), DepartmentID: depts[i],
+			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef), DepartmentID: depts[i], SourceLine: sourceLine(l.SourceLine),
 		}); err != nil {
 			return 0, "", err
 		}
@@ -281,6 +287,11 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 	if err := po.CheckDate(ctx, date, "date"); err != nil {
 		return 0, err
 	}
+	if orig.Type != JournalAsset { // the register's own journals carry no link; its run holds the register settings already
+		if err := po.svc.checkReverse(ctx, po.p.TenantID, po.propertyID, journalID); err != nil {
+			return 0, err
+		}
+	}
 	number, err := po.svc.days.NextDocumentNumber(ctx, po.propertyID, tenancy.SeqJournal)
 	if err != nil {
 		return 0, err
@@ -304,4 +315,8 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 	}
 	return id, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.payables_journal_reversed", "gl_journal", id, auditlabel.Journal(ctx, po.propertyID, id), nil,
 		map[string]any{"journal_number": number, "reverses": orig.Number, "reason": reason, "approved_by": approvedBy}))
+}
+
+func sourceLine(n int32) pgtype.Int4 {
+	return pgtype.Int4{Int32: n, Valid: n > 0}
 }

@@ -14267,6 +14267,199 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/waiting:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetWaiting
+      summary: "The journal lines that wait to become assets, or the ones marked not an asset (any asset permission)"
+      description: "Debit lines of the cost accounts of the categories, from the first month of the register, that no asset covers yet. `dismissed=true` lists the lines marked not an asset."
+      tags: [assets]
+      parameters:
+        - { name: dismissed, in: query, schema: { type: boolean } }
+        - { name: source, in: query, schema: { type: string, enum: [BILL, CASHIER, BANK, MANUAL, OTHER] } }
+        - { name: category_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: The page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetWaitingPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/waiting/dismiss:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: dismissAssetLine
+      summary: "Mark a journal line not an asset (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journal_line_id, reason]
+              properties:
+                journal_line_id: { type: integer, format: int64 }
+                reason: { type: string }
+      responses:
+        "204": { description: Done. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/waiting/restore:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: restoreAssetLine
+      summary: "Put a line marked not an asset back on the waiting list (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journal_line_id]
+              properties:
+                journal_line_id: { type: integer, format: int64 }
+      responses:
+        "204": { description: Done. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/from-line:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: makeAssetFromLine
+      summary: "Make one or more assets of a journal line (asset.manage); no journal is posted"
+      description: "`Idempotency-Key` is required. The same key replays the first answer (200). With `units` above 1 the cost is divided and the last unit takes the rounding. 409 `LINE_ALREADY_ASSET` when the line is covered, 422 `LINE_NOT_ELIGIBLE` (reason in the context) when it cannot be an asset."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetMakeRequest" }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMakeResult" }
+        "201":
+          description: The assets.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMakeResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/depreciation:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetDepreciation
+      summary: "The months of the register with their runs, and the month to run next (asset.depreciate)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The overview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDepreciationOverview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/depreciation/{month}/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: month, in: path, required: true, schema: { type: string, examples: ["2026-10"] }, description: "YYYY-MM." }
+    get:
+      operationId: previewAssetDepreciation
+      summary: "The run of a month computed, and written nowhere (asset.depreciate)"
+      description: "Lists the assets, the amount of each (a catch-up has `months` above 1), the groups of the journal and the blockers (REGISTER_NOT_STARTED, DEPRECIATION_MONTH_INVALID, DEPRECIATION_ALREADY_RUN, PERIOD_CLOSED, ACCOUNTING_NOT_SET_UP, DEPARTMENT_REQUIRED, ACCOUNT_INACTIVE, ...)."
+      tags: [assets]
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDepreciationPreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/depreciation/{month}/run:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: month, in: path, required: true, schema: { type: string, examples: ["2026-10"] }, description: "YYYY-MM." }
+    post:
+      operationId: runAssetDepreciation
+      summary: "Run the depreciation of a month: one journal dated its last day (asset.depreciate)"
+      description: "`Idempotency-Key` is required; the same key replays the first answer (200). Months are run in order and once they have ended. 409 `DEPRECIATION_ALREADY_RUN`, `DEPRECIATION_MONTH_INVALID` (reason NOT_NEXT, NOT_ENDED, BEFORE_REGISTER), `PERIOD_CLOSED`, `DEPRECIATION_BLOCKED` (the blockers in the context)."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDepreciationRunResult" }
+        "201":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDepreciationRunResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/depreciation/{month}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: month, in: path, required: true, schema: { type: string, examples: ["2026-10"] }, description: "YYYY-MM." }
+    post:
+      operationId: reverseAssetDepreciation
+      summary: "Reverse the latest run while its month is open (asset.depreciate)"
+      description: "A mirror journal dated the last day of the month; the state of the assets goes back. 404 `DEPRECIATION_RUN_NOT_FOUND`, 409 `DEPRECIATION_MONTH_INVALID` (reason NOT_LATEST), `PERIOD_CLOSED`, `DEPRECIATION_NOT_REVERSIBLE`."
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: The reversed run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDepreciationRunResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/assets:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -14383,6 +14576,22 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/schedule:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getAssetSchedule
+      summary: "The commercial depreciation schedule of an asset: the opening balances, the months posted (and the run that booked each) and the months projected (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The schedule.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetSchedule" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -20394,7 +20603,7 @@ components:
         approval: { $ref: "#/components/schemas/Approval" }
     GlPeriod:
       type: object
-      required: [period_start, period_end, status, days, posted_days, closable, reopenable, closed_at, closed_by, reopened_at]
+      required: [period_start, period_end, status, days, posted_days, closable, blockers, reopenable, closed_at, closed_by, reopened_at]
       properties:
         period_start: { type: string, format: date }
         period_end: { type: string, format: date }
@@ -20402,6 +20611,16 @@ components:
         days: { type: integer, description: Business days of the month from the accounting start date. }
         posted_days: { type: integer, description: Of those, days that are closed and have their journal. }
         closable: { type: boolean }
+        blockers:
+          type: array
+          description: "What other modules have to do before the month closes (DEPRECIATION_NOT_RUN: the fixed assets are not depreciated). Empty when nothing stops it. Close answers 409 PERIOD_NOT_READY with them in the context."
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              message: { type: string }
+              params: { type: object, additionalProperties: { type: string } }
         reopenable: { type: boolean }
         closed_at: { type: string, format: date-time, nullable: true }
         closed_by: { type: integer, format: int64, nullable: true }
@@ -26598,6 +26817,106 @@ components:
         fiscal_opening_as_of: { type: [string, "null"], format: date }
         fiscal_opening_estimated: { type: boolean }
         version: { type: integer }
+    AssetWaitingLine:
+      type: object
+      required: [line_id, journal_id, journal_number, journal_type, journal_date, line_no, source, document_number, account_id, account_code, account_name, description, cost, category_id, category_code, category_name, category_kind, age_days, below_threshold, dismissed]
+      properties:
+        line_id: { type: integer, format: int64 }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        journal_type: { type: string }
+        journal_date: { type: string, format: date }
+        line_no: { type: integer }
+        source: { type: string, enum: [BILL, CASHIER, BANK, MANUAL, OTHER] }
+        document_number: { type: string }
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        description: { type: string }
+        cost: { type: string }
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        category_kind: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        bill_id: { type: [integer, "null"], format: int64 }
+        bill_number: { type: [string, "null"] }
+        bill_line_no: { type: [integer, "null"] }
+        invoice_number: { type: [string, "null"] }
+        supplier_id: { type: [integer, "null"], format: int64 }
+        supplier_code: { type: [string, "null"] }
+        supplier_name: { type: [string, "null"] }
+        vat_treatment: { type: [string, "null"] }
+        age_days: { type: integer }
+        below_threshold: { type: boolean }
+        dismissed: { type: boolean }
+        dismissed_reason: { type: [string, "null"] }
+        dismissed_at: { type: [string, "null"], format: date-time }
+    AssetWaitingPage:
+      type: object
+      required: [data, total, total_cost, capitalization_threshold, counts]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetWaitingLine" } }
+        total: { type: integer }
+        total_cost: { type: string }
+        register_from: { type: [string, "null"], format: date, description: "Empty: the register has not started, so nothing waits." }
+        capitalization_threshold: { type: string }
+        counts:
+          type: object
+          required: [waiting, waiting_cost, dismissed, dismissed_cost]
+          properties:
+            waiting: { type: integer }
+            waiting_cost: { type: string }
+            dismissed: { type: integer }
+            dismissed_cost: { type: string }
+    AssetMakeRequest:
+      type: object
+      required: [journal_line_id, name]
+      properties:
+        journal_line_id: { type: integer, format: int64 }
+        units: { type: integer, description: "How many assets the line is divided into (default 1)." }
+        name: { type: string }
+        category_id: { type: [integer, "null"], format: int64, description: "Default: the category of the cost account." }
+        location_id: { type: [integer, "null"], format: int64 }
+        department_id: { type: [integer, "null"], format: int64 }
+        supplier_id: { type: [integer, "null"], format: int64 }
+        in_service_date: { type: [string, "null"], format: date }
+        start_rule: { type: string }
+        unit_count: { type: [integer, "null"], description: "The sets of a batch of operating equipment (one asset)." }
+        serial_no: { type: [string, "null"] }
+        warranty_until: { type: [string, "null"], format: date }
+        notes: { type: [string, "null"] }
+    AssetMakeResult:
+      type: object
+      required: [assets, warnings, replayed]
+      properties:
+        assets:
+          type: array
+          items:
+            type: object
+            required: [id, number, name, cost]
+            properties:
+              id: { type: integer, format: int64 }
+              number: { type: string }
+              name: { type: string }
+              cost: { type: string }
+        warnings: { type: array, items: { $ref: "#/components/schemas/AssetOpeningFinding" } }
+        replayed: { type: boolean }
+    AssetSourceLink:
+      type: object
+      required: [journal_line_id, unit_no, units, cost, journal_id, journal_number, journal_date, journal_type]
+      properties:
+        journal_line_id: { type: integer, format: int64 }
+        unit_no: { type: integer }
+        units: { type: integer }
+        cost: { type: string }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        journal_date: { type: string, format: date }
+        journal_type: { type: string }
+        bill_id: { type: [integer, "null"], format: int64 }
+        bill_number: { type: [string, "null"] }
+        bill_line_no: { type: [integer, "null"] }
     AssetLedgerEntry:
       type: object
       required: [id, kind, event_date, cost_delta, accum_delta, months_delta, source_type, source_id, created_at]
@@ -26621,6 +26940,7 @@ components:
           required: [ledger]
           properties:
             opening_import_number: { type: [string, "null"] }
+            source_link: { oneOf: [{ $ref: "#/components/schemas/AssetSourceLink" }, { type: "null" }] }
             ledger: { type: array, items: { $ref: "#/components/schemas/AssetLedgerEntry" } }
     AssetPage:
       type: object
@@ -26647,6 +26967,8 @@ components:
         serial_no: { type: [string, "null"] }
         warranty_until: { type: [string, "null"], format: date }
         notes: { type: [string, "null"] }
+        in_service_date: { type: [string, "null"], format: date, description: "Only while no month has been depreciated." }
+        start_rule: { type: string, description: "Only while no month has been depreciated." }
         version: { type: integer }
     AssetOpeningRow:
       type: object
@@ -26788,3 +27110,139 @@ components:
         asset_count: { type: integer }
         total_cost: { type: string }
         total_accum: { type: string }
+    AssetDepreciationBlocker:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string, description: "English text for logs and API clients; the screen words the blocker by `code` and `params`." }
+        params: { type: object, additionalProperties: { type: string } }
+    AssetDepreciationLine:
+      type: object
+      required: [asset_id, asset_number, asset_name, category_id, category_code, category_name, expense_account_id, expense_account_code, months, from_month, catch_up, amount, accum_after, carrying_after, months_done_after]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        asset_number: { type: string }
+        asset_name: { type: string }
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        expense_account_id: { type: integer, format: int64 }
+        expense_account_code: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: [string, "null"] }
+        department_name: { type: [string, "null"] }
+        months: { type: integer, description: "1, or more for a catch-up (an asset registered late)." }
+        from_month: { type: string, format: date }
+        catch_up: { type: boolean }
+        amount: { type: string }
+        accum_after: { type: string }
+        carrying_after: { type: string }
+        months_done_after: { type: integer }
+    AssetDepreciationGroup:
+      type: object
+      required: [category_id, category_code, category_name, expense_account_id, expense_account_code, accumulated_account_id, accumulated_account_code, assets, amount]
+      properties:
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        expense_account_id: { type: integer, format: int64 }
+        expense_account_code: { type: string }
+        accumulated_account_id: { type: integer, format: int64 }
+        accumulated_account_code: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_code: { type: [string, "null"] }
+        department_name: { type: [string, "null"] }
+        assets: { type: integer }
+        amount: { type: string }
+    AssetDepreciationPreview:
+      type: object
+      required: [month, journal_date, status, lines, groups, total, asset_count, catch_up_count, blockers, can_run]
+      properties:
+        month: { type: string, format: date }
+        journal_date: { type: string, format: date }
+        status: { type: string, enum: [NOT_RUN, POSTED] }
+        next_month: { type: [string, "null"], format: date }
+        lines: { type: array, items: { $ref: "#/components/schemas/AssetDepreciationLine" } }
+        groups: { type: array, items: { $ref: "#/components/schemas/AssetDepreciationGroup" } }
+        total: { type: string }
+        asset_count: { type: integer }
+        catch_up_count: { type: integer }
+        blockers: { type: array, items: { $ref: "#/components/schemas/AssetDepreciationBlocker" } }
+        can_run: { type: boolean }
+    AssetDepreciationRun:
+      type: object
+      required: [id, month, status, journal_id, journal_number, total, asset_count, run_at]
+      properties:
+        id: { type: integer, format: int64 }
+        month: { type: string, format: date }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        reversal_journal_id: { type: [integer, "null"], format: int64 }
+        reversal_journal_number: { type: [string, "null"] }
+        total: { type: string }
+        asset_count: { type: integer }
+        run_by: { type: [integer, "null"], format: int64 }
+        run_at: { type: string, format: date-time }
+        reversed_by: { type: [integer, "null"], format: int64 }
+        reversed_at: { type: [string, "null"], format: date-time }
+        reversal_reason: { type: [string, "null"] }
+    AssetDepreciationRunResult:
+      type: object
+      required: [run, lines, groups, replayed]
+      properties:
+        run: { $ref: "#/components/schemas/AssetDepreciationRun" }
+        lines: { type: array, items: { $ref: "#/components/schemas/AssetDepreciationLine" } }
+        groups: { type: array, items: { $ref: "#/components/schemas/AssetDepreciationGroup" } }
+        replayed: { type: boolean }
+    AssetDepreciationMonth:
+      type: object
+      required: [month, status, total, asset_count, period_closed, is_next, runnable, reversible]
+      properties:
+        month: { type: string, format: date }
+        status: { type: string, enum: [NOT_RUN, POSTED, REVERSED] }
+        run_id: { type: [integer, "null"], format: int64 }
+        journal_number: { type: [string, "null"] }
+        reversal_journal_number: { type: [string, "null"] }
+        total: { type: string }
+        asset_count: { type: integer }
+        run_at: { type: [string, "null"], format: date-time }
+        period_closed: { type: boolean, description: "The month is closed in the books." }
+        is_next: { type: boolean }
+        runnable: { type: boolean, description: "The next month, and it has ended." }
+        reversible: { type: boolean, description: "The latest live run, in a month that is open." }
+    AssetDepreciationOverview:
+      type: object
+      required: [business_date, months]
+      properties:
+        register_from: { type: [string, "null"], format: date }
+        next_month: { type: [string, "null"], format: date }
+        business_date: { type: string, format: date }
+        months: { type: array, items: { $ref: "#/components/schemas/AssetDepreciationMonth" } }
+    AssetScheduleRow:
+      type: object
+      required: [month, kind, months, amount, accum_after, carrying_after, months_done]
+      properties:
+        month: { type: string, format: date }
+        kind: { type: string, enum: [OPENING, POSTED, PROJECTED] }
+        months: { type: integer, description: "1, or the months an opening balance brought." }
+        amount: { type: string }
+        accum_after: { type: string }
+        carrying_after: { type: string }
+        months_done: { type: integer }
+        run_month: { type: [string, "null"], format: date, description: "The month of the run that booked it: later than `month` for a catch-up." }
+        journal_number: { type: [string, "null"] }
+    AssetSchedule:
+      type: object
+      required: [asset_id, number, name, depreciable, cost, residual_value, rows]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        depreciable: { type: boolean }
+        cost: { type: string }
+        residual_value: { type: string }
+        life_months: { type: [integer, "null"] }
+        method: { type: [string, "null"] }
+        rows: { type: array, items: { $ref: "#/components/schemas/AssetScheduleRow" } }

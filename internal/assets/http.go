@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"kamarapms/internal/platform/apperr"
+	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/csvlang"
 	"kamarapms/internal/platform/httpx"
@@ -40,10 +41,19 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/opening/imports", httpx.HandlerFunc(h.listImports))
 	mux.Handle("POST "+p+"/opening/import", httpx.HandlerFunc(h.importOpening))
 	mux.Handle("POST "+p+"/opening/single", httpx.HandlerFunc(h.importSingle))
+	mux.Handle("GET "+p+"/waiting", httpx.HandlerFunc(h.listWaiting))
+	mux.Handle("POST "+p+"/waiting/dismiss", httpx.HandlerFunc(h.dismissLine))
+	mux.Handle("POST "+p+"/waiting/restore", httpx.HandlerFunc(h.restoreLine))
+	mux.Handle("POST "+p+"/from-line", httpx.HandlerFunc(h.makeAsset))
+	mux.Handle("GET "+p+"/depreciation", httpx.HandlerFunc(h.listDepreciation))
+	mux.Handle("GET "+p+"/depreciation/{month}/preview", httpx.HandlerFunc(h.previewDepreciation))
+	mux.Handle("POST "+p+"/depreciation/{month}/run", httpx.HandlerFunc(h.runDepreciation))
+	mux.Handle("POST "+p+"/depreciation/{month}/reverse", httpx.HandlerFunc(h.reverseDepreciation))
 	mux.Handle("GET "+p, httpx.HandlerFunc(h.listAssets))
 	mux.Handle("GET "+p+"/{id}", httpx.HandlerFunc(h.getAsset))
 	mux.Handle("PATCH "+p+"/{id}", httpx.HandlerFunc(h.updateAsset))
 	mux.Handle("POST "+p+"/{id}/cancel", httpx.HandlerFunc(h.cancelAsset))
+	mux.Handle("GET "+p+"/{id}/schedule", httpx.HandlerFunc(h.assetSchedule))
 }
 
 func pathID(r *http.Request) (int64, error) {
@@ -504,6 +514,178 @@ func (h *Handler) cancelAsset(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	v, err := h.svc.CancelAsset(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) listWaiting(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	q := r.URL.Query()
+	f := WaitingFilter{Source: strings.ToUpper(strings.TrimSpace(q.Get("source"))), Q: q.Get("q")}
+	if f.CategoryID, err = queryInt(r, "category_id"); err != nil {
+		return err
+	}
+	if f.DateFrom, err = queryDate(r, "date_from"); err != nil {
+		return err
+	}
+	if f.DateTo, err = queryDate(r, "date_to"); err != nil {
+		return err
+	}
+	if b, err := queryBool(r, "dismissed"); err != nil {
+		return err
+	} else if b != nil {
+		f.Dismissed = *b
+	}
+	if n, err := queryInt(r, "limit"); err != nil {
+		return err
+	} else if n != nil {
+		f.Limit = int(*n)
+	}
+	if n, err := queryInt(r, "offset"); err != nil {
+		return err
+	} else if n != nil {
+		f.Offset = int(*n)
+	}
+	v, err := h.svc.ListWaiting(r.Context(), pid, f)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) makeAsset(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in MakeAssetInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	res, err := h.svc.MakeAssetFromLine(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	if res.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, res)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) dismissLine(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in DismissInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	if err := h.svc.DismissLine(r.Context(), pid, in); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (h *Handler) restoreLine(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in struct {
+		JournalLineID int64 `json:"journal_line_id"`
+	}
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	if err := h.svc.RestoreLine(r.Context(), pid, in.JournalLineID); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (h *Handler) listDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.ListDepreciation(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+// monthOf checks the permission before it reads the month, so a user without it gets 403 whatever the path says.
+func (h *Handler) monthOf(r *http.Request) (int64, civil.Date, error) {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return 0, civil.Date{}, err
+	}
+	if _, err := h.svc.require(r.Context(), pid, auth.PermAssetDepreciate); err != nil {
+		return 0, civil.Date{}, err
+	}
+	m, err := ParseMonth(r.PathValue("month"))
+	return pid, m, err
+}
+
+func (h *Handler) previewDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, m, err := h.monthOf(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.PreviewDepreciation(r.Context(), pid, m)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) runDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, m, err := h.monthOf(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.RunDepreciation(r.Context(), pid, m, strings.TrimSpace(r.Header.Get("Idempotency-Key")))
+	if err != nil {
+		return err
+	}
+	if v.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, v)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, v)
+}
+
+func (h *Handler) reverseDepreciation(w http.ResponseWriter, r *http.Request) error {
+	pid, m, err := h.monthOf(r)
+	if err != nil {
+		return err
+	}
+	var in ReverseRunInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	v, err := h.svc.ReverseDepreciation(r.Context(), pid, m, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) assetSchedule(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	v, err := h.svc.AssetSchedule(r.Context(), pid, id)
 	if err != nil {
 		return err
 	}

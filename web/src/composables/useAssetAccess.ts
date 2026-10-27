@@ -12,5 +12,6 @@ export function useAssetAccess() {
   const canRead = computed(() => ANY.some((p) => auth.can(p, pid.value)))
   const canManage = computed(() => auth.can('asset.manage', pid.value))
   const canSetup = computed(() => auth.can('asset.setup', pid.value))
-  return { pid, canRead, canManage, canSetup }
+  const canDepreciate = computed(() => auth.can('asset.depreciate', pid.value))
+  return { pid, canRead, canManage, canSetup, canDepreciate }
 }

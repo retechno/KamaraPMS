@@ -52,6 +52,11 @@ const (
 	ModeRegisterOnly     = "REGISTER_ONLY"
 	sourceTypeOpening    = "FA_OPENING"
 	sourceTypeCancel     = "FA_CANCEL"
+	sourceTypeLine       = "FA_LINE"
+	sourceTypeDepr       = "FA_DEPR"
+	sourceJournal        = "JOURNAL"
+	LedgerAcquire        = "ACQUIRE"
+	LedgerDepreciate     = "DEPRECIATE"
 	sourceTypeRebuild    = "FA_REBUILD"
 	LedgerOpen           = "OPEN"
 	LedgerReversal       = "REVERSAL"
@@ -312,8 +317,9 @@ type LedgerEntry struct {
 // AssetDetail is one asset with its ledger.
 type AssetDetail struct {
 	Asset
-	OpeningImportNumber *string       `json:"opening_import_number"`
-	Ledger              []LedgerEntry `json:"ledger"`
+	OpeningImportNumber *string          `json:"opening_import_number"`
+	SourceLink          *AssetSourceLink `json:"source_link"`
+	Ledger              []LedgerEntry    `json:"ledger"`
 }
 
 // AssetFilter narrows the register.
@@ -346,6 +352,8 @@ type AssetPage struct {
 
 // AssetPatch changes the data of an asset that is not money.
 type AssetPatch struct {
+	InServiceDate *civil.Date `json:"in_service_date"` // free until the asset has been depreciated (the start rule too)
+	StartRule     *string     `json:"start_rule"`
 	Name          string      `json:"name"`
 	LocationID    *int64      `json:"location_id"`
 	DepartmentID  *int64      `json:"department_id"`
@@ -411,4 +419,19 @@ type SetupCheck struct {
 type RebuildResult struct {
 	Checked  int `json:"checked"`
 	Repaired int `json:"repaired"`
+}
+
+// AssetSourceLink is where an asset made from a journal line comes from: the journal, its line, and the bill when it is a line of one.
+type AssetSourceLink struct {
+	JournalLineID int64           `json:"journal_line_id"`
+	UnitNo        int32           `json:"unit_no"`
+	Units         int32           `json:"units"`
+	Cost          decimal.Decimal `json:"cost"`
+	JournalID     int64           `json:"journal_id"`
+	JournalNumber string          `json:"journal_number"`
+	JournalDate   civil.Date      `json:"journal_date"`
+	JournalType   string          `json:"journal_type"`
+	BillID        *int64          `json:"bill_id"`
+	BillNumber    *string         `json:"bill_number"`
+	BillLineNo    *int32          `json:"bill_line_no"`
 }
