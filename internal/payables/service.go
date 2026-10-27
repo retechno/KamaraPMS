@@ -29,15 +29,16 @@ const (
 // Service is the payables application service. Reading needs payables.view, suppliers payables.manage, and entering
 // bills and payments payables.post (voiding one also needs an approval).
 type Service struct {
-	txm   *db.TxManager
-	clock clock.Clock
-	audit *audit.Writer
-	authz auth.Authorizer
-	days  *tenancy.Service
-	acct  *accounting.Service
-	iam   *iam.Service
-	tax   *taxfiling.Service // the PKP status on the date of a bill (how its input VAT is treated)
-	guard VoidGuard
+	txm    *db.TxManager
+	clock  clock.Clock
+	audit  *audit.Writer
+	authz  auth.Authorizer
+	days   *tenancy.Service
+	acct   *accounting.Service
+	iam    *iam.Service
+	tax    *taxfiling.Service // the PKP status on the date of a bill (how its input VAT is treated)
+	guard  VoidGuard
+	assets AssetGuard
 }
 
 // VoidGuard is asked before a bill is voided, inside the transaction: the inventory answers 409 BILL_HAS_STOCK_MATCH for a bill that is matched to goods received (35-inventory.md F13), because the way to
@@ -45,6 +46,15 @@ type Service struct {
 type VoidGuard interface {
 	CheckVoid(ctx context.Context, tenantID, propertyID, billID int64) error
 }
+
+// AssetGuard is asked, inside the transaction and with the supplier of the bill locked, before a bill is voided (lineNo 0) or a credit note is posted on one of its lines (lineNo of the bill line):
+// the fixed assets answer 409 BILL_LINE_IS_ASSET for a line that has been made an asset, because the register mirrors that line (37-fixed-assets.md F8). The way out is to cancel the asset.
+type AssetGuard interface {
+	CheckBillLine(ctx context.Context, tenantID, propertyID, billID int64, lineNo int32) error
+}
+
+// SetAssetGuard wires the guard of the fixed assets; without one every bill can be voided as before.
+func (s *Service) SetAssetGuard(g AssetGuard) { s.assets = g }
 
 // SetVoidGuard wires the guard; without one every bill can be voided as before.
 func (s *Service) SetVoidGuard(g VoidGuard) { s.guard = g }

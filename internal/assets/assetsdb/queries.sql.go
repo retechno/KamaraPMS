@@ -77,8 +77,9 @@ func (q *Queries) AccountHasJournalLines(ctx context.Context, arg AccountHasJour
 }
 
 const assetHasRegisterEvents = `-- name: AssetHasRegisterEvents :one
-SELECT EXISTS (SELECT 1 FROM fa_ledger WHERE tenant_id = $1 AND property_id = $2 AND asset_id = $3
-                AND kind NOT IN ('OPEN', 'ACQUIRE', 'REVERSAL'))::boolean
+SELECT EXISTS (SELECT 1 FROM fa_ledger e WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.asset_id = $3
+                AND e.kind NOT IN ('OPEN', 'ACQUIRE', 'REVERSAL')
+                AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id))::boolean
 `
 
 type AssetHasRegisterEventsParams struct {
@@ -180,6 +181,22 @@ func (q *Queries) ControlAccountIDs(ctx context.Context, arg ControlAccountIDsPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const countLiveLinksOfLine = `-- name: CountLiveLinksOfLine :one
+SELECT count(*)::int FROM fa_source_links WHERE property_id = $1 AND journal_line_id = $2 AND released_at IS NULL
+`
+
+type CountLiveLinksOfLineParams struct {
+	PropertyID int64
+	LineID     int64
+}
+
+func (q *Queries) CountLiveLinksOfLine(ctx context.Context, arg CountLiveLinksOfLineParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countLiveLinksOfLine, arg.PropertyID, arg.LineID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const ensureSettings = `-- name: EnsureSettings :one
@@ -604,6 +621,48 @@ func (q *Queries) GetCategoryByCode(ctx context.Context, arg GetCategoryByCodePa
 	return i, err
 }
 
+const getCategoryByCostAccount = `-- name: GetCategoryByCostAccount :one
+SELECT id, tenant_id, property_id, code, name, kind, cost_account_id, accumulated_account_id, expense_account_id, department_id, method, life_months, residual_pct, db_factor, fiscal_group, fiscal_method, is_depreciable, is_active, sort_order, version, created_at, created_by, updated_at, updated_by FROM fa_categories WHERE tenant_id = $1 AND property_id = $2 AND cost_account_id = $3 AND is_active LIMIT 1
+`
+
+type GetCategoryByCostAccountParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountID  int64
+}
+
+func (q *Queries) GetCategoryByCostAccount(ctx context.Context, arg GetCategoryByCostAccountParams) (FaCategory, error) {
+	row := q.db.QueryRow(ctx, getCategoryByCostAccount, arg.TenantID, arg.PropertyID, arg.AccountID)
+	var i FaCategory
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Code,
+		&i.Name,
+		&i.Kind,
+		&i.CostAccountID,
+		&i.AccumulatedAccountID,
+		&i.ExpenseAccountID,
+		&i.DepartmentID,
+		&i.Method,
+		&i.LifeMonths,
+		&i.ResidualPct,
+		&i.DbFactor,
+		&i.FiscalGroup,
+		&i.FiscalMethod,
+		&i.IsDepreciable,
+		&i.IsActive,
+		&i.SortOrder,
+		&i.Version,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const getDepartmentRefByCode = `-- name: GetDepartmentRefByCode :one
 SELECT id, code, name FROM departments WHERE tenant_id = $1 AND property_id = $2 AND code = $3
 `
@@ -641,6 +700,133 @@ func (q *Queries) GetFiscalYearStartMonth(ctx context.Context, arg GetFiscalYear
 	var fiscal_year_start_month int16
 	err := row.Scan(&fiscal_year_start_month)
 	return fiscal_year_start_month, err
+}
+
+const getJournalLineForAsset = `-- name: GetJournalLineForAsset :one
+SELECT l.id AS line_id, l.journal_id, j.journal_number, j.journal_type, j.journal_date, l.line_no, l.account_id, l.debit, l.description, l.source_type, l.source_ref, l.source_line, l.department_id,
+       (j.reverses_journal_id IS NOT NULL OR EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id))::boolean AS is_void,
+       b.id AS bill_id, b.supplier_id AS bill_supplier_id
+  FROM gl_journal_lines l
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+  LEFT JOIN supplier_bills b ON b.property_id = l.property_id AND b.journal_id = l.journal_id AND l.source_type = 'AP_BILL'
+ WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.id = $3
+`
+
+type GetJournalLineForAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	LineID     int64
+}
+
+type GetJournalLineForAssetRow struct {
+	LineID         int64
+	JournalID      int64
+	JournalNumber  string
+	JournalType    string
+	JournalDate    civil.Date
+	LineNo         int32
+	AccountID      int64
+	Debit          decimal.Decimal
+	Description    *string
+	SourceType     *string
+	SourceRef      *string
+	SourceLine     *int32
+	DepartmentID   *int64
+	IsVoid         bool
+	BillID         *int64
+	BillSupplierID *int64
+}
+
+// One journal line with what "make asset" must know about it, whether it qualifies or not.
+func (q *Queries) GetJournalLineForAsset(ctx context.Context, arg GetJournalLineForAssetParams) (GetJournalLineForAssetRow, error) {
+	row := q.db.QueryRow(ctx, getJournalLineForAsset, arg.TenantID, arg.PropertyID, arg.LineID)
+	var i GetJournalLineForAssetRow
+	err := row.Scan(
+		&i.LineID,
+		&i.JournalID,
+		&i.JournalNumber,
+		&i.JournalType,
+		&i.JournalDate,
+		&i.LineNo,
+		&i.AccountID,
+		&i.Debit,
+		&i.Description,
+		&i.SourceType,
+		&i.SourceRef,
+		&i.SourceLine,
+		&i.DepartmentID,
+		&i.IsVoid,
+		&i.BillID,
+		&i.BillSupplierID,
+	)
+	return i, err
+}
+
+const getLiveDismissal = `-- name: GetLiveDismissal :one
+SELECT id FROM fa_source_dismissals WHERE property_id = $1 AND journal_line_id = $2 AND restored_at IS NULL
+`
+
+type GetLiveDismissalParams struct {
+	PropertyID int64
+	LineID     int64
+}
+
+func (q *Queries) GetLiveDismissal(ctx context.Context, arg GetLiveDismissalParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getLiveDismissal, arg.PropertyID, arg.LineID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getLiveLinkOfAsset = `-- name: GetLiveLinkOfAsset :one
+SELECT k.journal_line_id, k.unit_no, k.cost, k.bill_id, k.bill_line_no, j.id AS journal_id, j.journal_number, j.journal_date, j.journal_type, l.source_type, b.bill_number,
+       (SELECT count(*) FROM fa_source_links o WHERE o.property_id = k.property_id AND o.journal_line_id = k.journal_line_id AND o.released_at IS NULL)::int AS units
+  FROM fa_source_links k
+  JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+  LEFT JOIN supplier_bills b ON b.id = k.bill_id
+ WHERE k.tenant_id = $1 AND k.property_id = $2 AND k.asset_id = $3 AND k.released_at IS NULL
+`
+
+type GetLiveLinkOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+type GetLiveLinkOfAssetRow struct {
+	JournalLineID int64
+	UnitNo        int32
+	Cost          decimal.Decimal
+	BillID        *int64
+	BillLineNo    *int32
+	JournalID     int64
+	JournalNumber string
+	JournalDate   civil.Date
+	JournalType   string
+	SourceType    *string
+	BillNumber    *string
+	Units         int32
+}
+
+func (q *Queries) GetLiveLinkOfAsset(ctx context.Context, arg GetLiveLinkOfAssetParams) (GetLiveLinkOfAssetRow, error) {
+	row := q.db.QueryRow(ctx, getLiveLinkOfAsset, arg.TenantID, arg.PropertyID, arg.AssetID)
+	var i GetLiveLinkOfAssetRow
+	err := row.Scan(
+		&i.JournalLineID,
+		&i.UnitNo,
+		&i.Cost,
+		&i.BillID,
+		&i.BillLineNo,
+		&i.JournalID,
+		&i.JournalNumber,
+		&i.JournalDate,
+		&i.JournalType,
+		&i.SourceType,
+		&i.BillNumber,
+		&i.Units,
+	)
+	return i, err
 }
 
 const getLocation = `-- name: GetLocation :one
@@ -1038,6 +1224,95 @@ func (q *Queries) GetWarehouseRefByCode(ctx context.Context, arg GetWarehouseRef
 	return i, err
 }
 
+const guardBillAssets = `-- name: GuardBillAssets :many
+SELECT a.number, k.bill_line_no
+  FROM fa_source_links k
+  JOIN fa_assets a ON a.property_id = k.property_id AND a.id = k.asset_id
+  JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
+  JOIN supplier_bills b ON b.property_id = k.property_id AND b.journal_id = l.journal_id
+ WHERE k.tenant_id = $1 AND k.property_id = $2 AND b.id = $3 AND k.released_at IS NULL
+   AND ($4::int = 0 OR k.bill_line_no = $4 OR k.bill_line_no IS NULL)
+ ORDER BY a.number
+`
+
+type GuardBillAssetsParams struct {
+	TenantID   int64
+	PropertyID int64
+	BillID     int64
+	LineNo     int32
+}
+
+type GuardBillAssetsRow struct {
+	Number     string
+	BillLineNo *int32
+}
+
+// The live assets made from the lines of a bill (line_no 0: any line), whether the link knows its bill line or only its journal (a bill posted before migration 00094).
+func (q *Queries) GuardBillAssets(ctx context.Context, arg GuardBillAssetsParams) ([]GuardBillAssetsRow, error) {
+	rows, err := q.db.Query(ctx, guardBillAssets,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.BillID,
+		arg.LineNo,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GuardBillAssetsRow{}
+	for rows.Next() {
+		var i GuardBillAssetsRow
+		if err := rows.Scan(&i.Number, &i.BillLineNo); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const guardJournalAssets = `-- name: GuardJournalAssets :many
+SELECT a.number, l.line_no
+  FROM fa_source_links k
+  JOIN fa_assets a ON a.property_id = k.property_id AND a.id = k.asset_id
+  JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
+ WHERE k.tenant_id = $1 AND k.property_id = $2 AND l.journal_id = $3 AND k.released_at IS NULL
+ ORDER BY a.number
+`
+
+type GuardJournalAssetsParams struct {
+	TenantID   int64
+	PropertyID int64
+	JournalID  int64
+}
+
+type GuardJournalAssetsRow struct {
+	Number string
+	LineNo int32
+}
+
+func (q *Queries) GuardJournalAssets(ctx context.Context, arg GuardJournalAssetsParams) ([]GuardJournalAssetsRow, error) {
+	rows, err := q.db.Query(ctx, guardJournalAssets, arg.TenantID, arg.PropertyID, arg.JournalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GuardJournalAssetsRow{}
+	for rows.Next() {
+		var i GuardJournalAssetsRow
+		if err := rows.Scan(&i.Number, &i.LineNo); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertCategory = `-- name: InsertCategory :one
 INSERT INTO fa_categories (tenant_id, property_id, code, name, kind, cost_account_id, accumulated_account_id, expense_account_id, department_id, method, life_months,
                            residual_pct, db_factor, fiscal_group, fiscal_method, is_active, sort_order, created_by, updated_by)
@@ -1116,6 +1391,29 @@ func (q *Queries) InsertCategory(ctx context.Context, arg InsertCategoryParams) 
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const insertDismissal = `-- name: InsertDismissal :exec
+INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason, dismissed_by) VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertDismissalParams struct {
+	TenantID   int64
+	PropertyID int64
+	LineID     int64
+	Reason     string
+	ActorID    *int64
+}
+
+func (q *Queries) InsertDismissal(ctx context.Context, arg InsertDismissalParams) error {
+	_, err := q.db.Exec(ctx, insertDismissal,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.LineID,
+		arg.Reason,
+		arg.ActorID,
+	)
+	return err
 }
 
 const insertLocation = `-- name: InsertLocation :one
@@ -1228,6 +1526,59 @@ func (q *Queries) InsertOpeningImport(ctx context.Context, arg InsertOpeningImpo
 		&i.CreatedBy,
 	)
 	return i, err
+}
+
+const insertSourceLink = `-- name: InsertSourceLink :exec
+INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertSourceLinkParams struct {
+	TenantID       int64
+	PropertyID     int64
+	JournalLineID  int64
+	UnitNo         int32
+	AssetID        int64
+	Cost           decimal.Decimal
+	BillID         *int64
+	BillLineNo     *int32
+	IdempotencyKey *string
+	ActorID        *int64
+}
+
+func (q *Queries) InsertSourceLink(ctx context.Context, arg InsertSourceLinkParams) error {
+	_, err := q.db.Exec(ctx, insertSourceLink,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.JournalLineID,
+		arg.UnitNo,
+		arg.AssetID,
+		arg.Cost,
+		arg.BillID,
+		arg.BillLineNo,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	return err
+}
+
+const journalDebitsCostAccount = `-- name: JournalDebitsCostAccount :one
+SELECT EXISTS (SELECT 1 FROM gl_journal_lines l JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id
+                WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.journal_id = $3 AND l.debit > 0)::boolean
+`
+
+type JournalDebitsCostAccountParams struct {
+	TenantID   int64
+	PropertyID int64
+	JournalID  int64
+}
+
+// Whether the journal has a debit line on the cost account of a category (the only journals the register can hold a link to).
+func (q *Queries) JournalDebitsCostAccount(ctx context.Context, arg JournalDebitsCostAccountParams) (bool, error) {
+	row := q.db.QueryRow(ctx, journalDebitsCostAccount, arg.TenantID, arg.PropertyID, arg.JournalID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const ledgerDrift = `-- name: LedgerDrift :many
@@ -1524,9 +1875,10 @@ func (q *Queries) LedgerSetCancelled(ctx context.Context, arg LedgerSetCancelled
 }
 
 const ledgerSumsOfAsset = `-- name: LedgerSumsOfAsset :one
-SELECT COALESCE(SUM(cost_delta), 0)::numeric(18,3) AS cost, COALESCE(SUM(accum_delta), 0)::numeric(18,3) AS accum, COALESCE(SUM(months_delta), 0)::int AS months,
-       COALESCE(MAX(book_month) FILTER (WHERE kind IN ('OPEN', 'DEPRECIATE') AND months_delta > 0), DATE '1900-01-01')::date AS last_dep_month
-  FROM fa_ledger WHERE tenant_id = $1 AND property_id = $2 AND asset_id = $3
+SELECT COALESCE(SUM(e.cost_delta), 0)::numeric(18,3) AS cost, COALESCE(SUM(e.accum_delta), 0)::numeric(18,3) AS accum, COALESCE(SUM(e.months_delta), 0)::int AS months,
+       COALESCE(MAX(e.book_month) FILTER (WHERE e.kind IN ('OPEN', 'DEPRECIATE') AND e.months_delta > 0
+                                          AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id)), DATE '1900-01-01')::date AS last_dep_month
+  FROM fa_ledger e WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.asset_id = $3
 `
 
 type LedgerSumsOfAssetParams struct {
@@ -1552,6 +1904,35 @@ func (q *Queries) LedgerSumsOfAsset(ctx context.Context, arg LedgerSumsOfAssetPa
 		&i.LastDepMonth,
 	)
 	return i, err
+}
+
+const ledgerUpdateStart = `-- name: LedgerUpdateStart :exec
+UPDATE fa_assets SET in_service_date = $1, start_rule = $2, first_dep_month = $3, version = version + 1, updated_by = $4
+ WHERE tenant_id = $5 AND property_id = $6 AND id = $7 AND status = 'ACTIVE'
+`
+
+type LedgerUpdateStartParams struct {
+	InServiceDate civil.Date
+	StartRule     string
+	FirstDepMonth *civil.Date
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+// The start of the depreciation, free until the asset has been depreciated (the trigger fa_assets_start_locked is the backstop).
+func (q *Queries) LedgerUpdateStart(ctx context.Context, arg LedgerUpdateStartParams) error {
+	_, err := q.db.Exec(ctx, ledgerUpdateStart,
+		arg.InServiceDate,
+		arg.StartRule,
+		arg.FirstDepMonth,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
 }
 
 const listAccountsOfType = `-- name: ListAccountsOfType :many
@@ -2303,6 +2684,50 @@ func (q *Queries) ListFiscalGroups(ctx context.Context, arg ListFiscalGroupsPara
 	return items, nil
 }
 
+const listLinksByKey = `-- name: ListLinksByKey :many
+SELECT id, tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, released_at, released_by, created_at, created_by FROM fa_source_links WHERE property_id = $1 AND idempotency_key = $2 ORDER BY unit_no
+`
+
+type ListLinksByKeyParams struct {
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) ListLinksByKey(ctx context.Context, arg ListLinksByKeyParams) ([]FaSourceLink, error) {
+	rows, err := q.db.Query(ctx, listLinksByKey, arg.PropertyID, arg.IdempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FaSourceLink{}
+	for rows.Next() {
+		var i FaSourceLink
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.JournalLineID,
+			&i.UnitNo,
+			&i.AssetID,
+			&i.Cost,
+			&i.BillID,
+			&i.BillLineNo,
+			&i.IdempotencyKey,
+			&i.ReleasedAt,
+			&i.ReleasedBy,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLocations = `-- name: ListLocations :many
 
 SELECT l.id, l.tenant_id, l.property_id, l.code, l.name, l.kind, l.room_id, l.banquet_room_id, l.warehouse_id, l.label_code, l.is_active, l.created_at, l.created_by, l.updated_at, l.updated_by, r.room_number, br.name AS banquet_room_name, w.name AS warehouse_name,
@@ -2457,6 +2882,164 @@ func (q *Queries) ListOpeningImports(ctx context.Context, arg ListOpeningImports
 	return items, nil
 }
 
+const listWaitingLines = `-- name: ListWaitingLines :many
+
+WITH w AS (
+  SELECT l.id AS line_id, l.journal_id, j.journal_number, j.journal_type, j.journal_date, j.description AS journal_description, l.line_no, l.account_id,
+         ga.code AS account_code, ga.name AS account_name, l.debit AS cost, l.description, l.source_type, l.source_ref, l.source_line, l.department_id,
+         c.id AS category_id, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
+         b.id AS bill_id, b.bill_number, b.supplier_invoice_number, s.id AS supplier_id, s.code AS supplier_code, s.name AS supplier_name, bl.vat_treatment AS bill_vat_treatment,
+         CASE WHEN l.source_type = 'AP_BILL' THEN 'BILL' WHEN j.journal_type = 'CASHIER' THEN 'CASHIER' WHEN j.journal_type = 'BANK' THEN 'BANK'
+              WHEN j.journal_type = 'MANUAL' THEN 'MANUAL' ELSE 'OTHER' END::text AS source,
+         (d.id IS NOT NULL)::boolean AS dismissed, d.reason AS dismissed_reason, d.dismissed_at
+    FROM gl_journal_lines l
+    JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+    JOIN gl_accounts ga ON ga.property_id = l.property_id AND ga.id = l.account_id
+    JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id AND c.is_active
+    JOIN fa_settings st ON st.property_id = l.property_id
+    LEFT JOIN supplier_bills b ON b.property_id = l.property_id AND b.journal_id = l.journal_id AND l.source_type = 'AP_BILL'
+    LEFT JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+    LEFT JOIN supplier_bill_lines bl ON bl.bill_id = b.id AND bl.line_no = l.source_line
+    LEFT JOIN fa_source_dismissals d ON d.property_id = l.property_id AND d.journal_line_id = l.id AND d.restored_at IS NULL
+   WHERE l.tenant_id = $8 AND l.property_id = $9 AND l.debit > 0
+     AND j.journal_type NOT IN ('ASSET', 'REVERSAL', 'CLOSING') AND j.reverses_journal_id IS NULL
+     AND COALESCE(l.source_type, '') <> 'ASSET'
+     AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+     AND st.register_from IS NOT NULL AND j.journal_date >= st.register_from
+     AND NOT (c.kind = 'OE' AND st.oe_policy = 'EXPENSE')
+     AND NOT EXISTS (SELECT 1 FROM fa_source_links k WHERE k.property_id = l.property_id AND k.journal_line_id = l.id AND k.released_at IS NULL)
+     AND ((d.id IS NOT NULL) = $10::boolean)
+)
+SELECT w.line_id, w.journal_id, w.journal_number, w.journal_type, w.journal_date, w.journal_description, w.line_no, w.account_id, w.account_code, w.account_name, w.cost, w.description, w.source_type, w.source_ref, w.source_line, w.department_id, w.category_id, w.category_code, w.category_name, w.category_kind, w.bill_id, w.bill_number, w.supplier_invoice_number, w.supplier_id, w.supplier_code, w.supplier_name, w.bill_vat_treatment, w.source, w.dismissed, w.dismissed_reason, w.dismissed_at, count(*) OVER ()::int AS total_rows, COALESCE(sum(w.cost) OVER (), 0)::numeric(18,3) AS total_cost
+  FROM w
+ WHERE ($1::text IS NULL OR w.source = $1)
+   AND ($2::bigint IS NULL OR w.category_id = $2)
+   AND ($3::date IS NULL OR w.journal_date >= $3)
+   AND ($4::date IS NULL OR w.journal_date <= $4)
+   AND ($5::text IS NULL OR w.description ILIKE '%' || $5 || '%' OR w.journal_number ILIKE '%' || $5 || '%' OR w.supplier_name ILIKE '%' || $5 || '%'
+        OR w.bill_number ILIKE '%' || $5 || '%' OR w.supplier_invoice_number ILIKE '%' || $5 || '%')
+ ORDER BY w.journal_date, w.line_id
+ LIMIT $7 OFFSET $6
+`
+
+type ListWaitingLinesParams struct {
+	Source     *string
+	CategoryID *int64
+	DateFrom   *civil.Date
+	DateTo     *civil.Date
+	Q          *string
+	RowOffset  int32
+	RowLimit   int32
+	TenantID   int64
+	PropertyID int64
+	Dismissed  bool
+}
+
+type ListWaitingLinesRow struct {
+	LineID                int64
+	JournalID             int64
+	JournalNumber         string
+	JournalType           string
+	JournalDate           civil.Date
+	JournalDescription    string
+	LineNo                int32
+	AccountID             int64
+	AccountCode           string
+	AccountName           string
+	Cost                  decimal.Decimal
+	Description           *string
+	SourceType            *string
+	SourceRef             *string
+	SourceLine            *int32
+	DepartmentID          *int64
+	CategoryID            int64
+	CategoryCode          string
+	CategoryName          string
+	CategoryKind          string
+	BillID                *int64
+	BillNumber            *string
+	SupplierInvoiceNumber *string
+	SupplierID            *int64
+	SupplierCode          *string
+	SupplierName          *string
+	BillVatTreatment      *string
+	Source                string
+	Dismissed             bool
+	DismissedReason       *string
+	DismissedAt           *time.Time
+	TotalRows             int32
+	TotalCost             decimal.Decimal
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Acquisition from a journal line (acquire.go)
+// The journal lines that debit the cost account of an active category and are not an asset yet (37-fixed-assets.md 4.2.1). A line of a journal that is reversed, of a reversal, of the register itself
+// (type ASSET) or of a closing is never in the list. The cost is the debit of the line (F7). dismissed = true lists the lines marked "not an asset" instead.
+func (q *Queries) ListWaitingLines(ctx context.Context, arg ListWaitingLinesParams) ([]ListWaitingLinesRow, error) {
+	rows, err := q.db.Query(ctx, listWaitingLines,
+		arg.Source,
+		arg.CategoryID,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.Q,
+		arg.RowOffset,
+		arg.RowLimit,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Dismissed,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWaitingLinesRow{}
+	for rows.Next() {
+		var i ListWaitingLinesRow
+		if err := rows.Scan(
+			&i.LineID,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.JournalType,
+			&i.JournalDate,
+			&i.JournalDescription,
+			&i.LineNo,
+			&i.AccountID,
+			&i.AccountCode,
+			&i.AccountName,
+			&i.Cost,
+			&i.Description,
+			&i.SourceType,
+			&i.SourceRef,
+			&i.SourceLine,
+			&i.DepartmentID,
+			&i.CategoryID,
+			&i.CategoryCode,
+			&i.CategoryName,
+			&i.CategoryKind,
+			&i.BillID,
+			&i.BillNumber,
+			&i.SupplierInvoiceNumber,
+			&i.SupplierID,
+			&i.SupplierCode,
+			&i.SupplierName,
+			&i.BillVatTreatment,
+			&i.Source,
+			&i.Dismissed,
+			&i.DismissedReason,
+			&i.DismissedAt,
+			&i.TotalRows,
+			&i.TotalCost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lookupAssets = `-- name: LookupAssets :many
 SELECT a.id, a.number, a.name, a.status, l.name AS location_name
   FROM fa_assets a
@@ -2545,6 +3128,46 @@ func (q *Queries) RegisterTotalsByCategory(ctx context.Context, arg RegisterTota
 		return nil, err
 	}
 	return items, nil
+}
+
+const releaseLinksOfAsset = `-- name: ReleaseLinksOfAsset :exec
+UPDATE fa_source_links SET released_at = now(), released_by = $1 WHERE property_id = $2 AND asset_id = $3 AND released_at IS NULL
+`
+
+type ReleaseLinksOfAssetParams struct {
+	ActorID    *int64
+	PropertyID int64
+	AssetID    int64
+}
+
+func (q *Queries) ReleaseLinksOfAsset(ctx context.Context, arg ReleaseLinksOfAssetParams) error {
+	_, err := q.db.Exec(ctx, releaseLinksOfAsset, arg.ActorID, arg.PropertyID, arg.AssetID)
+	return err
+}
+
+const restoreDismissal = `-- name: RestoreDismissal :execrows
+UPDATE fa_source_dismissals SET restored_at = now(), restored_by = $1
+ WHERE tenant_id = $2 AND property_id = $3 AND journal_line_id = $4 AND restored_at IS NULL
+`
+
+type RestoreDismissalParams struct {
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	LineID     int64
+}
+
+func (q *Queries) RestoreDismissal(ctx context.Context, arg RestoreDismissalParams) (int64, error) {
+	result, err := q.db.Exec(ctx, restoreDismissal,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.LineID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setRegisterFrom = `-- name: SetRegisterFrom :exec
@@ -2882,6 +3505,49 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+	)
+	return i, err
+}
+
+const waitingTotals = `-- name: WaitingTotals :one
+SELECT count(*) FILTER (WHERE NOT dismissed)::int AS waiting, COALESCE(sum(cost) FILTER (WHERE NOT dismissed), 0)::numeric(18,3) AS waiting_cost,
+       count(*) FILTER (WHERE dismissed)::int AS dismissed, COALESCE(sum(cost) FILTER (WHERE dismissed), 0)::numeric(18,3) AS dismissed_cost
+  FROM (
+    SELECT l.debit AS cost, (d.id IS NOT NULL) AS dismissed
+      FROM gl_journal_lines l
+      JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+      JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id AND c.is_active
+      JOIN fa_settings st ON st.property_id = l.property_id
+      LEFT JOIN fa_source_dismissals d ON d.property_id = l.property_id AND d.journal_line_id = l.id AND d.restored_at IS NULL
+     WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.debit > 0
+       AND j.journal_type NOT IN ('ASSET', 'REVERSAL', 'CLOSING') AND j.reverses_journal_id IS NULL AND COALESCE(l.source_type, '') <> 'ASSET'
+       AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+       AND st.register_from IS NOT NULL AND j.journal_date >= st.register_from AND NOT (c.kind = 'OE' AND st.oe_policy = 'EXPENSE')
+       AND NOT EXISTS (SELECT 1 FROM fa_source_links k WHERE k.property_id = l.property_id AND k.journal_line_id = l.id AND k.released_at IS NULL)
+  ) x
+`
+
+type WaitingTotalsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type WaitingTotalsRow struct {
+	Waiting       int32
+	WaitingCost   decimal.Decimal
+	Dismissed     int32
+	DismissedCost decimal.Decimal
+}
+
+// What waits in the list, for the badge: the lines and their cost, the dismissed ones apart.
+func (q *Queries) WaitingTotals(ctx context.Context, arg WaitingTotalsParams) (WaitingTotalsRow, error) {
+	row := q.db.QueryRow(ctx, waitingTotals, arg.TenantID, arg.PropertyID)
+	var i WaitingTotalsRow
+	err := row.Scan(
+		&i.Waiting,
+		&i.WaitingCost,
+		&i.Dismissed,
+		&i.DismissedCost,
 	)
 	return i, err
 }

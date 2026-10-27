@@ -45,6 +45,8 @@ type fx struct {
 	svc              *assets.Service
 	tenantID, propID int64
 	admin            context.Context
+	boss             context.Context // a tenant administrator with a password, for the approvals
+	bossEmail        string
 	accounts         map[string]int64
 }
 
@@ -56,6 +58,9 @@ func newFx(t *testing.T) *fx {
 	f := &fx{Env: e, tenantID: tn.ID, propID: p.ID, admin: roomstest.Admin(tn.ID), accounts: map[string]int64{}}
 	f.svc = assets.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, e.Accounting, e.Departments)
 	e.Accounting.SetAssetSource(f.svc)
+	e.Accounting.SetJournalGuard(f.svc) // like internal/app: a journal or a bill with a line made an asset is not undone
+	e.Payables.SetAssetGuard(f.svc)
+	f.boss, f.bossEmail = e.AdminAccount(t, tn.ID)
 	rows, err := e.Pool.Query(context.Background(), `SELECT code, id FROM gl_accounts WHERE property_id = $1`, p.ID)
 	must(t, err)
 	for rows.Next() {

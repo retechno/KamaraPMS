@@ -36,15 +36,16 @@ var codePattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9._:/-]{0,29}$`)
 // Service is the accounting application service. Reading needs accounting.view; the chart of accounts and the system
 // account map need accounting.manage; manual journals accounting.post; periods accounting.close.
 type Service struct {
-	txm   *db.TxManager
-	clock clock.Clock
-	audit *audit.Writer
-	authz auth.Authorizer
-	days  *tenancy.Service
-	iam   *iam.Service
-	depts *departments.Service
-	stock StockSource
-	asset AssetSource
+	txm    *db.TxManager
+	clock  clock.Clock
+	audit  *audit.Writer
+	authz  auth.Authorizer
+	days   *tenancy.Service
+	iam    *iam.Service
+	depts  *departments.Service
+	stock  StockSource
+	asset  AssetSource
+	jguard JournalGuard
 }
 
 // NewService wires the service.
@@ -91,6 +92,22 @@ func (s *Service) stockControlAccounts(ctx context.Context, tenantID, propertyID
 // depreciation accounts of its categories (docs/architecture/37-fixed-assets.md F5). The cost accounts stay open to a bill line and to a manual journal.
 type AssetSource interface {
 	ControlAccountIDs(ctx context.Context, tenantID, propertyID int64) ([]int64, error)
+}
+
+// JournalGuard is asked, inside the transaction and after the accounting settings are locked, before a journal is reversed: the fixed assets answer 409 JOURNAL_LINE_IS_ASSET for a journal that has
+// a line made an asset, because the register mirrors that line (docs/architecture/37-fixed-assets.md F8). The way out is to cancel the asset.
+type JournalGuard interface {
+	CheckReverse(ctx context.Context, tenantID, propertyID, journalID int64) error
+}
+
+// SetJournalGuard wires the guard of the fixed assets; without one every journal can be reversed as before.
+func (s *Service) SetJournalGuard(g JournalGuard) { s.jguard = g }
+
+func (s *Service) checkReverse(ctx context.Context, tenantID, propertyID, journalID int64) error {
+	if s.jguard == nil {
+		return nil
+	}
+	return s.jguard.CheckReverse(ctx, tenantID, propertyID, journalID)
 }
 
 // SetAssetSource wires the fixed asset register; without it no account is the register's own.

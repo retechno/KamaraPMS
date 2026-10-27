@@ -1940,7 +1940,10 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('inv_amenity_runs', 'CHILD', 'of inv_movements: the cost of the night'), ('inv_amenity_run_lines', 'CHILD', 'of inv_movements'),
     ('inv_balance_days', 'CHILD', 'of inv_movements: the balance at the end of a day'), ('inv_cost_days', 'CHILD', 'of inv_movements: the cost of a day'),
     ('inv_fb_cost_days', 'CHILD', 'of inv_movements: the food and beverage cost of a day beside the POS revenue'),
-    ('fa_opening_imports', 'CHILD', 'of fa_assets: the totals of an import, whose assets are in the register');
+    ('fa_opening_imports', 'CHILD', 'of fa_assets: the totals of an import, whose assets are in the register'),
+    ('fa_source_links', 'CHILD', 'of fa_assets: the cost of each unit made from a journal line, which the journal already holds'),
+    ('fa_depr_runs', 'CHILD', 'of fa_ledger: the total of a month of depreciation, whose journal and ledger rows hold the money'),
+    ('fa_depr_lines', 'CHILD', 'of fa_ledger: the amount of an asset in a run');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -2867,6 +2870,70 @@ SELECT expect_error('a building has no declining balance rate', '23514', $q$SELE
 SELECT expect_error('a fiscal group is one row for a property', '23505', $q$SELECT pms_test.fa_base()$q$,
     $q$INSERT INTO fa_fiscal_groups (tenant_id, property_id, code, life_years, sl_rate, db_rate) VALUES (tn('ABC'), pr('BALI'), 'G1', 4, 25, 50)$q$,
     $q$INSERT INTO fa_fiscal_groups (tenant_id, property_id, code, life_years, sl_rate, db_rate) VALUES (tn('ABC'), pr('BALI'), 'G1', 4, 26, 50)$q$);
+
+-- the acquisition from a journal line and the depreciation runs (migration 00094)
+CREATE FUNCTION pms_test.fa_line(p_number text DEFAULT 'JV-L1', p_debit numeric DEFAULT 36000000, p_type text DEFAULT 'MANUAL', p_source_line int DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+    WITH j AS (INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), p_number, p_type, DATE '2026-01-10', 'Purchase') RETURNING id)
+    INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, source_line)
+    SELECT tn('ABC'), pr('BALI'), j.id, v.n, v.acc, v.dr, v.cr, CASE WHEN v.n = 1 THEN p_source_line END FROM j,
+           (VALUES (1, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '1530'), p_debit, 0::numeric),
+                   (2, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '7520'), 0::numeric, p_debit)) AS v(n, acc, dr, cr)
+$$;
+CREATE FUNCTION pms_test.fa_link(p_unit int DEFAULT 1, p_cost numeric DEFAULT 36000000, p_number text DEFAULT 'FA-000001', p_journal text DEFAULT 'JV-L1') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost)
+    SELECT tn('ABC'), pr('BALI'), (SELECT l.id FROM gl_journal_lines l JOIN gl_journals j ON j.id = l.journal_id WHERE j.property_id = pr('BALI') AND j.journal_number = p_journal AND l.line_no = 1), p_unit, a.id, p_cost
+      FROM fa_assets a WHERE a.property_id = pr('BALI') AND a.number = p_number
+$$;
+SELECT expect_ok('a unit made from a journal line is linked to it', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_link()$q$);
+SELECT expect_error('the live units of a line add up to its debit', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_link(1, 30000000)$q$);
+SELECT expect_ok('two units add up to the debit of the line', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset('FA-000001')$q$, $q$SELECT pms_test.fa_asset('FA-000002', 'FFE', 0, 0, 0, 'BBBBBBBBBBBB')$q$,
+    $q$SELECT pms_test.fa_link(1, 18000000, 'FA-000001')$q$, $q$SELECT pms_test.fa_link(2, 18000000, 'FA-000002')$q$);
+SELECT expect_error('a unit of a line is made once', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset('FA-000001')$q$, $q$SELECT pms_test.fa_asset('FA-000002', 'FFE', 0, 0, 0, 'BBBBBBBBBBBB')$q$,
+    $q$SELECT pms_test.fa_link(1, 36000000, 'FA-000001')$q$, $q$SELECT pms_test.fa_link(1, 36000000, 'FA-000002')$q$);
+SELECT expect_error('an asset comes from one line only', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_line('JV-L2')$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$SELECT pms_test.fa_link()$q$, $q$SELECT pms_test.fa_link(1, 36000000, 'FA-000001', 'JV-L2')$q$);
+SELECT expect_ok('a released link frees the line for a new asset', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset('FA-000001')$q$, $q$SELECT pms_test.fa_asset('FA-000002', 'FFE', 0, 0, 0, 'BBBBBBBBBBBB')$q$,
+    $q$SELECT pms_test.fa_link(1, 36000000, 'FA-000001')$q$, $q$UPDATE fa_source_links SET released_at = now()$q$, $q$SELECT pms_test.fa_link(1, 36000000, 'FA-000002')$q$);
+SELECT expect_error('a link is kept: it cannot be deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_link()$q$, $q$DELETE FROM fa_source_links$q$);
+SELECT expect_error('a link keeps its cost', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_link()$q$, $q$UPDATE fa_source_links SET cost = 1$q$);
+SELECT expect_error('a released link is not written again', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_link()$q$,
+    $q$UPDATE fa_source_links SET released_at = now()$q$, $q$UPDATE fa_source_links SET released_at = now() + interval '1 day'$q$);
+SELECT expect_error('a bill line names its bill and its number together', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id) SELECT tn('ABC'), pr('BALI'), l.id, 1, (SELECT id FROM fa_assets LIMIT 1), 36000000, 1 FROM gl_journal_lines l WHERE l.line_no = 1$q$);
+SELECT expect_error('only a line of a bill has a line number', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-L1', 100, 'MANUAL', 1)$q$);
+SELECT expect_ok('a dismissal hides the line once, and the restored one is kept', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$,
+    $q$INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason) SELECT tn('ABC'), pr('BALI'), id, 'a repair' FROM gl_journal_lines WHERE line_no = 1$q$,
+    $q$UPDATE fa_source_dismissals SET restored_at = now()$q$,
+    $q$INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason) SELECT tn('ABC'), pr('BALI'), id, 'a repair again' FROM gl_journal_lines WHERE line_no = 1$q$);
+SELECT expect_error('a line is dismissed once at a time', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$,
+    $q$INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason) SELECT tn('ABC'), pr('BALI'), id, 'a repair' FROM gl_journal_lines WHERE line_no = 1$q$,
+    $q$INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason) SELECT tn('ABC'), pr('BALI'), id, 'again' FROM gl_journal_lines WHERE line_no = 1$q$);
+SELECT expect_error('a dismissal has a reason', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line()$q$,
+    $q$INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason) SELECT tn('ABC'), pr('BALI'), id, '  ' FROM gl_journal_lines WHERE line_no = 1$q$);
+CREATE FUNCTION pms_test.fa_run(p_month date DEFAULT DATE '2026-01-01', p_journal text DEFAULT 'JV-R1') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_depr_runs (tenant_id, property_id, period_month, journal_id, total, asset_count)
+    SELECT tn('ABC'), pr('BALI'), p_month, j.id, 375000, 1 FROM gl_journals j WHERE j.property_id = pr('BALI') AND j.journal_number = p_journal
+$$;
+CREATE FUNCTION pms_test.fa_run_line(p_months int DEFAULT 1) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_depr_lines (tenant_id, property_id, run_id, asset_id, category_id, expense_account_id, months, from_month, amount, accum_after, carrying_after, months_done_after)
+    SELECT tn('ABC'), pr('BALI'), r.id, a.id, a.category_id, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = '7520'), p_months, DATE '2026-01-01', 375000, 375000, 35625000, 1
+      FROM fa_depr_runs r, fa_assets a
+$$;
+SELECT expect_ok('a run of a month and its line', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_run()$q$, $q$SELECT pms_test.fa_run_line()$q$);
+SELECT expect_error('a month has one live run', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_line('JV-R2')$q$, $q$SELECT pms_test.fa_run()$q$, $q$SELECT pms_test.fa_run(DATE '2026-01-01', 'JV-R2')$q$);
+SELECT expect_error('a run is for a whole month', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_run(DATE '2026-01-15')$q$);
+SELECT expect_ok('a reversed run lets the month be run again', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_line('JV-R2')$q$, $q$SELECT pms_test.fa_run()$q$,
+    $q$UPDATE fa_depr_runs SET status = 'REVERSED', reversal_journal_id = (SELECT id FROM gl_journals WHERE journal_number = 'JV-R2'), reversed_at = now(), reversal_reason = 'a mistake'$q$,
+    $q$SELECT pms_test.fa_run(DATE '2026-01-01', 'JV-R2')$q$);
+SELECT expect_error('a reversed run names its journal and its reason', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_run()$q$, $q$UPDATE fa_depr_runs SET status = 'REVERSED'$q$);
+SELECT expect_error('a run is not deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_run()$q$, $q$DELETE FROM fa_depr_runs$q$);
+SELECT expect_error('a run keeps its total', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_run()$q$, $q$UPDATE fa_depr_runs SET total = 1$q$);
+SELECT expect_error('the lines of a run are append-only', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_run()$q$,
+    $q$SELECT pms_test.fa_run_line()$q$, $q$UPDATE fa_depr_lines SET amount = 1$q$);
+SELECT expect_error('an asset is once in a run', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_run()$q$,
+    $q$SELECT pms_test.fa_run_line()$q$, $q$SELECT pms_test.fa_run_line()$q$);
+SELECT expect_error('a line of a run is for one month or more', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_line('JV-R1')$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_run()$q$,
+    $q$SELECT pms_test.fa_run_line(0)$q$);
 
 -- the standard chart of a new property, and the seed of the register
 SELECT expect_ok('the standard chart has the accounts of the register, in both languages, and 1590 is a header',

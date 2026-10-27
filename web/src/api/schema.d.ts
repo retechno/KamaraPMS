@@ -12385,6 +12385,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/assets/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The journal lines that wait to become assets, or the ones marked not an asset (any asset permission)
+         * @description Debit lines of the cost accounts of the categories, from the first month of the register, that no asset covers yet. `dismissed=true` lists the lines marked not an asset.
+         */
+        get: operations["listAssetWaiting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/waiting/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a journal line not an asset (asset.manage) */
+        post: operations["dismissAssetLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/waiting/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put a line marked not an asset back on the waiting list (asset.manage) */
+        post: operations["restoreAssetLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/from-line": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make one or more assets of a journal line (asset.manage); no journal is posted
+         * @description `Idempotency-Key` is required. The same key replays the first answer (200). With `units` above 1 the cost is divided and the last unit takes the rounding. 409 `LINE_ALREADY_ASSET` when the line is covered, 422 `LINE_NOT_ELIGIBLE` (reason in the context) when it cannot be an asset.
+         */
+        post: operations["makeAssetFromLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/assets": {
         parameters: {
             query?: never;
@@ -25049,6 +25131,121 @@ export interface components {
             fiscal_opening_estimated: boolean;
             version: number;
         };
+        AssetWaitingLine: {
+            /** Format: int64 */
+            line_id: number;
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            journal_type: string;
+            /** Format: date */
+            journal_date: string;
+            line_no: number;
+            /** @enum {string} */
+            source: "BILL" | "CASHIER" | "BANK" | "MANUAL" | "OTHER";
+            document_number: string;
+            /** Format: int64 */
+            account_id: number;
+            account_code: string;
+            account_name: string;
+            description: string;
+            cost: string;
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            category_kind: string;
+            /** Format: int64 */
+            department_id?: number | null;
+            /** Format: int64 */
+            bill_id?: number | null;
+            bill_number?: string | null;
+            bill_line_no?: number | null;
+            invoice_number?: string | null;
+            /** Format: int64 */
+            supplier_id?: number | null;
+            supplier_code?: string | null;
+            supplier_name?: string | null;
+            vat_treatment?: string | null;
+            age_days: number;
+            below_threshold: boolean;
+            dismissed: boolean;
+            dismissed_reason?: string | null;
+            /** Format: date-time */
+            dismissed_at?: string | null;
+        };
+        AssetWaitingPage: {
+            data: components["schemas"]["AssetWaitingLine"][];
+            total: number;
+            total_cost: string;
+            /**
+             * Format: date
+             * @description Empty: the register has not started, so nothing waits.
+             */
+            register_from?: string | null;
+            capitalization_threshold: string;
+            counts: {
+                waiting: number;
+                waiting_cost: string;
+                dismissed: number;
+                dismissed_cost: string;
+            };
+        };
+        AssetMakeRequest: {
+            /** Format: int64 */
+            journal_line_id: number;
+            /** @description How many assets the line is divided into (default 1). */
+            units?: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Default: the category of the cost account.
+             */
+            category_id?: number | null;
+            /** Format: int64 */
+            location_id?: number | null;
+            /** Format: int64 */
+            department_id?: number | null;
+            /** Format: int64 */
+            supplier_id?: number | null;
+            /** Format: date */
+            in_service_date?: string | null;
+            start_rule?: string;
+            /** @description The sets of a batch of operating equipment (one asset). */
+            unit_count?: number | null;
+            serial_no?: string | null;
+            /** Format: date */
+            warranty_until?: string | null;
+            notes?: string | null;
+        };
+        AssetMakeResult: {
+            assets: {
+                /** Format: int64 */
+                id: number;
+                number: string;
+                name: string;
+                cost: string;
+            }[];
+            warnings: components["schemas"]["AssetOpeningFinding"][];
+            replayed: boolean;
+        };
+        AssetSourceLink: {
+            /** Format: int64 */
+            journal_line_id: number;
+            unit_no: number;
+            units: number;
+            cost: string;
+            /** Format: int64 */
+            journal_id: number;
+            journal_number: string;
+            /** Format: date */
+            journal_date: string;
+            journal_type: string;
+            /** Format: int64 */
+            bill_id?: number | null;
+            bill_number?: string | null;
+            bill_line_no?: number | null;
+        };
         AssetLedgerEntry: {
             /** Format: int64 */
             id: number;
@@ -25072,6 +25269,7 @@ export interface components {
         };
         AssetDetail: components["schemas"]["Asset"] & {
             opening_import_number?: string | null;
+            source_link?: components["schemas"]["AssetSourceLink"] | null;
             ledger: components["schemas"]["AssetLedgerEntry"][];
         };
         AssetPage: {
@@ -25096,6 +25294,13 @@ export interface components {
             /** Format: date */
             warranty_until?: string | null;
             notes?: string | null;
+            /**
+             * Format: date
+             * @description Only while no month has been depreciated.
+             */
+            in_service_date?: string | null;
+            /** @description Only while no month has been depreciated. */
+            start_rule?: string;
             version: number;
         };
         /** @description One old asset. Blank fields follow the category; what the register can compute it computes, with a warning. */
@@ -45570,6 +45775,146 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetOpeningResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listAssetWaiting: {
+        parameters: {
+            query?: {
+                dismissed?: boolean;
+                source?: "BILL" | "CASHIER" | "BANK" | "MANUAL" | "OTHER";
+                category_id?: number;
+                date_from?: string;
+                date_to?: string;
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetWaitingPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    dismissAssetLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    journal_line_id: number;
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    restoreAssetLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    journal_line_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Done. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    makeAssetFromLine: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetMakeRequest"];
+            };
+        };
+        responses: {
+            /** @description The answer of an earlier request with the same key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetMakeResult"];
+                };
+            };
+            /** @description The assets. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetMakeResult"];
                 };
             };
             400: components["responses"]["Problem"];

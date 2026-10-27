@@ -110,6 +110,16 @@ func (s *Service) assetDetail(ctx context.Context, p auth.Principal, propertyID,
 			d.OpeningImportNumber = &imp.Number
 		}
 	}
+	if r.Source == sourceJournal {
+		k, err := q.GetLiveLinkOfAsset(ctx, assetsdb.GetLiveLinkOfAssetParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: id})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return AssetDetail{}, err
+		}
+		if err == nil {
+			d.SourceLink = &AssetSourceLink{JournalLineID: k.JournalLineID, UnitNo: k.UnitNo, Units: k.Units, Cost: k.Cost, JournalID: k.JournalID, JournalNumber: k.JournalNumber, JournalDate: k.JournalDate,
+				JournalType: k.JournalType, BillID: k.BillID, BillNumber: k.BillNumber, BillLineNo: k.BillLineNo}
+		}
+	}
 	rows, err := q.ListAssetLedger(ctx, assetsdb.ListAssetLedgerParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: id})
 	if err != nil {
 		return AssetDetail{}, err
@@ -165,7 +175,8 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 		return AssetDetail{}, invalid("asset", f...)
 	}
 	err = s.write(ctx, propertyID, func(ctx context.Context, day civil.Date) error {
-		if _, err := s.lockSettings(ctx, p, propertyID, db.ForShare); err != nil {
+		cfg, err := s.lockSettings(ctx, p, propertyID, db.ForShare)
+		if err != nil {
 			return err
 		}
 		if err := db.LockRows(ctx, db.FAAssets, db.ForNoKeyUpdate, propertyID, []int64{id}); err != nil {
@@ -178,6 +189,10 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 		}
 		if cur.Status != statusActive {
 			return apperr.Conflict("ASSET_STATUS_INVALID", "only an active asset is changed").WithContext("status", cur.Status)
+		}
+		start, err := s.newStart(cur, in, cfg, day)
+		if err != nil {
+			return err
 		}
 		if in.LocationID != nil {
 			loc, err := q.GetLocation(ctx, assetsdb.GetLocationParams{TenantID: p.TenantID, PropertyID: propertyID, ID: *in.LocationID})
@@ -200,6 +215,11 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 			}
 			return err
 		}
+		if start != nil {
+			if err := s.setStart(ctx, p, propertyID, id, start.inService, start.rule, start.firstDep); err != nil {
+				return err
+			}
+		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, day, "asset.updated", "fa_asset", id, cur.Number,
 			map[string]any{"name": cur.Name, "location_id": cur.LocationID, "department_id": cur.DepartmentID, "supplier_id": cur.SupplierID, "serial_no": cur.SerialNo, "warranty_until": cur.WarrantyUntil},
 			map[string]any{"name": in.Name, "location_id": in.LocationID, "department_id": in.DepartmentID, "supplier_id": in.SupplierID, "serial_no": in.SerialNo, "warranty_until": in.WarrantyUntil}))
@@ -208,6 +228,54 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 		return AssetDetail{}, err
 	}
 	return s.assetDetail(ctx, p, propertyID, id)
+}
+
+// startChange is a new start of the depreciation of an asset.
+type startChange struct {
+	inService civil.Date
+	rule      string
+	firstDep  *civil.Date
+}
+
+// newStart reads the change of the start from a patch: nil when the patch does not touch it. The start is free until the asset has been depreciated (A8); the trigger of the database is the backstop.
+func (s *Service) newStart(cur assetsdb.GetAssetRow, in AssetPatch, cfg assetsdb.FaSetting, day civil.Date) (*startChange, error) {
+	if in.InServiceDate == nil && in.StartRule == nil {
+		return nil, nil
+	}
+	c := startChange{inService: cur.InServiceDate, rule: cur.StartRule, firstDep: cur.FirstDepMonth}
+	if in.InServiceDate != nil {
+		c.inService = *in.InServiceDate
+	}
+	if in.StartRule != nil {
+		c.rule = *in.StartRule
+	}
+	if c.inService.Equal(cur.InServiceDate) && c.rule == cur.StartRule {
+		return nil, nil
+	}
+	if cur.DepMonthsDone > 0 {
+		return nil, apperr.Conflict("ASSET_START_LOCKED", "the start of the depreciation cannot change once the asset has been depreciated").WithContext("asset", cur.Number)
+	}
+	var f []apperr.FieldError
+	if c.rule != StartInServiceMonth && c.rule != StartNextMonth {
+		f = append(f, fieldErr("start_rule", "INVALID_VALUE", "IN_SERVICE_MONTH or NEXT_MONTH"))
+	}
+	if c.inService.After(day) {
+		f = append(f, fieldErr("in_service_date", "IN_THE_FUTURE", "not after the open business date"))
+	}
+	if cur.LifeMonths != nil && len(f) == 0 {
+		fd := MonthStart(c.inService)
+		if c.rule == StartNextMonth {
+			fd = AddMonths(fd, 1)
+		}
+		c.firstDep = &fd
+		if cfg.RegisterFrom != nil && fd.Before(MonthStart(*cfg.RegisterFrom)) {
+			f = append(f, fieldErr("in_service_date", "BEFORE_REGISTER_START", "the depreciation cannot start before the register does"))
+		}
+	}
+	if len(f) > 0 {
+		return nil, invalid("asset", f...)
+	}
+	return &c, nil
 }
 
 // CancelAsset takes an asset out of the register while the register has not depreciated it and nothing has been done to it (asset.manage, a reason). Its journal, when the asset came with one,
@@ -242,6 +310,9 @@ func (s *Service) CancelAsset(ctx context.Context, propertyID, id int64, in Canc
 			return apperr.Conflict("ASSET_HAS_DEPRECIATION", "the register has depreciated or changed this asset: it cannot be cancelled").WithContext("asset", cur.Number)
 		}
 		if err := s.cancelAsset(ctx, p, propertyID, id, day); err != nil {
+			return err
+		}
+		if err := q.ReleaseLinksOfAsset(ctx, assetsdb.ReleaseLinksOfAssetParams{PropertyID: propertyID, AssetID: id, ActorID: p.ActorID()}); err != nil { // the line is back in the waiting list
 			return err
 		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, day, "asset.cancelled", "fa_asset", id, cur.Number, map[string]any{"status": cur.Status},

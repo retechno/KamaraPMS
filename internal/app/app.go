@@ -176,7 +176,9 @@ func New(d Deps) *App {
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	assetsSvc := assets.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, departmentsSvc)
-	accountingSvc.SetAssetSource(assetsSvc) // the accumulated depreciation accounts of the categories are the register's own (37-fixed-assets.md F5)
+	accountingSvc.SetAssetSource(assetsSvc)  // the accumulated depreciation accounts of the categories are the register's own (37-fixed-assets.md F5)
+	accountingSvc.SetJournalGuard(assetsSvc) // a journal with a line made an asset is not reversed (37-fixed-assets.md F8)
+	payablesSvc.SetAssetGuard(assetsSvc)     // nor a bill or a credit note on a line made an asset
 	documentsSvc.SetAssets(assetsSvc)
 	accountingSvc.SetStockSource(stockBooks{inv: inventorySvc})                 // the journal of the day reads the stock ledger, and the stock accounts are the inventory's own
 	nightAuditSvc.SetStockChecker(stockClose{inv: inventorySvc})                // and the close asks the stock whether its books agree

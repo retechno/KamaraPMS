@@ -259,6 +259,11 @@ func (s *Service) postCredit(ctx context.Context, p auth.Principal, propertyID i
 				lineErrs = append(lineErrs, fieldErr(at("bill_line_no"), "NOT_FOUND", "no such line on the bill"))
 				continue
 			}
+			if s.assets != nil {
+				if err := s.assets.CheckBillLine(ctx, p.TenantID, propertyID, in.BillID, l.BillLineNo); err != nil {
+					return err
+				}
+			}
 			if left := bl.Amount.Sub(doneAmount[l.BillLineNo]); l.Amount.GreaterThan(left) {
 				lineErrs = append(lineErrs, fieldErr(at("amount"), "EXCEEDS_BILL_LINE", "more than the "+left.String()+" the bill line has left to credit"))
 			}

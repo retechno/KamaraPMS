@@ -14267,6 +14267,109 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/waiting:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetWaiting
+      summary: "The journal lines that wait to become assets, or the ones marked not an asset (any asset permission)"
+      description: "Debit lines of the cost accounts of the categories, from the first month of the register, that no asset covers yet. `dismissed=true` lists the lines marked not an asset."
+      tags: [assets]
+      parameters:
+        - { name: dismissed, in: query, schema: { type: boolean } }
+        - { name: source, in: query, schema: { type: string, enum: [BILL, CASHIER, BANK, MANUAL, OTHER] } }
+        - { name: category_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: The page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetWaitingPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/waiting/dismiss:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: dismissAssetLine
+      summary: "Mark a journal line not an asset (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journal_line_id, reason]
+              properties:
+                journal_line_id: { type: integer, format: int64 }
+                reason: { type: string }
+      responses:
+        "204": { description: Done. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/waiting/restore:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: restoreAssetLine
+      summary: "Put a line marked not an asset back on the waiting list (asset.manage)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journal_line_id]
+              properties:
+                journal_line_id: { type: integer, format: int64 }
+      responses:
+        "204": { description: Done. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/from-line:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: makeAssetFromLine
+      summary: "Make one or more assets of a journal line (asset.manage); no journal is posted"
+      description: "`Idempotency-Key` is required. The same key replays the first answer (200). With `units` above 1 the cost is divided and the last unit takes the rounding. 409 `LINE_ALREADY_ASSET` when the line is covered, 422 `LINE_NOT_ELIGIBLE` (reason in the context) when it cannot be an asset."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetMakeRequest" }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMakeResult" }
+        "201":
+          description: The assets.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMakeResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/assets:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -26598,6 +26701,106 @@ components:
         fiscal_opening_as_of: { type: [string, "null"], format: date }
         fiscal_opening_estimated: { type: boolean }
         version: { type: integer }
+    AssetWaitingLine:
+      type: object
+      required: [line_id, journal_id, journal_number, journal_type, journal_date, line_no, source, document_number, account_id, account_code, account_name, description, cost, category_id, category_code, category_name, category_kind, age_days, below_threshold, dismissed]
+      properties:
+        line_id: { type: integer, format: int64 }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        journal_type: { type: string }
+        journal_date: { type: string, format: date }
+        line_no: { type: integer }
+        source: { type: string, enum: [BILL, CASHIER, BANK, MANUAL, OTHER] }
+        document_number: { type: string }
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        description: { type: string }
+        cost: { type: string }
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        category_kind: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        bill_id: { type: [integer, "null"], format: int64 }
+        bill_number: { type: [string, "null"] }
+        bill_line_no: { type: [integer, "null"] }
+        invoice_number: { type: [string, "null"] }
+        supplier_id: { type: [integer, "null"], format: int64 }
+        supplier_code: { type: [string, "null"] }
+        supplier_name: { type: [string, "null"] }
+        vat_treatment: { type: [string, "null"] }
+        age_days: { type: integer }
+        below_threshold: { type: boolean }
+        dismissed: { type: boolean }
+        dismissed_reason: { type: [string, "null"] }
+        dismissed_at: { type: [string, "null"], format: date-time }
+    AssetWaitingPage:
+      type: object
+      required: [data, total, total_cost, capitalization_threshold, counts]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetWaitingLine" } }
+        total: { type: integer }
+        total_cost: { type: string }
+        register_from: { type: [string, "null"], format: date, description: "Empty: the register has not started, so nothing waits." }
+        capitalization_threshold: { type: string }
+        counts:
+          type: object
+          required: [waiting, waiting_cost, dismissed, dismissed_cost]
+          properties:
+            waiting: { type: integer }
+            waiting_cost: { type: string }
+            dismissed: { type: integer }
+            dismissed_cost: { type: string }
+    AssetMakeRequest:
+      type: object
+      required: [journal_line_id, name]
+      properties:
+        journal_line_id: { type: integer, format: int64 }
+        units: { type: integer, description: "How many assets the line is divided into (default 1)." }
+        name: { type: string }
+        category_id: { type: [integer, "null"], format: int64, description: "Default: the category of the cost account." }
+        location_id: { type: [integer, "null"], format: int64 }
+        department_id: { type: [integer, "null"], format: int64 }
+        supplier_id: { type: [integer, "null"], format: int64 }
+        in_service_date: { type: [string, "null"], format: date }
+        start_rule: { type: string }
+        unit_count: { type: [integer, "null"], description: "The sets of a batch of operating equipment (one asset)." }
+        serial_no: { type: [string, "null"] }
+        warranty_until: { type: [string, "null"], format: date }
+        notes: { type: [string, "null"] }
+    AssetMakeResult:
+      type: object
+      required: [assets, warnings, replayed]
+      properties:
+        assets:
+          type: array
+          items:
+            type: object
+            required: [id, number, name, cost]
+            properties:
+              id: { type: integer, format: int64 }
+              number: { type: string }
+              name: { type: string }
+              cost: { type: string }
+        warnings: { type: array, items: { $ref: "#/components/schemas/AssetOpeningFinding" } }
+        replayed: { type: boolean }
+    AssetSourceLink:
+      type: object
+      required: [journal_line_id, unit_no, units, cost, journal_id, journal_number, journal_date, journal_type]
+      properties:
+        journal_line_id: { type: integer, format: int64 }
+        unit_no: { type: integer }
+        units: { type: integer }
+        cost: { type: string }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        journal_date: { type: string, format: date }
+        journal_type: { type: string }
+        bill_id: { type: [integer, "null"], format: int64 }
+        bill_number: { type: [string, "null"] }
+        bill_line_no: { type: [integer, "null"] }
     AssetLedgerEntry:
       type: object
       required: [id, kind, event_date, cost_delta, accum_delta, months_delta, source_type, source_id, created_at]
@@ -26621,6 +26824,7 @@ components:
           required: [ledger]
           properties:
             opening_import_number: { type: [string, "null"] }
+            source_link: { oneOf: [{ $ref: "#/components/schemas/AssetSourceLink" }, { type: "null" }] }
             ledger: { type: array, items: { $ref: "#/components/schemas/AssetLedgerEntry" } }
     AssetPage:
       type: object
@@ -26647,6 +26851,8 @@ components:
         serial_no: { type: [string, "null"] }
         warranty_until: { type: [string, "null"], format: date }
         notes: { type: [string, "null"] }
+        in_service_date: { type: [string, "null"], format: date, description: "Only while no month has been depreciated." }
+        start_rule: { type: string, description: "Only while no month has been depreciated." }
         version: { type: integer }
     AssetOpeningRow:
       type: object

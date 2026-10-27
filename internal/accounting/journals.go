@@ -790,6 +790,9 @@ func (s *Service) Reverse(ctx context.Context, propertyID, journalID int64, in R
 		case orig.ReversedByID != nil:
 			return apperr.Conflict("JOURNAL_ALREADY_REVERSED", "the journal has been reversed already").WithContext("reversed_by", orig.ReversedByNumber)
 		}
+		if err := s.checkReverse(ctx, p.TenantID, propertyID, journalID); err != nil {
+			return err
+		}
 		date := day.BusinessDate
 		if in.Date != nil {
 			date = *in.Date

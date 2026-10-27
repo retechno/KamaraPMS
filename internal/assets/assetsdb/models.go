@@ -122,3 +122,20 @@ type FaSetting struct {
 	UpdatedAt               time.Time
 	UpdatedBy               *int64
 }
+
+type FaSourceLink struct {
+	ID             int64
+	TenantID       int64
+	PropertyID     int64
+	JournalLineID  int64
+	UnitNo         int32
+	AssetID        int64
+	Cost           decimal.Decimal
+	BillID         *int64
+	BillLineNo     *int32
+	IdempotencyKey *string
+	ReleasedAt     *time.Time
+	ReleasedBy     *int64
+	CreatedAt      time.Time
+	CreatedBy      *int64
+}

@@ -3,6 +3,8 @@ package assets
 import (
 	"context"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/assets/assetsdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -72,4 +74,26 @@ func (s *Service) restateAsset(ctx context.Context, p auth.Principal, propertyID
 	}
 	return true, q.LedgerRestateAsset(ctx, assetsdb.LedgerRestateAssetParams{TenantID: p.TenantID, PropertyID: propertyID, ID: assetID, Cost: sum.Cost, AccumDepr: sum.Accum, DepMonthsDone: sum.Months,
 		LastDepMonth: last, ActorID: p.ActorID()})
+}
+
+// acquireAsset makes an asset from a journal line, with its first row of the ledger (kind ACQUIRE): the cost of its unit. The journal that debited the account is the line's own (journalID); the
+// register posts none. The row is keyed by the asset, so an asset made again after a cancellation is a new row.
+func (s *Service) acquireAsset(ctx context.Context, p auth.Principal, propertyID int64, a assetsdb.LedgerInsertAssetParams, eventDate civil.Date, journalID int64) (int64, error) {
+	q := s.q(ctx)
+	a.TenantID, a.PropertyID, a.ActorID = p.TenantID, propertyID, p.ActorID()
+	id, err := q.LedgerInsertAsset(ctx, a)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := q.LedgerInsertEntry(ctx, assetsdb.LedgerInsertEntryParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: id, CategoryID: a.CategoryID, Kind: LedgerAcquire,
+		EventDate: eventDate, CostDelta: a.Cost, AccumDelta: decimal.Zero, JournalID: &journalID, SourceType: sourceTypeLine, SourceID: id, ActorID: p.ActorID()}); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// setStart changes the start of the depreciation of an asset that has not been depreciated (the trigger fa_assets_start_locked refuses it otherwise). The caller has locked the asset.
+func (s *Service) setStart(ctx context.Context, p auth.Principal, propertyID, assetID int64, inService civil.Date, rule string, firstDep *civil.Date) error {
+	return s.q(ctx).LedgerUpdateStart(ctx, assetsdb.LedgerUpdateStartParams{TenantID: p.TenantID, PropertyID: propertyID, ID: assetID, InServiceDate: inService, StartRule: rule,
+		FirstDepMonth: firstDep, ActorID: p.ActorID()})
 }

@@ -274,7 +274,7 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 		}
 		desc := strings.TrimSpace(in.Description)
 		jl := make([]accounting.SystemLine, 0, len(in.Lines)+1)
-		for _, l := range in.Lines {
+		for i, l := range in.Lines {
 			d := strings.TrimSpace(l.Description)
 			if d == "" {
 				d = "Invoice " + inv + " " + sup.Name
@@ -283,7 +283,7 @@ func (s *Service) postBill(ctx context.Context, p auth.Principal, propertyID int
 			if treatment == taxfiling.InputVATExpense {
 				cost = cost.Add(l.VATAmount) // the VAT is part of what the purchase cost
 			}
-			jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, Debit: cost, Description: d, SourceType: "AP_BILL", SourceRef: number, DepartmentID: l.DepartmentID})
+			jl = append(jl, accounting.SystemLine{AccountID: l.AccountID, Debit: cost, Description: d, SourceType: "AP_BILL", SourceRef: number, SourceLine: int32(i + 1), DepartmentID: l.DepartmentID})
 			if l.VATAmount.IsPositive() && treatment != taxfiling.InputVATExpense {
 				jl = append(jl, accounting.SystemLine{AccountID: inputVAT, Debit: l.VATAmount, Description: "VAT " + d, SourceType: "AP_BILL", SourceRef: number})
 			}
@@ -388,6 +388,11 @@ func (s *Service) voidBill(ctx context.Context, propertyID, id int64, in VoidInp
 		}
 		if guarded && s.guard != nil {
 			if err := s.guard.CheckVoid(ctx, p.TenantID, propertyID, id); err != nil {
+				return err
+			}
+		}
+		if s.assets != nil { // the supplier is locked: a "make asset" from a line of this bill waits for us, or we see its asset (37-fixed-assets.md F8)
+			if err := s.assets.CheckBillLine(ctx, p.TenantID, propertyID, id, 0); err != nil {
 				return err
 			}
 		}

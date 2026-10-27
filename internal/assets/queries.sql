@@ -266,8 +266,9 @@ RETURNING id;
 
 -- name: AssetHasRegisterEvents :one
 -- Whether the register ever depreciated, revalued, disposed of or reclassified the asset: what stops a cancellation.
-SELECT EXISTS (SELECT 1 FROM fa_ledger WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = @asset_id
-                AND kind NOT IN ('OPEN', 'ACQUIRE', 'REVERSAL'))::boolean;
+SELECT EXISTS (SELECT 1 FROM fa_ledger e WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.asset_id = @asset_id
+                AND e.kind NOT IN ('OPEN', 'ACQUIRE', 'REVERSAL')
+                AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id))::boolean;
 
 -- name: ListAssetLedger :many
 SELECT * FROM fa_ledger WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = @asset_id ORDER BY id;
@@ -338,9 +339,10 @@ UPDATE fa_assets SET cost = @cost, accum_depr = @accum_depr, dep_months_done = @
  WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
 
 -- name: LedgerSumsOfAsset :one
-SELECT COALESCE(SUM(cost_delta), 0)::numeric(18,3) AS cost, COALESCE(SUM(accum_delta), 0)::numeric(18,3) AS accum, COALESCE(SUM(months_delta), 0)::int AS months,
-       COALESCE(MAX(book_month) FILTER (WHERE kind IN ('OPEN', 'DEPRECIATE') AND months_delta > 0), DATE '1900-01-01')::date AS last_dep_month
-  FROM fa_ledger WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = @asset_id;
+SELECT COALESCE(SUM(e.cost_delta), 0)::numeric(18,3) AS cost, COALESCE(SUM(e.accum_delta), 0)::numeric(18,3) AS accum, COALESCE(SUM(e.months_delta), 0)::int AS months,
+       COALESCE(MAX(e.book_month) FILTER (WHERE e.kind IN ('OPEN', 'DEPRECIATE') AND e.months_delta > 0
+                                          AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id)), DATE '1900-01-01')::date AS last_dep_month
+  FROM fa_ledger e WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.asset_id = @asset_id;
 
 -- name: LedgerOpenEntry :one
 SELECT * FROM fa_ledger WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = @asset_id AND kind IN ('OPEN', 'ACQUIRE') ORDER BY id LIMIT 1;
@@ -365,3 +367,138 @@ SELECT i.*, j.journal_number FROM fa_opening_imports i LEFT JOIN gl_journals j O
 
 -- name: ListAssetsOfImport :many
 SELECT id, number, name, category_id, cost, accum_depr FROM fa_assets WHERE tenant_id = @tenant_id AND property_id = @property_id AND opening_import_id = @import_id ORDER BY id;
+
+-- name: LedgerUpdateStart :exec
+-- The start of the depreciation, free until the asset has been depreciated (the trigger fa_assets_start_locked is the backstop).
+UPDATE fa_assets SET in_service_date = @in_service_date, start_rule = @start_rule, first_dep_month = sqlc.narg(first_dep_month), version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Acquisition from a journal line (acquire.go)
+
+-- name: ListWaitingLines :many
+-- The journal lines that debit the cost account of an active category and are not an asset yet (37-fixed-assets.md 4.2.1). A line of a journal that is reversed, of a reversal, of the register itself
+-- (type ASSET) or of a closing is never in the list. The cost is the debit of the line (F7). dismissed = true lists the lines marked "not an asset" instead.
+WITH w AS (
+  SELECT l.id AS line_id, l.journal_id, j.journal_number, j.journal_type, j.journal_date, j.description AS journal_description, l.line_no, l.account_id,
+         ga.code AS account_code, ga.name AS account_name, l.debit AS cost, l.description, l.source_type, l.source_ref, l.source_line, l.department_id,
+         c.id AS category_id, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
+         b.id AS bill_id, b.bill_number, b.supplier_invoice_number, s.id AS supplier_id, s.code AS supplier_code, s.name AS supplier_name, bl.vat_treatment AS bill_vat_treatment,
+         CASE WHEN l.source_type = 'AP_BILL' THEN 'BILL' WHEN j.journal_type = 'CASHIER' THEN 'CASHIER' WHEN j.journal_type = 'BANK' THEN 'BANK'
+              WHEN j.journal_type = 'MANUAL' THEN 'MANUAL' ELSE 'OTHER' END::text AS source,
+         (d.id IS NOT NULL)::boolean AS dismissed, d.reason AS dismissed_reason, d.dismissed_at
+    FROM gl_journal_lines l
+    JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+    JOIN gl_accounts ga ON ga.property_id = l.property_id AND ga.id = l.account_id
+    JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id AND c.is_active
+    JOIN fa_settings st ON st.property_id = l.property_id
+    LEFT JOIN supplier_bills b ON b.property_id = l.property_id AND b.journal_id = l.journal_id AND l.source_type = 'AP_BILL'
+    LEFT JOIN suppliers s ON s.property_id = b.property_id AND s.id = b.supplier_id
+    LEFT JOIN supplier_bill_lines bl ON bl.bill_id = b.id AND bl.line_no = l.source_line
+    LEFT JOIN fa_source_dismissals d ON d.property_id = l.property_id AND d.journal_line_id = l.id AND d.restored_at IS NULL
+   WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.debit > 0
+     AND j.journal_type NOT IN ('ASSET', 'REVERSAL', 'CLOSING') AND j.reverses_journal_id IS NULL
+     AND COALESCE(l.source_type, '') <> 'ASSET'
+     AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+     AND st.register_from IS NOT NULL AND j.journal_date >= st.register_from
+     AND NOT (c.kind = 'OE' AND st.oe_policy = 'EXPENSE')
+     AND NOT EXISTS (SELECT 1 FROM fa_source_links k WHERE k.property_id = l.property_id AND k.journal_line_id = l.id AND k.released_at IS NULL)
+     AND ((d.id IS NOT NULL) = @dismissed::boolean)
+)
+SELECT w.*, count(*) OVER ()::int AS total_rows, COALESCE(sum(w.cost) OVER (), 0)::numeric(18,3) AS total_cost
+  FROM w
+ WHERE (sqlc.narg(source)::text IS NULL OR w.source = sqlc.narg(source))
+   AND (sqlc.narg(category_id)::bigint IS NULL OR w.category_id = sqlc.narg(category_id))
+   AND (sqlc.narg(date_from)::date IS NULL OR w.journal_date >= sqlc.narg(date_from))
+   AND (sqlc.narg(date_to)::date IS NULL OR w.journal_date <= sqlc.narg(date_to))
+   AND (sqlc.narg(q)::text IS NULL OR w.description ILIKE '%' || sqlc.narg(q) || '%' OR w.journal_number ILIKE '%' || sqlc.narg(q) || '%' OR w.supplier_name ILIKE '%' || sqlc.narg(q) || '%'
+        OR w.bill_number ILIKE '%' || sqlc.narg(q) || '%' OR w.supplier_invoice_number ILIKE '%' || sqlc.narg(q) || '%')
+ ORDER BY w.journal_date, w.line_id
+ LIMIT @row_limit OFFSET @row_offset;
+
+-- name: GetJournalLineForAsset :one
+-- One journal line with what "make asset" must know about it, whether it qualifies or not.
+SELECT l.id AS line_id, l.journal_id, j.journal_number, j.journal_type, j.journal_date, l.line_no, l.account_id, l.debit, l.description, l.source_type, l.source_ref, l.source_line, l.department_id,
+       (j.reverses_journal_id IS NOT NULL OR EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id))::boolean AS is_void,
+       b.id AS bill_id, b.supplier_id AS bill_supplier_id
+  FROM gl_journal_lines l
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+  LEFT JOIN supplier_bills b ON b.property_id = l.property_id AND b.journal_id = l.journal_id AND l.source_type = 'AP_BILL'
+ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.id = @line_id;
+
+-- name: GetCategoryByCostAccount :one
+SELECT * FROM fa_categories WHERE tenant_id = @tenant_id AND property_id = @property_id AND cost_account_id = @account_id AND is_active LIMIT 1;
+
+-- name: CountLiveLinksOfLine :one
+SELECT count(*)::int FROM fa_source_links WHERE property_id = @property_id AND journal_line_id = @line_id AND released_at IS NULL;
+
+-- name: GetLiveDismissal :one
+SELECT id FROM fa_source_dismissals WHERE property_id = @property_id AND journal_line_id = @line_id AND restored_at IS NULL;
+
+-- name: InsertDismissal :exec
+INSERT INTO fa_source_dismissals (tenant_id, property_id, journal_line_id, reason, dismissed_by) VALUES (@tenant_id, @property_id, @line_id, @reason, sqlc.narg(actor_id));
+
+-- name: RestoreDismissal :execrows
+UPDATE fa_source_dismissals SET restored_at = now(), restored_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND journal_line_id = @line_id AND restored_at IS NULL;
+
+-- name: ListLinksByKey :many
+SELECT * FROM fa_source_links WHERE property_id = @property_id AND idempotency_key = @idempotency_key ORDER BY unit_no;
+
+-- name: InsertSourceLink :exec
+INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @journal_line_id, @unit_no, @asset_id, @cost, sqlc.narg(bill_id), sqlc.narg(bill_line_no), sqlc.narg(idempotency_key), sqlc.narg(actor_id));
+
+-- name: ReleaseLinksOfAsset :exec
+UPDATE fa_source_links SET released_at = now(), released_by = sqlc.narg(actor_id) WHERE property_id = @property_id AND asset_id = @asset_id AND released_at IS NULL;
+
+-- name: GetLiveLinkOfAsset :one
+SELECT k.journal_line_id, k.unit_no, k.cost, k.bill_id, k.bill_line_no, j.id AS journal_id, j.journal_number, j.journal_date, j.journal_type, l.source_type, b.bill_number,
+       (SELECT count(*) FROM fa_source_links o WHERE o.property_id = k.property_id AND o.journal_line_id = k.journal_line_id AND o.released_at IS NULL)::int AS units
+  FROM fa_source_links k
+  JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+  LEFT JOIN supplier_bills b ON b.id = k.bill_id
+ WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND k.asset_id = @asset_id AND k.released_at IS NULL;
+
+-- name: GuardBillAssets :many
+-- The live assets made from the lines of a bill (line_no 0: any line), whether the link knows its bill line or only its journal (a bill posted before migration 00094).
+SELECT a.number, k.bill_line_no
+  FROM fa_source_links k
+  JOIN fa_assets a ON a.property_id = k.property_id AND a.id = k.asset_id
+  JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
+  JOIN supplier_bills b ON b.property_id = k.property_id AND b.journal_id = l.journal_id
+ WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND b.id = @bill_id AND k.released_at IS NULL
+   AND (@line_no::int = 0 OR k.bill_line_no = @line_no OR k.bill_line_no IS NULL)
+ ORDER BY a.number;
+
+-- name: JournalDebitsCostAccount :one
+-- Whether the journal has a debit line on the cost account of a category (the only journals the register can hold a link to).
+SELECT EXISTS (SELECT 1 FROM gl_journal_lines l JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id
+                WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.journal_id = @journal_id AND l.debit > 0)::boolean;
+
+-- name: GuardJournalAssets :many
+SELECT a.number, l.line_no
+  FROM fa_source_links k
+  JOIN fa_assets a ON a.property_id = k.property_id AND a.id = k.asset_id
+  JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
+ WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND l.journal_id = @journal_id AND k.released_at IS NULL
+ ORDER BY a.number;
+
+-- name: WaitingTotals :one
+-- What waits in the list, for the badge: the lines and their cost, the dismissed ones apart.
+SELECT count(*) FILTER (WHERE NOT dismissed)::int AS waiting, COALESCE(sum(cost) FILTER (WHERE NOT dismissed), 0)::numeric(18,3) AS waiting_cost,
+       count(*) FILTER (WHERE dismissed)::int AS dismissed, COALESCE(sum(cost) FILTER (WHERE dismissed), 0)::numeric(18,3) AS dismissed_cost
+  FROM (
+    SELECT l.debit AS cost, (d.id IS NOT NULL) AS dismissed
+      FROM gl_journal_lines l
+      JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+      JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id AND c.is_active
+      JOIN fa_settings st ON st.property_id = l.property_id
+      LEFT JOIN fa_source_dismissals d ON d.property_id = l.property_id AND d.journal_line_id = l.id AND d.restored_at IS NULL
+     WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.debit > 0
+       AND j.journal_type NOT IN ('ASSET', 'REVERSAL', 'CLOSING') AND j.reverses_journal_id IS NULL AND COALESCE(l.source_type, '') <> 'ASSET'
+       AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+       AND st.register_from IS NOT NULL AND j.journal_date >= st.register_from AND NOT (c.kind = 'OE' AND st.oe_policy = 'EXPENSE')
+       AND NOT EXISTS (SELECT 1 FROM fa_source_links k WHERE k.property_id = l.property_id AND k.journal_line_id = l.id AND k.released_at IS NULL)
+  ) x;
