@@ -10,6 +10,7 @@ import (
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/assets"
 	"kamarapms/internal/departments"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
@@ -17,12 +18,14 @@ import (
 )
 
 // seedDeps are the services that the demo of the waiting list (docs/architecture/37-fixed-assets.md, PR 2) needs besides the register: the payables for the bill, the transaction manager and the business day
-// for the journals that the cashier and the bank would post, and the departments for the assets.
+// for the journals that the cashier and the bank would post, and the departments for the assets, and the rules of approval for the disposals.
 type seedDeps struct {
 	pay   *payables.Service
 	txm   *db.TxManager
 	days  *tenancy.Service
 	depts *departments.Service
+	rules *iam.Rules   // the approval rule of the disposals, which the demo of the disposals sets
+	iam   *iam.Service // the clerk of the demo, who asks for the disposal that waits for approval
 }
 
 const (
