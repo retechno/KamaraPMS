@@ -4491,6 +4491,7 @@ export const en = {
     total_liabilities_and_equity: 'Total liabilities and equity',
     operating_activities: 'Operating activities',
     depreciation_and_amortization_not_paid_in_cash: 'Depreciation and amortization (not paid in cash)',
+    loss_gain_on_the_disposal_of_fixed_assets_shown_under_investing: 'Loss (gain) on the disposal of fixed assets (shown under investing)',
     net_cash_from_operating_activities: 'Net cash from operating activities',
     investing_activities: 'Investing activities',
     purchase_of_property_and_equipment: 'Purchase of property and equipment',

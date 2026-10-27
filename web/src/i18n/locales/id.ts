@@ -4489,6 +4489,7 @@ export const id: Messages = {
     total_liabilities_and_equity: 'Total liabilitas dan ekuitas',
     operating_activities: 'Aktivitas operasi',
     depreciation_and_amortization_not_paid_in_cash: 'Penyusutan dan amortisasi (tidak dibayar tunai)',
+    loss_gain_on_the_disposal_of_fixed_assets_shown_under_investing: 'Rugi (laba) pelepasan aset tetap (ditampilkan di investasi)',
     net_cash_from_operating_activities: 'Kas bersih dari aktivitas operasi',
     investing_activities: 'Aktivitas investasi',
     purchase_of_property_and_equipment: 'Pembelian properti dan peralatan',
