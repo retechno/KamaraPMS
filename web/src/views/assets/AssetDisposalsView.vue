@@ -135,6 +135,7 @@ async function reverse(approval: Approval): Promise<void> {
         <li v-for="r in pending" :key="r.id" class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border pb-2 text-sm" :data-testid="`request-${r.id}`">
           <span class="min-w-48 flex-1"><RouterLink :to="`/assets/${r.asset_id}`" class="font-semibold text-primary hover:underline">{{ r.asset_name }}</RouterLink><span class="block text-xs text-muted-foreground">{{ r.asset_number }} · {{ kindText(r.kind, r.reason_code) }} · {{ formatDate(r.disposal_date) }}</span></span>
           <span class="tabular-nums">{{ t('assets.disposals.amount', { amount: formatMoney(r.approval_amount) }) }}</span>
+          <span v-if="r.kind === 'SALE'" class="tabular-nums" :data-testid="`request-${r.id}-proceeds`">{{ t('assets.dispose.proceeds') }}: {{ formatMoney(r.proceeds) }}</span>
           <span class="text-xs text-muted-foreground">{{ t('assets.disposals.requestedBy', { name: r.requested_by_name ?? '–', at: formatDateTime(r.requested_at) }) }}</span>
           <span v-if="canDispose" class="flex gap-2">
             <Button size="sm" :disabled="busy" :data-testid="`approve-${r.id}`" @click="approve(r)">{{ t('assets.disposals.approve') }}</Button>

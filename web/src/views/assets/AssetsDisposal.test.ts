@@ -266,6 +266,9 @@ describe('the disposal of an asset', () => {
     expect(body('[data-testid=dispose-gain]').text()).toBe('2,375,000')
     expect(body('[data-testid=dispose-vat]').text()).toContain('tax consultant')
     expect(body('[data-testid=dispose-approval]').text()).toContain('not needed')
+    expect(body('[data-testid=dispose-confirm]').text()).toBe('Approve now') // the person may approve their own: the button posts at once
+    expect(has('[data-testid=dispose-approve-now]')).toBe(false)
+    expect(has('[data-testid=dispose-approve-note]')).toBe(false)
     expect(callTo(POST, '/dispose/preview')?.[1].body).toMatchObject({ kind: 'SALE', reason_code: 'SOLD', proceeds: '25000000', proceeds_account_id: 31 })
     result = { data: { status: 'POSTED', disposal: { number: 'FAD-000004' }, request: null, replayed: false } }
     await click('[data-testid=dispose-confirm]')
@@ -282,10 +285,31 @@ describe('the disposal of an asset', () => {
     expect(body('[data-testid=dispose-approval]').text()).toContain('someone else is needed (amount 25,000,000)')
     expect(body('[data-testid=dispose-confirm]').text()).toBe('Request disposal')
     expect(has('[data-testid=dispose-approve-now]')).toBe(true)
+    expect(disabled('[data-testid=dispose-approve-now]')).toBe(true) // someone else must approve: the button to approve at once is off, with the reason
+    expect(body('[data-testid=dispose-approve-note]').text()).toContain('needs the approval of someone else')
     result = { data: { status: 'PENDING', disposal: null, request: requestRow, replayed: false } }
     await click('[data-testid=dispose-confirm]')
     expect(callTo(POST, '/assets/{id}/dispose')).toBeDefined()
     expect(has('[data-testid=dispose-dialog]')).toBe(false)
+  })
+
+  it('lets the person approve their own disposal below the limit of DISTINCT_ABOVE, and asks for someone else above it', async () => {
+    rules = [{ kind: 'ASSET_DISPOSAL', rule: 'DISTINCT_ABOVE', threshold: '30000000' }]
+    await open()
+    await fillSale()
+    expect(body('[data-testid=dispose-approval]').text()).not.toContain('someone else is needed')
+    expect(body('[data-testid=dispose-confirm]').text()).toBe('Approve now')
+    expect(disabled('[data-testid=dispose-confirm]')).toBe(false)
+    expect(has('[data-testid=dispose-approve-now]')).toBe(false)
+  })
+
+  it('asks for someone else above the limit of DISTINCT_ABOVE and turns the button to approve at once off', async () => {
+    rules = [{ kind: 'ASSET_DISPOSAL', rule: 'DISTINCT_ABOVE', threshold: '10000000' }]
+    await open()
+    await fillSale()
+    expect(body('[data-testid=dispose-confirm]').text()).toBe('Request disposal')
+    expect(disabled('[data-testid=dispose-approve-now]')).toBe(true)
+    expect(body('[data-testid=dispose-approve-note]').text()).toContain('needs the approval of someone else')
   })
 
   it('writes an asset off without a price, and asks for a note when the reason is "other"', async () => {
@@ -316,6 +340,8 @@ describe('the disposals and their approval', () => {
     expect(body('[data-testid=tab-pending]').text()).toContain('Waiting for approval (1)')
     expect(body('[data-testid=request-9]').text()).toContain('FA-000012')
     expect(body('[data-testid=request-9]').text()).toContain('25,000,000')
+    expect(body('[data-testid=request-9-proceeds]').text()).toContain('25,000,000') // the price with the separator of thousands
+    expect(body('[data-testid=request-9]').text()).not.toContain('2026-11-06T02:00:00Z') // the time is formatted like the rest of the app
     POST.mockResolvedValue({ data: { status: 'POSTED', disposal: { number: 'FAD-000004' }, request: null, replayed: false } })
     await click('[data-testid=approve-9]')
     expect(callTo(POST, '/disposal-requests/{id}/approve')?.[1].params.path).toEqual({ propertyId: 7, id: 9 })

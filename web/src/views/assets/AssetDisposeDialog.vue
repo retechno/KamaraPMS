@@ -2,8 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, AssetAccountOption, AssetDetail, AssetDisposalPreview, AssetDisposeRequest } from '@/api/types'
-import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import type { AssetAccountOption, AssetDetail, AssetDisposalPreview, AssetDisposeRequest } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
@@ -18,7 +17,7 @@ import { formatDate, formatMoney } from '@/utils/format'
 
 /**
  * Sell, write off or lose an asset, or some pieces of a batch (docs/architecture/37-fixed-assets.md 4.7, mockup 57). The preview is worked out by the server as the form changes: the amounts, the journal and the amount the
- * approval follows. The disposal posts at once when the rule lets the person; otherwise it becomes a request that waits for another user (or the approver's credentials are typed here).
+ * approval follows. The disposal posts at once when the rule lets the person; otherwise it becomes a request that waits for another user, and the button to approve at once is disabled with the reason.
  */
 const props = defineProps<{ asset: AssetDetail | null; propertyId: number }>()
 const emit = defineEmits<{ close: []; done: [status: 'POSTED' | 'PENDING'] }>()
@@ -29,8 +28,6 @@ const error = ref<ApiError | null>(null)
 const previewError = ref<ApiError | null>(null)
 const preview = ref<AssetDisposalPreview | null>(null)
 const accounts = ref<AssetAccountOption[]>([])
-const approving = ref(false)
-const approveError = ref<ApiError | null>(null)
 const form = ref({ kind: 'SALE' as 'SALE' | 'WRITE_OFF', reason_code: 'SOLD', disposal_date: '', units: 1, proceeds: '', proceeds_account_id: 0, note: '' })
 let key = crypto.randomUUID()
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -71,11 +68,11 @@ const complete = computed(() => {
   return Number(f.proceeds) > 0 && f.proceeds_account_id > 0
 })
 
-function body(approval?: Approval): AssetDisposeRequest {
+function body(): AssetDisposeRequest {
   const f = form.value
   return {
     kind: f.kind, reason_code: f.reason_code as AssetDisposeRequest['reason_code'], disposal_date: f.disposal_date || null, units: isBatch.value ? units.value : null,
-    proceeds: f.kind === 'SALE' ? f.proceeds.trim() : null, proceeds_account_id: f.kind === 'SALE' ? f.proceeds_account_id || null : null, note: f.note.trim(), ...(approval ? { approval } : {}),
+    proceeds: f.kind === 'SALE' ? f.proceeds.trim() : null, proceeds_account_id: f.kind === 'SALE' ? f.proceeds_account_id || null : null, note: f.note.trim(),
   }
 }
 
@@ -114,22 +111,19 @@ const limit = computed(() => formatMoney(rules.ruleOf('ASSET_DISPOSAL')?.thresho
 const needsOther = computed(() => ruleLine.value === 'distinct' || ruleLine.value === 'above')
 const isLoss = computed(() => !!preview.value && toMinor(preview.value.gain_loss, 3) < 0n)
 
-async function submit(approval?: Approval): Promise<void> {
+async function submit(): Promise<void> {
   const a = props.asset
   if (!a) return
   busy.value = true
   error.value = null
-  approveError.value = null
   try {
-    const { data } = await api.POST('/api/v1/properties/{propertyId}/assets/{id}/dispose', { params: { path: { propertyId: props.propertyId, id: a.id }, header: { 'Idempotency-Key': key } }, body: body(approval) })
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/assets/{id}/dispose', { params: { path: { propertyId: props.propertyId, id: a.id }, header: { 'Idempotency-Key': key } }, body: body() })
     key = crypto.randomUUID()
     const status = data?.status ?? 'POSTED'
     toast.success(status === 'PENDING' ? t('assets.dispose.pending') : t('assets.dispose.posted', { number: data?.disposal?.number ?? '' }))
-    approving.value = false
     emit('done', status)
   } catch (e) {
-    if (approval) approveError.value = e instanceof ApiError ? e : null
-    else error.value = e instanceof ApiError ? e : null
+    error.value = e instanceof ApiError ? e : null
   } finally {
     busy.value = false
   }
@@ -137,7 +131,7 @@ async function submit(approval?: Approval): Promise<void> {
 </script>
 
 <template>
-  <Dialog :open="!!asset && !approving" @update:open="(v) => { if (!v) emit('close') }">
+  <Dialog :open="!!asset" @update:open="(v) => { if (!v) emit('close') }">
     <DialogContent v-if="asset" class="max-h-[92dvh] max-w-3xl overflow-y-auto p-5" data-testid="dispose-dialog" @interact-outside.prevent>
       <form novalidate class="flex flex-col gap-3" @submit.prevent="submit()">
         <DialogTitle>{{ t('assets.dispose.title') }}</DialogTitle>
@@ -195,16 +189,13 @@ async function submit(approval?: Approval): Promise<void> {
         </section>
         <p v-else class="m-0 text-xs text-muted-foreground" data-testid="dispose-wait">{{ t('assets.dispose.fill') }}</p>
 
+        <p v-if="needsOther" id="dispose-approve-note" class="m-0 text-right text-xs text-muted-foreground" data-testid="dispose-approve-note">{{ t('assets.dispose.approveNeedsOther') }}</p>
         <div class="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
-          <Button v-if="needsOther" type="button" variant="outline" :disabled="busy || !preview" data-testid="dispose-approve-now" @click="approving = true; approveError = null">{{ t('assets.dispose.approveNow') }}</Button>
-          <Button type="submit" :disabled="busy || !preview" data-testid="dispose-confirm">{{ needsOther ? t('assets.dispose.request') : t('assets.dispose.confirm') }}</Button>
+          <Button v-if="needsOther" type="button" variant="outline" disabled aria-describedby="dispose-approve-note" data-testid="dispose-approve-now">{{ t('assets.dispose.approveNow') }}</Button>
+          <Button type="submit" :disabled="busy || !preview" data-testid="dispose-confirm">{{ needsOther ? t('assets.dispose.request') : t('assets.dispose.approveNow') }}</Button>
         </div>
       </form>
     </DialogContent>
   </Dialog>
-  <ApprovalDialog
-    v-if="approving && preview" kind="ASSET_DISPOSAL" :amount="preview.approval_amount" :title="t('assets.dispose.approvalTitle')" :message="t('assets.dispose.approvalMessage')" :busy="busy" :error="approveError"
-    @approve="(a) => submit(a)" @cancel="approving = false"
-  />
 </template>
