@@ -444,7 +444,7 @@ func (s *Service) makeUnits(ctx context.Context, p auth.Principal, propertyID in
 		if err != nil {
 			return err
 		}
-		if err := q.InsertSourceLink(ctx, assetsdb.InsertSourceLinkParams{TenantID: p.TenantID, PropertyID: propertyID, JournalLineID: line.LineID, UnitNo: k, AssetID: id, Cost: cost,
+		if err := q.InsertSourceLink(ctx, assetsdb.InsertSourceLinkParams{TenantID: p.TenantID, PropertyID: propertyID, JournalLineID: line.LineID, UnitNo: k, AssetID: id, Cost: cost, Kind: linkUnit,
 			BillID: billID, BillLineNo: billLine, IdempotencyKey: &key, ActorID: p.ActorID()}); err != nil {
 			return err
 		}

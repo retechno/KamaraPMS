@@ -208,12 +208,17 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 				return err
 			}
 		}
-		if _, err := q.UpdateAssetDetails(ctx, assetsdb.UpdateAssetDetailsParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Version: in.Version, Name: in.Name, LocationID: in.LocationID,
-			DepartmentID: in.DepartmentID, SupplierID: in.SupplierID, SerialNo: in.SerialNo, WarrantyUntil: in.WarrantyUntil, Notes: in.Notes, ActorID: p.ActorID()}); err != nil {
+		if _, err := q.UpdateAssetDetails(ctx, assetsdb.UpdateAssetDetailsParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Version: in.Version, Name: in.Name, LocationID: cur.LocationID,
+			DepartmentID: cur.DepartmentID, SupplierID: in.SupplierID, SerialNo: in.SerialNo, WarrantyUntil: in.WarrantyUntil, Notes: in.Notes, ActorID: p.ActorID()}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return versionConflict("asset", cur.Version)
 			}
 			return err
+		}
+		if !sameID(in.LocationID, cur.LocationID) || !sameID(in.DepartmentID, cur.DepartmentID) { // where it stands and its department change by a move, which is kept (4.6)
+			if err := s.applyMove(ctx, p, propertyID, day, cur, in.LocationID, in.DepartmentID, moveReasonEdit, nil); err != nil {
+				return err
+			}
 		}
 		if start != nil {
 			if err := s.setStart(ctx, p, propertyID, id, start.inService, start.rule, start.firstDep); err != nil {

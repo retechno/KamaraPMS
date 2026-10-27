@@ -12657,6 +12657,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/assets/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move assets to another location, another department or both, from the open business day, all or nothing (asset.manage)
+         * @description `Idempotency-Key` is required; the same key replays the first answer (200). The date of a move is the open business day: it is never backdated. An asset that is where it is asked to be is counted in `skipped`; when none moves the request is 422 (`asset_ids` `NOTHING_TO_MOVE`). 409 `ASSET_STATUS_INVALID` for an asset that is not active.
+         */
+        post: operations["moveAssets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move one asset to another location, another department or both (asset.manage)
+         * @description As `moveAssets` for one asset (`asset_ids` is ignored); answers the asset. `Idempotency-Key` is required.
+         */
+        post: operations["moveAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the life, the residual value or the method of an asset, add value to it from a journal line, or move it to another category (asset.manage)
+         * @description Prospective, from the next run; nothing posted is rewritten. `Idempotency-Key` and `reason` are required. The months before the open day's month must have been run (409 `DEPRECIATION_NOT_RUN`). LIFE takes the new total life (409 `LIFE_TOO_SHORT`), RESIDUAL the new residual value (not above the carrying value), METHOD `SL` or `DB` (with `db_factor`), CAPITALIZE the `journal_line_id` of a line on the cost account of the asset's category that is not an asset (409 `LINE_ALREADY_ASSET`, 422 `LINE_NOT_ELIGIBLE`); no journal is posted. CATEGORY takes `category_id` and posts the journal that moves the cost and the accumulated depreciation to the accounts of the new category (type ASSET, dated the open day); a construction in progress that is finished also takes `in_service_date` and `start_rule`, and `life_months`, `residual_value`, `method` and `db_factor` change what the new category brings.
+         */
+        post: operations["reviseAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** What happened to an asset: its moves, revisions and months of depreciation, in the order they happened (any asset permission) */
+        get: operations["getAssetHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -25711,6 +25799,94 @@ export interface components {
              */
             run_month?: string | null;
             journal_number?: string | null;
+        };
+        AssetMoveRequest: {
+            /** @description The assets to move (the batch route; the route of one asset takes it from the path). */
+            asset_ids?: number[];
+            change_location?: boolean;
+            /**
+             * Format: int64
+             * @description The new location, used when `change_location` is true (null: none).
+             */
+            location_id?: number | null;
+            change_department?: boolean;
+            /**
+             * Format: int64
+             * @description The new department, used when `change_department` is true (null: none).
+             */
+            department_id?: number | null;
+            reason: string;
+        };
+        AssetMoveResult: {
+            moved: {
+                /** Format: int64 */
+                id: number;
+                number: string;
+                name: string;
+            }[];
+            skipped: number;
+            replayed: boolean;
+        };
+        AssetRevisionRequest: {
+            /** @enum {string} */
+            kind: "LIFE" | "RESIDUAL" | "METHOD" | "CAPITALIZE" | "CATEGORY";
+            reason: string;
+            /**
+             * Format: int32
+             * @description LIFE: the new total life. CATEGORY: overrides the life of the new category.
+             */
+            life_months?: number | null;
+            /** @description RESIDUAL: the new residual value. CATEGORY: overrides the one of the new category. */
+            residual_value?: string | null;
+            /** @enum {string|null} */
+            method?: "SL" | "DB" | null;
+            /** @description The factor of a declining balance (above 0, not above 5; 2 by default). */
+            db_factor?: string | null;
+            /**
+             * Format: int64
+             * @description CAPITALIZE: the line that adds the value.
+             */
+            journal_line_id?: number | null;
+            /**
+             * Format: int64
+             * @description CATEGORY: the new category.
+             */
+            category_id?: number | null;
+            /**
+             * Format: date
+             * @description CATEGORY of a construction in progress: when it was finished.
+             */
+            in_service_date?: string | null;
+            /** @enum {string|null} */
+            start_rule?: "IN_SERVICE_MONTH" | "NEXT_MONTH" | null;
+        };
+        AssetRevisionResult: components["schemas"]["AssetDetail"] & {
+            /** Format: int64 */
+            revision_id: number;
+            /**
+             * Format: int64
+             * @description The journal of a change of category that moved accounts; for a value added, the journal of the line.
+             */
+            journal_id: number | null;
+            journal_number: string | null;
+            replayed: boolean;
+        };
+        AssetHistoryEntry: {
+            /** @enum {string} */
+            kind: "MOVE" | "LIFE" | "RESIDUAL" | "METHOD" | "CAPITALIZE" | "CATEGORY" | "DEPRECIATION" | "DISPOSAL";
+            /** Format: date */
+            date: string;
+            reason: string | null;
+            /** @description A move: from_location, to_location, from_department, to_department. A revision: old and new. A month of depreciation: month, months, amount, accum_after, carrying_after. */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Format: int64 */
+            journal_id: number | null;
+            journal_number: string | null;
+            by: string | null;
+            /** Format: date-time */
+            at: string;
         };
         AssetSchedule: {
             /** Format: int64 */
@@ -46513,6 +46689,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetSchedule"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    moveAssets: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description The answer of an earlier request with the same key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetMoveResult"];
+                };
+            };
+            /** @description The assets that moved. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetMoveResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    moveAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description The asset. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    reviseAsset: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description The answer of an earlier request with the same key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRevisionResult"];
+                };
+            };
+            /** @description The asset after the revision. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRevisionResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetHistoryEntry"][];
                 };
             };
             403: components["responses"]["Problem"];

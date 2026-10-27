@@ -49,11 +49,15 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/depreciation/{month}/preview", httpx.HandlerFunc(h.previewDepreciation))
 	mux.Handle("POST "+p+"/depreciation/{month}/run", httpx.HandlerFunc(h.runDepreciation))
 	mux.Handle("POST "+p+"/depreciation/{month}/reverse", httpx.HandlerFunc(h.reverseDepreciation))
+	mux.Handle("POST "+p+"/moves", httpx.HandlerFunc(h.moveAssets))
 	mux.Handle("GET "+p, httpx.HandlerFunc(h.listAssets))
 	mux.Handle("GET "+p+"/{id}", httpx.HandlerFunc(h.getAsset))
 	mux.Handle("PATCH "+p+"/{id}", httpx.HandlerFunc(h.updateAsset))
 	mux.Handle("POST "+p+"/{id}/cancel", httpx.HandlerFunc(h.cancelAsset))
 	mux.Handle("GET "+p+"/{id}/schedule", httpx.HandlerFunc(h.assetSchedule))
+	mux.Handle("POST "+p+"/{id}/moves", httpx.HandlerFunc(h.moveAsset))
+	mux.Handle("POST "+p+"/{id}/revisions", httpx.HandlerFunc(h.reviseAsset))
+	mux.Handle("GET "+p+"/{id}/history", httpx.HandlerFunc(h.assetHistory))
 }
 
 func pathID(r *http.Request) (int64, error) {
@@ -690,4 +694,73 @@ func (h *Handler) assetSchedule(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) moveAssets(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in MoveInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	res, err := h.svc.MoveAssets(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	if res.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, res)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) moveAsset(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in MoveInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	d, err := h.svc.MoveAsset(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, d)
+}
+
+func (h *Handler) reviseAsset(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in RevisionInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	res, err := h.svc.ReviseAsset(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	if res.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, res)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) assetHistory(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	out, err := h.svc.GetHistory(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
 }

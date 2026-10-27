@@ -272,6 +272,10 @@ func (s *Service) planRun(ctx context.Context, p auth.Principal, propertyID int6
 		block(blocker(BlockMonthInvalid, "the month has not ended", "reason", "NOT_ENDED", "month", monthLabel(month)))
 	}
 
+	moves, err := s.movesByAsset(ctx, p.TenantID, propertyID, pl.everyone)
+	if err != nil {
+		return nil, err
+	}
 	// the assets that are due in the month
 	for _, r := range rows {
 		from := firstDue(int(r.DepMonthsDone), r.LastDepMonth, r.FirstDepMonth, registerFrom)
@@ -290,7 +294,7 @@ func (s *Service) planRun(ctx context.Context, p auth.Principal, propertyID int6
 		pa.line = DepreciationLine{AssetID: r.ID, AssetNumber: r.Number, AssetName: r.Name, CategoryID: r.CategoryID, CategoryCode: r.CategoryCode, CategoryName: r.CategoryName,
 			ExpenseAccountID: *r.ExpenseAccountID, Months: int32(applied), FromMonth: from, CatchUp: applied > 1, Amount: total, AccumAfter: after.Accum, CarryingAfter: after.Carrying(), //nolint:gosec // G115: at most the life
 			MonthsDoneAfter: int32(after.MonthsDone)} //nolint:gosec // G115: at most the life
-		pa.dept = r.DepartmentID
+		pa.dept = departmentAt(r.DepartmentID, moves[r.ID], monthEnd) // the department the asset has at the end of the month, not the one it has today (4.6)
 		if pa.dept == nil {
 			pa.dept = r.CategoryDepartmentID
 		}

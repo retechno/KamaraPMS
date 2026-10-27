@@ -121,9 +121,11 @@ M88="$(ls "$ROOT"/migrations/00088_*.sql)"
 M92="$(ls "$ROOT"/migrations/00092_*.sql)"
 M93="$(ls "$ROOT"/migrations/00093_*.sql)"
 M94="$(ls "$ROOT"/migrations/00094_*.sql)"
+M95="$(ls "$ROOT"/migrations/00095_*.sql)"
 # 00092 (the stock of the banquet) stands on the inventory tables of 00084, 00087 and 00088, so it goes first and comes back after 00088 does
 # 00088 stands on 00087, 00087 on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
-# 00093 (the fixed assets) has a foreign key to the warehouses of 00084, so it goes first of all and comes back last, and 00094 (their acquisition and depreciation) stands on 00093: it goes before it
+# 00093 (the fixed assets) has a foreign key to the warehouses of 00084, so it goes first of all and comes back last, and 00094 (their acquisition and depreciation) stands on 00093: it goes before it, and 00095 (their changes) on 00094
+section down "$M95" | psql_run
 section down "$M94" | psql_run
 section down "$M93" | psql_run
 section down "$M92" | psql_run
@@ -242,6 +244,13 @@ psql_run < "$ROOT/db/tests/migration_00094_down.sql" 2>&1 | sed -E -n -e 's/^(ps
 section up "$M94" | psql_run >/dev/null
 # the bills of the test are removed (the journals are append-only, so the triggers are switched off for this one clean-up): the Down of an earlier migration would refuse their journal type
 psql_run -c "SET session_replication_role = replica; DELETE FROM supplier_bill_lines; DELETE FROM supplier_bills; DELETE FROM gl_journal_lines WHERE journal_id IN (SELECT id FROM gl_journals WHERE journal_number IN ('JV-94A', 'JV-94B', 'JV-94M')); DELETE FROM gl_journals WHERE journal_number IN ('JV-94A', 'JV-94B', 'JV-94M'); DELETE FROM suppliers WHERE code = 'SUP94'"
+
+echo "==> migration 00095 (changes, moves, disposals): the sequence and the account of the gain or loss"
+section up "$M95" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00095_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section down "$M95" | psql_run
+psql_run < "$ROOT/db/tests/migration_00095_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M95" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

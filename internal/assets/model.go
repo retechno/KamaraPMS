@@ -60,6 +60,12 @@ const (
 	sourceTypeRebuild    = "FA_REBUILD"
 	LedgerOpen           = "OPEN"
 	LedgerReversal       = "REVERSAL"
+	LedgerCapitalize     = "CAPITALIZE"
+	LedgerReclassOut     = "RECLASS_OUT"
+	LedgerReclassIn      = "RECLASS_IN"
+	sourceTypeRevision   = "FA_REVISION"
+	linkUnit             = "UNIT"
+	linkCapitalize       = "CAPITALIZE"
 	journalSourceAsset   = "ASSET"
 	maxName              = 150
 	maxPageRow           = 200

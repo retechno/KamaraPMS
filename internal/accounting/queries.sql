@@ -378,7 +378,7 @@ INSERT INTO gl_account_map (tenant_id, property_id, map_key, account_id, updated
 SELECT a.tenant_id, a.property_id, m.map_key, a.id, sqlc.narg(actor_id)
   FROM gl_accounts a
   JOIN (VALUES ('RETAINED_EARNINGS', '3200'), ('ACCOUNTS_PAYABLE', '2110'), ('INPUT_VAT', '1425'), ('CASH_OVER_SHORT', '6195'), ('QRIS', '1155'), ('FOLIO_TRANSFER', '1215'), ('COMP', '6196'),
-    ('INV_GRNI', '2130'), ('INV_PPV', '5299'), ('INV_WASTE', '5290'), ('INV_COUNT_VARIANCE', '5295'), ('INV_COGS_FOOD', '5210'), ('INV_COGS_BEVERAGE', '5220'), ('INV_STAFF_MEAL', '5240'), ('INV_ENTERTAINMENT', '6170')) AS m (map_key, code) ON m.code = a.code
+    ('INV_GRNI', '2130'), ('INV_PPV', '5299'), ('INV_WASTE', '5290'), ('INV_COUNT_VARIANCE', '5295'), ('INV_COGS_FOOD', '5210'), ('INV_COGS_BEVERAGE', '5220'), ('INV_STAFF_MEAL', '5240'), ('INV_ENTERTAINMENT', '6170'), ('ASSET_DISPOSAL', '7420')) AS m (map_key, code) ON m.code = a.code
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id
 ON CONFLICT (property_id, map_key) DO NOTHING;
 

@@ -123,6 +123,25 @@ type FaOpeningImport struct {
 	CreatedBy      *int64
 }
 
+type FaRevision struct {
+	ID             int64
+	TenantID       int64
+	PropertyID     int64
+	AssetID        int64
+	Kind           string
+	EffectiveOn    civil.Date
+	OldValue       []byte
+	NewValue       []byte
+	BillID         *int64
+	BillLineNo     *int32
+	JournalLineID  *int64
+	JournalID      *int64
+	Reason         string
+	IdempotencyKey *string
+	CreatedBy      *int64
+	CreatedAt      time.Time
+}
+
 type FaSetting struct {
 	ID                      int64
 	PropertyID              int64
@@ -156,4 +175,5 @@ type FaSourceLink struct {
 	ReleasedBy     *int64
 	CreatedAt      time.Time
 	CreatedBy      *int64
+	Kind           string
 }

@@ -446,8 +446,8 @@ UPDATE fa_source_dismissals SET restored_at = now(), restored_by = sqlc.narg(act
 SELECT * FROM fa_source_links WHERE property_id = @property_id AND idempotency_key = @idempotency_key ORDER BY unit_no;
 
 -- name: InsertSourceLink :exec
-INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, created_by)
-VALUES (@tenant_id, @property_id, @journal_line_id, @unit_no, @asset_id, @cost, sqlc.narg(bill_id), sqlc.narg(bill_line_no), sqlc.narg(idempotency_key), sqlc.narg(actor_id));
+INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, kind, bill_id, bill_line_no, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @journal_line_id, @unit_no, @asset_id, @cost, @kind, sqlc.narg(bill_id), sqlc.narg(bill_line_no), sqlc.narg(idempotency_key), sqlc.narg(actor_id));
 
 -- name: ReleaseLinksOfAsset :exec
 UPDATE fa_source_links SET released_at = now(), released_by = sqlc.narg(actor_id) WHERE property_id = @property_id AND asset_id = @asset_id AND released_at IS NULL;
@@ -459,7 +459,7 @@ SELECT k.journal_line_id, k.unit_no, k.cost, k.bill_id, k.bill_line_no, j.id AS 
   JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
   JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
   LEFT JOIN supplier_bills b ON b.id = k.bill_id
- WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND k.asset_id = @asset_id AND k.released_at IS NULL;
+ WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND k.asset_id = @asset_id AND k.released_at IS NULL AND k.kind = 'UNIT';
 
 -- name: GuardBillAssets :many
 -- The live assets made from the lines of a bill (line_no 0: any line), whether the link knows its bill line or only its journal (a bill posted before migration 00094).
@@ -608,3 +608,67 @@ SELECT l.id, l.run_id, r.period_month, j.journal_number, l.from_month, l.months,
   JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
  WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.asset_id = @asset_id
  ORDER BY r.period_month;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Moves and revisions (changes.go)
+
+-- name: LedgerMoveAsset :exec
+-- Where the asset stands and which department it belongs to (the history is fa_moves).
+UPDATE fa_assets SET location_id = sqlc.narg(location_id), department_id = sqlc.narg(department_id), version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: InsertMove :one
+INSERT INTO fa_moves (tenant_id, property_id, asset_id, effective_on, from_location_id, to_location_id, from_department_id, to_department_id, reason, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @asset_id, @effective_on, sqlc.narg(from_location_id), sqlc.narg(to_location_id), sqlc.narg(from_department_id), sqlc.narg(to_department_id), @reason,
+        sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: ListMovesByKey :many
+SELECT asset_id FROM fa_moves WHERE property_id = @property_id AND idempotency_key = @idempotency_key ORDER BY asset_id;
+
+-- name: ListMovesOfAssets :many
+-- Every move of the assets, in the order they happened: the department of an asset at a date is read from them (4.6).
+SELECT asset_id, effective_on, from_department_id, to_department_id
+  FROM fa_moves WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = ANY(@asset_ids::bigint[]) ORDER BY asset_id, effective_on, id;
+
+-- name: ListMovesOfAsset :many
+SELECT m.id, m.effective_on, m.reason, m.created_at, m.created_by, u.full_name AS created_by_name,
+       m.from_location_id, fl.name AS from_location_name, m.to_location_id, tl.name AS to_location_name,
+       m.from_department_id, fd.name AS from_department_name, m.to_department_id, td.name AS to_department_name
+  FROM fa_moves m
+  LEFT JOIN fa_locations fl ON fl.property_id = m.property_id AND fl.id = m.from_location_id
+  LEFT JOIN fa_locations tl ON tl.property_id = m.property_id AND tl.id = m.to_location_id
+  LEFT JOIN departments fd ON fd.property_id = m.property_id AND fd.id = m.from_department_id
+  LEFT JOIN departments td ON td.property_id = m.property_id AND td.id = m.to_department_id
+  LEFT JOIN users u ON u.id = m.created_by
+ WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.asset_id = @asset_id
+ ORDER BY m.effective_on, m.id;
+
+-- name: LedgerReviseAsset :exec
+-- The life, the residual value and the method of an asset, from the next run (a revision, 4.5).
+UPDATE fa_assets SET life_months = sqlc.narg(life_months), residual_value = @residual_value, method = sqlc.narg(method), db_factor = sqlc.narg(db_factor), version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: LedgerReclassAsset :exec
+-- The asset in its new category: the category, what depreciation it has (a construction in progress that is finished gets its life, method and start) and its fiscal group.
+UPDATE fa_assets SET category_id = @category_id, life_months = sqlc.narg(life_months), method = sqlc.narg(method), db_factor = sqlc.narg(db_factor), residual_value = @residual_value,
+       in_service_date = @in_service_date, start_rule = @start_rule, first_dep_month = sqlc.narg(first_dep_month), fiscal_group = @fiscal_group, fiscal_method = sqlc.narg(fiscal_method),
+       version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: InsertRevision :one
+INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, bill_id, bill_line_no, journal_line_id, journal_id, reason, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @asset_id, @kind, @effective_on, @old_value, @new_value, sqlc.narg(bill_id), sqlc.narg(bill_line_no), sqlc.narg(journal_line_id), sqlc.narg(journal_id), @reason,
+        sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: GetRevisionByKey :one
+SELECT * FROM fa_revisions WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: ListRevisionsOfAsset :many
+SELECT r.id, r.kind, r.effective_on, r.old_value, r.new_value, r.journal_id, j.journal_number, r.reason, r.created_at, r.created_by, u.full_name AS created_by_name
+  FROM fa_revisions r
+  LEFT JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN users u ON u.id = r.created_by
+ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.asset_id = @asset_id
+ ORDER BY r.effective_on, r.id;

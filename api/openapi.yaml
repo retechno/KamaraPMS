@@ -14592,6 +14592,114 @@ paths:
               schema: { $ref: "#/components/schemas/AssetSchedule" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/moves:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: moveAssets
+      summary: "Move assets to another location, another department or both, from the open business day, all or nothing (asset.manage)"
+      description: "`Idempotency-Key` is required; the same key replays the first answer (200). The date of a move is the open business day: it is never backdated. An asset that is where it is asked to be is counted in `skipped`; when none moves the request is 422 (`asset_ids` `NOTHING_TO_MOVE`). 409 `ASSET_STATUS_INVALID` for an asset that is not active."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetMoveRequest" }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMoveResult" }
+        "201":
+          description: The assets that moved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMoveResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/moves:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: moveAsset
+      summary: "Move one asset to another location, another department or both (asset.manage)"
+      description: "As `moveAssets` for one asset (`asset_ids` is ignored); answers the asset. `Idempotency-Key` is required."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetMoveRequest" }
+      responses:
+        "200":
+          description: The asset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDetail" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/revisions:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reviseAsset
+      summary: "Change the life, the residual value or the method of an asset, add value to it from a journal line, or move it to another category (asset.manage)"
+      description: "Prospective, from the next run; nothing posted is rewritten. `Idempotency-Key` and `reason` are required. The months before the open day's month must have been run (409 `DEPRECIATION_NOT_RUN`). LIFE takes the new total life (409 `LIFE_TOO_SHORT`), RESIDUAL the new residual value (not above the carrying value), METHOD `SL` or `DB` (with `db_factor`), CAPITALIZE the `journal_line_id` of a line on the cost account of the asset's category that is not an asset (409 `LINE_ALREADY_ASSET`, 422 `LINE_NOT_ELIGIBLE`); no journal is posted. CATEGORY takes `category_id` and posts the journal that moves the cost and the accumulated depreciation to the accounts of the new category (type ASSET, dated the open day); a construction in progress that is finished also takes `in_service_date` and `start_rule`, and `life_months`, `residual_value`, `method` and `db_factor` change what the new category brings."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetRevisionRequest" }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRevisionResult" }
+        "201":
+          description: The asset after the revision.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRevisionResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/history:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getAssetHistory
+      summary: "What happened to an asset: its moves, revisions and months of depreciation, in the order they happened (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The history.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssetHistoryEntry" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -27233,6 +27341,67 @@ components:
         months_done: { type: integer }
         run_month: { type: [string, "null"], format: date, description: "The month of the run that booked it: later than `month` for a catch-up." }
         journal_number: { type: [string, "null"] }
+    AssetMoveRequest:
+      type: object
+      required: [reason]
+      properties:
+        asset_ids: { type: array, items: { type: integer, format: int64 }, maxItems: 500, description: "The assets to move (the batch route; the route of one asset takes it from the path)." }
+        change_location: { type: boolean }
+        location_id: { type: [integer, "null"], format: int64, description: "The new location, used when `change_location` is true (null: none)." }
+        change_department: { type: boolean }
+        department_id: { type: [integer, "null"], format: int64, description: "The new department, used when `change_department` is true (null: none)." }
+        reason: { type: string, maxLength: 300 }
+    AssetMoveResult:
+      type: object
+      required: [moved, skipped, replayed]
+      properties:
+        moved:
+          type: array
+          items:
+            type: object
+            required: [id, number, name]
+            properties:
+              id: { type: integer, format: int64 }
+              number: { type: string }
+              name: { type: string }
+        skipped: { type: integer }
+        replayed: { type: boolean }
+    AssetRevisionRequest:
+      type: object
+      required: [kind, reason]
+      properties:
+        kind: { type: string, enum: [LIFE, RESIDUAL, METHOD, CAPITALIZE, CATEGORY] }
+        reason: { type: string, maxLength: 300 }
+        life_months: { type: [integer, "null"], format: int32, description: "LIFE: the new total life. CATEGORY: overrides the life of the new category." }
+        residual_value: { type: [string, "null"], description: "RESIDUAL: the new residual value. CATEGORY: overrides the one of the new category." }
+        method: { type: [string, "null"], enum: [SL, DB, null] }
+        db_factor: { type: [string, "null"], description: "The factor of a declining balance (above 0, not above 5; 2 by default)." }
+        journal_line_id: { type: [integer, "null"], format: int64, description: "CAPITALIZE: the line that adds the value." }
+        category_id: { type: [integer, "null"], format: int64, description: "CATEGORY: the new category." }
+        in_service_date: { type: [string, "null"], format: date, description: "CATEGORY of a construction in progress: when it was finished." }
+        start_rule: { type: [string, "null"], enum: [IN_SERVICE_MONTH, NEXT_MONTH, null] }
+    AssetRevisionResult:
+      allOf:
+        - $ref: "#/components/schemas/AssetDetail"
+        - type: object
+          required: [revision_id, journal_id, journal_number, replayed]
+          properties:
+            revision_id: { type: integer, format: int64 }
+            journal_id: { type: [integer, "null"], format: int64, description: "The journal of a change of category that moved accounts; for a value added, the journal of the line." }
+            journal_number: { type: [string, "null"] }
+            replayed: { type: boolean }
+    AssetHistoryEntry:
+      type: object
+      required: [kind, date, reason, details, journal_id, journal_number, by, at]
+      properties:
+        kind: { type: string, enum: [MOVE, LIFE, RESIDUAL, METHOD, CAPITALIZE, CATEGORY, DEPRECIATION, DISPOSAL] }
+        date: { type: string, format: date }
+        reason: { type: [string, "null"] }
+        details: { type: object, additionalProperties: true, description: "A move: from_location, to_location, from_department, to_department. A revision: old and new. A month of depreciation: month, months, amount, accum_after, carrying_after." }
+        journal_id: { type: [integer, "null"], format: int64 }
+        journal_number: { type: [string, "null"] }
+        by: { type: [string, "null"] }
+        at: { type: string, format: date-time }
     AssetSchedule:
       type: object
       required: [asset_id, number, name, depreciable, cost, residual_value, rows]

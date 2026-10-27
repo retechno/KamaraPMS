@@ -848,7 +848,7 @@ SELECT k.journal_line_id, k.unit_no, k.cost, k.bill_id, k.bill_line_no, j.id AS 
   JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
   JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
   LEFT JOIN supplier_bills b ON b.id = k.bill_id
- WHERE k.tenant_id = $1 AND k.property_id = $2 AND k.asset_id = $3 AND k.released_at IS NULL
+ WHERE k.tenant_id = $1 AND k.property_id = $2 AND k.asset_id = $3 AND k.released_at IS NULL AND k.kind = 'UNIT'
 `
 
 type GetLiveLinkOfAssetParams struct {
@@ -1150,6 +1150,40 @@ func (q *Queries) GetOpeningImportByKey(ctx context.Context, arg GetOpeningImpor
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getRevisionByKey = `-- name: GetRevisionByKey :one
+SELECT id, tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, bill_id, bill_line_no, journal_line_id, journal_id, reason, idempotency_key, created_by, created_at FROM fa_revisions WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetRevisionByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) GetRevisionByKey(ctx context.Context, arg GetRevisionByKeyParams) (FaRevision, error) {
+	row := q.db.QueryRow(ctx, getRevisionByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i FaRevision
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AssetID,
+		&i.Kind,
+		&i.EffectiveOn,
+		&i.OldValue,
+		&i.NewValue,
+		&i.BillID,
+		&i.BillLineNo,
+		&i.JournalLineID,
+		&i.JournalID,
+		&i.Reason,
+		&i.IdempotencyKey,
+		&i.CreatedBy,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -1652,6 +1686,46 @@ func (q *Queries) InsertLocation(ctx context.Context, arg InsertLocationParams) 
 	return i, err
 }
 
+const insertMove = `-- name: InsertMove :one
+INSERT INTO fa_moves (tenant_id, property_id, asset_id, effective_on, from_location_id, to_location_id, from_department_id, to_department_id, reason, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+        $10, $11)
+RETURNING id
+`
+
+type InsertMoveParams struct {
+	TenantID         int64
+	PropertyID       int64
+	AssetID          int64
+	EffectiveOn      civil.Date
+	FromLocationID   *int64
+	ToLocationID     *int64
+	FromDepartmentID *int64
+	ToDepartmentID   *int64
+	Reason           string
+	IdempotencyKey   *string
+	ActorID          *int64
+}
+
+func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertMove,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AssetID,
+		arg.EffectiveOn,
+		arg.FromLocationID,
+		arg.ToLocationID,
+		arg.FromDepartmentID,
+		arg.ToDepartmentID,
+		arg.Reason,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertOpeningImport = `-- name: InsertOpeningImport :one
 
 INSERT INTO fa_opening_imports (tenant_id, property_id, number, as_of, mode, journal_id, asset_count, total_cost, total_accum, file_hash, idempotency_key, created_by)
@@ -1709,6 +1783,52 @@ func (q *Queries) InsertOpeningImport(ctx context.Context, arg InsertOpeningImpo
 		&i.CreatedBy,
 	)
 	return i, err
+}
+
+const insertRevision = `-- name: InsertRevision :one
+INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, bill_id, bill_line_no, journal_line_id, journal_id, reason, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        $13, $14)
+RETURNING id
+`
+
+type InsertRevisionParams struct {
+	TenantID       int64
+	PropertyID     int64
+	AssetID        int64
+	Kind           string
+	EffectiveOn    civil.Date
+	OldValue       []byte
+	NewValue       []byte
+	BillID         *int64
+	BillLineNo     *int32
+	JournalLineID  *int64
+	JournalID      *int64
+	Reason         string
+	IdempotencyKey *string
+	ActorID        *int64
+}
+
+func (q *Queries) InsertRevision(ctx context.Context, arg InsertRevisionParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertRevision,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AssetID,
+		arg.Kind,
+		arg.EffectiveOn,
+		arg.OldValue,
+		arg.NewValue,
+		arg.BillID,
+		arg.BillLineNo,
+		arg.JournalLineID,
+		arg.JournalID,
+		arg.Reason,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertRun = `-- name: InsertRun :one
@@ -1788,8 +1908,8 @@ func (q *Queries) InsertRunLine(ctx context.Context, arg InsertRunLineParams) (i
 }
 
 const insertSourceLink = `-- name: InsertSourceLink :exec
-INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, kind, bill_id, bill_line_no, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 `
 
 type InsertSourceLinkParams struct {
@@ -1799,6 +1919,7 @@ type InsertSourceLinkParams struct {
 	UnitNo         int32
 	AssetID        int64
 	Cost           decimal.Decimal
+	Kind           string
 	BillID         *int64
 	BillLineNo     *int32
 	IdempotencyKey *string
@@ -1813,6 +1934,7 @@ func (q *Queries) InsertSourceLink(ctx context.Context, arg InsertSourceLinkPara
 		arg.UnitNo,
 		arg.AssetID,
 		arg.Cost,
+		arg.Kind,
 		arg.BillID,
 		arg.BillLineNo,
 		arg.IdempotencyKey,
@@ -2155,6 +2277,36 @@ func (q *Queries) LedgerInsertEntry(ctx context.Context, arg LedgerInsertEntryPa
 	return id, err
 }
 
+const ledgerMoveAsset = `-- name: LedgerMoveAsset :exec
+
+UPDATE fa_assets SET location_id = $1, department_id = $2, version = version + 1, updated_by = $3
+ WHERE tenant_id = $4 AND property_id = $5 AND id = $6 AND status = 'ACTIVE'
+`
+
+type LedgerMoveAssetParams struct {
+	LocationID   *int64
+	DepartmentID *int64
+	ActorID      *int64
+	TenantID     int64
+	PropertyID   int64
+	ID           int64
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Moves and revisions (changes.go)
+// Where the asset stands and which department it belongs to (the history is fa_moves).
+func (q *Queries) LedgerMoveAsset(ctx context.Context, arg LedgerMoveAssetParams) error {
+	_, err := q.db.Exec(ctx, ledgerMoveAsset,
+		arg.LocationID,
+		arg.DepartmentID,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const ledgerOpenEntry = `-- name: LedgerOpenEntry :one
 SELECT id, tenant_id, property_id, asset_id, category_id, kind, event_date, book_month, cost_delta, accum_delta, months_delta, journal_id, source_type, source_id, source_line, reverses_id, created_at, created_by FROM fa_ledger WHERE tenant_id = $1 AND property_id = $2 AND asset_id = $3 AND kind IN ('OPEN', 'ACQUIRE') ORDER BY id LIMIT 1
 `
@@ -2191,6 +2343,51 @@ func (q *Queries) LedgerOpenEntry(ctx context.Context, arg LedgerOpenEntryParams
 	return i, err
 }
 
+const ledgerReclassAsset = `-- name: LedgerReclassAsset :exec
+UPDATE fa_assets SET category_id = $1, life_months = $2, method = $3, db_factor = $4, residual_value = $5,
+       in_service_date = $6, start_rule = $7, first_dep_month = $8, fiscal_group = $9, fiscal_method = $10,
+       version = version + 1, updated_by = $11
+ WHERE tenant_id = $12 AND property_id = $13 AND id = $14 AND status = 'ACTIVE'
+`
+
+type LedgerReclassAssetParams struct {
+	CategoryID    int64
+	LifeMonths    *int32
+	Method        *string
+	DbFactor      *decimal.Decimal
+	ResidualValue decimal.Decimal
+	InServiceDate civil.Date
+	StartRule     string
+	FirstDepMonth *civil.Date
+	FiscalGroup   string
+	FiscalMethod  *string
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+// The asset in its new category: the category, what depreciation it has (a construction in progress that is finished gets its life, method and start) and its fiscal group.
+func (q *Queries) LedgerReclassAsset(ctx context.Context, arg LedgerReclassAssetParams) error {
+	_, err := q.db.Exec(ctx, ledgerReclassAsset,
+		arg.CategoryID,
+		arg.LifeMonths,
+		arg.Method,
+		arg.DbFactor,
+		arg.ResidualValue,
+		arg.InServiceDate,
+		arg.StartRule,
+		arg.FirstDepMonth,
+		arg.FiscalGroup,
+		arg.FiscalMethod,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const ledgerRestateAsset = `-- name: LedgerRestateAsset :exec
 UPDATE fa_assets SET cost = $1, accum_depr = $2, dep_months_done = $3, last_dep_month = $4, version = version + 1, updated_by = $5
  WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'ACTIVE'
@@ -2213,6 +2410,37 @@ func (q *Queries) LedgerRestateAsset(ctx context.Context, arg LedgerRestateAsset
 		arg.AccumDepr,
 		arg.DepMonthsDone,
 		arg.LastDepMonth,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const ledgerReviseAsset = `-- name: LedgerReviseAsset :exec
+UPDATE fa_assets SET life_months = $1, residual_value = $2, method = $3, db_factor = $4, version = version + 1, updated_by = $5
+ WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'ACTIVE'
+`
+
+type LedgerReviseAssetParams struct {
+	LifeMonths    *int32
+	ResidualValue decimal.Decimal
+	Method        *string
+	DbFactor      *decimal.Decimal
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+// The life, the residual value and the method of an asset, from the next run (a revision, 4.5).
+func (q *Queries) LedgerReviseAsset(ctx context.Context, arg LedgerReviseAssetParams) error {
+	_, err := q.db.Exec(ctx, ledgerReviseAsset,
+		arg.LifeMonths,
+		arg.ResidualValue,
+		arg.Method,
+		arg.DbFactor,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -3194,7 +3422,7 @@ func (q *Queries) ListFiscalGroups(ctx context.Context, arg ListFiscalGroupsPara
 }
 
 const listLinksByKey = `-- name: ListLinksByKey :many
-SELECT id, tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, released_at, released_by, created_at, created_by FROM fa_source_links WHERE property_id = $1 AND idempotency_key = $2 ORDER BY unit_no
+SELECT id, tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, released_at, released_by, created_at, created_by, kind FROM fa_source_links WHERE property_id = $1 AND idempotency_key = $2 ORDER BY unit_no
 `
 
 type ListLinksByKeyParams struct {
@@ -3226,6 +3454,7 @@ func (q *Queries) ListLinksByKey(ctx context.Context, arg ListLinksByKeyParams) 
 			&i.ReleasedBy,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -3374,6 +3603,151 @@ func (q *Queries) ListLocations(ctx context.Context, arg ListLocationsParams) ([
 	return items, nil
 }
 
+const listMovesByKey = `-- name: ListMovesByKey :many
+SELECT asset_id FROM fa_moves WHERE property_id = $1 AND idempotency_key = $2 ORDER BY asset_id
+`
+
+type ListMovesByKeyParams struct {
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) ListMovesByKey(ctx context.Context, arg ListMovesByKeyParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listMovesByKey, arg.PropertyID, arg.IdempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var asset_id int64
+		if err := rows.Scan(&asset_id); err != nil {
+			return nil, err
+		}
+		items = append(items, asset_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMovesOfAsset = `-- name: ListMovesOfAsset :many
+SELECT m.id, m.effective_on, m.reason, m.created_at, m.created_by, u.full_name AS created_by_name,
+       m.from_location_id, fl.name AS from_location_name, m.to_location_id, tl.name AS to_location_name,
+       m.from_department_id, fd.name AS from_department_name, m.to_department_id, td.name AS to_department_name
+  FROM fa_moves m
+  LEFT JOIN fa_locations fl ON fl.property_id = m.property_id AND fl.id = m.from_location_id
+  LEFT JOIN fa_locations tl ON tl.property_id = m.property_id AND tl.id = m.to_location_id
+  LEFT JOIN departments fd ON fd.property_id = m.property_id AND fd.id = m.from_department_id
+  LEFT JOIN departments td ON td.property_id = m.property_id AND td.id = m.to_department_id
+  LEFT JOIN users u ON u.id = m.created_by
+ WHERE m.tenant_id = $1 AND m.property_id = $2 AND m.asset_id = $3
+ ORDER BY m.effective_on, m.id
+`
+
+type ListMovesOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+type ListMovesOfAssetRow struct {
+	ID                 int64
+	EffectiveOn        civil.Date
+	Reason             string
+	CreatedAt          time.Time
+	CreatedBy          *int64
+	CreatedByName      *string
+	FromLocationID     *int64
+	FromLocationName   *string
+	ToLocationID       *int64
+	ToLocationName     *string
+	FromDepartmentID   *int64
+	FromDepartmentName *string
+	ToDepartmentID     *int64
+	ToDepartmentName   *string
+}
+
+func (q *Queries) ListMovesOfAsset(ctx context.Context, arg ListMovesOfAssetParams) ([]ListMovesOfAssetRow, error) {
+	rows, err := q.db.Query(ctx, listMovesOfAsset, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMovesOfAssetRow{}
+	for rows.Next() {
+		var i ListMovesOfAssetRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EffectiveOn,
+			&i.Reason,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.CreatedByName,
+			&i.FromLocationID,
+			&i.FromLocationName,
+			&i.ToLocationID,
+			&i.ToLocationName,
+			&i.FromDepartmentID,
+			&i.FromDepartmentName,
+			&i.ToDepartmentID,
+			&i.ToDepartmentName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMovesOfAssets = `-- name: ListMovesOfAssets :many
+SELECT asset_id, effective_on, from_department_id, to_department_id
+  FROM fa_moves WHERE tenant_id = $1 AND property_id = $2 AND asset_id = ANY($3::bigint[]) ORDER BY asset_id, effective_on, id
+`
+
+type ListMovesOfAssetsParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetIds   []int64
+}
+
+type ListMovesOfAssetsRow struct {
+	AssetID          int64
+	EffectiveOn      civil.Date
+	FromDepartmentID *int64
+	ToDepartmentID   *int64
+}
+
+// Every move of the assets, in the order they happened: the department of an asset at a date is read from them (4.6).
+func (q *Queries) ListMovesOfAssets(ctx context.Context, arg ListMovesOfAssetsParams) ([]ListMovesOfAssetsRow, error) {
+	rows, err := q.db.Query(ctx, listMovesOfAssets, arg.TenantID, arg.PropertyID, arg.AssetIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMovesOfAssetsRow{}
+	for rows.Next() {
+		var i ListMovesOfAssetsRow
+		if err := rows.Scan(
+			&i.AssetID,
+			&i.EffectiveOn,
+			&i.FromDepartmentID,
+			&i.ToDepartmentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpeningImports = `-- name: ListOpeningImports :many
 SELECT i.id, i.tenant_id, i.property_id, i.number, i.as_of, i.mode, i.journal_id, i.asset_count, i.total_cost, i.total_accum, i.file_hash, i.idempotency_key, i.created_at, i.created_by, j.journal_number FROM fa_opening_imports i LEFT JOIN gl_journals j ON j.property_id = i.property_id AND j.id = i.journal_id
  WHERE i.tenant_id = $1 AND i.property_id = $2 ORDER BY i.id DESC LIMIT 100
@@ -3462,6 +3836,67 @@ func (q *Queries) ListPeriodStates(ctx context.Context, arg ListPeriodStatesPara
 	for rows.Next() {
 		var i ListPeriodStatesRow
 		if err := rows.Scan(&i.PeriodStart, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRevisionsOfAsset = `-- name: ListRevisionsOfAsset :many
+SELECT r.id, r.kind, r.effective_on, r.old_value, r.new_value, r.journal_id, j.journal_number, r.reason, r.created_at, r.created_by, u.full_name AS created_by_name
+  FROM fa_revisions r
+  LEFT JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN users u ON u.id = r.created_by
+ WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.asset_id = $3
+ ORDER BY r.effective_on, r.id
+`
+
+type ListRevisionsOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+type ListRevisionsOfAssetRow struct {
+	ID            int64
+	Kind          string
+	EffectiveOn   civil.Date
+	OldValue      []byte
+	NewValue      []byte
+	JournalID     *int64
+	JournalNumber *string
+	Reason        string
+	CreatedAt     time.Time
+	CreatedBy     *int64
+	CreatedByName *string
+}
+
+func (q *Queries) ListRevisionsOfAsset(ctx context.Context, arg ListRevisionsOfAssetParams) ([]ListRevisionsOfAssetRow, error) {
+	rows, err := q.db.Query(ctx, listRevisionsOfAsset, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRevisionsOfAssetRow{}
+	for rows.Next() {
+		var i ListRevisionsOfAssetRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.EffectiveOn,
+			&i.OldValue,
+			&i.NewValue,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.Reason,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.CreatedByName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
