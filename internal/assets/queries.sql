@@ -117,6 +117,22 @@ RETURNING *;
 SELECT DISTINCT accumulated_account_id::bigint FROM fa_categories
  WHERE tenant_id = @tenant_id AND property_id = @property_id AND accumulated_account_id IS NOT NULL;
 
+-- name: DisposalFlows :many
+-- What the disposals posted in a range took out of each cost account and the proceeds they brought, for the cash flow statement: a disposal counts on the date of its journal, and a reversed one is
+-- taken back on the date of the reversal journal, so what the books show for the range is what this returns.
+SELECT c.cost_account_id::bigint AS cost_account_id,
+       (COALESCE(SUM(d.cost_removed) FILTER (WHERE j.journal_date BETWEEN @from_date AND @to_date), 0)
+        - COALESCE(SUM(d.cost_removed) FILTER (WHERE rj.journal_date BETWEEN @from_date AND @to_date), 0))::numeric(18,3) AS cost_removed,
+       (COALESCE(SUM(d.proceeds) FILTER (WHERE j.journal_date BETWEEN @from_date AND @to_date), 0)
+        - COALESCE(SUM(d.proceeds) FILTER (WHERE rj.journal_date BETWEEN @from_date AND @to_date), 0))::numeric(18,3) AS proceeds
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  JOIN gl_journals j ON j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.id = d.reversal_journal_id
+ WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id
+ GROUP BY c.cost_account_id;
+
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Locations
 

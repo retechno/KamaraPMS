@@ -65,6 +65,23 @@ func (s *Service) ControlAccountIDs(ctx context.Context, tenantID, propertyID in
 	return s.q(ctx).ControlAccountIDs(ctx, assetsdb.ControlAccountIDsParams{TenantID: tenantID, PropertyID: propertyID})
 }
 
+// DisposalFlows is what the disposals of a range took out of the cost accounts and the proceeds they brought (accounting.DisposalFlowSource): the cash flow statement shows the proceeds on a line of
+// their own and the purchases without the cost that left with a disposal.
+func (s *Service) DisposalFlows(ctx context.Context, tenantID, propertyID int64, from, to civil.Date) (accounting.DisposalFlows, error) {
+	rows, err := s.q(ctx).DisposalFlows(ctx, assetsdb.DisposalFlowsParams{TenantID: tenantID, PropertyID: propertyID, FromDate: from, ToDate: to})
+	if err != nil {
+		return accounting.DisposalFlows{}, err
+	}
+	out := accounting.DisposalFlows{CostRemoved: map[int64]decimal.Decimal{}}
+	for _, r := range rows {
+		out.Proceeds = out.Proceeds.Add(r.Proceeds)
+		if !r.CostRemoved.IsZero() {
+			out.CostRemoved[r.CostAccountID] = r.CostRemoved
+		}
+	}
+	return out, nil
+}
+
 func fieldErr(f, code, msg string) apperr.FieldError {
 	return apperr.FieldError{Field: f, Code: code, Message: msg}
 }

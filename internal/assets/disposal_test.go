@@ -2,11 +2,13 @@ package assets_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/shopspring/decimal"
 
+	"kamarapms/internal/accounting"
 	"kamarapms/internal/assets"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/auth"
@@ -378,6 +380,82 @@ func TestExample1011TheCashFlowOfADisposal(t *testing.T) {
 	must(t, err)
 	if !flow.NetIncome.Equal(dec("-3000000")) || !flow.Operating.IsZero() || !flow.Investing.Equal(dec("12000000")) || !flow.Reconciled {
 		t.Fatalf("loss: net income %s, operating %s, investing %s, reconciled %v", flow.NetIncome, flow.Operating, flow.Investing, flow.Reconciled)
+	}
+}
+
+// sectionsAddUp checks that the lines shown in each section of the indirect cash flow add up to the total of that section (no adjustment out of sight) and that the sections add up to the net change.
+func sectionsAddUp(t *testing.T, flow accounting.CashFlow) {
+	t.Helper()
+	sum, sections := decimal.Zero, decimal.Zero
+	for _, l := range flow.Lines {
+		switch l.Kind {
+		case "HEADING":
+			sum = decimal.Zero
+		case "GROUP":
+			sum = sum.Add(l.Amount)
+		case "SUBTOTAL":
+			if !sum.Equal(l.Amount) {
+				t.Errorf("the lines of %s add up to %s, the total says %s", l.Key, sum, l.Amount)
+			}
+			sections = sections.Add(l.Amount)
+		}
+	}
+	if !sections.Add(flow.Unclassified).Equal(flow.NetChange) || !flow.Reconciled {
+		t.Errorf("sections %s + %s, net change %s, reconciled %v (difference %s)", sections, flow.Unclassified, flow.NetChange, flow.Reconciled, flow.Difference)
+	}
+}
+
+func cashFlowLine(flow accounting.CashFlow, key string) (accounting.StatementLine, bool) {
+	for _, l := range flow.Lines {
+		if l.Key == key {
+			return l, true
+		}
+	}
+	return accounting.StatementLine{}, false
+}
+
+// The investing activities of the cash flow: a purchase, the depreciation, a disposal at a loss and one at a gain. The purchase is the growth of the cost accounts (never the accumulated depreciation),
+// the proceeds are a line of their own, positive, and every section adds up to its total (the review of PR 61).
+func TestTheInvestingActivitiesAddUpAndShowTheProceedsOnTheirOwnLine(t *testing.T) {
+	f := newFx(t)
+	ids := f.withAssets(t, chair("Chair A"), chair("Chair B"))
+	f.manual(t, "2026-09-10", "1530", "1110", "24000000") // a cash purchase of equipment
+	f.advanceTo(t, "2026-10-01")
+	f.run(t, "2026-09")
+	f.disposeAs(t, f.admin, ids[0], f.sale("12000000", "1110"))           // carrying value 15,000,000: a loss of 3,000,000
+	second := f.disposeAs(t, f.admin, ids[1], f.sale("18000000", "1110")) // a gain of 3,000,000
+	from, to := d("2026-09-02"), d("2026-10-01")
+	flow, err := f.Accounting.CashFlow(f.admin, f.propID, &from, &to)
+	must(t, err)
+	sectionsAddUp(t, flow)
+	buy, ok := cashFlowLine(flow, "FIXED_ASSETS")
+	if !ok || !buy.Amount.Equal(dec("-24000000")) {
+		t.Fatalf("purchases: %+v", buy)
+	}
+	for _, a := range buy.Accounts {
+		if strings.HasPrefix(a.Code, "159") {
+			t.Errorf("an accumulated depreciation account %s is shown as a purchase", a.Code)
+		}
+	}
+	proceeds, ok := cashFlowLine(flow, "DISPOSAL_PROCEEDS")
+	if !ok || !proceeds.Amount.Equal(dec("30000000")) {
+		t.Fatalf("proceeds: %+v", proceeds)
+	}
+	if _, other := cashFlowLine(flow, "FIXED_ASSETS_OTHER"); other {
+		t.Errorf("a line of other movements was needed: %+v", flow.Lines)
+	}
+	if !flow.Investing.Equal(dec("6000000")) || !flow.Operating.IsZero() {
+		t.Errorf("operating %s, investing %s", flow.Operating, flow.Investing)
+	}
+	// the sale reversed takes its proceeds off again, and the sections still add up
+	if _, err := f.svc.ReverseDisposal(f.boss, f.propID, second.Disposal.ID, assets.ReverseDisposalInput{Reason: "kept"}); err != nil {
+		t.Fatal(err)
+	}
+	flow, err = f.Accounting.CashFlow(f.admin, f.propID, &from, &to)
+	must(t, err)
+	sectionsAddUp(t, flow)
+	if proceeds, _ = cashFlowLine(flow, "DISPOSAL_PROCEEDS"); !proceeds.Amount.Equal(dec("12000000")) {
+		t.Errorf("proceeds after the reversal: %+v", proceeds)
 	}
 }
 

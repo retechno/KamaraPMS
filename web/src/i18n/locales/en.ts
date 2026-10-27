@@ -4495,6 +4495,8 @@ export const en = {
     net_cash_from_operating_activities: 'Net cash from operating activities',
     investing_activities: 'Investing activities',
     purchase_of_property_and_equipment: 'Purchase of property and equipment',
+    proceeds_from_sale_of_fixed_assets: 'Proceeds from sale of fixed assets',
+    other_movements_of_property_and_equipment: 'Other movements of property and equipment',
     net_cash_from_investing_activities: 'Net cash from investing activities',
     financing_activities: 'Financing activities',
     owner_s_equity_capital_and_drawings: 'Owner\'s equity (capital and drawings)',

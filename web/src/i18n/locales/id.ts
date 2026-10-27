@@ -4493,6 +4493,8 @@ export const id: Messages = {
     net_cash_from_operating_activities: 'Kas bersih dari aktivitas operasi',
     investing_activities: 'Aktivitas investasi',
     purchase_of_property_and_equipment: 'Pembelian properti dan peralatan',
+    proceeds_from_sale_of_fixed_assets: 'Hasil penjualan aset tetap',
+    other_movements_of_property_and_equipment: 'Perubahan lain pada properti dan peralatan',
     net_cash_from_investing_activities: 'Kas bersih dari aktivitas investasi',
     financing_activities: 'Aktivitas pendanaan',
     owner_s_equity_capital_and_drawings: 'Ekuitas pemilik (modal dan prive)',

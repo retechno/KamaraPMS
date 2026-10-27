@@ -187,6 +187,22 @@ describe('report views', () => {
     expect(bad.get('[data-testid=imbalance]').text()).toContain('differs from the change of the cash accounts by 25')
   })
 
+  it('shows the proceeds of the sale of fixed assets on a line of their own under investing, and the purchases without the accumulated depreciation', async () => {
+    const lines = [
+      { key: 'H_INVESTING', title: 'Investing activities', kind: 'HEADING', amount: '0', accounts: [] },
+      { key: 'FIXED_ASSETS', title: 'Purchase of property and equipment', kind: 'GROUP', amount: '-24000000', accounts: [{ account_id: 5, code: '1530', name: 'Furniture', amount: '-24000000' }] },
+      { key: 'DISPOSAL_PROCEEDS', title: 'Proceeds from sale of fixed assets', kind: 'GROUP', amount: '30000000', accounts: [] },
+      { key: 'FIXED_ASSETS_OTHER', title: 'Other movements of property and equipment', kind: 'GROUP', amount: '500', accounts: [] },
+      { key: 'INVESTING', title: 'Net cash from investing activities', kind: 'SUBTOTAL', amount: '6000500', accounts: [] },
+    ]
+    const w = await mountView(StatementView, ['accounting.view'], 'accounting-cash-flow', { '/cash-flow': { ...(answers['/cash-flow'] as object), lines } })
+    await flushPromises()
+    expect(w.get('[data-testid=line-DISPOSAL_PROCEEDS]').text()).toContain('Proceeds from sale of fixed assets')
+    expect(w.get('[data-testid=line-DISPOSAL_PROCEEDS]').text()).toContain('30,000,000')
+    expect(w.get('[data-testid=line-FIXED_ASSETS_OTHER]').text()).toContain('Other movements of property and equipment')
+    expect(w.get('[data-testid=line-FIXED_ASSETS]').text()).not.toContain('159')
+  })
+
   it('warns when the balance sheet does not balance', async () => {
     const w = await mountView(StatementView, ['accounting.view'], 'accounting-balance-sheet')
     await flushPromises()

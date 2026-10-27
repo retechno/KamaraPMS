@@ -310,6 +310,61 @@ func (q *Queries) DepartmentNames(ctx context.Context, arg DepartmentNamesParams
 	return items, nil
 }
 
+const disposalFlows = `-- name: DisposalFlows :many
+SELECT c.cost_account_id::bigint AS cost_account_id,
+       (COALESCE(SUM(d.cost_removed) FILTER (WHERE j.journal_date BETWEEN $1 AND $2), 0)
+        - COALESCE(SUM(d.cost_removed) FILTER (WHERE rj.journal_date BETWEEN $1 AND $2), 0))::numeric(18,3) AS cost_removed,
+       (COALESCE(SUM(d.proceeds) FILTER (WHERE j.journal_date BETWEEN $1 AND $2), 0)
+        - COALESCE(SUM(d.proceeds) FILTER (WHERE rj.journal_date BETWEEN $1 AND $2), 0))::numeric(18,3) AS proceeds
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  JOIN gl_journals j ON j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.id = d.reversal_journal_id
+ WHERE d.tenant_id = $3 AND d.property_id = $4
+ GROUP BY c.cost_account_id
+`
+
+type DisposalFlowsParams struct {
+	FromDate   civil.Date
+	ToDate     civil.Date
+	TenantID   int64
+	PropertyID int64
+}
+
+type DisposalFlowsRow struct {
+	CostAccountID int64
+	CostRemoved   decimal.Decimal
+	Proceeds      decimal.Decimal
+}
+
+// What the disposals posted in a range took out of each cost account and the proceeds they brought, for the cash flow statement: a disposal counts on the date of its journal, and a reversed one is
+// taken back on the date of the reversal journal, so what the books show for the range is what this returns.
+func (q *Queries) DisposalFlows(ctx context.Context, arg DisposalFlowsParams) ([]DisposalFlowsRow, error) {
+	rows, err := q.db.Query(ctx, disposalFlows,
+		arg.FromDate,
+		arg.ToDate,
+		arg.TenantID,
+		arg.PropertyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DisposalFlowsRow{}
+	for rows.Next() {
+		var i DisposalFlowsRow
+		if err := rows.Scan(&i.CostAccountID, &i.CostRemoved, &i.Proceeds); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const ensureSettings = `-- name: EnsureSettings :one
 INSERT INTO fa_settings (tenant_id, property_id, created_by, updated_by) VALUES ($1, $2, $3, $3)
 ON CONFLICT (property_id) DO UPDATE SET property_id = EXCLUDED.property_id
