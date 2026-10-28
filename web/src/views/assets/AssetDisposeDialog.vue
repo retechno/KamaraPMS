@@ -5,6 +5,7 @@ import { ApiError } from '@/api/problem'
 import type { AssetAccountOption, AssetDetail, AssetDisposalPreview, AssetDisposeRequest } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
+import MoneyInput from '@/components/app/MoneyInput.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { useApprovalRulesStore } from '@/stores/approvalRules'
+import { usePropertyStore } from '@/stores/property'
 import { toMinor } from '@/utils/checkin'
 import { formatDate, formatMoney } from '@/utils/format'
 
@@ -23,6 +25,8 @@ const props = defineProps<{ asset: AssetDetail | null; propertyId: number }>()
 const emit = defineEmits<{ close: []; done: [status: 'POSTED' | 'PENDING'] }>()
 
 const rules = useApprovalRulesStore()
+const property = usePropertyStore()
+const decimals = computed(() => property.current?.currency_decimals ?? 0)
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
 const previewError = ref<ApiError | null>(null)
@@ -149,7 +153,7 @@ async function submit(): Promise<void> {
           <FormField v-if="isBatch" :label="t('assets.dispose.units', { n: asset.unit_count })" :error="error?.fieldMessage('units')"><template #default="{ id }"><Input :id="id" v-model.number="form.units" name="units" type="number" min="1" :max="asset.unit_count" inputmode="numeric" data-testid="dispose-units" /></template></FormField>
         </div>
         <div v-if="form.kind === 'SALE'" class="grid gap-3 sm:grid-cols-2" data-testid="dispose-proceeds">
-          <FormField :label="t('assets.dispose.proceeds')" required :error="error?.fieldMessage('proceeds')"><template #default="{ id }"><Input :id="id" v-model="form.proceeds" name="proceeds" inputmode="decimal" data-testid="dispose-price" /></template></FormField>
+          <FormField :label="t('assets.dispose.proceeds')" required :error="error?.fieldMessage('proceeds')"><template #default="{ id }"><MoneyInput :id="id" v-model="form.proceeds" :decimals="decimals" name="proceeds" data-testid="dispose-price" /></template></FormField>
           <FormField :label="t('assets.dispose.account')" required :error="error?.fieldMessage('proceeds_account_id')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model.number="form.proceeds_account_id" name="proceeds_account_id" data-testid="dispose-account">

@@ -429,7 +429,7 @@ What a plan needs: **`INVENTORY`** for the register, the opening import, movemen
 | `POST {P}/assets/{id}/revisions` (`LIFE`, `RESIDUAL`, `METHOD`, `CAPITALIZE`, `CATEGORY`) | manage | 4.5 |
 | `POST {P}/assets/{id}/dispose`, `POST .../assets/disposals/{id}/reverse`, `GET .../assets/disposals` | dispose / read | 4.7, 4.8 |
 | **PR 4:** `GET/PUT {P}/assets/fiscal-groups` | read / setup | the rates of 4.9 |
-| `GET/POST {P}/assets/audits`, `PUT .../audits/{id}/lines`, `POST .../audits/{id}/close`, `GET .../assets/proposals`, `POST .../proposals/{id}/apply|reject` | manage (apply: manage or dispose) | 4.10 |
+| `GET/POST {P}/assets/audits`, `GET .../audits/{id}/detail`, `PUT .../audits/{id}/lines`, `POST .../audits/{id}/close`, `GET .../assets/proposals`, `POST .../proposals/{id}/apply|reject` | manage (apply: manage or dispose) | 4.10 |
 | `GET {P}/assets/{id}/maintenance`; `PATCH {P}/maintenance-requests/{id}` gains `asset_id` | read / maintenance.manage | 4.11 |
 | `GET {P}/assets/reports/{register,schedule,recap,fiscal,locations,expiring,audit-differences}` with `?format=csv` | read | 4.12 |
 

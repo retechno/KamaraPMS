@@ -13,7 +13,8 @@ func (h *Handler) registerAudits(mux *http.ServeMux) {
 	const p = "/api/v1/properties/{propertyId}/assets"
 	mux.Handle("GET "+p+"/audits", httpx.HandlerFunc(h.listAudits))
 	mux.Handle("POST "+p+"/audits", httpx.HandlerFunc(h.startAudit))
-	mux.Handle("GET "+p+"/audits/{id}", httpx.HandlerFunc(h.getAudit))
+	// not GET audits/{id}: that shape overlaps GET {id}/history, {id}/schedule and {id}/maintenance of an asset and the mux refuses both
+	mux.Handle("GET "+p+"/audits/{id}/detail", httpx.HandlerFunc(h.getAudit))
 	mux.Handle("PUT "+p+"/audits/{id}/lines", httpx.HandlerFunc(h.scanAsset))
 	mux.Handle("POST "+p+"/audits/{id}/close", httpx.HandlerFunc(h.closeAudit))
 	mux.Handle("GET "+p+"/proposals", httpx.HandlerFunc(h.listProposals))

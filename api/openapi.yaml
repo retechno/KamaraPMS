@@ -15055,7 +15055,7 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
-  /api/v1/properties/{propertyId}/assets/audits/{id}:
+  /api/v1/properties/{propertyId}/assets/audits/{id}/detail:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
       - $ref: "#/components/parameters/Id"

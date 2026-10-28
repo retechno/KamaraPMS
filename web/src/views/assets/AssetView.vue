@@ -3,11 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AssetCategory, AssetDetail, AssetHistoryEntry, AssetLocation, AssetSchedule } from '@/api/types'
+import type { AssetCategory, AssetDetail, AssetHistoryEntry, AssetLocation, AssetRepair, AssetSchedule } from '@/api/types'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -52,12 +53,13 @@ async function load(): Promise<void> {
   }
   await loadSchedule()
   await loadHistory()
+  await loadRepairs()
 }
 watch([pid, assetId], load, { immediate: true })
 
 // the commercial depreciation schedule: the months posted and the months projected, summed by year
 const schedule = ref<AssetSchedule | null>(null)
-const tab = ref<'schedule' | 'history'>('schedule')
+const tab = ref<'schedule' | 'history' | 'repairs'>('schedule')
 const monthly = ref(false)
 async function loadSchedule(): Promise<void> {
   const propertyId = pid.value
@@ -70,15 +72,18 @@ async function loadSchedule(): Promise<void> {
     error.value = e instanceof ApiError ? e : null
   }
 }
-interface YearRow { year: string; months: number; amount: string; accum: string; carrying: string; label: 'POSTED' | 'CURRENT' | 'PROJECTED' | 'OPENING' }
+interface YearRow { year: string; months: number; amount: string; accum: string; carrying: string; label: 'POSTED' | 'CURRENT' | 'PROJECTED' | 'OPENING'; fiscal: string | null; fiscalAccum: string | null }
+/** The schedule has a fiscal column when the asset has a fiscal group (docs/architecture/37-fixed-assets.md 4.9). */
+const hasFiscal = computed(() => (schedule.value?.rows ?? []).some((r) => r.fiscal_amount !== null && r.fiscal_amount !== undefined))
 const years = computed<YearRow[]>(() => {
   const out: YearRow[] = []
-  const by = new Map<string, { rows: AssetSchedule['rows']; amount: bigint; months: number }>()
+  const by = new Map<string, { rows: AssetSchedule['rows']; amount: bigint; fiscal: bigint; months: number }>()
   for (const r of schedule.value?.rows ?? []) {
     const y = r.month.slice(0, 4)
-    const e = by.get(y) ?? { rows: [], amount: 0n, months: 0 }
+    const e = by.get(y) ?? { rows: [], amount: 0n, fiscal: 0n, months: 0 }
     e.rows.push(r)
     if (r.kind !== 'OPENING') e.amount += toMinor(r.amount, decimals.value)
+    if (r.fiscal_amount) e.fiscal += toMinor(r.fiscal_amount, decimals.value)
     e.months += r.kind === 'OPENING' ? 0 : r.months
     by.set(y, e)
   }
@@ -87,7 +92,7 @@ const years = computed<YearRow[]>(() => {
     if (!last) continue
     const kinds = new Set(e.rows.map((r) => r.kind))
     const label = kinds.size === 1 && kinds.has('OPENING') ? 'OPENING' : kinds.has('PROJECTED') ? (kinds.has('POSTED') ? 'CURRENT' : 'PROJECTED') : 'POSTED'
-    out.push({ year, months: e.months, amount: fromMinor(e.amount, decimals.value), accum: last.accum_after, carrying: last.carrying_after, label })
+    out.push({ year, months: e.months, amount: fromMinor(e.amount, decimals.value), accum: last.accum_after, carrying: last.carrying_after, label, fiscal: hasFiscal.value ? fromMinor(e.fiscal, decimals.value) : null, fiscalAccum: last.fiscal_accum_after ?? null })
   }
   return out
 })
@@ -111,6 +116,19 @@ async function loadHistory(): Promise<void> {
     history.value = data ?? []
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+}
+// the repair requests that name the asset, without any cost (docs/architecture/37-fixed-assets.md 4.11)
+const repairs = ref<AssetRepair[]>([])
+async function loadRepairs(): Promise<void> {
+  const propertyId = pid.value
+  repairs.value = []
+  if (propertyId === null || !canRead.value || !asset.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/{id}/maintenance', { params: { path: { propertyId, id: assetId.value } } })
+    repairs.value = data?.data ?? []
+  } catch {
+    // the repairs are a side view: a failure here never hides the asset
   }
 }
 const detail = (e: AssetHistoryEntry, k: string): string => {
@@ -249,6 +267,7 @@ async function changed(next: AssetDetail): Promise<void> {
   asset.value = next
   await loadSchedule()
   await loadHistory()
+  await loadRepairs()
 }
 async function disposed(): Promise<void> {
   disposing.value = false
@@ -324,6 +343,7 @@ async function disposed(): Promise<void> {
     <div class="flex gap-2" role="tablist">
       <button type="button" role="tab" :aria-selected="tab === 'schedule'" class="min-h-9 rounded-full border px-3 text-sm" :class="tab === 'schedule' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'" data-testid="tab-schedule" @click="tab = 'schedule'">{{ t('assets.schedule.tab') }}</button>
       <button type="button" role="tab" :aria-selected="tab === 'history'" class="min-h-9 rounded-full border px-3 text-sm" :class="tab === 'history' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'" data-testid="tab-history" @click="tab = 'history'">{{ t('assets.asset.history') }}</button>
+      <button type="button" role="tab" :aria-selected="tab === 'repairs'" class="min-h-9 rounded-full border px-3 text-sm" :class="tab === 'repairs' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'" data-testid="tab-repairs" @click="tab = 'repairs'">{{ t('assets.repairs.tab') }}</button>
     </div>
     <Card v-if="tab === 'schedule'" class="flex flex-col gap-2 p-4" data-testid="asset-schedule">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -333,28 +353,31 @@ async function disposed(): Promise<void> {
       <p v-if="!schedule || !schedule.depreciable" class="muted m-0" data-testid="schedule-none">{{ t('assets.schedule.none') }}</p>
       <div v-else class="overflow-x-auto">
         <table v-if="!monthly" class="w-full border-collapse text-sm tabular-nums" data-testid="schedule-years">
-          <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.schedule.year') }}</th><th class="p-2 text-right">{{ t('assets.schedule.depreciation') }}</th><th class="p-2 text-right">{{ t('assets.col.accum') }}</th><th class="p-2 text-right">{{ t('assets.col.carrying') }}</th></tr></thead>
+          <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.schedule.year') }}</th><th class="p-2 text-right">{{ t('assets.schedule.depreciation') }}</th><th class="p-2 text-right">{{ t('assets.col.accum') }}</th><th class="p-2 text-right">{{ t('assets.col.carrying') }}</th><th v-if="hasFiscal" class="p-2 text-right" data-testid="fiscal-col">{{ t('assets.schedule.fiscalAmount') }}</th><th v-if="hasFiscal" class="p-2 text-right">{{ t('assets.schedule.fiscalAccum') }}</th></tr></thead>
           <tbody>
             <tr v-for="r in years" :key="r.year" class="border-t border-border" :data-testid="`schedule-year-${r.year}`">
               <td class="p-2">{{ r.year }}<span class="text-xs text-muted-foreground"> · {{ r.label === 'OPENING' ? '' : t('assets.schedule.months', { n: r.months }) }} {{ yearLabel(r) }}</span></td>
               <td class="p-2 text-right">{{ formatMoney(r.amount) }}</td><td class="p-2 text-right">{{ formatMoney(r.accum) }}</td><td class="p-2 text-right">{{ formatMoney(r.carrying) }}</td>
+              <td v-if="hasFiscal" class="p-2 text-right">{{ r.fiscal === null ? '–' : formatMoney(r.fiscal) }}</td><td v-if="hasFiscal" class="p-2 text-right">{{ r.fiscalAccum === null ? '–' : formatMoney(r.fiscalAccum) }}</td>
             </tr>
           </tbody>
         </table>
         <table v-else class="w-full border-collapse text-sm tabular-nums" data-testid="schedule-months">
-          <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.schedule.month') }}</th><th class="p-2">{{ t('assets.col.status') }}</th><th class="p-2 text-right">{{ t('assets.schedule.depreciation') }}</th><th class="p-2 text-right">{{ t('assets.col.accum') }}</th><th class="p-2 text-right">{{ t('assets.col.carrying') }}</th></tr></thead>
+          <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.schedule.month') }}</th><th class="p-2">{{ t('assets.col.status') }}</th><th class="p-2 text-right">{{ t('assets.schedule.depreciation') }}</th><th class="p-2 text-right">{{ t('assets.col.accum') }}</th><th class="p-2 text-right">{{ t('assets.col.carrying') }}</th><th v-if="hasFiscal" class="p-2 text-right">{{ t('assets.schedule.fiscalAmount') }}</th><th v-if="hasFiscal" class="p-2 text-right">{{ t('assets.schedule.fiscalAccum') }}</th></tr></thead>
           <tbody>
             <tr v-for="r in schedule.rows" :key="`${r.kind}-${r.month}`" class="border-t border-border" :data-testid="`schedule-month-${r.month.slice(0, 7)}`">
               <td class="p-2">{{ formatMonth(r.month.slice(0, 7)) }}<span v-if="r.months > 1" class="text-xs text-muted-foreground"> · {{ t('assets.schedule.months', { n: r.months }) }}</span></td>
               <td class="p-2"><Badge :variant="r.kind === 'PROJECTED' ? 'outline' : 'success'">{{ t(`assets.schedule.kind.${r.kind}`) }}</Badge><span v-if="r.journal_number" class="ml-2 text-xs text-muted-foreground">{{ r.journal_number }}</span></td>
               <td class="p-2 text-right">{{ formatMoney(r.amount) }}</td><td class="p-2 text-right">{{ formatMoney(r.accum_after) }}</td><td class="p-2 text-right">{{ formatMoney(r.carrying_after) }}</td>
+              <td v-if="hasFiscal" class="p-2 text-right">{{ r.fiscal_amount ? formatMoney(r.fiscal_amount) : '–' }}</td><td v-if="hasFiscal" class="p-2 text-right">{{ r.fiscal_accum_after ? formatMoney(r.fiscal_accum_after) : '–' }}</td>
             </tr>
           </tbody>
         </table>
       </div>
       <p v-if="schedule?.depreciable" class="m-0 text-xs text-muted-foreground">{{ t('assets.schedule.note', { residual: formatMoney(schedule.residual_value) }) }}</p>
+      <p v-if="hasFiscal" class="m-0 text-xs text-muted-foreground" data-testid="schedule-fiscal-note">{{ t('assets.schedule.fiscalNote') }} <RouterLink to="/assets/reports/fiscal">{{ t('assets.schedule.fiscalLink') }}</RouterLink></p>
     </Card>
-    <Card v-else class="flex flex-col gap-2 p-4" data-testid="asset-history">
+    <Card v-else-if="tab === 'history'" class="flex flex-col gap-2 p-4" data-testid="asset-history">
       <h2 class="m-0 text-base font-semibold">{{ t('assets.asset.history') }}</h2>
       <ul v-if="history.length" class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="history-list">
         <li v-for="(e, i) in history" :key="`${e.kind}-${e.at}-${i}`" class="flex flex-wrap items-baseline gap-x-3 border-b border-border py-1" :data-testid="`history-${i}`">
@@ -374,6 +397,19 @@ async function disposed(): Promise<void> {
           <span class="tabular-nums">{{ t('assets.asset.accumDelta') }} {{ formatMoney(e.accum_delta) }}</span>
         </li>
       </ul>
+    </Card>
+    <Card v-else class="flex flex-col gap-2 p-4" data-testid="asset-repairs">
+      <h2 class="m-0 text-base font-semibold">{{ t('assets.repairs.title') }}</h2>
+      <p v-if="!repairs.length" class="muted m-0" data-testid="repairs-none">{{ t('assets.repairs.none') }}</p>
+      <ul v-else class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="repairs-list">
+        <li v-for="r in repairs" :key="r.id" class="flex flex-wrap items-baseline gap-x-3 border-b border-border py-1" :data-testid="`repair-${r.request_number}`">
+          <b class="w-28 font-medium">{{ formatDate(r.business_date) }}</b>
+          <span class="flex-1">{{ r.request_number }} · {{ r.description }}<span v-if="r.resolution_note" class="block text-xs text-muted-foreground">{{ r.resolution_note }}</span></span>
+          <StatusBadge domain="work" :status="r.status" />
+          <span v-if="r.location || r.room_number" class="text-xs text-muted-foreground">{{ r.location ?? r.room_number }}</span>
+        </li>
+      </ul>
+      <p class="m-0 text-xs text-muted-foreground">{{ t('assets.repairs.noCost') }}</p>
     </Card>
   </template>
   <p v-else-if="loaded && !error" class="muted">{{ t('assets.asset.notFound') }}</p>

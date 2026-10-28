@@ -340,10 +340,17 @@ watch([ensureKind, canSetup], loadEnsure, { immediate: true })
         <table class="w-full border-collapse text-sm tabular-nums" data-testid="check-reconciliation">
           <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.col.category') }}</th><th class="p-2 text-right">{{ t('assets.settings.registerCost') }}</th><th class="p-2 text-right">{{ t('assets.settings.ledgerCost') }}</th><th class="p-2 text-right">{{ t('assets.settings.registerAccum') }}</th><th class="p-2 text-right">{{ t('assets.settings.ledgerAccum') }}</th></tr></thead>
           <tbody>
-            <tr v-for="r in check.reconciliation" :key="r.category_id" class="border-t border-border">
+            <template v-for="r in check.reconciliation" :key="r.category_id">
+            <tr class="border-t border-border">
               <td class="p-2">{{ r.category_code }}</td><td class="p-2 text-right">{{ formatMoney(r.register_cost) }}</td><td class="p-2 text-right" :class="Number(r.cost_difference) !== 0 ? 'text-destructive' : ''">{{ formatMoney(r.ledger_cost) }}</td>
               <td class="p-2 text-right">{{ formatMoney(r.register_accum) }}</td><td class="p-2 text-right" :class="Number(r.accum_difference) !== 0 ? 'text-destructive' : ''">{{ formatMoney(r.ledger_accum) }}</td>
             </tr>
+            <tr v-if="(r.cost_causes?.length ?? 0) + (r.accum_causes?.length ?? 0)" :data-testid="`check-causes-${r.category_code}`">
+              <td colspan="5" class="px-2 pb-2 text-xs text-muted-foreground">
+                <span v-for="c in [...(r.cost_causes ?? []), ...(r.accum_causes ?? [])]" :key="`${c.code}-${c.amount}`" class="mr-3">{{ t(`assets.reports.cause.${c.code}`) }} {{ formatMoney(c.amount) }}</span>
+              </td>
+            </tr>
+            </template>
           </tbody>
         </table>
       </div>

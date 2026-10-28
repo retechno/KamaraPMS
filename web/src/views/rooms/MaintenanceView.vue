@@ -5,7 +5,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { HousekeepingBoardRoom, HousekeepingStaffMember, MaintenanceRequest } from '@/api/types'
+import type { AssetLookup, HousekeepingBoardRoom, HousekeepingStaffMember, MaintenanceRequest } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -17,21 +17,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { useAssetAccess } from '@/composables/useAssetAccess'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { useSubscriptionStore } from '@/stores/subscription'
 import { addDays } from '@/utils/dates'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
 const route = useRoute()
+const subscription = useSubscriptionStore()
+const assetAccess = useAssetAccess()
 
 const rows = ref<MaintenanceRequest[]>([])
 const nextCursor = ref<string | undefined>()
 const staff = ref<HousekeepingStaffMember[]>([])
 const roomList = ref<HousekeepingBoardRoom[]>([])
+const assetList = ref<AssetLookup[]>([])
+// the asset to which a repair belongs (docs/architecture/37-fixed-assets.md 4.11): only where the plan has the module and the person may read the register
+const canPickAsset = computed(() => subscription.has('INVENTORY') && assetAccess.canRead.value)
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
 const notice = ref('')
@@ -39,7 +46,7 @@ const busy = ref(false)
 const filter = reactive({ view: 'open', category: '', priority: '' })
 const selectedId = ref<number | null>(null)
 const creating = ref(false)
-const form = reactive({ room_id: 0, location: '', category: 'OTHER', description: '', priority: 'NORMAL' })
+const form = reactive({ room_id: 0, location: '', category: 'OTHER', description: '', priority: 'NORMAL', asset_id: 0 })
 const action = reactive({ assignTo: 0, note: '', releaseBlock: true, blockType: 'OOO', blockEnd: '' })
 // What the selected request is being closed with (the note is asked first).
 const closing = ref<'resolve' | 'cancel' | null>(null)
@@ -97,6 +104,15 @@ async function loadHelpers(): Promise<void> {
       staff.value = []
     }
   }
+  assetList.value = []
+  if (canPickAsset.value) {
+    try {
+      const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/lookup', { params: { path: { propertyId } } })
+      assetList.value = data?.data ?? []
+    } catch {
+      assetList.value = []
+    }
+  }
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/housekeeping', { params: { path: { propertyId } } })
     roomList.value = data?.data ?? []
@@ -126,7 +142,7 @@ async function run(what: () => Promise<unknown>, done: string): Promise<void> {
 const base = () => ({ path: { propertyId: pid.value as number, id: selectedId.value as number } })
 
 function startNew(room = 0): void {
-  Object.assign(form, { room_id: room, location: '', category: 'OTHER', description: '', priority: 'NORMAL' })
+  Object.assign(form, { room_id: room, location: '', category: 'OTHER', description: '', priority: 'NORMAL', asset_id: 0 })
   creating.value = true
   error.value = null
 }
@@ -139,7 +155,7 @@ async function report(): Promise<void> {
       params: { path: { propertyId: pid.value as number } },
       body: {
         room_id: form.room_id || null, location: form.location || undefined, category: form.category as 'OTHER', description: form.description,
-        priority: form.priority as 'NORMAL',
+        priority: form.priority as 'NORMAL', asset_id: form.asset_id || undefined,
       },
     })
     creating.value = false
@@ -239,6 +255,11 @@ watch(() => route.query.room, (v) => {
                 <NativeSelect :id="id" v-model="form.priority" name="priority">
                   <option v-for="p in PRIORITIES" :key="p" :value="p">{{ priorityLabel(p) }}</option>
                 </NativeSelect>
+              </template>
+            </FormField>
+            <FormField v-if="canPickAsset" class="sm:col-span-2" :label="t('maintenance.asset')" :hint="t('maintenance.assetHint')">
+              <template #default="{ id }">
+                <Combobox :id="id" v-model="form.asset_id" name="asset_id" data-testid="request-asset" :options="[{ value: 0, label: t('maintenance.noAsset') }, ...assetList.map((a) => ({ value: a.id, label: `${a.number} · ${a.name}${a.location_name ? ` · ${a.location_name}` : ''}` }))]" />
               </template>
             </FormField>
             <FormField class="sm:col-span-2" :label="t('maintenance.whatWrong')" :error="fieldError('description')">

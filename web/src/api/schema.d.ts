@@ -13029,7 +13029,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/properties/{propertyId}/assets/audits/{id}": {
+    "/api/v1/properties/{propertyId}/assets/audits/{id}/detail": {
         parameters: {
             query?: never;
             header?: never;

@@ -250,6 +250,12 @@ describe('the disposal of an asset', () => {
     await pause()
   }
 
+  it('groups the digits of the sale price while it is typed and sends the plain amount', async () => {
+    await open()
+    await type('[data-testid=dispose-price]', '25000000')
+    expect((document.body.querySelector('[data-testid=dispose-price]') as HTMLInputElement).value).toBe('25,000,000')
+  })
+
   it('offers only the accounts that may take the price: cash, bank and 1230', async () => {
     await open()
     const options = [...document.body.querySelectorAll('[data-testid=dispose-account] option')].map((o) => o.textContent?.trim())
