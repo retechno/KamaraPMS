@@ -429,6 +429,10 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupCheck,
 		for _, h := range held {
 			reg[h.CategoryID] = h
 		}
+		causes, err := s.causesOf(ctx, p.TenantID, propertyID, cats, day.BusinessDate)
+		if err != nil {
+			return SetupCheck{}, err
+		}
 		for _, c := range cats {
 			if !c.IsActive {
 				continue
@@ -439,6 +443,7 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupCheck,
 				r.LedgerAccum = bal[*c.AccumulatedAccountID].Neg()
 			}
 			r.CostDifference, r.AccumDifference = r.LedgerCost.Sub(r.RegisterCost), r.LedgerAccum.Sub(r.RegisterAccum)
+			r.CostCauses, r.AccumCauses = causes[c.ID].costCauses(r.CostDifference), causes[c.ID].accumCauses(r.AccumDifference)
 			out.Reconciliation = append(out.Reconciliation, r)
 			if !r.CostDifference.IsZero() || !r.AccumDifference.IsZero() {
 				issue("GL_DIFFERENCE", "WARNING", "the general ledger and the register differ for category "+c.Code, "category", c.Code, "cost_difference", r.CostDifference.String(),

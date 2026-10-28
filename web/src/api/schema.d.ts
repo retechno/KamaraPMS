@@ -12657,6 +12657,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/assets/reports/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The register as of a date: the assets with the sums of their ledger up to it (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetRegisterReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The depreciation schedules of one asset or of the active assets of a category: the months posted and the months to come, with the fiscal columns (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetScheduleReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/recap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The recap by category for a period: cost and accumulated depreciation (opening, additions, changes of category, disposals, depreciation, closing), the general ledger beside it and the difference with its causes (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetRecapReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/fiscal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Commercial against fiscal for a tax year and the correction of the annual return: computed from the rates of the fiscal groups, nothing is posted (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetFiscalReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The count, cost and carrying value of the active assets of each location and each department, sub-departments included (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetPlacementReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/expiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Assets whose warranty ends soon, whose life is nearly over, or that are fully depreciated and still in use (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetExpiringReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/assets/moves": {
         parameters: {
             query?: never;
@@ -25418,6 +25532,9 @@ export interface components {
             register_accum: string;
             ledger_accum: string;
             accum_difference: string;
+            /** @description The known parts of the cost difference, general ledger less register; what nothing explains is OTHER. */
+            cost_causes?: components["schemas"]["AssetDifferenceCause"][];
+            accum_causes?: components["schemas"]["AssetDifferenceCause"][];
         };
         AssetSetupCheck: {
             issues: components["schemas"]["AssetSetupIssue"][];
@@ -25950,6 +26067,9 @@ export interface components {
              */
             run_month?: string | null;
             journal_number?: string | null;
+            /** @description The fiscal depreciation of the same month (4.9), computed; null for an asset without a fiscal group. */
+            fiscal_amount?: string | null;
+            fiscal_accum_after?: string | null;
         };
         AssetMoveRequest: {
             /** @description The assets to move (the batch route; the route of one asset takes it from the path). */
@@ -26195,7 +26315,214 @@ export interface components {
             residual_value: string;
             life_months?: number | null;
             method?: string | null;
+            fiscal_group?: string | null;
+            fiscal_method?: string | null;
             rows: components["schemas"]["AssetScheduleRow"][];
+        };
+        AssetScheduleList: {
+            data: components["schemas"]["AssetSchedule"][];
+        };
+        AssetDifferenceCause: {
+            /** @enum {string} */
+            code: "WAITING_LIST" | "DISMISSED" | "MANUAL_JOURNAL" | "REGISTER_ONLY" | "OTHER";
+            /** @description Its share of the general ledger less the register. */
+            amount: string;
+            lines?: number;
+        };
+        AssetRegisterRow: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            category_code: string;
+            category_name: string;
+            location_name?: string | null;
+            department_name?: string | null;
+            supplier_name?: string | null;
+            /** Format: date */
+            acquisition_date: string;
+            /** Format: date */
+            in_service_date: string;
+            cost: string;
+            accum_depr: string;
+            carrying_value: string;
+            life_months?: number | null;
+            months_done: number;
+            months_left?: number | null;
+            method?: string | null;
+            status: string;
+            serial_no?: string | null;
+            /** Format: date */
+            warranty_until?: string | null;
+        };
+        AssetRegisterReport: {
+            /** Format: date */
+            as_of: string;
+            rows: components["schemas"]["AssetRegisterRow"][];
+            count: number;
+            cost: string;
+            accum_depr: string;
+            carrying_value: string;
+        };
+        AssetRecapRow: {
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            cost_account_code: string;
+            accumulated_account_code?: string | null;
+            cost_opening: string;
+            /** @description The opening balances, the acquisitions and the values added. */
+            cost_additions: string;
+            /** @description Changes of category, in and out. */
+            cost_reclass: string;
+            cost_disposals: string;
+            cost_closing: string;
+            accum_opening: string;
+            accum_additions: string;
+            accum_depreciation: string;
+            accum_reclass: string;
+            accum_disposals: string;
+            accum_closing: string;
+            carrying_closing: string;
+            ledger_cost_opening: string;
+            ledger_cost_closing: string;
+            ledger_accum_opening: string;
+            ledger_accum_closing: string;
+            /** @description General ledger less register at the end of the period. */
+            cost_difference: string;
+            accum_difference: string;
+            cost_causes: components["schemas"]["AssetDifferenceCause"][];
+            accum_causes: components["schemas"]["AssetDifferenceCause"][];
+        };
+        AssetRecapReport: {
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            rows: components["schemas"]["AssetRecapRow"][];
+            total: components["schemas"]["AssetRecapRow"];
+            /** @description The balance (credit positive) of the old single accumulated depreciation account, which belongs to no category. */
+            account_1590: string;
+        };
+        AssetFiscalRow: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            category_code: string;
+            fiscal_group: string;
+            /** @enum {string} */
+            fiscal_method: "SL" | "DB";
+            /** @description The depreciation of the ledger in the tax year. */
+            commercial: string;
+            /** @description The fiscal depreciation of the tax year, computed. */
+            fiscal: string;
+            /** @description Commercial less fiscal: positive when the commercial expense is larger. */
+            difference: string;
+            /** @description At the end of the tax year. */
+            fiscal_accumulated: string;
+            /** @description The year starts before the register: the commercial months before it are not in the ledger. */
+            partial_year: boolean;
+            /** @description The fiscal state of the opening balance was estimated, not given. */
+            fiscal_estimated: boolean;
+            from_opening: boolean;
+            disposed_in_year: boolean;
+        };
+        AssetFiscalDisposal: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            disposal_number: string;
+            /** Format: date */
+            disposal_date: string;
+            cost_removed: string;
+            proceeds: string;
+            /** @description A loss is negative. */
+            commercial_gain: string;
+            fiscal_book_value: string;
+            fiscal_gain: string;
+            /** @description Fiscal gain less commercial gain: positive raises the taxable income. */
+            difference: string;
+        };
+        AssetFiscalTotals: {
+            commercial: string;
+            fiscal: string;
+            /** @description Where the commercial expense is larger. */
+            positive_correction: string;
+            /** @description Where the fiscal expense is larger, as a positive amount. */
+            negative_correction: string;
+            depreciation_net: string;
+            disposal_correction: string;
+            net_correction: string;
+            partial_year_assets: number;
+            estimated_fiscal_assets: number;
+        };
+        AssetFiscalRate: {
+            code: string;
+            life_years: number;
+            sl_rate: string;
+            db_rate?: string | null;
+        };
+        AssetFiscalReport: {
+            /** @description Named by the calendar year in which the tax year starts. */
+            tax_year: number;
+            /** Format: date */
+            year_start: string;
+            /** Format: date */
+            year_end: string;
+            rows: components["schemas"]["AssetFiscalRow"][];
+            disposals: components["schemas"]["AssetFiscalDisposal"][];
+            totals: components["schemas"]["AssetFiscalTotals"];
+            rates: components["schemas"]["AssetFiscalRate"][];
+            /** @description Always true: the rates are data and the tax consultant must confirm them. */
+            rates_to_confirm: boolean;
+        };
+        AssetPlacementRow: {
+            /** Format: int64 */
+            id?: number | null;
+            /** Format: int64 */
+            parent_id?: number | null;
+            code: string;
+            name: string;
+            kind?: string;
+            is_active: boolean;
+            assets: number;
+            cost: string;
+            accum_depr: string;
+            carrying_value: string;
+            /** @description With the sub-departments of a department. */
+            total_assets: number;
+            total_cost: string;
+            total_accum_depr: string;
+            total_carrying_value: string;
+        };
+        AssetPlacementReport: {
+            locations: components["schemas"]["AssetPlacementRow"][];
+            no_location: components["schemas"]["AssetPlacementRow"];
+            departments: components["schemas"]["AssetPlacementRow"][];
+            no_department: components["schemas"]["AssetPlacementRow"];
+        };
+        AssetExpiringRow: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            category_code: string;
+            location_name?: string | null;
+            cost: string;
+            carrying_value: string;
+            /** Format: date */
+            warranty_until?: string | null;
+            warranty_ending: boolean;
+            warranty_expired: boolean;
+            months_left?: number | null;
+            life_ending: boolean;
+            fully_depreciated: boolean;
+        };
+        AssetExpiringList: {
+            data: components["schemas"]["AssetExpiringRow"][];
         };
     };
     responses: {
@@ -46990,6 +47317,206 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getAssetRegisterReport: {
+        parameters: {
+            query?: {
+                /** @description Default: the business date */
+                as_of?: string;
+                category_id?: number;
+                location_id?: number;
+                department_id?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRegisterReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetScheduleReport: {
+        parameters: {
+            query?: {
+                asset_id?: number;
+                /** @description The first 300 active assets of the category */
+                category_id?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The schedules, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetScheduleList"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetRecapReport: {
+        parameters: {
+            query?: {
+                /** @description Default: 1 January of the year of the end date */
+                date_from?: string;
+                /** @description Default: the business date */
+                date_to?: string;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recap, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRecapReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetFiscalReport: {
+        parameters: {
+            query?: {
+                /** @description The calendar year in which the tax year starts; default: the tax year of the business date */
+                tax_year?: number;
+                category_id?: number;
+                asset_id?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetFiscalReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetPlacementReport: {
+        parameters: {
+            query?: {
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetPlacementReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetExpiringReport: {
+        parameters: {
+            query?: {
+                /** @description The warranty ends within this many days (default 90) */
+                days?: number;
+                /** @description This many months or fewer are left to depreciate (default 6) */
+                months?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetExpiringList"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     moveAssets: {

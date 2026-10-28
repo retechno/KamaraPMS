@@ -14592,6 +14592,145 @@ paths:
               schema: { $ref: "#/components/schemas/AssetSchedule" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/reports/register:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetRegisterReport
+      summary: "The register as of a date: the assets with the sums of their ledger up to it (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: as_of, in: query, description: "Default: the business date", schema: { type: string, format: date } }
+        - { name: category_id, in: query, schema: { type: integer } }
+        - { name: location_id, in: query, schema: { type: integer } }
+        - { name: department_id, in: query, schema: { type: integer } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The report, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRegisterReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/reports/schedule:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetScheduleReport
+      summary: "The depreciation schedules of one asset or of the active assets of a category: the months posted and the months to come, with the fiscal columns (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: asset_id, in: query, schema: { type: integer } }
+        - { name: category_id, in: query, description: "The first 300 active assets of the category", schema: { type: integer } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The schedules, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetScheduleList" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/reports/recap:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetRecapReport
+      summary: "The recap by category for a period: cost and accumulated depreciation (opening, additions, changes of category, disposals, depreciation, closing), the general ledger beside it and the difference with its causes (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: date_from, in: query, description: "Default: 1 January of the year of the end date", schema: { type: string, format: date } }
+        - { name: date_to, in: query, description: "Default: the business date", schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The recap, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRecapReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/reports/fiscal:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetFiscalReport
+      summary: "Commercial against fiscal for a tax year and the correction of the annual return: computed from the rates of the fiscal groups, nothing is posted (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: tax_year, in: query, description: "The calendar year in which the tax year starts; default: the tax year of the business date", schema: { type: integer } }
+        - { name: category_id, in: query, schema: { type: integer } }
+        - { name: asset_id, in: query, schema: { type: integer } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The report, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetFiscalReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/reports/locations:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetPlacementReport
+      summary: "The count, cost and carrying value of the active assets of each location and each department, sub-departments included (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The report, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetPlacementReport" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/reports/expiring:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetExpiringReport
+      summary: "Assets whose warranty ends soon, whose life is nearly over, or that are fully depreciated and still in use (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: days, in: query, description: "The warranty ends within this many days (default 90)", schema: { type: integer } }
+        - { name: months, in: query, description: "This many months or fewer are left to depreciate (default 6)", schema: { type: integer } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The report, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetExpiringList" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/assets/moves:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -27041,6 +27180,8 @@ components:
         register_accum: { type: string }
         ledger_accum: { type: string }
         accum_difference: { type: string }
+        cost_causes: { type: array, items: { $ref: "#/components/schemas/AssetDifferenceCause" }, description: "The known parts of the cost difference, general ledger less register; what nothing explains is OTHER." }
+        accum_causes: { type: array, items: { $ref: "#/components/schemas/AssetDifferenceCause" } }
     AssetSetupCheck:
       type: object
       required: [issues, reconciliation, as_of]
@@ -27515,6 +27656,8 @@ components:
         months_done: { type: integer }
         run_month: { type: [string, "null"], format: date, description: "The month of the run that booked it: later than `month` for a catch-up." }
         journal_number: { type: [string, "null"] }
+        fiscal_amount: { type: [string, "null"], description: "The fiscal depreciation of the same month (4.9), computed; null for an asset without a fiscal group." }
+        fiscal_accum_after: { type: [string, "null"] }
     AssetMoveRequest:
       type: object
       required: [reason]
@@ -27697,4 +27840,204 @@ components:
         residual_value: { type: string }
         life_months: { type: [integer, "null"] }
         method: { type: [string, "null"] }
+        fiscal_group: { type: [string, "null"] }
+        fiscal_method: { type: [string, "null"] }
         rows: { type: array, items: { $ref: "#/components/schemas/AssetScheduleRow" } }
+    AssetScheduleList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetSchedule" } }
+    AssetDifferenceCause:
+      type: object
+      required: [code, amount]
+      properties:
+        code: { type: string, enum: [WAITING_LIST, DISMISSED, MANUAL_JOURNAL, REGISTER_ONLY, OTHER] }
+        amount: { type: string, description: "Its share of the general ledger less the register." }
+        lines: { type: integer }
+    AssetRegisterRow:
+      type: object
+      required: [asset_id, number, name, category_code, category_name, acquisition_date, in_service_date, cost, accum_depr, carrying_value, months_done, status]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        category_code: { type: string }
+        category_name: { type: string }
+        location_name: { type: [string, "null"] }
+        department_name: { type: [string, "null"] }
+        supplier_name: { type: [string, "null"] }
+        acquisition_date: { type: string, format: date }
+        in_service_date: { type: string, format: date }
+        cost: { type: string }
+        accum_depr: { type: string }
+        carrying_value: { type: string }
+        life_months: { type: [integer, "null"] }
+        months_done: { type: integer }
+        months_left: { type: [integer, "null"] }
+        method: { type: [string, "null"] }
+        status: { type: string }
+        serial_no: { type: [string, "null"] }
+        warranty_until: { type: [string, "null"], format: date }
+    AssetRegisterReport:
+      type: object
+      required: [as_of, rows, count, cost, accum_depr, carrying_value]
+      properties:
+        as_of: { type: string, format: date }
+        rows: { type: array, items: { $ref: "#/components/schemas/AssetRegisterRow" } }
+        count: { type: integer }
+        cost: { type: string }
+        accum_depr: { type: string }
+        carrying_value: { type: string }
+    AssetRecapRow:
+      type: object
+      required: [category_id, category_code, category_name, cost_account_code, cost_opening, cost_additions, cost_reclass, cost_disposals, cost_closing, accum_opening, accum_additions, accum_depreciation, accum_reclass, accum_disposals, accum_closing, carrying_closing, ledger_cost_opening, ledger_cost_closing, ledger_accum_opening, ledger_accum_closing, cost_difference, accum_difference, cost_causes, accum_causes]
+      properties:
+        category_id: { type: integer, format: int64 }
+        category_code: { type: string }
+        category_name: { type: string }
+        cost_account_code: { type: string }
+        accumulated_account_code: { type: [string, "null"] }
+        cost_opening: { type: string }
+        cost_additions: { type: string, description: "The opening balances, the acquisitions and the values added." }
+        cost_reclass: { type: string, description: "Changes of category, in and out." }
+        cost_disposals: { type: string }
+        cost_closing: { type: string }
+        accum_opening: { type: string }
+        accum_additions: { type: string }
+        accum_depreciation: { type: string }
+        accum_reclass: { type: string }
+        accum_disposals: { type: string }
+        accum_closing: { type: string }
+        carrying_closing: { type: string }
+        ledger_cost_opening: { type: string }
+        ledger_cost_closing: { type: string }
+        ledger_accum_opening: { type: string }
+        ledger_accum_closing: { type: string }
+        cost_difference: { type: string, description: "General ledger less register at the end of the period." }
+        accum_difference: { type: string }
+        cost_causes: { type: array, items: { $ref: "#/components/schemas/AssetDifferenceCause" } }
+        accum_causes: { type: array, items: { $ref: "#/components/schemas/AssetDifferenceCause" } }
+    AssetRecapReport:
+      type: object
+      required: [date_from, date_to, rows, total, account_1590]
+      properties:
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        rows: { type: array, items: { $ref: "#/components/schemas/AssetRecapRow" } }
+        total: { $ref: "#/components/schemas/AssetRecapRow" }
+        account_1590: { type: string, description: "The balance (credit positive) of the old single accumulated depreciation account, which belongs to no category." }
+    AssetFiscalRow:
+      type: object
+      required: [asset_id, number, name, category_code, fiscal_group, fiscal_method, commercial, fiscal, difference, fiscal_accumulated, partial_year, fiscal_estimated, from_opening, disposed_in_year]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        category_code: { type: string }
+        fiscal_group: { type: string }
+        fiscal_method: { type: string, enum: [SL, DB] }
+        commercial: { type: string, description: "The depreciation of the ledger in the tax year." }
+        fiscal: { type: string, description: "The fiscal depreciation of the tax year, computed." }
+        difference: { type: string, description: "Commercial less fiscal: positive when the commercial expense is larger." }
+        fiscal_accumulated: { type: string, description: "At the end of the tax year." }
+        partial_year: { type: boolean, description: "The year starts before the register: the commercial months before it are not in the ledger." }
+        fiscal_estimated: { type: boolean, description: "The fiscal state of the opening balance was estimated, not given." }
+        from_opening: { type: boolean }
+        disposed_in_year: { type: boolean }
+    AssetFiscalDisposal:
+      type: object
+      required: [asset_id, number, name, disposal_number, disposal_date, cost_removed, proceeds, commercial_gain, fiscal_book_value, fiscal_gain, difference]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        disposal_number: { type: string }
+        disposal_date: { type: string, format: date }
+        cost_removed: { type: string }
+        proceeds: { type: string }
+        commercial_gain: { type: string, description: "A loss is negative." }
+        fiscal_book_value: { type: string }
+        fiscal_gain: { type: string }
+        difference: { type: string, description: "Fiscal gain less commercial gain: positive raises the taxable income." }
+    AssetFiscalTotals:
+      type: object
+      required: [commercial, fiscal, positive_correction, negative_correction, depreciation_net, disposal_correction, net_correction, partial_year_assets, estimated_fiscal_assets]
+      properties:
+        commercial: { type: string }
+        fiscal: { type: string }
+        positive_correction: { type: string, description: "Where the commercial expense is larger." }
+        negative_correction: { type: string, description: "Where the fiscal expense is larger, as a positive amount." }
+        depreciation_net: { type: string }
+        disposal_correction: { type: string }
+        net_correction: { type: string }
+        partial_year_assets: { type: integer }
+        estimated_fiscal_assets: { type: integer }
+    AssetFiscalRate:
+      type: object
+      required: [code, life_years, sl_rate]
+      properties:
+        code: { type: string }
+        life_years: { type: integer }
+        sl_rate: { type: string }
+        db_rate: { type: [string, "null"] }
+    AssetFiscalReport:
+      type: object
+      required: [tax_year, year_start, year_end, rows, disposals, totals, rates, rates_to_confirm]
+      properties:
+        tax_year: { type: integer, description: "Named by the calendar year in which the tax year starts." }
+        year_start: { type: string, format: date }
+        year_end: { type: string, format: date }
+        rows: { type: array, items: { $ref: "#/components/schemas/AssetFiscalRow" } }
+        disposals: { type: array, items: { $ref: "#/components/schemas/AssetFiscalDisposal" } }
+        totals: { $ref: "#/components/schemas/AssetFiscalTotals" }
+        rates: { type: array, items: { $ref: "#/components/schemas/AssetFiscalRate" } }
+        rates_to_confirm: { type: boolean, description: "Always true: the rates are data and the tax consultant must confirm them." }
+    AssetPlacementRow:
+      type: object
+      required: [code, name, is_active, assets, cost, accum_depr, carrying_value, total_assets, total_cost, total_accum_depr, total_carrying_value]
+      properties:
+        id: { type: [integer, "null"], format: int64 }
+        parent_id: { type: [integer, "null"], format: int64 }
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        is_active: { type: boolean }
+        assets: { type: integer }
+        cost: { type: string }
+        accum_depr: { type: string }
+        carrying_value: { type: string }
+        total_assets: { type: integer, description: "With the sub-departments of a department." }
+        total_cost: { type: string }
+        total_accum_depr: { type: string }
+        total_carrying_value: { type: string }
+    AssetPlacementReport:
+      type: object
+      required: [locations, no_location, departments, no_department]
+      properties:
+        locations: { type: array, items: { $ref: "#/components/schemas/AssetPlacementRow" } }
+        no_location: { $ref: "#/components/schemas/AssetPlacementRow" }
+        departments: { type: array, items: { $ref: "#/components/schemas/AssetPlacementRow" } }
+        no_department: { $ref: "#/components/schemas/AssetPlacementRow" }
+    AssetExpiringRow:
+      type: object
+      required: [asset_id, number, name, category_code, cost, carrying_value, warranty_ending, warranty_expired, life_ending, fully_depreciated]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        category_code: { type: string }
+        location_name: { type: [string, "null"] }
+        cost: { type: string }
+        carrying_value: { type: string }
+        warranty_until: { type: [string, "null"], format: date }
+        warranty_ending: { type: boolean }
+        warranty_expired: { type: boolean }
+        months_left: { type: [integer, "null"] }
+        life_ending: { type: boolean }
+        fully_depreciated: { type: boolean }
+    AssetExpiringList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetExpiringRow" } }

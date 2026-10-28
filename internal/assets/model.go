@@ -415,6 +415,9 @@ type Reconciliation struct {
 	RegisterAccum    decimal.Decimal `json:"register_accum"`
 	LedgerAccum      decimal.Decimal `json:"ledger_accum"`
 	AccumDifference  decimal.Decimal `json:"accum_difference"`
+	// the known causes of each difference, "general ledger less register" (5.3); what nothing explains is OTHER
+	CostCauses  []DifferenceCause `json:"cost_causes"`
+	AccumCauses []DifferenceCause `json:"accum_causes"`
 }
 
 // SetupCheck is the answer of the setup check.

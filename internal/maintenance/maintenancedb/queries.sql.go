@@ -67,7 +67,7 @@ func (q *Queries) CloseRequest(ctx context.Context, arg CloseRequestParams) erro
 }
 
 const getRequestForUpdate = `-- name: GetRequestForUpdate :one
-SELECT id, tenant_id, property_id, request_number, room_id, location, category, description, priority, status, business_date, reported_by, reported_at, assigned_to, assigned_at, started_at, closed_at, closed_by, resolution_note, room_block_id, created_at, updated_at FROM maintenance_requests WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, request_number, room_id, location, category, description, priority, status, business_date, reported_by, reported_at, assigned_to, assigned_at, started_at, closed_at, closed_by, resolution_note, room_block_id, created_at, updated_at, asset_id FROM maintenance_requests WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetRequestForUpdateParams struct {
@@ -102,6 +102,7 @@ func (q *Queries) GetRequestForUpdate(ctx context.Context, arg GetRequestForUpda
 		&i.RoomBlockID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetID,
 	)
 	return i, err
 }

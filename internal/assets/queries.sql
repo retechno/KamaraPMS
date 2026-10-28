@@ -814,3 +814,157 @@ SELECT count(*)::int FROM fa_ledger e
  WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.asset_id = @asset_id AND e.kind IN ('DISPOSE', 'RECLASS_OUT', 'RECLASS_IN', 'CAPITALIZE')
    AND e.id > (SELECT d.id FROM fa_ledger d WHERE d.property_id = @property_id AND d.kind = 'DISPOSE' AND d.source_type = 'FA_DISPOSAL' AND d.source_id = @disposal_id)
    AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id);
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Reports and the fiscal book (reports.go, fiscalbook.go; PR 4)
+
+-- name: FiscalBookAssets :many
+-- The assets that have a fiscal group (land and construction in progress have none), cancelled ones left out.
+SELECT a.id, a.number, a.name, a.category_id, c.code AS category_code, c.name AS category_name, a.source, a.status, a.acquisition_date, a.disposed_on, a.fiscal_group, a.fiscal_method,
+       a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated
+  FROM fa_assets a
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.fiscal_group <> 'NONE' AND a.status <> 'CANCELLED'
+   AND (sqlc.narg(category_id)::bigint IS NULL OR a.category_id = sqlc.narg(category_id))
+   AND (sqlc.narg(asset_id)::bigint IS NULL OR a.id = sqlc.narg(asset_id))
+ ORDER BY a.number;
+
+-- name: FiscalBookLayers :many
+-- The cost layers of the fiscal book: what the acquisition (or the opening balance) and each value added brought, a reversal counted at the date of the row it negates.
+SELECT e.asset_id, COALESCE(o.kind, e.kind)::text AS layer_kind, COALESCE(o.event_date, e.event_date)::date AS layer_date, COALESCE(SUM(e.cost_delta), 0)::numeric(18,3) AS cost
+  FROM fa_ledger e
+  LEFT JOIN fa_ledger o ON o.property_id = e.property_id AND o.id = e.reverses_id
+ WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND COALESCE(o.kind, e.kind) IN ('OPEN', 'ACQUIRE', 'CAPITALIZE')
+   AND (sqlc.narg(asset_id)::bigint IS NULL OR e.asset_id = sqlc.narg(asset_id))
+ GROUP BY e.asset_id, COALESCE(o.kind, e.kind), COALESCE(o.event_date, e.event_date)
+ ORDER BY e.asset_id, layer_date;
+
+-- name: FiscalBookDisposals :many
+SELECT d.asset_id, d.number, d.disposal_date, d.cost_removed, d.accum_removed, d.carrying_removed, d.proceeds, d.gain_loss
+  FROM fa_disposals d
+ WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id AND d.status = 'POSTED' AND (sqlc.narg(asset_id)::bigint IS NULL OR d.asset_id = sqlc.narg(asset_id))
+ ORDER BY d.disposal_date, d.id;
+
+-- name: CommercialDepreciationByMonth :many
+-- The depreciation the runs booked (and took back) per asset and book month.
+SELECT e.asset_id, e.book_month::date AS book_month, COALESCE(SUM(e.accum_delta), 0)::numeric(18,3) AS amount
+  FROM fa_ledger e
+ WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.source_type = 'FA_DEPR' AND e.book_month IS NOT NULL
+   AND (sqlc.narg(asset_id)::bigint IS NULL OR e.asset_id = sqlc.narg(asset_id))
+ GROUP BY e.asset_id, e.book_month
+HAVING SUM(e.accum_delta) <> 0
+ ORDER BY e.asset_id, e.book_month;
+
+-- name: RegisterAsOf :many
+-- The register as of a date: each asset with the sums of its ledger up to the date (an asset acquired later has no row).
+SELECT a.id, a.number, a.name, a.category_id, c.code AS category_code, c.name AS category_name, c.kind AS category_kind, a.location_id, l.name AS location_name, a.department_id, d.name AS department_name,
+       s.name AS supplier_name, a.acquisition_date, a.in_service_date, a.life_months, a.method, a.serial_no, a.warranty_until, a.status, a.disposed_on,
+       x.cost, x.accum, x.months_done
+  FROM fa_assets a
+  JOIN (SELECT e.asset_id, SUM(e.cost_delta)::numeric(18,3) AS cost, SUM(e.accum_delta)::numeric(18,3) AS accum, SUM(e.months_delta)::int AS months_done
+          FROM fa_ledger e WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.event_date <= @as_of GROUP BY e.asset_id) x ON x.asset_id = a.id
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
+  LEFT JOIN departments d ON d.property_id = a.property_id AND d.id = a.department_id
+  LEFT JOIN suppliers s ON s.property_id = a.property_id AND s.id = a.supplier_id
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND (x.cost <> 0 OR x.accum <> 0)
+   AND (sqlc.narg(category_id)::bigint IS NULL OR a.category_id = sqlc.narg(category_id))
+   AND (sqlc.narg(location_id)::bigint IS NULL OR a.location_id = sqlc.narg(location_id))
+   AND (sqlc.narg(department_id)::bigint IS NULL OR a.department_id = sqlc.narg(department_id))
+ ORDER BY a.number
+ LIMIT 10000;
+
+-- name: RecapMovements :many
+-- The movement of the register per category in a period, by what the row is (a reversal counts as the row it negates): before the period (the opening), then inside it.
+SELECT e.category_id,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date < @date_from), 0)::numeric(18,3) AS cost_opening,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date BETWEEN @date_from AND @date_to AND COALESCE(o.kind, e.kind) IN ('OPEN', 'ACQUIRE', 'CAPITALIZE')), 0)::numeric(18,3) AS cost_additions,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date BETWEEN @date_from AND @date_to AND COALESCE(o.kind, e.kind) IN ('RECLASS_IN', 'RECLASS_OUT')), 0)::numeric(18,3) AS cost_reclass,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date BETWEEN @date_from AND @date_to AND COALESCE(o.kind, e.kind) = 'DISPOSE'), 0)::numeric(18,3) AS cost_disposals,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date <= @date_to), 0)::numeric(18,3) AS cost_closing,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date < @date_from), 0)::numeric(18,3) AS accum_opening,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN @date_from AND @date_to AND COALESCE(o.kind, e.kind) IN ('OPEN', 'ACQUIRE', 'CAPITALIZE')), 0)::numeric(18,3) AS accum_additions,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN @date_from AND @date_to AND COALESCE(o.kind, e.kind) = 'DEPRECIATE'), 0)::numeric(18,3) AS accum_depreciation,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN @date_from AND @date_to AND COALESCE(o.kind, e.kind) IN ('RECLASS_IN', 'RECLASS_OUT')), 0)::numeric(18,3) AS accum_reclass,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN @date_from AND @date_to AND COALESCE(o.kind, e.kind) = 'DISPOSE'), 0)::numeric(18,3) AS accum_disposals,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date <= @date_to), 0)::numeric(18,3) AS accum_closing
+  FROM fa_ledger e
+  LEFT JOIN fa_ledger o ON o.property_id = e.property_id AND o.id = e.reverses_id
+ WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id
+ GROUP BY e.category_id;
+
+-- name: WaitingByCategory :many
+-- The lines of the waiting list (and the dismissed ones) up to a date, per category and source: what the general ledger holds that the register does not.
+SELECT c.id AS category_id, (d.id IS NOT NULL)::boolean AS dismissed,
+       CASE WHEN l.source_type = 'AP_BILL' THEN 'BILL' WHEN j.journal_type = 'CASHIER' THEN 'CASHIER' WHEN j.journal_type = 'BANK' THEN 'BANK'
+            WHEN j.journal_type = 'MANUAL' THEN 'MANUAL' ELSE 'OTHER' END::text AS source,
+       count(*)::int AS line_count, COALESCE(SUM(l.debit), 0)::numeric(18,3) AS amount
+  FROM gl_journal_lines l
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+  JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id AND c.is_active
+  JOIN fa_settings st ON st.property_id = l.property_id
+  LEFT JOIN fa_source_dismissals d ON d.property_id = l.property_id AND d.journal_line_id = l.id AND d.restored_at IS NULL
+ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.debit > 0 AND j.journal_date <= @as_of
+   AND j.journal_type NOT IN ('ASSET', 'REVERSAL', 'CLOSING') AND j.reverses_journal_id IS NULL AND COALESCE(l.source_type, '') <> 'ASSET'
+   AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+   AND st.register_from IS NOT NULL AND j.journal_date >= st.register_from AND NOT (c.kind = 'OE' AND st.oe_policy = 'EXPENSE')
+   AND NOT EXISTS (SELECT 1 FROM fa_source_links k WHERE k.property_id = l.property_id AND k.journal_line_id = l.id AND k.released_at IS NULL)
+ GROUP BY c.id, (d.id IS NOT NULL), 3;
+
+-- name: ManualJournalBalances :many
+-- What manual journals (not reversed, not a reversal) hold on accounts up to a date.
+SELECT l.account_id, COALESCE(SUM(l.debit - l.credit), 0)::numeric(18,3) AS balance
+  FROM gl_journal_lines l
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = ANY(@account_ids::bigint[]) AND j.journal_date <= @as_of
+   AND j.journal_type = 'MANUAL' AND j.reverses_journal_id IS NULL
+   AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+ GROUP BY l.account_id;
+
+-- name: LocationSummary :many
+SELECT l.id AS location_id, l.code AS location_code, l.name AS location_name, l.kind AS location_kind, l.is_active, count(a.id)::int AS assets,
+       COALESCE(SUM(a.cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(a.accum_depr), 0)::numeric(18,3) AS accum
+  FROM fa_locations l
+  LEFT JOIN fa_assets a ON a.property_id = l.property_id AND a.location_id = l.id AND a.status = 'ACTIVE'
+ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id
+ GROUP BY l.id
+ ORDER BY l.code;
+
+-- name: UnplacedSummary :one
+SELECT count(*)::int AS assets, COALESCE(SUM(cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(accum_depr), 0)::numeric(18,3) AS accum
+  FROM fa_assets WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'ACTIVE' AND location_id IS NULL;
+
+-- name: DepartmentSummary :many
+SELECT d.id AS department_id, d.parent_id, d.code AS department_code, d.name AS department_name, count(a.id)::int AS assets,
+       COALESCE(SUM(a.cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(a.accum_depr), 0)::numeric(18,3) AS accum
+  FROM departments d
+  LEFT JOIN fa_assets a ON a.property_id = d.property_id AND a.department_id = d.id AND a.status = 'ACTIVE'
+ WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id
+ GROUP BY d.id
+ ORDER BY d.code;
+
+-- name: NoDepartmentSummary :one
+SELECT count(*)::int AS assets, COALESCE(SUM(cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(accum_depr), 0)::numeric(18,3) AS accum
+  FROM fa_assets WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'ACTIVE' AND department_id IS NULL;
+
+-- name: ExpiringAssets :many
+-- Active assets whose warranty ends by a date or that have few months of life left (those fully depreciated are among them, with zero months left).
+SELECT a.id, a.number, a.name, c.code AS category_code, l.name AS location_name, a.cost, a.accum_depr, a.warranty_until, a.life_months, a.dep_months_done, a.residual_value
+  FROM fa_assets a
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.status = 'ACTIVE'
+   AND ((a.warranty_until IS NOT NULL AND a.warranty_until <= @warranty_before::date)
+        OR (a.life_months IS NOT NULL AND a.life_months - a.dep_months_done <= @months_left::int))
+ ORDER BY a.number
+ LIMIT 5000;
+
+-- name: RegisterOnlyByCategory :many
+-- What the opening balances in the mode REGISTER_ONLY brought to the register (no journal was made for them), per category, up to a date.
+SELECT e.category_id, COALESCE(SUM(e.cost_delta), 0)::numeric(18,3) AS cost, COALESCE(SUM(e.accum_delta), 0)::numeric(18,3) AS accum
+  FROM fa_ledger e
+  LEFT JOIN fa_ledger o ON o.property_id = e.property_id AND o.id = e.reverses_id
+  JOIN fa_assets a ON a.property_id = e.property_id AND a.id = e.asset_id
+  JOIN fa_opening_imports i ON i.property_id = a.property_id AND i.id = a.opening_import_id
+ WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND i.mode = 'REGISTER_ONLY' AND COALESCE(o.kind, e.kind) = 'OPEN' AND e.event_date <= @as_of
+ GROUP BY e.category_id;

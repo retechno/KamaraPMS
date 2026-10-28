@@ -153,6 +153,49 @@ func (q *Queries) CategoryUsingCostAccount(ctx context.Context, arg CategoryUsin
 	return column_1, err
 }
 
+const commercialDepreciationByMonth = `-- name: CommercialDepreciationByMonth :many
+SELECT e.asset_id, e.book_month::date AS book_month, COALESCE(SUM(e.accum_delta), 0)::numeric(18,3) AS amount
+  FROM fa_ledger e
+ WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.source_type = 'FA_DEPR' AND e.book_month IS NOT NULL
+   AND ($3::bigint IS NULL OR e.asset_id = $3)
+ GROUP BY e.asset_id, e.book_month
+HAVING SUM(e.accum_delta) <> 0
+ ORDER BY e.asset_id, e.book_month
+`
+
+type CommercialDepreciationByMonthParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    *int64
+}
+
+type CommercialDepreciationByMonthRow struct {
+	AssetID   int64
+	BookMonth civil.Date
+	Amount    decimal.Decimal
+}
+
+// The depreciation the runs booked (and took back) per asset and book month.
+func (q *Queries) CommercialDepreciationByMonth(ctx context.Context, arg CommercialDepreciationByMonthParams) ([]CommercialDepreciationByMonthRow, error) {
+	rows, err := q.db.Query(ctx, commercialDepreciationByMonth, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CommercialDepreciationByMonthRow{}
+	for rows.Next() {
+		var i CommercialDepreciationByMonthRow
+		if err := rows.Scan(&i.AssetID, &i.BookMonth, &i.Amount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const controlAccountIDs = `-- name: ControlAccountIDs :many
 SELECT DISTINCT accumulated_account_id::bigint FROM fa_categories
  WHERE tenant_id = $1 AND property_id = $2 AND accumulated_account_id IS NOT NULL
@@ -310,6 +353,59 @@ func (q *Queries) DepartmentNames(ctx context.Context, arg DepartmentNamesParams
 	return items, nil
 }
 
+const departmentSummary = `-- name: DepartmentSummary :many
+SELECT d.id AS department_id, d.parent_id, d.code AS department_code, d.name AS department_name, count(a.id)::int AS assets,
+       COALESCE(SUM(a.cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(a.accum_depr), 0)::numeric(18,3) AS accum
+  FROM departments d
+  LEFT JOIN fa_assets a ON a.property_id = d.property_id AND a.department_id = d.id AND a.status = 'ACTIVE'
+ WHERE d.tenant_id = $1 AND d.property_id = $2
+ GROUP BY d.id
+ ORDER BY d.code
+`
+
+type DepartmentSummaryParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type DepartmentSummaryRow struct {
+	DepartmentID   int64
+	ParentID       *int64
+	DepartmentCode string
+	DepartmentName string
+	Assets         int32
+	Cost           decimal.Decimal
+	Accum          decimal.Decimal
+}
+
+func (q *Queries) DepartmentSummary(ctx context.Context, arg DepartmentSummaryParams) ([]DepartmentSummaryRow, error) {
+	rows, err := q.db.Query(ctx, departmentSummary, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DepartmentSummaryRow{}
+	for rows.Next() {
+		var i DepartmentSummaryRow
+		if err := rows.Scan(
+			&i.DepartmentID,
+			&i.ParentID,
+			&i.DepartmentCode,
+			&i.DepartmentName,
+			&i.Assets,
+			&i.Cost,
+			&i.Accum,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const disposalFlows = `-- name: DisposalFlows :many
 SELECT c.cost_account_id::bigint AS cost_account_id,
        (COALESCE(SUM(d.cost_removed) FILTER (WHERE j.journal_date BETWEEN $1 AND $2), 0)
@@ -400,6 +496,77 @@ func (q *Queries) EnsureSettings(ctx context.Context, arg EnsureSettingsParams) 
 	return i, err
 }
 
+const expiringAssets = `-- name: ExpiringAssets :many
+SELECT a.id, a.number, a.name, c.code AS category_code, l.name AS location_name, a.cost, a.accum_depr, a.warranty_until, a.life_months, a.dep_months_done, a.residual_value
+  FROM fa_assets a
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
+ WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.status = 'ACTIVE'
+   AND ((a.warranty_until IS NOT NULL AND a.warranty_until <= $3::date)
+        OR (a.life_months IS NOT NULL AND a.life_months - a.dep_months_done <= $4::int))
+ ORDER BY a.number
+ LIMIT 5000
+`
+
+type ExpiringAssetsParams struct {
+	TenantID       int64
+	PropertyID     int64
+	WarrantyBefore civil.Date
+	MonthsLeft     int32
+}
+
+type ExpiringAssetsRow struct {
+	ID            int64
+	Number        string
+	Name          string
+	CategoryCode  string
+	LocationName  *string
+	Cost          decimal.Decimal
+	AccumDepr     decimal.Decimal
+	WarrantyUntil *civil.Date
+	LifeMonths    *int32
+	DepMonthsDone int32
+	ResidualValue decimal.Decimal
+}
+
+// Active assets whose warranty ends by a date or that have few months of life left (those fully depreciated are among them, with zero months left).
+func (q *Queries) ExpiringAssets(ctx context.Context, arg ExpiringAssetsParams) ([]ExpiringAssetsRow, error) {
+	rows, err := q.db.Query(ctx, expiringAssets,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.WarrantyBefore,
+		arg.MonthsLeft,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExpiringAssetsRow{}
+	for rows.Next() {
+		var i ExpiringAssetsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Name,
+			&i.CategoryCode,
+			&i.LocationName,
+			&i.Cost,
+			&i.AccumDepr,
+			&i.WarrantyUntil,
+			&i.LifeMonths,
+			&i.DepMonthsDone,
+			&i.ResidualValue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findDuplicateAssets = `-- name: FindDuplicateAssets :many
 SELECT id, number FROM fa_assets
  WHERE tenant_id = $1 AND property_id = $2 AND status = 'ACTIVE' AND category_id = $3 AND lower(name) = lower($4::text) AND cost = $5
@@ -437,6 +604,191 @@ func (q *Queries) FindDuplicateAssets(ctx context.Context, arg FindDuplicateAsse
 	for rows.Next() {
 		var i FindDuplicateAssetsRow
 		if err := rows.Scan(&i.ID, &i.Number); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fiscalBookAssets = `-- name: FiscalBookAssets :many
+
+SELECT a.id, a.number, a.name, a.category_id, c.code AS category_code, c.name AS category_name, a.source, a.status, a.acquisition_date, a.disposed_on, a.fiscal_group, a.fiscal_method,
+       a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated
+  FROM fa_assets a
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+ WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.fiscal_group <> 'NONE' AND a.status <> 'CANCELLED'
+   AND ($3::bigint IS NULL OR a.category_id = $3)
+   AND ($4::bigint IS NULL OR a.id = $4)
+ ORDER BY a.number
+`
+
+type FiscalBookAssetsParams struct {
+	TenantID   int64
+	PropertyID int64
+	CategoryID *int64
+	AssetID    *int64
+}
+
+type FiscalBookAssetsRow struct {
+	ID                      int64
+	Number                  string
+	Name                    string
+	CategoryID              int64
+	CategoryCode            string
+	CategoryName            string
+	Source                  string
+	Status                  string
+	AcquisitionDate         civil.Date
+	DisposedOn              *civil.Date
+	FiscalGroup             string
+	FiscalMethod            *string
+	FiscalAccumOpening      *decimal.Decimal
+	FiscalMonthsDoneOpening *int32
+	FiscalOpeningAsOf       *civil.Date
+	FiscalOpeningEstimated  bool
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Reports and the fiscal book (reports.go, fiscalbook.go; PR 4)
+// The assets that have a fiscal group (land and construction in progress have none), cancelled ones left out.
+func (q *Queries) FiscalBookAssets(ctx context.Context, arg FiscalBookAssetsParams) ([]FiscalBookAssetsRow, error) {
+	rows, err := q.db.Query(ctx, fiscalBookAssets,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.CategoryID,
+		arg.AssetID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FiscalBookAssetsRow{}
+	for rows.Next() {
+		var i FiscalBookAssetsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Name,
+			&i.CategoryID,
+			&i.CategoryCode,
+			&i.CategoryName,
+			&i.Source,
+			&i.Status,
+			&i.AcquisitionDate,
+			&i.DisposedOn,
+			&i.FiscalGroup,
+			&i.FiscalMethod,
+			&i.FiscalAccumOpening,
+			&i.FiscalMonthsDoneOpening,
+			&i.FiscalOpeningAsOf,
+			&i.FiscalOpeningEstimated,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fiscalBookDisposals = `-- name: FiscalBookDisposals :many
+SELECT d.asset_id, d.number, d.disposal_date, d.cost_removed, d.accum_removed, d.carrying_removed, d.proceeds, d.gain_loss
+  FROM fa_disposals d
+ WHERE d.tenant_id = $1 AND d.property_id = $2 AND d.status = 'POSTED' AND ($3::bigint IS NULL OR d.asset_id = $3)
+ ORDER BY d.disposal_date, d.id
+`
+
+type FiscalBookDisposalsParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    *int64
+}
+
+type FiscalBookDisposalsRow struct {
+	AssetID         int64
+	Number          string
+	DisposalDate    civil.Date
+	CostRemoved     decimal.Decimal
+	AccumRemoved    decimal.Decimal
+	CarryingRemoved decimal.Decimal
+	Proceeds        decimal.Decimal
+	GainLoss        decimal.Decimal
+}
+
+func (q *Queries) FiscalBookDisposals(ctx context.Context, arg FiscalBookDisposalsParams) ([]FiscalBookDisposalsRow, error) {
+	rows, err := q.db.Query(ctx, fiscalBookDisposals, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FiscalBookDisposalsRow{}
+	for rows.Next() {
+		var i FiscalBookDisposalsRow
+		if err := rows.Scan(
+			&i.AssetID,
+			&i.Number,
+			&i.DisposalDate,
+			&i.CostRemoved,
+			&i.AccumRemoved,
+			&i.CarryingRemoved,
+			&i.Proceeds,
+			&i.GainLoss,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fiscalBookLayers = `-- name: FiscalBookLayers :many
+SELECT e.asset_id, COALESCE(o.kind, e.kind)::text AS layer_kind, COALESCE(o.event_date, e.event_date)::date AS layer_date, COALESCE(SUM(e.cost_delta), 0)::numeric(18,3) AS cost
+  FROM fa_ledger e
+  LEFT JOIN fa_ledger o ON o.property_id = e.property_id AND o.id = e.reverses_id
+ WHERE e.tenant_id = $1 AND e.property_id = $2 AND COALESCE(o.kind, e.kind) IN ('OPEN', 'ACQUIRE', 'CAPITALIZE')
+   AND ($3::bigint IS NULL OR e.asset_id = $3)
+ GROUP BY e.asset_id, COALESCE(o.kind, e.kind), COALESCE(o.event_date, e.event_date)
+ ORDER BY e.asset_id, layer_date
+`
+
+type FiscalBookLayersParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    *int64
+}
+
+type FiscalBookLayersRow struct {
+	AssetID   int64
+	LayerKind string
+	LayerDate civil.Date
+	Cost      decimal.Decimal
+}
+
+// The cost layers of the fiscal book: what the acquisition (or the opening balance) and each value added brought, a reversal counted at the date of the row it negates.
+func (q *Queries) FiscalBookLayers(ctx context.Context, arg FiscalBookLayersParams) ([]FiscalBookLayersRow, error) {
+	rows, err := q.db.Query(ctx, fiscalBookLayers, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FiscalBookLayersRow{}
+	for rows.Next() {
+		var i FiscalBookLayersRow
+		if err := rows.Scan(
+			&i.AssetID,
+			&i.LayerKind,
+			&i.LayerDate,
+			&i.Cost,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -5064,6 +5416,61 @@ func (q *Queries) LiveRunFrom(ctx context.Context, arg LiveRunFromParams) (int32
 	return column_1, err
 }
 
+const locationSummary = `-- name: LocationSummary :many
+SELECT l.id AS location_id, l.code AS location_code, l.name AS location_name, l.kind AS location_kind, l.is_active, count(a.id)::int AS assets,
+       COALESCE(SUM(a.cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(a.accum_depr), 0)::numeric(18,3) AS accum
+  FROM fa_locations l
+  LEFT JOIN fa_assets a ON a.property_id = l.property_id AND a.location_id = l.id AND a.status = 'ACTIVE'
+ WHERE l.tenant_id = $1 AND l.property_id = $2
+ GROUP BY l.id
+ ORDER BY l.code
+`
+
+type LocationSummaryParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type LocationSummaryRow struct {
+	LocationID   int64
+	LocationCode string
+	LocationName string
+	LocationKind string
+	IsActive     bool
+	Assets       int32
+	Cost         decimal.Decimal
+	Accum        decimal.Decimal
+}
+
+func (q *Queries) LocationSummary(ctx context.Context, arg LocationSummaryParams) ([]LocationSummaryRow, error) {
+	rows, err := q.db.Query(ctx, locationSummary, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LocationSummaryRow{}
+	for rows.Next() {
+		var i LocationSummaryRow
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.LocationCode,
+			&i.LocationName,
+			&i.LocationKind,
+			&i.IsActive,
+			&i.Assets,
+			&i.Cost,
+			&i.Accum,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lookupAssets = `-- name: LookupAssets :many
 SELECT a.id, a.number, a.name, a.status, l.name AS location_name
   FROM fa_assets a
@@ -5104,6 +5511,54 @@ func (q *Queries) LookupAssets(ctx context.Context, arg LookupAssetsParams) ([]L
 			&i.Status,
 			&i.LocationName,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const manualJournalBalances = `-- name: ManualJournalBalances :many
+SELECT l.account_id, COALESCE(SUM(l.debit - l.credit), 0)::numeric(18,3) AS balance
+  FROM gl_journal_lines l
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+ WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = ANY($3::bigint[]) AND j.journal_date <= $4
+   AND j.journal_type = 'MANUAL' AND j.reverses_journal_id IS NULL
+   AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+ GROUP BY l.account_id
+`
+
+type ManualJournalBalancesParams struct {
+	TenantID   int64
+	PropertyID int64
+	AccountIds []int64
+	AsOf       civil.Date
+}
+
+type ManualJournalBalancesRow struct {
+	AccountID int64
+	Balance   decimal.Decimal
+}
+
+// What manual journals (not reversed, not a reversal) hold on accounts up to a date.
+func (q *Queries) ManualJournalBalances(ctx context.Context, arg ManualJournalBalancesParams) ([]ManualJournalBalancesRow, error) {
+	rows, err := q.db.Query(ctx, manualJournalBalances,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AccountIds,
+		arg.AsOf,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ManualJournalBalancesRow{}
+	for rows.Next() {
+		var i ManualJournalBalancesRow
+		if err := rows.Scan(&i.AccountID, &i.Balance); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -5170,6 +5625,29 @@ func (q *Queries) MarkRunReversed(ctx context.Context, arg MarkRunReversedParams
 	return err
 }
 
+const noDepartmentSummary = `-- name: NoDepartmentSummary :one
+SELECT count(*)::int AS assets, COALESCE(SUM(cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(accum_depr), 0)::numeric(18,3) AS accum
+  FROM fa_assets WHERE tenant_id = $1 AND property_id = $2 AND status = 'ACTIVE' AND department_id IS NULL
+`
+
+type NoDepartmentSummaryParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type NoDepartmentSummaryRow struct {
+	Assets int32
+	Cost   decimal.Decimal
+	Accum  decimal.Decimal
+}
+
+func (q *Queries) NoDepartmentSummary(ctx context.Context, arg NoDepartmentSummaryParams) (NoDepartmentSummaryRow, error) {
+	row := q.db.QueryRow(ctx, noDepartmentSummary, arg.TenantID, arg.PropertyID)
+	var i NoDepartmentSummaryRow
+	err := row.Scan(&i.Assets, &i.Cost, &i.Accum)
+	return i, err
+}
+
 const pKPOnDate = `-- name: PKPOnDate :one
 SELECT COALESCE((SELECT t.is_pkp FROM property_tax_settings t WHERE t.property_id = $1 AND t.effective_from <= $2::date ORDER BY t.effective_from DESC, t.id DESC LIMIT 1), false)::boolean
 `
@@ -5185,6 +5663,235 @@ func (q *Queries) PKPOnDate(ctx context.Context, arg PKPOnDateParams) (bool, err
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const recapMovements = `-- name: RecapMovements :many
+SELECT e.category_id,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date < $1), 0)::numeric(18,3) AS cost_opening,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date BETWEEN $1 AND $2 AND COALESCE(o.kind, e.kind) IN ('OPEN', 'ACQUIRE', 'CAPITALIZE')), 0)::numeric(18,3) AS cost_additions,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date BETWEEN $1 AND $2 AND COALESCE(o.kind, e.kind) IN ('RECLASS_IN', 'RECLASS_OUT')), 0)::numeric(18,3) AS cost_reclass,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date BETWEEN $1 AND $2 AND COALESCE(o.kind, e.kind) = 'DISPOSE'), 0)::numeric(18,3) AS cost_disposals,
+       COALESCE(SUM(e.cost_delta) FILTER (WHERE e.event_date <= $2), 0)::numeric(18,3) AS cost_closing,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date < $1), 0)::numeric(18,3) AS accum_opening,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN $1 AND $2 AND COALESCE(o.kind, e.kind) IN ('OPEN', 'ACQUIRE', 'CAPITALIZE')), 0)::numeric(18,3) AS accum_additions,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN $1 AND $2 AND COALESCE(o.kind, e.kind) = 'DEPRECIATE'), 0)::numeric(18,3) AS accum_depreciation,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN $1 AND $2 AND COALESCE(o.kind, e.kind) IN ('RECLASS_IN', 'RECLASS_OUT')), 0)::numeric(18,3) AS accum_reclass,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date BETWEEN $1 AND $2 AND COALESCE(o.kind, e.kind) = 'DISPOSE'), 0)::numeric(18,3) AS accum_disposals,
+       COALESCE(SUM(e.accum_delta) FILTER (WHERE e.event_date <= $2), 0)::numeric(18,3) AS accum_closing
+  FROM fa_ledger e
+  LEFT JOIN fa_ledger o ON o.property_id = e.property_id AND o.id = e.reverses_id
+ WHERE e.tenant_id = $3 AND e.property_id = $4
+ GROUP BY e.category_id
+`
+
+type RecapMovementsParams struct {
+	DateFrom   civil.Date
+	DateTo     civil.Date
+	TenantID   int64
+	PropertyID int64
+}
+
+type RecapMovementsRow struct {
+	CategoryID        int64
+	CostOpening       decimal.Decimal
+	CostAdditions     decimal.Decimal
+	CostReclass       decimal.Decimal
+	CostDisposals     decimal.Decimal
+	CostClosing       decimal.Decimal
+	AccumOpening      decimal.Decimal
+	AccumAdditions    decimal.Decimal
+	AccumDepreciation decimal.Decimal
+	AccumReclass      decimal.Decimal
+	AccumDisposals    decimal.Decimal
+	AccumClosing      decimal.Decimal
+}
+
+// The movement of the register per category in a period, by what the row is (a reversal counts as the row it negates): before the period (the opening), then inside it.
+func (q *Queries) RecapMovements(ctx context.Context, arg RecapMovementsParams) ([]RecapMovementsRow, error) {
+	rows, err := q.db.Query(ctx, recapMovements,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.TenantID,
+		arg.PropertyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecapMovementsRow{}
+	for rows.Next() {
+		var i RecapMovementsRow
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.CostOpening,
+			&i.CostAdditions,
+			&i.CostReclass,
+			&i.CostDisposals,
+			&i.CostClosing,
+			&i.AccumOpening,
+			&i.AccumAdditions,
+			&i.AccumDepreciation,
+			&i.AccumReclass,
+			&i.AccumDisposals,
+			&i.AccumClosing,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const registerAsOf = `-- name: RegisterAsOf :many
+SELECT a.id, a.number, a.name, a.category_id, c.code AS category_code, c.name AS category_name, c.kind AS category_kind, a.location_id, l.name AS location_name, a.department_id, d.name AS department_name,
+       s.name AS supplier_name, a.acquisition_date, a.in_service_date, a.life_months, a.method, a.serial_no, a.warranty_until, a.status, a.disposed_on,
+       x.cost, x.accum, x.months_done
+  FROM fa_assets a
+  JOIN (SELECT e.asset_id, SUM(e.cost_delta)::numeric(18,3) AS cost, SUM(e.accum_delta)::numeric(18,3) AS accum, SUM(e.months_delta)::int AS months_done
+          FROM fa_ledger e WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.event_date <= $3 GROUP BY e.asset_id) x ON x.asset_id = a.id
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
+  LEFT JOIN departments d ON d.property_id = a.property_id AND d.id = a.department_id
+  LEFT JOIN suppliers s ON s.property_id = a.property_id AND s.id = a.supplier_id
+ WHERE a.tenant_id = $1 AND a.property_id = $2 AND (x.cost <> 0 OR x.accum <> 0)
+   AND ($4::bigint IS NULL OR a.category_id = $4)
+   AND ($5::bigint IS NULL OR a.location_id = $5)
+   AND ($6::bigint IS NULL OR a.department_id = $6)
+ ORDER BY a.number
+ LIMIT 10000
+`
+
+type RegisterAsOfParams struct {
+	TenantID     int64
+	PropertyID   int64
+	AsOf         civil.Date
+	CategoryID   *int64
+	LocationID   *int64
+	DepartmentID *int64
+}
+
+type RegisterAsOfRow struct {
+	ID              int64
+	Number          string
+	Name            string
+	CategoryID      int64
+	CategoryCode    string
+	CategoryName    string
+	CategoryKind    string
+	LocationID      *int64
+	LocationName    *string
+	DepartmentID    *int64
+	DepartmentName  *string
+	SupplierName    *string
+	AcquisitionDate civil.Date
+	InServiceDate   civil.Date
+	LifeMonths      *int32
+	Method          *string
+	SerialNo        *string
+	WarrantyUntil   *civil.Date
+	Status          string
+	DisposedOn      *civil.Date
+	Cost            decimal.Decimal
+	Accum           decimal.Decimal
+	MonthsDone      int32
+}
+
+// The register as of a date: each asset with the sums of its ledger up to the date (an asset acquired later has no row).
+func (q *Queries) RegisterAsOf(ctx context.Context, arg RegisterAsOfParams) ([]RegisterAsOfRow, error) {
+	rows, err := q.db.Query(ctx, registerAsOf,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AsOf,
+		arg.CategoryID,
+		arg.LocationID,
+		arg.DepartmentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RegisterAsOfRow{}
+	for rows.Next() {
+		var i RegisterAsOfRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Name,
+			&i.CategoryID,
+			&i.CategoryCode,
+			&i.CategoryName,
+			&i.CategoryKind,
+			&i.LocationID,
+			&i.LocationName,
+			&i.DepartmentID,
+			&i.DepartmentName,
+			&i.SupplierName,
+			&i.AcquisitionDate,
+			&i.InServiceDate,
+			&i.LifeMonths,
+			&i.Method,
+			&i.SerialNo,
+			&i.WarrantyUntil,
+			&i.Status,
+			&i.DisposedOn,
+			&i.Cost,
+			&i.Accum,
+			&i.MonthsDone,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const registerOnlyByCategory = `-- name: RegisterOnlyByCategory :many
+SELECT e.category_id, COALESCE(SUM(e.cost_delta), 0)::numeric(18,3) AS cost, COALESCE(SUM(e.accum_delta), 0)::numeric(18,3) AS accum
+  FROM fa_ledger e
+  LEFT JOIN fa_ledger o ON o.property_id = e.property_id AND o.id = e.reverses_id
+  JOIN fa_assets a ON a.property_id = e.property_id AND a.id = e.asset_id
+  JOIN fa_opening_imports i ON i.property_id = a.property_id AND i.id = a.opening_import_id
+ WHERE e.tenant_id = $1 AND e.property_id = $2 AND i.mode = 'REGISTER_ONLY' AND COALESCE(o.kind, e.kind) = 'OPEN' AND e.event_date <= $3
+ GROUP BY e.category_id
+`
+
+type RegisterOnlyByCategoryParams struct {
+	TenantID   int64
+	PropertyID int64
+	AsOf       civil.Date
+}
+
+type RegisterOnlyByCategoryRow struct {
+	CategoryID int64
+	Cost       decimal.Decimal
+	Accum      decimal.Decimal
+}
+
+// What the opening balances in the mode REGISTER_ONLY brought to the register (no journal was made for them), per category, up to a date.
+func (q *Queries) RegisterOnlyByCategory(ctx context.Context, arg RegisterOnlyByCategoryParams) ([]RegisterOnlyByCategoryRow, error) {
+	rows, err := q.db.Query(ctx, registerOnlyByCategory, arg.TenantID, arg.PropertyID, arg.AsOf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RegisterOnlyByCategoryRow{}
+	for rows.Next() {
+		var i RegisterOnlyByCategoryRow
+		if err := rows.Scan(&i.CategoryID, &i.Cost, &i.Accum); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const registerTotalsByCategory = `-- name: RegisterTotalsByCategory :many
@@ -5334,6 +6041,29 @@ func (q *Queries) SummarizeAssets(ctx context.Context, arg SummarizeAssetsParams
 	)
 	var i SummarizeAssetsRow
 	err := row.Scan(&i.Total, &i.Cost, &i.Accum)
+	return i, err
+}
+
+const unplacedSummary = `-- name: UnplacedSummary :one
+SELECT count(*)::int AS assets, COALESCE(SUM(cost), 0)::numeric(18,3) AS cost, COALESCE(SUM(accum_depr), 0)::numeric(18,3) AS accum
+  FROM fa_assets WHERE tenant_id = $1 AND property_id = $2 AND status = 'ACTIVE' AND location_id IS NULL
+`
+
+type UnplacedSummaryParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type UnplacedSummaryRow struct {
+	Assets int32
+	Cost   decimal.Decimal
+	Accum  decimal.Decimal
+}
+
+func (q *Queries) UnplacedSummary(ctx context.Context, arg UnplacedSummaryParams) (UnplacedSummaryRow, error) {
+	row := q.db.QueryRow(ctx, unplacedSummary, arg.TenantID, arg.PropertyID)
+	var i UnplacedSummaryRow
+	err := row.Scan(&i.Assets, &i.Cost, &i.Accum)
 	return i, err
 }
 
@@ -5604,6 +6334,65 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const waitingByCategory = `-- name: WaitingByCategory :many
+SELECT c.id AS category_id, (d.id IS NOT NULL)::boolean AS dismissed,
+       CASE WHEN l.source_type = 'AP_BILL' THEN 'BILL' WHEN j.journal_type = 'CASHIER' THEN 'CASHIER' WHEN j.journal_type = 'BANK' THEN 'BANK'
+            WHEN j.journal_type = 'MANUAL' THEN 'MANUAL' ELSE 'OTHER' END::text AS source,
+       count(*)::int AS line_count, COALESCE(SUM(l.debit), 0)::numeric(18,3) AS amount
+  FROM gl_journal_lines l
+  JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+  JOIN fa_categories c ON c.property_id = l.property_id AND c.cost_account_id = l.account_id AND c.is_active
+  JOIN fa_settings st ON st.property_id = l.property_id
+  LEFT JOIN fa_source_dismissals d ON d.property_id = l.property_id AND d.journal_line_id = l.id AND d.restored_at IS NULL
+ WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.debit > 0 AND j.journal_date <= $3
+   AND j.journal_type NOT IN ('ASSET', 'REVERSAL', 'CLOSING') AND j.reverses_journal_id IS NULL AND COALESCE(l.source_type, '') <> 'ASSET'
+   AND NOT EXISTS (SELECT 1 FROM gl_journals r WHERE r.property_id = j.property_id AND r.reverses_journal_id = j.id)
+   AND st.register_from IS NOT NULL AND j.journal_date >= st.register_from AND NOT (c.kind = 'OE' AND st.oe_policy = 'EXPENSE')
+   AND NOT EXISTS (SELECT 1 FROM fa_source_links k WHERE k.property_id = l.property_id AND k.journal_line_id = l.id AND k.released_at IS NULL)
+ GROUP BY c.id, (d.id IS NOT NULL), 3
+`
+
+type WaitingByCategoryParams struct {
+	TenantID   int64
+	PropertyID int64
+	AsOf       civil.Date
+}
+
+type WaitingByCategoryRow struct {
+	CategoryID int64
+	Dismissed  bool
+	Source     string
+	LineCount  int32
+	Amount     decimal.Decimal
+}
+
+// The lines of the waiting list (and the dismissed ones) up to a date, per category and source: what the general ledger holds that the register does not.
+func (q *Queries) WaitingByCategory(ctx context.Context, arg WaitingByCategoryParams) ([]WaitingByCategoryRow, error) {
+	rows, err := q.db.Query(ctx, waitingByCategory, arg.TenantID, arg.PropertyID, arg.AsOf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WaitingByCategoryRow{}
+	for rows.Next() {
+		var i WaitingByCategoryRow
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.Dismissed,
+			&i.Source,
+			&i.LineCount,
+			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const waitingTotals = `-- name: WaitingTotals :one

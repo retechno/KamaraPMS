@@ -325,6 +325,8 @@ const (
 	SeqFAOpening SequenceType = "FA_OPENING"
 	// SeqFADisposal numbers the disposals of assets (FAD-000001).
 	SeqFADisposal SequenceType = "FA_DISPOSAL"
+	// SeqFAAudit numbers the stock-takes of the assets (FAO-000001).
+	SeqFAAudit SequenceType = "FA_AUDIT"
 )
 
 // defaultSequences are created with every property.
@@ -365,4 +367,5 @@ var defaultSequences = []struct {
 	{SeqFixedAsset, "FA-"},
 	{SeqFAOpening, "FAI-"},
 	{SeqFADisposal, "FAD-"},
+	{SeqFAAudit, "FAO-"},
 }

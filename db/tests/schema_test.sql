@@ -3043,6 +3043,87 @@ SELECT expect_error('an approved request points to its disposal', '23514', $q$SE
 SELECT expect_error('a sale request names the account it is received into', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('PENDING', 'SALE')$q$);
 SELECT expect_error('a request is never deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq()$q$, $q$DELETE FROM fa_disposal_requests$q$);
 
+-- 00096: the stock-take, its proposals, and a request of Maintenance that names an asset
+CREATE FUNCTION pms_test.fa_audit(p_loc text DEFAULT NULL, p_number text DEFAULT 'FAO-000001', p_status text DEFAULT 'IN_PROGRESS') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_audits (tenant_id, property_id, number, location_id, status, closed_at)
+    SELECT tn('ABC'), pr('BALI'), p_number, (SELECT id FROM fa_locations WHERE property_id = pr('BALI') AND code = p_loc), p_status, CASE WHEN p_status = 'CLOSED' THEN now() END
+$$;
+CREATE FUNCTION pms_test.fa_aline(p_result text DEFAULT 'FOUND', p_found text DEFAULT NULL, p_note text DEFAULT NULL, p_scanned boolean DEFAULT true, p_number text DEFAULT 'FAO-000001') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_audit_lines (tenant_id, property_id, audit_id, asset_id, result, found_location_id, note, scanned_at)
+    SELECT tn('ABC'), pr('BALI'), (SELECT id FROM fa_audits WHERE property_id = pr('BALI') AND number = p_number),
+           (SELECT id FROM fa_assets WHERE property_id = pr('BALI') AND number = 'FA-000001'), p_result,
+           (SELECT id FROM fa_locations WHERE property_id = pr('BALI') AND code = p_found), p_note, CASE WHEN p_scanned THEN now() END
+$$;
+CREATE FUNCTION pms_test.fa_proposal(p_kind text DEFAULT 'WRITE_OFF', p_to text DEFAULT NULL, p_status text DEFAULT 'PENDING', p_note text DEFAULT NULL, p_decided boolean DEFAULT false,
+                                     p_result boolean DEFAULT false) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_proposals (tenant_id, property_id, audit_id, asset_id, kind, to_location_id, status, decided_at, decision_note, result_type, result_id)
+    SELECT tn('ABC'), pr('BALI'), a.id, (SELECT id FROM fa_assets WHERE property_id = pr('BALI') AND number = 'FA-000001'), p_kind,
+           (SELECT id FROM fa_locations WHERE property_id = pr('BALI') AND code = p_to), p_status, CASE WHEN p_decided THEN now() END, p_note,
+           CASE WHEN p_result THEN 'DISPOSAL' END, CASE WHEN p_result THEN 1 END
+      FROM fa_audits a WHERE a.property_id = pr('BALI') AND a.number = 'FAO-000001'
+$$;
+SELECT expect_ok('an audit of a location is opened', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_audit('A')$q$);
+SELECT expect_ok('an audit of the whole property is opened', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_audit()$q$);
+SELECT expect_error('one audit of a place is open at a time', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_audit('A')$q$,
+    $q$SELECT pms_test.fa_audit('A', 'FAO-000002')$q$);
+SELECT expect_error('one audit of the whole property is open at a time', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_audit(NULL, 'FAO-000002')$q$);
+SELECT expect_ok('a new audit of a place follows the closed one', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_audit('A', 'FAO-000001', 'CLOSED')$q$,
+    $q$SELECT pms_test.fa_audit('A', 'FAO-000002')$q$);
+SELECT expect_error('an audit number is unique in the property', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_loc('B')$q$,
+    $q$SELECT pms_test.fa_audit('A')$q$, $q$SELECT pms_test.fa_audit('B')$q$);
+SELECT expect_error('an audit is closed with its time', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$UPDATE fa_audits SET status = 'CLOSED'$q$);
+SELECT expect_ok('an audit is closed once', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$UPDATE fa_audits SET status = 'CLOSED', closed_at = now()$q$);
+SELECT expect_error('a closed audit is kept', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$UPDATE fa_audits SET status = 'CLOSED', closed_at = now()$q$,
+    $q$UPDATE fa_audits SET note = 'again'$q$);
+SELECT expect_error('an audit is never deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$DELETE FROM fa_audits$q$);
+SELECT expect_ok('an asset found where it belongs is a line', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline()$q$);
+SELECT expect_ok('an asset not scanned is missing', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$);
+SELECT expect_ok('an asset found elsewhere says where', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('B')$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MOVED', 'B')$q$);
+SELECT expect_error('an asset found is scanned', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline('FOUND', NULL, NULL, false)$q$);
+SELECT expect_error('an asset missing was not scanned', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline('MISSING')$q$);
+SELECT expect_error('an asset found elsewhere says where', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline('MOVED')$q$);
+SELECT expect_error('a damaged asset says what is wrong', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline('DAMAGED')$q$);
+SELECT expect_ok('a damaged asset with its note', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline('DAMAGED', NULL, 'screen cracked')$q$);
+SELECT expect_error('a result is of a known kind', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline('STOLEN')$q$);
+SELECT expect_error('an asset is one row in an audit', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline()$q$,
+    $q$SELECT pms_test.fa_aline()$q$);
+SELECT expect_error('the lines of a closed audit are kept', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$UPDATE fa_audits SET status = 'CLOSED', closed_at = now()$q$, $q$SELECT pms_test.fa_aline()$q$);
+SELECT expect_error('a line is never deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_aline()$q$,
+    $q$DELETE FROM fa_audit_lines$q$);
+SELECT expect_ok('a write-off is proposed for a missing asset', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal()$q$);
+SELECT expect_ok('a move is proposed for an asset found elsewhere', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('B')$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MOVED', 'B')$q$, $q$SELECT pms_test.fa_proposal('MOVE', 'B')$q$);
+SELECT expect_error('a move proposal names the place', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal('MOVE')$q$);
+SELECT expect_error('a write-off proposal names no place', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('B')$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal('WRITE_OFF', 'B')$q$);
+SELECT expect_error('an asset has one proposal in an audit', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal()$q$, $q$SELECT pms_test.fa_proposal()$q$);
+SELECT expect_error('a proposal comes from a line of its audit', '23503', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$, $q$SELECT pms_test.fa_proposal()$q$);
+SELECT expect_error('a proposal waiting has no decision time', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal('WRITE_OFF', NULL, 'PENDING', NULL, true)$q$);
+SELECT expect_error('a rejected proposal says why', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal('WRITE_OFF', NULL, 'REJECTED', NULL, true)$q$);
+SELECT expect_error('an applied proposal says what it made', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal('WRITE_OFF', NULL, 'APPLIED', NULL, true)$q$);
+SELECT expect_ok('a proposal is applied once', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal()$q$,
+    $q$UPDATE fa_proposals SET status = 'APPLIED', decided_at = now(), result_type = 'DISPOSAL', result_id = 1$q$);
+SELECT expect_error('a decided proposal is kept', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal()$q$,
+    $q$UPDATE fa_proposals SET status = 'REJECTED', decided_at = now(), decision_note = 'no'$q$, $q$UPDATE fa_proposals SET decision_note = 'other'$q$);
+SELECT expect_error('a proposal is never deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_audit()$q$,
+    $q$SELECT pms_test.fa_aline('MISSING', NULL, NULL, false)$q$, $q$SELECT pms_test.fa_proposal()$q$, $q$DELETE FROM fa_proposals$q$);
+SELECT expect_ok('a request of Maintenance names an asset', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date, asset_id)
+       SELECT tn('ABC'), pr('BALI'), 'MNT96', NULL, 'Lobby', 'FURNITURE', 'x', 'NORMAL', '2026-10-01', id FROM fa_assets$q$);
+SELECT expect_error('a request of Maintenance names an asset of its own property', '23503', $q$SELECT pms_test.fa_base()$q$,
+    $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date, asset_id)
+       VALUES (tn('ABC'), pr('BALI'), 'MNT96', NULL, 'Lobby', 'FURNITURE', 'x', 'NORMAL', '2026-10-01', 999999)$q$);
+
 ------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------
