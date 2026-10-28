@@ -35,7 +35,7 @@ func TestOnlyLedgerGoWritesTheAssetLedger(t *testing.T) {
 		src := string(raw)
 		switch {
 		case strings.HasSuffix(rel, ".go"):
-			if strings.Contains(src, ".Ledger") && regexp.MustCompile(`\.Ledger(InsertAsset|InsertEntry|SetCancelled|RestateAsset)\b`).MatchString(src) {
+			if strings.Contains(src, ".Ledger") && regexp.MustCompile(`\.Ledger(InsertAsset|InsertEntry|SetCancelled|RestateAsset|UpdateStart|MoveAsset|ReviseAsset|ReclassAsset)\b`).MatchString(src) {
 				bad = append(bad, rel+": calls a ledger writer")
 			}
 			if assetWriterSQL.MatchString(src) {

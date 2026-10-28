@@ -188,6 +188,7 @@ SELECT count(*)::int
   FROM fa_assets a
  WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.dep_months_done < a.life_months
    AND a.cost - a.accum_depr > a.residual_value
+   AND NOT EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING')
    AND GREATEST(CASE WHEN a.dep_months_done > 0 THEN (a.last_dep_month + INTERVAL '1 month')::date ELSE a.first_dep_month END, $3::date) <= $4::date
 `
 
@@ -227,6 +228,53 @@ func (q *Queries) CountLiveLinksOfLine(ctx context.Context, arg CountLiveLinksOf
 	return column_1, err
 }
 
+const countPostedDisposals = `-- name: CountPostedDisposals :one
+SELECT count(*)::int FROM fa_disposals WHERE tenant_id = $1 AND property_id = $2 AND asset_id = $3 AND status = 'POSTED'
+`
+
+type CountPostedDisposalsParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+func (q *Queries) CountPostedDisposals(ctx context.Context, arg CountPostedDisposalsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countPostedDisposals, arg.TenantID, arg.PropertyID, arg.AssetID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const decideDisposalRequest = `-- name: DecideDisposalRequest :exec
+UPDATE fa_disposal_requests SET status = $1, decided_by = $2, decided_at = $3, decision_note = $4, disposal_id = $5
+ WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'PENDING'
+`
+
+type DecideDisposalRequestParams struct {
+	Status       string
+	ActorID      *int64
+	DecidedAt    *time.Time
+	DecisionNote *string
+	DisposalID   *int64
+	TenantID     int64
+	PropertyID   int64
+	ID           int64
+}
+
+func (q *Queries) DecideDisposalRequest(ctx context.Context, arg DecideDisposalRequestParams) error {
+	_, err := q.db.Exec(ctx, decideDisposalRequest,
+		arg.Status,
+		arg.ActorID,
+		arg.DecidedAt,
+		arg.DecisionNote,
+		arg.DisposalID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const departmentNames = `-- name: DepartmentNames :many
 SELECT id, code, name FROM departments WHERE property_id = $1 AND id = ANY($2::bigint[])
 `
@@ -252,6 +300,61 @@ func (q *Queries) DepartmentNames(ctx context.Context, arg DepartmentNamesParams
 	for rows.Next() {
 		var i DepartmentNamesRow
 		if err := rows.Scan(&i.ID, &i.Code, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const disposalFlows = `-- name: DisposalFlows :many
+SELECT c.cost_account_id::bigint AS cost_account_id,
+       (COALESCE(SUM(d.cost_removed) FILTER (WHERE j.journal_date BETWEEN $1 AND $2), 0)
+        - COALESCE(SUM(d.cost_removed) FILTER (WHERE rj.journal_date BETWEEN $1 AND $2), 0))::numeric(18,3) AS cost_removed,
+       (COALESCE(SUM(d.proceeds) FILTER (WHERE j.journal_date BETWEEN $1 AND $2), 0)
+        - COALESCE(SUM(d.proceeds) FILTER (WHERE rj.journal_date BETWEEN $1 AND $2), 0))::numeric(18,3) AS proceeds
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  JOIN gl_journals j ON j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.id = d.reversal_journal_id
+ WHERE d.tenant_id = $3 AND d.property_id = $4
+ GROUP BY c.cost_account_id
+`
+
+type DisposalFlowsParams struct {
+	FromDate   civil.Date
+	ToDate     civil.Date
+	TenantID   int64
+	PropertyID int64
+}
+
+type DisposalFlowsRow struct {
+	CostAccountID int64
+	CostRemoved   decimal.Decimal
+	Proceeds      decimal.Decimal
+}
+
+// What the disposals posted in a range took out of each cost account and the proceeds they brought, for the cash flow statement: a disposal counts on the date of its journal, and a reversed one is
+// taken back on the date of the reversal journal, so what the books show for the range is what this returns.
+func (q *Queries) DisposalFlows(ctx context.Context, arg DisposalFlowsParams) ([]DisposalFlowsRow, error) {
+	rows, err := q.db.Query(ctx, disposalFlows,
+		arg.FromDate,
+		arg.ToDate,
+		arg.TenantID,
+		arg.PropertyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DisposalFlowsRow{}
+	for rows.Next() {
+		var i DisposalFlowsRow
+		if err := rows.Scan(&i.CostAccountID, &i.CostRemoved, &i.Proceeds); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -416,7 +519,8 @@ func (q *Queries) GetAccountByCode(ctx context.Context, arg GetAccountByCodePara
 
 const getAsset = `-- name: GetAsset :one
 SELECT a.id, a.tenant_id, a.property_id, a.number, a.name, a.category_id, a.location_id, a.department_id, a.supplier_id, a.source, a.opening_import_id, a.status, a.acquisition_date, a.in_service_date, a.start_rule, a.first_dep_month, a.cost, a.residual_value, a.life_months, a.method, a.db_factor, a.fiscal_group, a.fiscal_method, a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated, a.unit_count, a.serial_no, a.warranty_until, a.notes, a.label_code, a.accum_depr, a.dep_months_done, a.last_dep_month, a.disposed_on, a.version, a.created_at, a.created_by, a.updated_at, a.updated_by, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
-       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name
+       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name,
+       EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING') AS disposal_pending
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
   LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
@@ -482,6 +586,7 @@ type GetAssetRow struct {
 	DepartmentName          *string
 	SupplierCode            *string
 	SupplierName            *string
+	DisposalPending         bool
 }
 
 func (q *Queries) GetAsset(ctx context.Context, arg GetAssetParams) (GetAssetRow, error) {
@@ -538,6 +643,7 @@ func (q *Queries) GetAsset(ctx context.Context, arg GetAssetParams) (GetAssetRow
 		&i.DepartmentName,
 		&i.SupplierCode,
 		&i.SupplierName,
+		&i.DisposalPending,
 	)
 	return i, err
 }
@@ -749,6 +855,234 @@ func (q *Queries) GetDepartmentRefByCode(ctx context.Context, arg GetDepartmentR
 	return i, err
 }
 
+const getDisposal = `-- name: GetDisposal :one
+SELECT d.id, d.tenant_id, d.property_id, d.number, d.asset_id, d.kind, d.disposal_date, d.units, d.cost_removed, d.accum_removed, d.carrying_removed, d.proceeds, d.proceeds_account_id, d.gain_loss, d.reason_code, d.note, d.journal_id, d.approved_by, d.status, d.reversal_journal_id, d.reversed_by, d.reversed_at, d.reversal_reason, d.idempotency_key, d.created_by, d.created_at, a.number AS asset_number, a.name AS asset_name, j.journal_number, rj.journal_number AS reversal_journal_number, cu.full_name AS created_by_name, au.full_name AS approved_by_name,
+       ru.full_name AS reversed_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN gl_journals j ON j.property_id = d.property_id AND j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = d.property_id AND rj.id = d.reversal_journal_id
+  LEFT JOIN users cu ON cu.id = d.created_by
+  LEFT JOIN users au ON au.id = d.approved_by
+  LEFT JOIN users ru ON ru.id = d.reversed_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = d.property_id AND pa.id = d.proceeds_account_id
+ WHERE d.tenant_id = $1 AND d.property_id = $2 AND d.id = $3
+`
+
+type GetDisposalParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetDisposalRow struct {
+	ID                    int64
+	TenantID              int64
+	PropertyID            int64
+	Number                string
+	AssetID               int64
+	Kind                  string
+	DisposalDate          civil.Date
+	Units                 int32
+	CostRemoved           decimal.Decimal
+	AccumRemoved          decimal.Decimal
+	CarryingRemoved       decimal.Decimal
+	Proceeds              decimal.Decimal
+	ProceedsAccountID     *int64
+	GainLoss              decimal.Decimal
+	ReasonCode            string
+	Note                  *string
+	JournalID             int64
+	ApprovedBy            *int64
+	Status                string
+	ReversalJournalID     *int64
+	ReversedBy            *int64
+	ReversedAt            *time.Time
+	ReversalReason        *string
+	IdempotencyKey        *string
+	CreatedBy             *int64
+	CreatedAt             time.Time
+	AssetNumber           string
+	AssetName             string
+	JournalNumber         string
+	ReversalJournalNumber *string
+	CreatedByName         *string
+	ApprovedByName        *string
+	ReversedByName        *string
+	ProceedsAccountCode   *string
+	ProceedsAccountName   *string
+}
+
+func (q *Queries) GetDisposal(ctx context.Context, arg GetDisposalParams) (GetDisposalRow, error) {
+	row := q.db.QueryRow(ctx, getDisposal, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetDisposalRow
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.Number,
+		&i.AssetID,
+		&i.Kind,
+		&i.DisposalDate,
+		&i.Units,
+		&i.CostRemoved,
+		&i.AccumRemoved,
+		&i.CarryingRemoved,
+		&i.Proceeds,
+		&i.ProceedsAccountID,
+		&i.GainLoss,
+		&i.ReasonCode,
+		&i.Note,
+		&i.JournalID,
+		&i.ApprovedBy,
+		&i.Status,
+		&i.ReversalJournalID,
+		&i.ReversedBy,
+		&i.ReversedAt,
+		&i.ReversalReason,
+		&i.IdempotencyKey,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.AssetNumber,
+		&i.AssetName,
+		&i.JournalNumber,
+		&i.ReversalJournalNumber,
+		&i.CreatedByName,
+		&i.ApprovedByName,
+		&i.ReversedByName,
+		&i.ProceedsAccountCode,
+		&i.ProceedsAccountName,
+	)
+	return i, err
+}
+
+const getDisposalByKey = `-- name: GetDisposalByKey :one
+SELECT id, asset_id FROM fa_disposals WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetDisposalByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+type GetDisposalByKeyRow struct {
+	ID      int64
+	AssetID int64
+}
+
+func (q *Queries) GetDisposalByKey(ctx context.Context, arg GetDisposalByKeyParams) (GetDisposalByKeyRow, error) {
+	row := q.db.QueryRow(ctx, getDisposalByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i GetDisposalByKeyRow
+	err := row.Scan(&i.ID, &i.AssetID)
+	return i, err
+}
+
+const getDisposalRequest = `-- name: GetDisposalRequest :one
+SELECT r.id, r.tenant_id, r.property_id, r.asset_id, r.kind, r.disposal_date, r.units, r.proceeds, r.proceeds_account_id, r.reason_code, r.note, r.approval_amount, r.status, r.requested_by, r.requested_at, r.decided_by, r.decided_at, r.decision_note, r.disposal_id, r.idempotency_key, a.number AS asset_number, a.name AS asset_name, ru.full_name AS requested_by_name, du.full_name AS decided_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name,
+       d.number AS disposal_number
+  FROM fa_disposal_requests r
+  JOIN fa_assets a ON a.property_id = r.property_id AND a.id = r.asset_id
+  LEFT JOIN users ru ON ru.id = r.requested_by
+  LEFT JOIN users du ON du.id = r.decided_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = r.property_id AND pa.id = r.proceeds_account_id
+  LEFT JOIN fa_disposals d ON d.property_id = r.property_id AND d.id = r.disposal_id
+ WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.id = $3
+`
+
+type GetDisposalRequestParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetDisposalRequestRow struct {
+	ID                  int64
+	TenantID            int64
+	PropertyID          int64
+	AssetID             int64
+	Kind                string
+	DisposalDate        civil.Date
+	Units               int32
+	Proceeds            decimal.Decimal
+	ProceedsAccountID   *int64
+	ReasonCode          string
+	Note                *string
+	ApprovalAmount      decimal.Decimal
+	Status              string
+	RequestedBy         *int64
+	RequestedAt         time.Time
+	DecidedBy           *int64
+	DecidedAt           *time.Time
+	DecisionNote        *string
+	DisposalID          *int64
+	IdempotencyKey      *string
+	AssetNumber         string
+	AssetName           string
+	RequestedByName     *string
+	DecidedByName       *string
+	ProceedsAccountCode *string
+	ProceedsAccountName *string
+	DisposalNumber      *string
+}
+
+func (q *Queries) GetDisposalRequest(ctx context.Context, arg GetDisposalRequestParams) (GetDisposalRequestRow, error) {
+	row := q.db.QueryRow(ctx, getDisposalRequest, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetDisposalRequestRow
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AssetID,
+		&i.Kind,
+		&i.DisposalDate,
+		&i.Units,
+		&i.Proceeds,
+		&i.ProceedsAccountID,
+		&i.ReasonCode,
+		&i.Note,
+		&i.ApprovalAmount,
+		&i.Status,
+		&i.RequestedBy,
+		&i.RequestedAt,
+		&i.DecidedBy,
+		&i.DecidedAt,
+		&i.DecisionNote,
+		&i.DisposalID,
+		&i.IdempotencyKey,
+		&i.AssetNumber,
+		&i.AssetName,
+		&i.RequestedByName,
+		&i.DecidedByName,
+		&i.ProceedsAccountCode,
+		&i.ProceedsAccountName,
+		&i.DisposalNumber,
+	)
+	return i, err
+}
+
+const getDisposalRequestByKey = `-- name: GetDisposalRequestByKey :one
+SELECT id, asset_id FROM fa_disposal_requests WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetDisposalRequestByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+type GetDisposalRequestByKeyRow struct {
+	ID      int64
+	AssetID int64
+}
+
+func (q *Queries) GetDisposalRequestByKey(ctx context.Context, arg GetDisposalRequestByKeyParams) (GetDisposalRequestByKeyRow, error) {
+	row := q.db.QueryRow(ctx, getDisposalRequestByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i GetDisposalRequestByKeyRow
+	err := row.Scan(&i.ID, &i.AssetID)
+	return i, err
+}
+
 const getFiscalYearStartMonth = `-- name: GetFiscalYearStartMonth :one
 SELECT fiscal_year_start_month FROM accounting_settings WHERE tenant_id = $1 AND property_id = $2
 `
@@ -848,7 +1182,7 @@ SELECT k.journal_line_id, k.unit_no, k.cost, k.bill_id, k.bill_line_no, j.id AS 
   JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
   JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
   LEFT JOIN supplier_bills b ON b.id = k.bill_id
- WHERE k.tenant_id = $1 AND k.property_id = $2 AND k.asset_id = $3 AND k.released_at IS NULL
+ WHERE k.tenant_id = $1 AND k.property_id = $2 AND k.asset_id = $3 AND k.released_at IS NULL AND k.kind = 'UNIT'
 `
 
 type GetLiveLinkOfAssetParams struct {
@@ -1150,6 +1484,82 @@ func (q *Queries) GetOpeningImportByKey(ctx context.Context, arg GetOpeningImpor
 		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getPendingRequestOfAsset = `-- name: GetPendingRequestOfAsset :one
+SELECT id FROM fa_disposal_requests WHERE tenant_id = $1 AND property_id = $2 AND asset_id = $3 AND status = 'PENDING'
+`
+
+type GetPendingRequestOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+func (q *Queries) GetPendingRequestOfAsset(ctx context.Context, arg GetPendingRequestOfAssetParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getPendingRequestOfAsset, arg.TenantID, arg.PropertyID, arg.AssetID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getProceedsAccount = `-- name: GetProceedsAccount :one
+SELECT code, account_type, statement_group FROM gl_accounts
+ WHERE tenant_id = $1 AND property_id = $2 AND id = $3 AND is_active AND is_postable
+`
+
+type GetProceedsAccountParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetProceedsAccountRow struct {
+	Code           string
+	AccountType    string
+	StatementGroup *string
+}
+
+// An account that may receive the proceeds of a sale: its type and its statement group (CASH for the cash and bank accounts; 1230 is allowed by its code). Inactive or not postable is no account for it.
+func (q *Queries) GetProceedsAccount(ctx context.Context, arg GetProceedsAccountParams) (GetProceedsAccountRow, error) {
+	row := q.db.QueryRow(ctx, getProceedsAccount, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetProceedsAccountRow
+	err := row.Scan(&i.Code, &i.AccountType, &i.StatementGroup)
+	return i, err
+}
+
+const getRevisionByKey = `-- name: GetRevisionByKey :one
+SELECT id, tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, bill_id, bill_line_no, journal_line_id, journal_id, reason, idempotency_key, created_by, created_at FROM fa_revisions WHERE tenant_id = $1 AND property_id = $2 AND idempotency_key = $3
+`
+
+type GetRevisionByKeyParams struct {
+	TenantID       int64
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) GetRevisionByKey(ctx context.Context, arg GetRevisionByKeyParams) (FaRevision, error) {
+	row := q.db.QueryRow(ctx, getRevisionByKey, arg.TenantID, arg.PropertyID, arg.IdempotencyKey)
+	var i FaRevision
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AssetID,
+		&i.Kind,
+		&i.EffectiveOn,
+		&i.OldValue,
+		&i.NewValue,
+		&i.BillID,
+		&i.BillLineNo,
+		&i.JournalLineID,
+		&i.JournalID,
+		&i.Reason,
+		&i.IdempotencyKey,
+		&i.CreatedBy,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -1599,6 +2009,110 @@ func (q *Queries) InsertDismissal(ctx context.Context, arg InsertDismissalParams
 	return err
 }
 
+const insertDisposal = `-- name: InsertDisposal :one
+INSERT INTO fa_disposals (tenant_id, property_id, number, asset_id, kind, disposal_date, units, cost_removed, accum_removed, carrying_removed, proceeds, proceeds_account_id, gain_loss, reason_code, note,
+                          journal_id, approved_by, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19)
+RETURNING id
+`
+
+type InsertDisposalParams struct {
+	TenantID          int64
+	PropertyID        int64
+	Number            string
+	AssetID           int64
+	Kind              string
+	DisposalDate      civil.Date
+	Units             int32
+	CostRemoved       decimal.Decimal
+	AccumRemoved      decimal.Decimal
+	CarryingRemoved   decimal.Decimal
+	Proceeds          decimal.Decimal
+	ProceedsAccountID *int64
+	GainLoss          decimal.Decimal
+	ReasonCode        string
+	Note              *string
+	JournalID         int64
+	ApprovedBy        *int64
+	IdempotencyKey    *string
+	ActorID           *int64
+}
+
+func (q *Queries) InsertDisposal(ctx context.Context, arg InsertDisposalParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertDisposal,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Number,
+		arg.AssetID,
+		arg.Kind,
+		arg.DisposalDate,
+		arg.Units,
+		arg.CostRemoved,
+		arg.AccumRemoved,
+		arg.CarryingRemoved,
+		arg.Proceeds,
+		arg.ProceedsAccountID,
+		arg.GainLoss,
+		arg.ReasonCode,
+		arg.Note,
+		arg.JournalID,
+		arg.ApprovedBy,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertDisposalRequest = `-- name: InsertDisposalRequest :one
+
+INSERT INTO fa_disposal_requests (tenant_id, property_id, asset_id, kind, disposal_date, units, proceeds, proceeds_account_id, reason_code, note, approval_amount, requested_by, idempotency_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        $13)
+RETURNING id
+`
+
+type InsertDisposalRequestParams struct {
+	TenantID          int64
+	PropertyID        int64
+	AssetID           int64
+	Kind              string
+	DisposalDate      civil.Date
+	Units             int32
+	Proceeds          decimal.Decimal
+	ProceedsAccountID *int64
+	ReasonCode        string
+	Note              *string
+	ApprovalAmount    decimal.Decimal
+	ActorID           *int64
+	IdempotencyKey    *string
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Disposals (37-fixed-assets.md 4.7, 4.8)
+func (q *Queries) InsertDisposalRequest(ctx context.Context, arg InsertDisposalRequestParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertDisposalRequest,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AssetID,
+		arg.Kind,
+		arg.DisposalDate,
+		arg.Units,
+		arg.Proceeds,
+		arg.ProceedsAccountID,
+		arg.ReasonCode,
+		arg.Note,
+		arg.ApprovalAmount,
+		arg.ActorID,
+		arg.IdempotencyKey,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const insertLocation = `-- name: InsertLocation :one
 INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, room_id, banquet_room_id, warehouse_id, label_code, created_by, updated_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
@@ -1650,6 +2164,46 @@ func (q *Queries) InsertLocation(ctx context.Context, arg InsertLocationParams) 
 		&i.UpdatedBy,
 	)
 	return i, err
+}
+
+const insertMove = `-- name: InsertMove :one
+INSERT INTO fa_moves (tenant_id, property_id, asset_id, effective_on, from_location_id, to_location_id, from_department_id, to_department_id, reason, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+        $10, $11)
+RETURNING id
+`
+
+type InsertMoveParams struct {
+	TenantID         int64
+	PropertyID       int64
+	AssetID          int64
+	EffectiveOn      civil.Date
+	FromLocationID   *int64
+	ToLocationID     *int64
+	FromDepartmentID *int64
+	ToDepartmentID   *int64
+	Reason           string
+	IdempotencyKey   *string
+	ActorID          *int64
+}
+
+func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertMove,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AssetID,
+		arg.EffectiveOn,
+		arg.FromLocationID,
+		arg.ToLocationID,
+		arg.FromDepartmentID,
+		arg.ToDepartmentID,
+		arg.Reason,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertOpeningImport = `-- name: InsertOpeningImport :one
@@ -1709,6 +2263,52 @@ func (q *Queries) InsertOpeningImport(ctx context.Context, arg InsertOpeningImpo
 		&i.CreatedBy,
 	)
 	return i, err
+}
+
+const insertRevision = `-- name: InsertRevision :one
+INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, bill_id, bill_line_no, journal_line_id, journal_id, reason, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        $13, $14)
+RETURNING id
+`
+
+type InsertRevisionParams struct {
+	TenantID       int64
+	PropertyID     int64
+	AssetID        int64
+	Kind           string
+	EffectiveOn    civil.Date
+	OldValue       []byte
+	NewValue       []byte
+	BillID         *int64
+	BillLineNo     *int32
+	JournalLineID  *int64
+	JournalID      *int64
+	Reason         string
+	IdempotencyKey *string
+	ActorID        *int64
+}
+
+func (q *Queries) InsertRevision(ctx context.Context, arg InsertRevisionParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertRevision,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AssetID,
+		arg.Kind,
+		arg.EffectiveOn,
+		arg.OldValue,
+		arg.NewValue,
+		arg.BillID,
+		arg.BillLineNo,
+		arg.JournalLineID,
+		arg.JournalID,
+		arg.Reason,
+		arg.IdempotencyKey,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertRun = `-- name: InsertRun :one
@@ -1788,8 +2388,8 @@ func (q *Queries) InsertRunLine(ctx context.Context, arg InsertRunLineParams) (i
 }
 
 const insertSourceLink = `-- name: InsertSourceLink :exec
-INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, kind, bill_id, bill_line_no, idempotency_key, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 `
 
 type InsertSourceLinkParams struct {
@@ -1799,6 +2399,7 @@ type InsertSourceLinkParams struct {
 	UnitNo         int32
 	AssetID        int64
 	Cost           decimal.Decimal
+	Kind           string
 	BillID         *int64
 	BillLineNo     *int32
 	IdempotencyKey *string
@@ -1813,6 +2414,7 @@ func (q *Queries) InsertSourceLink(ctx context.Context, arg InsertSourceLinkPara
 		arg.UnitNo,
 		arg.AssetID,
 		arg.Cost,
+		arg.Kind,
 		arg.BillID,
 		arg.BillLineNo,
 		arg.IdempotencyKey,
@@ -1911,6 +2513,70 @@ func (q *Queries) LaterAssetEvents(ctx context.Context, arg LaterAssetEventsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const laterEntriesOfAsset = `-- name: LaterEntriesOfAsset :one
+SELECT count(*)::int FROM fa_ledger e
+ WHERE e.tenant_id = $1 AND e.property_id = $2 AND e.asset_id = $3 AND e.kind IN ('DISPOSE', 'RECLASS_OUT', 'RECLASS_IN', 'CAPITALIZE')
+   AND e.id > (SELECT d.id FROM fa_ledger d WHERE d.property_id = $2 AND d.kind = 'DISPOSE' AND d.source_type = 'FA_DISPOSAL' AND d.source_id = $4)
+   AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id)
+`
+
+type LaterEntriesOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+	DisposalID int64
+}
+
+// What happened to the asset after a disposal that has not been undone: another disposal, a value added or a change of category. The disposal cannot be reversed over them.
+func (q *Queries) LaterEntriesOfAsset(ctx context.Context, arg LaterEntriesOfAssetParams) (int32, error) {
+	row := q.db.QueryRow(ctx, laterEntriesOfAsset,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.AssetID,
+		arg.DisposalID,
+	)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const ledgerDisposeEntry = `-- name: LedgerDisposeEntry :one
+SELECT id, tenant_id, property_id, asset_id, category_id, kind, event_date, book_month, cost_delta, accum_delta, months_delta, journal_id, source_type, source_id, source_line, reverses_id, created_at, created_by FROM fa_ledger WHERE tenant_id = $1 AND property_id = $2 AND kind = 'DISPOSE' AND source_type = 'FA_DISPOSAL' AND source_id = $3
+`
+
+type LedgerDisposeEntryParams struct {
+	TenantID   int64
+	PropertyID int64
+	DisposalID int64
+}
+
+// The row of the ledger a disposal wrote (it is reversed by a REVERSAL row).
+func (q *Queries) LedgerDisposeEntry(ctx context.Context, arg LedgerDisposeEntryParams) (FaLedger, error) {
+	row := q.db.QueryRow(ctx, ledgerDisposeEntry, arg.TenantID, arg.PropertyID, arg.DisposalID)
+	var i FaLedger
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.PropertyID,
+		&i.AssetID,
+		&i.CategoryID,
+		&i.Kind,
+		&i.EventDate,
+		&i.BookMonth,
+		&i.CostDelta,
+		&i.AccumDelta,
+		&i.MonthsDelta,
+		&i.JournalID,
+		&i.SourceType,
+		&i.SourceID,
+		&i.SourceLine,
+		&i.ReversesID,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
 }
 
 const ledgerDrift = `-- name: LedgerDrift :many
@@ -2155,6 +2821,36 @@ func (q *Queries) LedgerInsertEntry(ctx context.Context, arg LedgerInsertEntryPa
 	return id, err
 }
 
+const ledgerMoveAsset = `-- name: LedgerMoveAsset :exec
+
+UPDATE fa_assets SET location_id = $1, department_id = $2, version = version + 1, updated_by = $3
+ WHERE tenant_id = $4 AND property_id = $5 AND id = $6 AND status = 'ACTIVE'
+`
+
+type LedgerMoveAssetParams struct {
+	LocationID   *int64
+	DepartmentID *int64
+	ActorID      *int64
+	TenantID     int64
+	PropertyID   int64
+	ID           int64
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Moves and revisions (changes.go)
+// Where the asset stands and which department it belongs to (the history is fa_moves).
+func (q *Queries) LedgerMoveAsset(ctx context.Context, arg LedgerMoveAssetParams) error {
+	_, err := q.db.Exec(ctx, ledgerMoveAsset,
+		arg.LocationID,
+		arg.DepartmentID,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const ledgerOpenEntry = `-- name: LedgerOpenEntry :one
 SELECT id, tenant_id, property_id, asset_id, category_id, kind, event_date, book_month, cost_delta, accum_delta, months_delta, journal_id, source_type, source_id, source_line, reverses_id, created_at, created_by FROM fa_ledger WHERE tenant_id = $1 AND property_id = $2 AND asset_id = $3 AND kind IN ('OPEN', 'ACQUIRE') ORDER BY id LIMIT 1
 `
@@ -2191,6 +2887,74 @@ func (q *Queries) LedgerOpenEntry(ctx context.Context, arg LedgerOpenEntryParams
 	return i, err
 }
 
+const ledgerReclassAsset = `-- name: LedgerReclassAsset :exec
+UPDATE fa_assets SET category_id = $1, life_months = $2, method = $3, db_factor = $4, residual_value = $5,
+       in_service_date = $6, start_rule = $7, first_dep_month = $8, fiscal_group = $9, fiscal_method = $10,
+       version = version + 1, updated_by = $11
+ WHERE tenant_id = $12 AND property_id = $13 AND id = $14 AND status = 'ACTIVE'
+`
+
+type LedgerReclassAssetParams struct {
+	CategoryID    int64
+	LifeMonths    *int32
+	Method        *string
+	DbFactor      *decimal.Decimal
+	ResidualValue decimal.Decimal
+	InServiceDate civil.Date
+	StartRule     string
+	FirstDepMonth *civil.Date
+	FiscalGroup   string
+	FiscalMethod  *string
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+// The asset in its new category: the category, what depreciation it has (a construction in progress that is finished gets its life, method and start) and its fiscal group.
+func (q *Queries) LedgerReclassAsset(ctx context.Context, arg LedgerReclassAssetParams) error {
+	_, err := q.db.Exec(ctx, ledgerReclassAsset,
+		arg.CategoryID,
+		arg.LifeMonths,
+		arg.Method,
+		arg.DbFactor,
+		arg.ResidualValue,
+		arg.InServiceDate,
+		arg.StartRule,
+		arg.FirstDepMonth,
+		arg.FiscalGroup,
+		arg.FiscalMethod,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const ledgerReinstate = `-- name: LedgerReinstate :exec
+UPDATE fa_assets SET status = 'ACTIVE', disposed_on = NULL, version = version + 1, updated_by = $1
+ WHERE tenant_id = $2 AND property_id = $3 AND id = $4 AND status = 'DISPOSED'
+`
+
+type LedgerReinstateParams struct {
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// The reversal of the disposal of a whole asset: it is active again (the caller restates it from the ledger).
+func (q *Queries) LedgerReinstate(ctx context.Context, arg LedgerReinstateParams) error {
+	_, err := q.db.Exec(ctx, ledgerReinstate,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const ledgerRestateAsset = `-- name: LedgerRestateAsset :exec
 UPDATE fa_assets SET cost = $1, accum_depr = $2, dep_months_done = $3, last_dep_month = $4, version = version + 1, updated_by = $5
  WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'ACTIVE'
@@ -2221,6 +2985,37 @@ func (q *Queries) LedgerRestateAsset(ctx context.Context, arg LedgerRestateAsset
 	return err
 }
 
+const ledgerReviseAsset = `-- name: LedgerReviseAsset :exec
+UPDATE fa_assets SET life_months = $1, residual_value = $2, method = $3, db_factor = $4, version = version + 1, updated_by = $5
+ WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'ACTIVE'
+`
+
+type LedgerReviseAssetParams struct {
+	LifeMonths    *int32
+	ResidualValue decimal.Decimal
+	Method        *string
+	DbFactor      *decimal.Decimal
+	ActorID       *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+// The life, the residual value and the method of an asset, from the next run (a revision, 4.5).
+func (q *Queries) LedgerReviseAsset(ctx context.Context, arg LedgerReviseAssetParams) error {
+	_, err := q.db.Exec(ctx, ledgerReviseAsset,
+		arg.LifeMonths,
+		arg.ResidualValue,
+		arg.Method,
+		arg.DbFactor,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const ledgerSetCancelled = `-- name: LedgerSetCancelled :exec
 UPDATE fa_assets SET status = 'CANCELLED', version = version + 1, updated_by = $1
  WHERE tenant_id = $2 AND property_id = $3 AND id = $4 AND status = 'ACTIVE'
@@ -2235,6 +3030,56 @@ type LedgerSetCancelledParams struct {
 
 func (q *Queries) LedgerSetCancelled(ctx context.Context, arg LedgerSetCancelledParams) error {
 	_, err := q.db.Exec(ctx, ledgerSetCancelled,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const ledgerSetDisposed = `-- name: LedgerSetDisposed :exec
+UPDATE fa_assets SET status = 'DISPOSED', disposed_on = $1, version = version + 1, updated_by = $2
+ WHERE tenant_id = $3 AND property_id = $4 AND id = $5 AND status = 'ACTIVE'
+`
+
+type LedgerSetDisposedParams struct {
+	DisposedOn *civil.Date
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// A whole asset leaves the register: the status and the day. Its state (cost, accumulated amount) stays as it was the day it left; the ledger holds the DISPOSE row that takes it to zero.
+func (q *Queries) LedgerSetDisposed(ctx context.Context, arg LedgerSetDisposedParams) error {
+	_, err := q.db.Exec(ctx, ledgerSetDisposed,
+		arg.DisposedOn,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
+const ledgerSetUnits = `-- name: LedgerSetUnits :exec
+UPDATE fa_assets SET unit_count = $1, version = version + 1, updated_by = $2
+ WHERE tenant_id = $3 AND property_id = $4 AND id = $5 AND status = 'ACTIVE'
+`
+
+type LedgerSetUnitsParams struct {
+	UnitCount  int32
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// The pieces of a batch that are left after a partial disposal (or back after its reversal).
+func (q *Queries) LedgerSetUnits(ctx context.Context, arg LedgerSetUnitsParams) error {
+	_, err := q.db.Exec(ctx, ledgerSetUnits,
+		arg.UnitCount,
 		arg.ActorID,
 		arg.TenantID,
 		arg.PropertyID,
@@ -2440,7 +3285,8 @@ func (q *Queries) ListAssetLedger(ctx context.Context, arg ListAssetLedgerParams
 const listAssets = `-- name: ListAssets :many
 
 SELECT a.id, a.tenant_id, a.property_id, a.number, a.name, a.category_id, a.location_id, a.department_id, a.supplier_id, a.source, a.opening_import_id, a.status, a.acquisition_date, a.in_service_date, a.start_rule, a.first_dep_month, a.cost, a.residual_value, a.life_months, a.method, a.db_factor, a.fiscal_group, a.fiscal_method, a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated, a.unit_count, a.serial_no, a.warranty_until, a.notes, a.label_code, a.accum_depr, a.dep_months_done, a.last_dep_month, a.disposed_on, a.version, a.created_at, a.created_by, a.updated_at, a.updated_by, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
-       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name
+       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name,
+       EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING') AS disposal_pending
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
   LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
@@ -2523,6 +3369,7 @@ type ListAssetsRow struct {
 	DepartmentName          *string
 	SupplierCode            *string
 	SupplierName            *string
+	DisposalPending         bool
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -2599,6 +3446,7 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListA
 			&i.DepartmentName,
 			&i.SupplierCode,
 			&i.SupplierName,
+			&i.DisposalPending,
 		); err != nil {
 			return nil, err
 		}
@@ -2612,7 +3460,8 @@ func (q *Queries) ListAssets(ctx context.Context, arg ListAssetsParams) ([]ListA
 
 const listAssetsByIDs = `-- name: ListAssetsByIDs :many
 SELECT a.id, a.tenant_id, a.property_id, a.number, a.name, a.category_id, a.location_id, a.department_id, a.supplier_id, a.source, a.opening_import_id, a.status, a.acquisition_date, a.in_service_date, a.start_rule, a.first_dep_month, a.cost, a.residual_value, a.life_months, a.method, a.db_factor, a.fiscal_group, a.fiscal_method, a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated, a.unit_count, a.serial_no, a.warranty_until, a.notes, a.label_code, a.accum_depr, a.dep_months_done, a.last_dep_month, a.disposed_on, a.version, a.created_at, a.created_by, a.updated_at, a.updated_by, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
-       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name
+       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name,
+       EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING') AS disposal_pending
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
   LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
@@ -2679,6 +3528,7 @@ type ListAssetsByIDsRow struct {
 	DepartmentName          *string
 	SupplierCode            *string
 	SupplierName            *string
+	DisposalPending         bool
 }
 
 func (q *Queries) ListAssetsByIDs(ctx context.Context, arg ListAssetsByIDsParams) ([]ListAssetsByIDsRow, error) {
@@ -2741,6 +3591,7 @@ func (q *Queries) ListAssetsByIDs(ctx context.Context, arg ListAssetsByIDsParams
 			&i.DepartmentName,
 			&i.SupplierCode,
 			&i.SupplierName,
+			&i.DisposalPending,
 		); err != nil {
 			return nil, err
 		}
@@ -3079,6 +3930,7 @@ SELECT a.id, a.number, a.name, a.category_id, a.department_id, a.cost, a.residua
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
  WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.method IS NOT NULL AND a.dep_months_done < a.life_months
+   AND NOT EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING')
  ORDER BY a.id
 `
 
@@ -3111,7 +3963,7 @@ type ListDepreciationAssetsRow struct {
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Depreciation: the runs, their lines and the month close (depreciation.go)
-// The active assets that have months left to depreciate, with what the run needs of their category. The run decides who is due in its month.
+// The active assets that have months left to depreciate, with what the run needs of their category. The run decides who is due in its month. An asset whose disposal waits for an approver is left out (the month of a disposal is not depreciated, Q5); if the request is rejected the next run catches the asset up.
 func (q *Queries) ListDepreciationAssets(ctx context.Context, arg ListDepreciationAssetsParams) ([]ListDepreciationAssetsRow, error) {
 	rows, err := q.db.Query(ctx, listDepreciationAssets, arg.TenantID, arg.PropertyID)
 	if err != nil {
@@ -3141,6 +3993,218 @@ func (q *Queries) ListDepreciationAssets(ctx context.Context, arg ListDepreciati
 			&i.ExpenseAccountID,
 			&i.AccumulatedAccountID,
 			&i.CategoryDepartmentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDisposalRequests = `-- name: ListDisposalRequests :many
+SELECT r.id, r.tenant_id, r.property_id, r.asset_id, r.kind, r.disposal_date, r.units, r.proceeds, r.proceeds_account_id, r.reason_code, r.note, r.approval_amount, r.status, r.requested_by, r.requested_at, r.decided_by, r.decided_at, r.decision_note, r.disposal_id, r.idempotency_key, a.number AS asset_number, a.name AS asset_name, ru.full_name AS requested_by_name, du.full_name AS decided_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name,
+       d.number AS disposal_number
+  FROM fa_disposal_requests r
+  JOIN fa_assets a ON a.property_id = r.property_id AND a.id = r.asset_id
+  LEFT JOIN users ru ON ru.id = r.requested_by
+  LEFT JOIN users du ON du.id = r.decided_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = r.property_id AND pa.id = r.proceeds_account_id
+  LEFT JOIN fa_disposals d ON d.property_id = r.property_id AND d.id = r.disposal_id
+ WHERE r.tenant_id = $1 AND r.property_id = $2 AND ($3::text IS NULL OR r.status = $3)
+ ORDER BY r.id DESC LIMIT 200
+`
+
+type ListDisposalRequestsParams struct {
+	TenantID   int64
+	PropertyID int64
+	Status     *string
+}
+
+type ListDisposalRequestsRow struct {
+	ID                  int64
+	TenantID            int64
+	PropertyID          int64
+	AssetID             int64
+	Kind                string
+	DisposalDate        civil.Date
+	Units               int32
+	Proceeds            decimal.Decimal
+	ProceedsAccountID   *int64
+	ReasonCode          string
+	Note                *string
+	ApprovalAmount      decimal.Decimal
+	Status              string
+	RequestedBy         *int64
+	RequestedAt         time.Time
+	DecidedBy           *int64
+	DecidedAt           *time.Time
+	DecisionNote        *string
+	DisposalID          *int64
+	IdempotencyKey      *string
+	AssetNumber         string
+	AssetName           string
+	RequestedByName     *string
+	DecidedByName       *string
+	ProceedsAccountCode *string
+	ProceedsAccountName *string
+	DisposalNumber      *string
+}
+
+func (q *Queries) ListDisposalRequests(ctx context.Context, arg ListDisposalRequestsParams) ([]ListDisposalRequestsRow, error) {
+	rows, err := q.db.Query(ctx, listDisposalRequests, arg.TenantID, arg.PropertyID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDisposalRequestsRow{}
+	for rows.Next() {
+		var i ListDisposalRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.AssetID,
+			&i.Kind,
+			&i.DisposalDate,
+			&i.Units,
+			&i.Proceeds,
+			&i.ProceedsAccountID,
+			&i.ReasonCode,
+			&i.Note,
+			&i.ApprovalAmount,
+			&i.Status,
+			&i.RequestedBy,
+			&i.RequestedAt,
+			&i.DecidedBy,
+			&i.DecidedAt,
+			&i.DecisionNote,
+			&i.DisposalID,
+			&i.IdempotencyKey,
+			&i.AssetNumber,
+			&i.AssetName,
+			&i.RequestedByName,
+			&i.DecidedByName,
+			&i.ProceedsAccountCode,
+			&i.ProceedsAccountName,
+			&i.DisposalNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDisposals = `-- name: ListDisposals :many
+SELECT d.id, d.tenant_id, d.property_id, d.number, d.asset_id, d.kind, d.disposal_date, d.units, d.cost_removed, d.accum_removed, d.carrying_removed, d.proceeds, d.proceeds_account_id, d.gain_loss, d.reason_code, d.note, d.journal_id, d.approved_by, d.status, d.reversal_journal_id, d.reversed_by, d.reversed_at, d.reversal_reason, d.idempotency_key, d.created_by, d.created_at, a.number AS asset_number, a.name AS asset_name, j.journal_number, rj.journal_number AS reversal_journal_number, cu.full_name AS created_by_name, au.full_name AS approved_by_name,
+       ru.full_name AS reversed_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN gl_journals j ON j.property_id = d.property_id AND j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = d.property_id AND rj.id = d.reversal_journal_id
+  LEFT JOIN users cu ON cu.id = d.created_by
+  LEFT JOIN users au ON au.id = d.approved_by
+  LEFT JOIN users ru ON ru.id = d.reversed_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = d.property_id AND pa.id = d.proceeds_account_id
+ WHERE d.tenant_id = $1 AND d.property_id = $2 AND ($3::bigint IS NULL OR d.asset_id = $3)
+ ORDER BY d.id DESC LIMIT 200
+`
+
+type ListDisposalsParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    *int64
+}
+
+type ListDisposalsRow struct {
+	ID                    int64
+	TenantID              int64
+	PropertyID            int64
+	Number                string
+	AssetID               int64
+	Kind                  string
+	DisposalDate          civil.Date
+	Units                 int32
+	CostRemoved           decimal.Decimal
+	AccumRemoved          decimal.Decimal
+	CarryingRemoved       decimal.Decimal
+	Proceeds              decimal.Decimal
+	ProceedsAccountID     *int64
+	GainLoss              decimal.Decimal
+	ReasonCode            string
+	Note                  *string
+	JournalID             int64
+	ApprovedBy            *int64
+	Status                string
+	ReversalJournalID     *int64
+	ReversedBy            *int64
+	ReversedAt            *time.Time
+	ReversalReason        *string
+	IdempotencyKey        *string
+	CreatedBy             *int64
+	CreatedAt             time.Time
+	AssetNumber           string
+	AssetName             string
+	JournalNumber         string
+	ReversalJournalNumber *string
+	CreatedByName         *string
+	ApprovedByName        *string
+	ReversedByName        *string
+	ProceedsAccountCode   *string
+	ProceedsAccountName   *string
+}
+
+func (q *Queries) ListDisposals(ctx context.Context, arg ListDisposalsParams) ([]ListDisposalsRow, error) {
+	rows, err := q.db.Query(ctx, listDisposals, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDisposalsRow{}
+	for rows.Next() {
+		var i ListDisposalsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.Number,
+			&i.AssetID,
+			&i.Kind,
+			&i.DisposalDate,
+			&i.Units,
+			&i.CostRemoved,
+			&i.AccumRemoved,
+			&i.CarryingRemoved,
+			&i.Proceeds,
+			&i.ProceedsAccountID,
+			&i.GainLoss,
+			&i.ReasonCode,
+			&i.Note,
+			&i.JournalID,
+			&i.ApprovedBy,
+			&i.Status,
+			&i.ReversalJournalID,
+			&i.ReversedBy,
+			&i.ReversedAt,
+			&i.ReversalReason,
+			&i.IdempotencyKey,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.AssetNumber,
+			&i.AssetName,
+			&i.JournalNumber,
+			&i.ReversalJournalNumber,
+			&i.CreatedByName,
+			&i.ApprovedByName,
+			&i.ReversedByName,
+			&i.ProceedsAccountCode,
+			&i.ProceedsAccountName,
 		); err != nil {
 			return nil, err
 		}
@@ -3194,7 +4258,7 @@ func (q *Queries) ListFiscalGroups(ctx context.Context, arg ListFiscalGroupsPara
 }
 
 const listLinksByKey = `-- name: ListLinksByKey :many
-SELECT id, tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, released_at, released_by, created_at, created_by FROM fa_source_links WHERE property_id = $1 AND idempotency_key = $2 ORDER BY unit_no
+SELECT id, tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, released_at, released_by, created_at, created_by, kind FROM fa_source_links WHERE property_id = $1 AND idempotency_key = $2 ORDER BY unit_no
 `
 
 type ListLinksByKeyParams struct {
@@ -3226,6 +4290,7 @@ func (q *Queries) ListLinksByKey(ctx context.Context, arg ListLinksByKeyParams) 
 			&i.ReleasedBy,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -3374,6 +4439,151 @@ func (q *Queries) ListLocations(ctx context.Context, arg ListLocationsParams) ([
 	return items, nil
 }
 
+const listMovesByKey = `-- name: ListMovesByKey :many
+SELECT asset_id FROM fa_moves WHERE property_id = $1 AND idempotency_key = $2 ORDER BY asset_id
+`
+
+type ListMovesByKeyParams struct {
+	PropertyID     int64
+	IdempotencyKey *string
+}
+
+func (q *Queries) ListMovesByKey(ctx context.Context, arg ListMovesByKeyParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listMovesByKey, arg.PropertyID, arg.IdempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var asset_id int64
+		if err := rows.Scan(&asset_id); err != nil {
+			return nil, err
+		}
+		items = append(items, asset_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMovesOfAsset = `-- name: ListMovesOfAsset :many
+SELECT m.id, m.effective_on, m.reason, m.created_at, m.created_by, u.full_name AS created_by_name,
+       m.from_location_id, fl.name AS from_location_name, m.to_location_id, tl.name AS to_location_name,
+       m.from_department_id, fd.name AS from_department_name, m.to_department_id, td.name AS to_department_name
+  FROM fa_moves m
+  LEFT JOIN fa_locations fl ON fl.property_id = m.property_id AND fl.id = m.from_location_id
+  LEFT JOIN fa_locations tl ON tl.property_id = m.property_id AND tl.id = m.to_location_id
+  LEFT JOIN departments fd ON fd.property_id = m.property_id AND fd.id = m.from_department_id
+  LEFT JOIN departments td ON td.property_id = m.property_id AND td.id = m.to_department_id
+  LEFT JOIN users u ON u.id = m.created_by
+ WHERE m.tenant_id = $1 AND m.property_id = $2 AND m.asset_id = $3
+ ORDER BY m.effective_on, m.id
+`
+
+type ListMovesOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+type ListMovesOfAssetRow struct {
+	ID                 int64
+	EffectiveOn        civil.Date
+	Reason             string
+	CreatedAt          time.Time
+	CreatedBy          *int64
+	CreatedByName      *string
+	FromLocationID     *int64
+	FromLocationName   *string
+	ToLocationID       *int64
+	ToLocationName     *string
+	FromDepartmentID   *int64
+	FromDepartmentName *string
+	ToDepartmentID     *int64
+	ToDepartmentName   *string
+}
+
+func (q *Queries) ListMovesOfAsset(ctx context.Context, arg ListMovesOfAssetParams) ([]ListMovesOfAssetRow, error) {
+	rows, err := q.db.Query(ctx, listMovesOfAsset, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMovesOfAssetRow{}
+	for rows.Next() {
+		var i ListMovesOfAssetRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EffectiveOn,
+			&i.Reason,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.CreatedByName,
+			&i.FromLocationID,
+			&i.FromLocationName,
+			&i.ToLocationID,
+			&i.ToLocationName,
+			&i.FromDepartmentID,
+			&i.FromDepartmentName,
+			&i.ToDepartmentID,
+			&i.ToDepartmentName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMovesOfAssets = `-- name: ListMovesOfAssets :many
+SELECT asset_id, effective_on, from_department_id, to_department_id
+  FROM fa_moves WHERE tenant_id = $1 AND property_id = $2 AND asset_id = ANY($3::bigint[]) ORDER BY asset_id, effective_on, id
+`
+
+type ListMovesOfAssetsParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetIds   []int64
+}
+
+type ListMovesOfAssetsRow struct {
+	AssetID          int64
+	EffectiveOn      civil.Date
+	FromDepartmentID *int64
+	ToDepartmentID   *int64
+}
+
+// Every move of the assets, in the order they happened: the department of an asset at a date is read from them (4.6).
+func (q *Queries) ListMovesOfAssets(ctx context.Context, arg ListMovesOfAssetsParams) ([]ListMovesOfAssetsRow, error) {
+	rows, err := q.db.Query(ctx, listMovesOfAssets, arg.TenantID, arg.PropertyID, arg.AssetIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMovesOfAssetsRow{}
+	for rows.Next() {
+		var i ListMovesOfAssetsRow
+		if err := rows.Scan(
+			&i.AssetID,
+			&i.EffectiveOn,
+			&i.FromDepartmentID,
+			&i.ToDepartmentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpeningImports = `-- name: ListOpeningImports :many
 SELECT i.id, i.tenant_id, i.property_id, i.number, i.as_of, i.mode, i.journal_id, i.asset_count, i.total_cost, i.total_accum, i.file_hash, i.idempotency_key, i.created_at, i.created_by, j.journal_number FROM fa_opening_imports i LEFT JOIN gl_journals j ON j.property_id = i.property_id AND j.id = i.journal_id
  WHERE i.tenant_id = $1 AND i.property_id = $2 ORDER BY i.id DESC LIMIT 100
@@ -3462,6 +4672,67 @@ func (q *Queries) ListPeriodStates(ctx context.Context, arg ListPeriodStatesPara
 	for rows.Next() {
 		var i ListPeriodStatesRow
 		if err := rows.Scan(&i.PeriodStart, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRevisionsOfAsset = `-- name: ListRevisionsOfAsset :many
+SELECT r.id, r.kind, r.effective_on, r.old_value, r.new_value, r.journal_id, j.journal_number, r.reason, r.created_at, r.created_by, u.full_name AS created_by_name
+  FROM fa_revisions r
+  LEFT JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN users u ON u.id = r.created_by
+ WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.asset_id = $3
+ ORDER BY r.effective_on, r.id
+`
+
+type ListRevisionsOfAssetParams struct {
+	TenantID   int64
+	PropertyID int64
+	AssetID    int64
+}
+
+type ListRevisionsOfAssetRow struct {
+	ID            int64
+	Kind          string
+	EffectiveOn   civil.Date
+	OldValue      []byte
+	NewValue      []byte
+	JournalID     *int64
+	JournalNumber *string
+	Reason        string
+	CreatedAt     time.Time
+	CreatedBy     *int64
+	CreatedByName *string
+}
+
+func (q *Queries) ListRevisionsOfAsset(ctx context.Context, arg ListRevisionsOfAssetParams) ([]ListRevisionsOfAssetRow, error) {
+	rows, err := q.db.Query(ctx, listRevisionsOfAsset, arg.TenantID, arg.PropertyID, arg.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRevisionsOfAssetRow{}
+	for rows.Next() {
+		var i ListRevisionsOfAssetRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.EffectiveOn,
+			&i.OldValue,
+			&i.NewValue,
+			&i.JournalID,
+			&i.JournalNumber,
+			&i.Reason,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.CreatedByName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -3843,6 +5114,34 @@ func (q *Queries) LookupAssets(ctx context.Context, arg LookupAssetsParams) ([]L
 	return items, nil
 }
 
+const markDisposalReversed = `-- name: MarkDisposalReversed :exec
+UPDATE fa_disposals SET status = 'REVERSED', reversal_journal_id = $1, reversed_by = $2, reversed_at = $3, reversal_reason = $4
+ WHERE tenant_id = $5 AND property_id = $6 AND id = $7 AND status = 'POSTED'
+`
+
+type MarkDisposalReversedParams struct {
+	ReversalJournalID *int64
+	ActorID           *int64
+	ReversedAt        *time.Time
+	ReversalReason    *string
+	TenantID          int64
+	PropertyID        int64
+	ID                int64
+}
+
+func (q *Queries) MarkDisposalReversed(ctx context.Context, arg MarkDisposalReversedParams) error {
+	_, err := q.db.Exec(ctx, markDisposalReversed,
+		arg.ReversalJournalID,
+		arg.ActorID,
+		arg.ReversedAt,
+		arg.ReversalReason,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	return err
+}
+
 const markRunReversed = `-- name: MarkRunReversed :exec
 UPDATE fa_depr_runs SET status = 'REVERSED', reversal_journal_id = $1, reversed_by = $2, reversed_at = $3, reversal_reason = $4
  WHERE tenant_id = $5 AND property_id = $6 AND id = $7 AND status = 'POSTED'
@@ -3869,6 +5168,23 @@ func (q *Queries) MarkRunReversed(ctx context.Context, arg MarkRunReversedParams
 		arg.ID,
 	)
 	return err
+}
+
+const pKPOnDate = `-- name: PKPOnDate :one
+SELECT COALESCE((SELECT t.is_pkp FROM property_tax_settings t WHERE t.property_id = $1 AND t.effective_from <= $2::date ORDER BY t.effective_from DESC, t.id DESC LIMIT 1), false)::boolean
+`
+
+type PKPOnDateParams struct {
+	PropertyID int64
+	OnDate     civil.Date
+}
+
+// Whether the property is a taxable entrepreneur (PKP) on a date: the sale of an asset is then subject to VAT, which this module does not handle (4.7). No settings: not PKP.
+func (q *Queries) PKPOnDate(ctx context.Context, arg PKPOnDateParams) (bool, error) {
+	row := q.db.QueryRow(ctx, pKPOnDate, arg.PropertyID, arg.OnDate)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const registerTotalsByCategory = `-- name: RegisterTotalsByCategory :many

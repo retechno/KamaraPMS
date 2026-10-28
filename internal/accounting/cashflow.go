@@ -95,6 +95,7 @@ func (s *Service) CashFlow(ctx context.Context, propertyID int64, from, to *civi
 		}
 	}
 	effects := map[string][]StatementAccount{} // by group: the cash effect of each account, which is minus its movement
+	contra := map[int64]bool{}                 // the accumulated depreciation accounts: fixed asset accounts that normally carry a credit
 	amounts := map[string]decimal.Decimal{}
 	cashOpen, cashClose := decimal.Zero, decimal.Zero
 	var unclassified []StatementAccount
@@ -126,6 +127,9 @@ func (s *Service) CashFlow(ctx context.Context, propertyID int64, from, to *civi
 		}
 		effects[g] = append(effects[g], sa)
 		amounts[g] = amounts[g].Add(effect)
+		if g == "FIXED_ASSETS" && a.row.NormalSide == SideCredit {
+			contra[a.row.ID] = true
+		}
 	}
 	depreciation := decimal.Zero
 	for _, x := range closing {
@@ -136,6 +140,22 @@ func (s *Service) CashFlow(ctx context.Context, propertyID int64, from, to *civi
 	for _, x := range opening {
 		if deref(x.StatementGroup) == "DEPRECIATION" {
 			depreciation = depreciation.Sub(x.Balance)
+		}
+	}
+
+	// The result of the disposal of fixed assets (the account of the key ASSET_DISPOSAL, docs/architecture/37-fixed-assets.md F10, Q11) is not an operating item: the gain is taken out of the
+	// operating activities and shown with the proceeds under investing, a loss is added back there. Its movement is debit minus credit, so a loss is positive and a gain negative.
+	disposal := decimal.Zero
+	mapped, err := q.ListAccountMap(ctx, accountingdb.ListAccountMapParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return CashFlow{}, err
+	}
+	for _, m := range mapped {
+		if m.MapKey != KeyAssetDisposal {
+			continue
+		}
+		if a := byID[m.AccountID]; a != nil {
+			disposal = a.closed.Sub(a.open)
 		}
 	}
 
@@ -173,12 +193,23 @@ func (s *Service) CashFlow(ctx context.Context, propertyID int64, from, to *civi
 		item("DEPRECIATION", "Depreciation and amortization (not paid in cash)", depreciation, nil)
 		op = op.Add(depreciation)
 	}
+	if !disposal.IsZero() {
+		item("DISPOSAL_RESULT", "Loss (gain) on the disposal of fixed assets (shown under investing)", disposal, nil)
+		op = op.Add(disposal)
+	}
 	op = op.Add(section(operatingGroups, nil))
 	op = total("OPERATING", "Net cash from operating activities", "SUBTOTAL", op)
 
 	heading("H_INVESTING", "Investing activities")
-	// The fixed assets carry the accumulated depreciation: what the depreciation took off them is not an outflow, it was added back above.
-	inv := section(investingGroups, map[string]decimal.Decimal{"FIXED_ASSETS": depreciation.Neg()})
+	inv := decimal.Zero
+	fixed, err := s.investingLines(ctx, p.TenantID, propertyID, r, effects["FIXED_ASSETS"], contra, amounts["FIXED_ASSETS"].Sub(depreciation).Sub(disposal))
+	if err != nil {
+		return CashFlow{}, err
+	}
+	for _, l := range fixed {
+		item(l.Key, l.Title, l.Amount, l.Accounts)
+		inv = inv.Add(l.Amount)
+	}
 	inv = total("INVESTING", "Net cash from investing activities", "SUBTOTAL", inv)
 
 	heading("H_FINANCING", "Financing activities")
@@ -201,6 +232,45 @@ func (s *Service) CashFlow(ctx context.Context, propertyID int64, from, to *civi
 		Range: r, Method: CashFlowIndirect, Lines: lines, NetIncome: is.NetIncome, Operating: op, Investing: inv, Financing: fin, Unclassified: unc, NetChange: net,
 		OpeningCash: cashOpen, ClosingCash: cashClose, Difference: diff, Reconciled: diff.IsZero(),
 	}, nil
+}
+
+// investingLines are the lines of the investing activities, and they add up to the cash the fixed assets took (movement) without anything adjusted out of sight. The movement of the fixed asset
+// accounts is what the cost accounts and the accumulated depreciation accounts moved, less the depreciation (added back in the operating activities) and less the result of the disposals (shown there too).
+// The purchases are what the cost accounts grew by, without the cost that left with a disposal (the accumulated depreciation is only used to work out the rest, never shown as a purchase); the proceeds of
+// the disposals are a line of their own, positive. What is left over (an opening balance posted to the accumulated depreciation, a manual posting to the account of the result of the disposals) is shown
+// as a line named for what it is, so the lines always add up to the total.
+func (s *Service) investingLines(ctx context.Context, tenantID, propertyID int64, r Range, effects []StatementAccount, contra map[int64]bool, movement decimal.Decimal) ([]StatementLine, error) {
+	var flows DisposalFlows
+	if src, ok := s.asset.(DisposalFlowSource); ok {
+		var err error
+		if flows, err = src.DisposalFlows(ctx, tenantID, propertyID, r.From, r.To); err != nil {
+			return nil, err
+		}
+	}
+	purchases := decimal.Zero
+	accounts := []StatementAccount{}
+	for _, a := range effects {
+		if contra[a.AccountID] {
+			continue
+		}
+		a.Amount = a.Amount.Sub(flows.CostRemoved[a.AccountID])
+		if a.Amount.IsZero() {
+			continue
+		}
+		accounts = append(accounts, a)
+		purchases = purchases.Add(a.Amount)
+	}
+	var lines []StatementLine
+	if len(accounts) > 0 {
+		lines = append(lines, StatementLine{Key: "FIXED_ASSETS", Title: "Purchase of property and equipment", Kind: "GROUP", Amount: purchases, Accounts: accounts})
+	}
+	if !flows.Proceeds.IsZero() {
+		lines = append(lines, StatementLine{Key: "DISPOSAL_PROCEEDS", Title: "Proceeds from sale of fixed assets", Kind: "GROUP", Amount: flows.Proceeds, Accounts: []StatementAccount{}})
+	}
+	if rest := movement.Sub(purchases).Sub(flows.Proceeds); !rest.IsZero() {
+		lines = append(lines, StatementLine{Key: "FIXED_ASSETS_OTHER", Title: "Other movements of property and equipment", Kind: "GROUP", Amount: rest, Accounts: []StatementAccount{}})
+	}
+	return lines, nil
 }
 
 // directCategory is where the cash a counterpart account explains is shown in the direct method.

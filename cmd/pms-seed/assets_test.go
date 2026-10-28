@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -20,8 +21,10 @@ func TestSeedAssets(t *testing.T) {
 	ctx := roomstest.Admin(tn.ID)
 	svc := assets.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, e.Accounting, e.Departments)
 	e.Accounting.SetAssetSource(svc)
+	iamSvc := iam.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.TokenConfig{Secret: randomSecret(), AccessTTL: time.Minute, RefreshTTL: time.Minute})
+	svc.SetApprover(iamSvc)
 	standardDepartments(t, e, tn.ID, p.ID)
-	deps := &seedDeps{pay: e.Payables, txm: e.TxM, days: e.Tenancy, depts: e.Departments}
+	deps := &seedDeps{pay: e.Payables, txm: e.TxM, days: e.Tenancy, depts: e.Departments, rules: iam.NewRules(iamSvc, iam.NewAuthorizer(e.TxM)), iam: iamSvc}
 	day, err := e.Tenancy.CurrentBusinessDay(ctx, p.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +43,7 @@ func TestSeedAssets(t *testing.T) {
 	}
 
 	n, out := run(true)
-	if n != len(assetAreas)+len(assetSpecs)+waitingRows || !strings.Contains(out, "dry run") {
+	if n != len(assetAreas)+len(assetSpecs)+waitingRows+disposalRows || !strings.Contains(out, "dry run") {
 		t.Fatalf("dry run: %d %q", n, out)
 	}
 	if locs, _ := svc.ListLocations(ctx, p.ID, "", nil); len(locs) != 0 {
@@ -84,6 +87,23 @@ func TestSeedAssets(t *testing.T) {
 	}
 	if len(wl.Data) != waitingRows || seen[assets.WaitingBill] != 2 || seen[assets.WaitingCashier] != 1 || seen[assets.WaitingBank] != 1 || seen[assets.WaitingManual] != 1 {
 		t.Fatalf("waiting list %d lines: %v", len(wl.Data), seen)
+	}
+
+	// the disposals: 50 pieces of the batch written off and posted, the sale of the server waiting for an approver
+	byName := map[string]assets.Asset{}
+	for _, a := range page.Data {
+		byName[a.Name] = a
+	}
+	linen := byName[demoDisposalBatchAsset]
+	if ds, _ := svc.ListDisposals(ctx, p.ID, &linen.ID); len(ds) != 1 || ds[0].Units != demoDisposalBatchUnits || ds[0].Status != assets.DisposalPosted {
+		t.Fatalf("the batch disposal: %+v", ds)
+	}
+	reqs, err := svc.ListDisposalRequests(ctx, p.ID, assets.RequestPending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reqs) != 1 || reqs[0].AssetID != byName[demoDisposalPendingAsset].ID || reqs[0].Kind != assets.DisposalSale {
+		t.Fatalf("the pending sale: %+v", reqs)
 	}
 
 	// the register-only demo: the plot that only the ledger holds ties out, any other file does not

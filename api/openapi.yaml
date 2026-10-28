@@ -14134,7 +14134,7 @@ paths:
       - $ref: "#/components/parameters/PropertyId"
     get:
       operationId: listAssetAccounts
-      summary: "The accounts a category may use (asset.setup)"
+      summary: "The accounts a category may use (asset.setup), or that take the price of a disposal (asset.dispose)"
       tags: [assets]
       parameters:
         - { name: type, in: query, schema: { type: string } }
@@ -14592,6 +14592,285 @@ paths:
               schema: { $ref: "#/components/schemas/AssetSchedule" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/moves:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    post:
+      operationId: moveAssets
+      summary: "Move assets to another location, another department or both, from the open business day, all or nothing (asset.manage)"
+      description: "`Idempotency-Key` is required; the same key replays the first answer (200). The date of a move is the open business day: it is never backdated. An asset that is where it is asked to be is counted in `skipped`; when none moves the request is 422 (`asset_ids` `NOTHING_TO_MOVE`). 409 `ASSET_STATUS_INVALID` for an asset that is not active."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetMoveRequest" }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMoveResult" }
+        "201":
+          description: The assets that moved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetMoveResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/moves:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: moveAsset
+      summary: "Move one asset to another location, another department or both (asset.manage)"
+      description: "As `moveAssets` for one asset (`asset_ids` is ignored); answers the asset. `Idempotency-Key` is required."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetMoveRequest" }
+      responses:
+        "200":
+          description: The asset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDetail" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/revisions:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reviseAsset
+      summary: "Change the life, the residual value or the method of an asset, add value to it from a journal line, or move it to another category (asset.manage)"
+      description: "Prospective, from the next run; nothing posted is rewritten. `Idempotency-Key` and `reason` are required. The months before the open day's month must have been run (409 `DEPRECIATION_NOT_RUN`). LIFE takes the new total life (409 `LIFE_TOO_SHORT`), RESIDUAL the new residual value (not above the carrying value), METHOD `SL` or `DB` (with `db_factor`), CAPITALIZE the `journal_line_id` of a line on the cost account of the asset's category that is not an asset (409 `LINE_ALREADY_ASSET`, 422 `LINE_NOT_ELIGIBLE`); no journal is posted. CATEGORY takes `category_id` and posts the journal that moves the cost and the accumulated depreciation to the accounts of the new category (type ASSET, dated the open day); a construction in progress that is finished also takes `in_service_date` and `start_rule`, and `life_months`, `residual_value`, `method` and `db_factor` change what the new category brings."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetRevisionRequest" }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRevisionResult" }
+        "201":
+          description: The asset after the revision.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRevisionResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/history:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getAssetHistory
+      summary: "What happened to an asset: its moves, revisions and months of depreciation, in the order they happened (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The history.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssetHistoryEntry" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/dispose/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: previewAssetDisposal
+      summary: "Work out a disposal without making it: the amounts, the journal and the amount of the approval (asset.dispose)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetDisposeRequest" }
+      responses:
+        "200":
+          description: The disposal worked out.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDisposalPreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/dispose:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: disposeAsset
+      summary: "Sell, write off or lose an asset, or some pieces of a batch (asset.dispose)"
+      description: "`Idempotency-Key` is required. The months before the month of the disposal must have been run (409 `DEPRECIATION_NOT_RUN`) and the month of the disposal is not depreciated (409 `DISPOSAL_MONTH_DEPRECIATED`). The approval follows the rule of the kind `ASSET_DISPOSAL` (the amount is the larger of the carrying value written off and the proceeds). With the credentials of an approver (`approval`) or when the rule lets the caller, the disposal is posted at once (201, `status` POSTED); otherwise a request is made and nothing is posted (201, `status` PENDING) until another user approves it (`approveAssetDisposal`). A sale takes `proceeds` above zero and a cash or bank account (or 1230 for a sale on credit). The VAT of a sale is not computed."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssetDisposeRequest" }
+      responses:
+        "200":
+          description: The answer of an earlier request with the same key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDisposeResult" }
+        "201":
+          description: The disposal posted, or the request that waits.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDisposeResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/disposals:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetDisposals
+      summary: "The disposals of the property, newest first, up to 200 (any asset permission)"
+      tags: [assets]
+      parameters:
+        - { name: asset_id, in: query, required: false, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The disposals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssetDisposal" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/disposals/{id}/reverse:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: reverseAssetDisposal
+      summary: "Reverse a disposal while the month of it is open (asset.dispose; the same approval)"
+      description: "The journal is reversed and the asset is active again. 409 `DISPOSAL_ALREADY_REVERSED`, or `DISPOSAL_NOT_REVERSIBLE` when the asset was depreciated, changed or disposed of again after it."
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 500 }
+                approval: { $ref: "#/components/schemas/Approval" }
+      responses:
+        "200":
+          description: The disposal, reversed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDisposal" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/disposal-requests:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetDisposalRequests
+      summary: "The disposals that wait for an approver, or were decided, newest first, up to 200 (any asset permission)"
+      tags: [assets]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [PENDING, APPROVED, REJECTED] } }
+      responses:
+        "200":
+          description: The requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssetDisposalRequest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/disposal-requests/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: approveAssetDisposal
+      summary: "Approve a disposal that waits: it is planned again and posted (asset.dispose; a user other than the requester when the rule says so)"
+      description: "409 `DISPOSAL_REQUEST_DECIDED` when it was decided already, `APPROVAL_SAME_USER` for the person who asked."
+      tags: [assets]
+      responses:
+        "200":
+          description: The disposal posted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDisposeResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/disposal-requests/{id}/reject:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: rejectAssetDisposal
+      summary: "Refuse a disposal that waits, or withdraw it, with the reason (asset.dispose)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, maxLength: 300 }
+      responses:
+        "200":
+          description: The request, rejected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetDisposalRequest" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -15704,7 +15983,7 @@ components:
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
     ApprovalKind:
       type: string
-      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, INV_BILL_VARIANCE, BANQUET_DISCOUNT]
+      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, INV_BILL_VARIANCE, BANQUET_DISCOUNT, ASSET_DISPOSAL]
       description: A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
     ApprovalRuleType:
       type: string
@@ -26807,6 +27086,7 @@ components:
         db_factor: { type: [string, "null"] }
         fully_depreciated: { type: boolean }
         unit_count: { type: integer }
+        disposal_pending: { type: boolean, description: "A disposal of the asset waits for an approver: the asset is left alone (no move, change, cancel or depreciation) until it is decided." }
         serial_no: { type: [string, "null"] }
         warranty_until: { type: [string, "null"], format: date }
         notes: { type: [string, "null"] }
@@ -27141,15 +27421,17 @@ components:
         months_done_after: { type: integer }
     AssetDepreciationGroup:
       type: object
-      required: [category_id, category_code, category_name, expense_account_id, expense_account_code, accumulated_account_id, accumulated_account_code, assets, amount]
+      required: [category_id, category_code, category_name, expense_account_id, expense_account_code, expense_account_name, accumulated_account_id, accumulated_account_code, accumulated_account_name, assets, amount]
       properties:
         category_id: { type: integer, format: int64 }
         category_code: { type: string }
         category_name: { type: string }
         expense_account_id: { type: integer, format: int64 }
         expense_account_code: { type: string }
+        expense_account_name: { type: string }
         accumulated_account_id: { type: integer, format: int64 }
         accumulated_account_code: { type: string }
+        accumulated_account_name: { type: string }
         department_id: { type: [integer, "null"], format: int64 }
         department_code: { type: [string, "null"] }
         department_name: { type: [string, "null"] }
@@ -27233,6 +27515,176 @@ components:
         months_done: { type: integer }
         run_month: { type: [string, "null"], format: date, description: "The month of the run that booked it: later than `month` for a catch-up." }
         journal_number: { type: [string, "null"] }
+    AssetMoveRequest:
+      type: object
+      required: [reason]
+      properties:
+        asset_ids: { type: array, items: { type: integer, format: int64 }, maxItems: 500, description: "The assets to move (the batch route; the route of one asset takes it from the path)." }
+        change_location: { type: boolean }
+        location_id: { type: [integer, "null"], format: int64, description: "The new location, used when `change_location` is true (null: none)." }
+        change_department: { type: boolean }
+        department_id: { type: [integer, "null"], format: int64, description: "The new department, used when `change_department` is true (null: none)." }
+        reason: { type: string, maxLength: 300 }
+    AssetMoveResult:
+      type: object
+      required: [moved, skipped, replayed]
+      properties:
+        moved:
+          type: array
+          items:
+            type: object
+            required: [id, number, name]
+            properties:
+              id: { type: integer, format: int64 }
+              number: { type: string }
+              name: { type: string }
+        skipped: { type: integer }
+        replayed: { type: boolean }
+    AssetRevisionRequest:
+      type: object
+      required: [kind, reason]
+      properties:
+        kind: { type: string, enum: [LIFE, RESIDUAL, METHOD, CAPITALIZE, CATEGORY] }
+        reason: { type: string, maxLength: 300 }
+        life_months: { type: [integer, "null"], format: int32, description: "LIFE: the new total life. CATEGORY: overrides the life of the new category." }
+        residual_value: { type: [string, "null"], description: "RESIDUAL: the new residual value. CATEGORY: overrides the one of the new category." }
+        method: { type: [string, "null"], enum: [SL, DB, null] }
+        db_factor: { type: [string, "null"], description: "The factor of a declining balance (above 0, not above 5; 2 by default)." }
+        journal_line_id: { type: [integer, "null"], format: int64, description: "CAPITALIZE: the line that adds the value." }
+        category_id: { type: [integer, "null"], format: int64, description: "CATEGORY: the new category." }
+        in_service_date: { type: [string, "null"], format: date, description: "CATEGORY of a construction in progress: when it was finished." }
+        start_rule: { type: [string, "null"], enum: [IN_SERVICE_MONTH, NEXT_MONTH, null] }
+    AssetRevisionResult:
+      allOf:
+        - $ref: "#/components/schemas/AssetDetail"
+        - type: object
+          required: [revision_id, journal_id, journal_number, replayed]
+          properties:
+            revision_id: { type: integer, format: int64 }
+            journal_id: { type: [integer, "null"], format: int64, description: "The journal of a change of category that moved accounts; for a value added, the journal of the line." }
+            journal_number: { type: [string, "null"] }
+            replayed: { type: boolean }
+    AssetDisposeRequest:
+      type: object
+      required: [kind, reason_code]
+      properties:
+        kind: { type: string, enum: [SALE, WRITE_OFF] }
+        reason_code: { type: string, enum: [SOLD, DAMAGED, LOST, OBSOLETE, DONATED, OTHER], description: "SOLD for a sale; one of the others for a write-off (OTHER needs a note)." }
+        disposal_date: { type: [string, "null"], format: date, description: "Not after the open business day; the open day by default." }
+        units: { type: [integer, "null"], format: int32, description: "The pieces of a batch to dispose of (all by default)." }
+        proceeds: { type: [string, "null"], description: "A sale: the price, above zero." }
+        proceeds_account_id: { type: [integer, "null"], format: int64, description: "A sale: the cash or bank account, or 1230." }
+        note: { type: string, maxLength: 300 }
+        approval: { $ref: "#/components/schemas/Approval" }
+    AssetDisposalLine:
+      type: object
+      required: [account_id, account_code, account_name, debit, credit, department_id]
+      properties:
+        account_id: { type: integer, format: int64 }
+        account_code: { type: string }
+        account_name: { type: string }
+        debit: { type: string }
+        credit: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+    AssetDisposalPreview:
+      type: object
+      required: [asset_id, asset_number, asset_name, kind, reason_code, disposal_date, units, unit_count, cost_removed, accum_removed, carrying_removed, proceeds, gain_loss, approval_amount, pkp_on_date, lines]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        asset_number: { type: string }
+        asset_name: { type: string }
+        kind: { type: string }
+        reason_code: { type: string }
+        disposal_date: { type: string, format: date }
+        units: { type: integer, format: int32 }
+        unit_count: { type: integer, format: int32 }
+        cost_removed: { type: string }
+        accum_removed: { type: string }
+        carrying_removed: { type: string }
+        proceeds: { type: string }
+        gain_loss: { type: string, description: "Positive is a gain, negative a loss." }
+        approval_amount: { type: string, description: "The larger of the carrying value written off and the proceeds." }
+        pkp_on_date: { type: boolean, description: "The property is a VAT-registered business on the date: the screen says the VAT of the sale is not computed." }
+        lines: { type: array, items: { $ref: "#/components/schemas/AssetDisposalLine" } }
+    AssetDisposal:
+      type: object
+      required: [id, number, asset_id, asset_number, asset_name, kind, reason_code, disposal_date, units, cost_removed, accum_removed, carrying_removed, proceeds, gain_loss, journal_id, journal_number, status, created_at]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        asset_id: { type: integer, format: int64 }
+        asset_number: { type: string }
+        asset_name: { type: string }
+        kind: { type: string, enum: [SALE, WRITE_OFF] }
+        reason_code: { type: string }
+        disposal_date: { type: string, format: date }
+        units: { type: integer, format: int32 }
+        cost_removed: { type: string }
+        accum_removed: { type: string }
+        carrying_removed: { type: string }
+        proceeds: { type: string }
+        proceeds_account_id: { type: [integer, "null"], format: int64 }
+        proceeds_account_code: { type: [string, "null"] }
+        proceeds_account_name: { type: [string, "null"] }
+        gain_loss: { type: string }
+        note: { type: [string, "null"] }
+        journal_id: { type: integer, format: int64 }
+        journal_number: { type: string }
+        status: { type: string, enum: [POSTED, REVERSED] }
+        reversal_journal_id: { type: [integer, "null"], format: int64 }
+        reversal_journal_number: { type: [string, "null"] }
+        reversal_reason: { type: [string, "null"] }
+        reversed_by_name: { type: [string, "null"] }
+        approved_by_name: { type: [string, "null"] }
+        created_by_name: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    AssetDisposalRequest:
+      type: object
+      required: [id, asset_id, asset_number, asset_name, kind, reason_code, disposal_date, units, proceeds, approval_amount, status, requested_at]
+      properties:
+        id: { type: integer, format: int64 }
+        asset_id: { type: integer, format: int64 }
+        asset_number: { type: string }
+        asset_name: { type: string }
+        kind: { type: string, enum: [SALE, WRITE_OFF] }
+        reason_code: { type: string }
+        disposal_date: { type: string, format: date }
+        units: { type: integer, format: int32 }
+        proceeds: { type: string }
+        proceeds_account_id: { type: [integer, "null"], format: int64 }
+        proceeds_account_code: { type: [string, "null"] }
+        proceeds_account_name: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        approval_amount: { type: string }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        requested_by: { type: [integer, "null"], format: int64 }
+        requested_by_name: { type: [string, "null"] }
+        requested_at: { type: string, format: date-time }
+        decided_by_name: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+        decision_note: { type: [string, "null"] }
+        disposal_id: { type: [integer, "null"], format: int64 }
+        disposal_number: { type: [string, "null"] }
+    AssetDisposeResult:
+      type: object
+      required: [status, disposal, request, replayed]
+      properties:
+        status: { type: string, enum: [POSTED, PENDING] }
+        disposal: { oneOf: [{ $ref: "#/components/schemas/AssetDisposal" }, { type: "null" }] }
+        request: { oneOf: [{ $ref: "#/components/schemas/AssetDisposalRequest" }, { type: "null" }] }
+        replayed: { type: boolean }
+    AssetHistoryEntry:
+      type: object
+      required: [kind, date, reason, details, journal_id, journal_number, by, at]
+      properties:
+        kind: { type: string, enum: [MOVE, LIFE, RESIDUAL, METHOD, CAPITALIZE, CATEGORY, DEPRECIATION, DISPOSAL, DISPOSAL_REQUEST] }
+        date: { type: string, format: date }
+        reason: { type: [string, "null"] }
+        details: { type: object, additionalProperties: true, description: "A move: from_location, to_location, from_department, to_department. A revision: old and new. A month of depreciation: month, months, amount, accum_after, carrying_after." }
+        journal_id: { type: [integer, "null"], format: int64 }
+        journal_number: { type: [string, "null"] }
+        by: { type: [string, "null"] }
+        at: { type: string, format: date-time }
     AssetSchedule:
       type: object
       required: [asset_id, number, name, depreciable, cost, residual_value, rows]

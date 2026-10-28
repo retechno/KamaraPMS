@@ -23,7 +23,7 @@ func assetFrom(r assetsdb.GetAssetRow) Asset {
 		CarryingValue: r.Cost.Sub(r.AccumDepr), LifeMonths: r.LifeMonths, MonthsDone: r.DepMonthsDone, LastDepMonth: r.LastDepMonth, Method: r.Method, DBFactor: r.DbFactor,
 		UnitCount: r.UnitCount, SerialNo: r.SerialNo, WarrantyUntil: r.WarrantyUntil, Notes: r.Notes, FiscalGroup: r.FiscalGroup, FiscalMethod: r.FiscalMethod,
 		FiscalAccumOpening: r.FiscalAccumOpening, FiscalMonthsDoneOpening: r.FiscalMonthsDoneOpening, FiscalOpeningAsOf: r.FiscalOpeningAsOf,
-		FiscalOpeningEstimated: r.FiscalOpeningEstimated, Version: r.Version}
+		FiscalOpeningEstimated: r.FiscalOpeningEstimated, DisposalPending: r.DisposalPending, Version: r.Version}
 	if r.LifeMonths != nil {
 		left := *r.LifeMonths - r.DepMonthsDone
 		a.RemainingMonths = &left
@@ -190,6 +190,9 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 		if cur.Status != statusActive {
 			return apperr.Conflict("ASSET_STATUS_INVALID", "only an active asset is changed").WithContext("status", cur.Status)
 		}
+		if cur.DisposalPending {
+			return disposalPending(cur.Number)
+		}
 		start, err := s.newStart(cur, in, cfg, day)
 		if err != nil {
 			return err
@@ -208,12 +211,17 @@ func (s *Service) UpdateAsset(ctx context.Context, propertyID, id int64, in Asse
 				return err
 			}
 		}
-		if _, err := q.UpdateAssetDetails(ctx, assetsdb.UpdateAssetDetailsParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Version: in.Version, Name: in.Name, LocationID: in.LocationID,
-			DepartmentID: in.DepartmentID, SupplierID: in.SupplierID, SerialNo: in.SerialNo, WarrantyUntil: in.WarrantyUntil, Notes: in.Notes, ActorID: p.ActorID()}); err != nil {
+		if _, err := q.UpdateAssetDetails(ctx, assetsdb.UpdateAssetDetailsParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Version: in.Version, Name: in.Name, LocationID: cur.LocationID,
+			DepartmentID: cur.DepartmentID, SupplierID: in.SupplierID, SerialNo: in.SerialNo, WarrantyUntil: in.WarrantyUntil, Notes: in.Notes, ActorID: p.ActorID()}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return versionConflict("asset", cur.Version)
 			}
 			return err
+		}
+		if !sameID(in.LocationID, cur.LocationID) || !sameID(in.DepartmentID, cur.DepartmentID) { // where it stands and its department change by a move, which is kept (4.6)
+			if err := s.applyMove(ctx, p, propertyID, day, cur, in.LocationID, in.DepartmentID, moveReasonEdit, nil); err != nil {
+				return err
+			}
 		}
 		if start != nil {
 			if err := s.setStart(ctx, p, propertyID, id, start.inService, start.rule, start.firstDep); err != nil {
@@ -303,6 +311,9 @@ func (s *Service) CancelAsset(ctx context.Context, propertyID, id int64, in Canc
 		}
 		if cur.Status != statusActive {
 			return apperr.Conflict("ASSET_STATUS_INVALID", "only an active asset is cancelled").WithContext("status", cur.Status)
+		}
+		if cur.DisposalPending {
+			return disposalPending(cur.Number)
 		}
 		if has, err := q.AssetHasRegisterEvents(ctx, assetsdb.AssetHasRegisterEventsParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: id}); err != nil {
 			return err

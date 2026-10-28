@@ -49,11 +49,22 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/depreciation/{month}/preview", httpx.HandlerFunc(h.previewDepreciation))
 	mux.Handle("POST "+p+"/depreciation/{month}/run", httpx.HandlerFunc(h.runDepreciation))
 	mux.Handle("POST "+p+"/depreciation/{month}/reverse", httpx.HandlerFunc(h.reverseDepreciation))
+	mux.Handle("POST "+p+"/moves", httpx.HandlerFunc(h.moveAssets))
+	mux.Handle("GET "+p+"/disposals", httpx.HandlerFunc(h.listDisposals))
+	mux.Handle("POST "+p+"/disposals/{id}/reverse", httpx.HandlerFunc(h.reverseDisposal))
+	mux.Handle("GET "+p+"/disposal-requests", httpx.HandlerFunc(h.listDisposalRequests))
+	mux.Handle("POST "+p+"/disposal-requests/{id}/approve", httpx.HandlerFunc(h.approveDisposal))
+	mux.Handle("POST "+p+"/disposal-requests/{id}/reject", httpx.HandlerFunc(h.rejectDisposal))
 	mux.Handle("GET "+p, httpx.HandlerFunc(h.listAssets))
 	mux.Handle("GET "+p+"/{id}", httpx.HandlerFunc(h.getAsset))
 	mux.Handle("PATCH "+p+"/{id}", httpx.HandlerFunc(h.updateAsset))
 	mux.Handle("POST "+p+"/{id}/cancel", httpx.HandlerFunc(h.cancelAsset))
 	mux.Handle("GET "+p+"/{id}/schedule", httpx.HandlerFunc(h.assetSchedule))
+	mux.Handle("POST "+p+"/{id}/moves", httpx.HandlerFunc(h.moveAsset))
+	mux.Handle("POST "+p+"/{id}/revisions", httpx.HandlerFunc(h.reviseAsset))
+	mux.Handle("POST "+p+"/{id}/dispose/preview", httpx.HandlerFunc(h.previewDisposal))
+	mux.Handle("POST "+p+"/{id}/dispose", httpx.HandlerFunc(h.disposeAsset))
+	mux.Handle("GET "+p+"/{id}/history", httpx.HandlerFunc(h.assetHistory))
 }
 
 func pathID(r *http.Request) (int64, error) {
@@ -690,4 +701,186 @@ func (h *Handler) assetSchedule(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, v)
+}
+
+func (h *Handler) moveAssets(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	var in MoveInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	res, err := h.svc.MoveAssets(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	if res.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, res)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) moveAsset(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in MoveInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	d, err := h.svc.MoveAsset(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, d)
+}
+
+func (h *Handler) reviseAsset(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in RevisionInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	res, err := h.svc.ReviseAsset(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	if res.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, res)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) assetHistory(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	out, err := h.svc.GetHistory(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) previewDisposal(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in DisposeInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	out, err := h.svc.PreviewDisposal(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) disposeAsset(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in DisposeInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	res, err := h.svc.Dispose(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	if res.Replayed {
+		return httpx.WriteJSON(w, http.StatusOK, res)
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) listDisposals(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	asset, err := queryInt(r, "asset_id")
+	if err != nil {
+		return err
+	}
+	out, err := h.svc.ListDisposals(r.Context(), pid, asset)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) reverseDisposal(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in ReverseDisposalInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	out, err := h.svc.ReverseDisposal(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) listDisposalRequests(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	out, err := h.svc.ListDisposalRequests(r.Context(), pid, r.URL.Query().Get("status"))
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) approveDisposal(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	out, err := h.svc.ApproveDisposal(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// RejectDisposalInput is the reason a request is refused or withdrawn.
+type RejectDisposalInput struct {
+	Note string `json:"note"`
+}
+
+func (h *Handler) rejectDisposal(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	var in RejectDisposalInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	out, err := h.svc.RejectDisposal(r.Context(), pid, id, in.Note)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
 }

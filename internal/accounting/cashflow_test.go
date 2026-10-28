@@ -49,6 +49,11 @@ func TestCashFlowIsWorkedOutFromTheJournalsAndProvedAgainstTheCash(t *testing.T)
 		t.Fatalf("the account that moved: %+v", rec.Accounts)
 	}
 	eq(t, "fixed assets net of depreciation", lineOf(t, cf.Lines, "FIXED_ASSETS").Amount, "-5000000")
+	for _, a := range lineOf(t, cf.Lines, "FIXED_ASSETS").Accounts {
+		if a.Code == "1592" {
+			t.Errorf("the accumulated depreciation is shown as a purchase: %+v", a)
+		}
+	}
 	eq(t, "the loan", lineOf(t, cf.Lines, "LONG_TERM_DEBT").Amount, "8000000")
 	eq(t, "the capital", lineOf(t, cf.Lines, "EQUITY").Amount, "2000000")
 	eq(t, "operating subtotal", lineOf(t, cf.Lines, "OPERATING").Amount, "100000")

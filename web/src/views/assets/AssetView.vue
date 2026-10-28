@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AssetDetail, AssetLocation, AssetSchedule } from '@/api/types'
+import type { AssetCategory, AssetDetail, AssetHistoryEntry, AssetLocation, AssetSchedule } from '@/api/types'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -19,11 +19,14 @@ import { toast } from '@/composables/useToast'
 import { t, te } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney, formatMonth } from '@/utils/format'
+import AssetDisposeDialog from './AssetDisposeDialog.vue'
+import AssetMoveDialog from './AssetMoveDialog.vue'
+import AssetReviseDialog from './AssetReviseDialog.vue'
 import { fromMinor, toMinor } from './split'
 
 /** One asset (docs/architecture/37-fixed-assets.md 9, mockup 52, the part of PR 1): its data, its values, its fiscal group and the history of the register. The schedule comes with the depreciation. */
 const route = useRoute()
-const { pid, canRead, canManage } = useAssetAccess()
+const { pid, canRead, canManage, canDispose } = useAssetAccess()
 const property = usePropertyStore()
 const decimals = computed(() => property.current?.currency_decimals ?? 0)
 const assetId = computed(() => Number(route.params.id))
@@ -48,6 +51,7 @@ async function load(): Promise<void> {
     loaded.value = true
   }
   await loadSchedule()
+  await loadHistory()
 }
 watch([pid, assetId], load, { immediate: true })
 
@@ -96,6 +100,51 @@ const methodText = computed(() => {
   if (!a || noDepreciation.value || !a.method) return t('assets.life.notDepreciated')
   return `${t(`assets.method.${a.method}`)} · ${t('assets.life.months', { n: a.life_months ?? 0 })}`
 })
+// what happened to the asset: moves, changes, months of depreciation and disposals, in the order they happened
+const history = ref<AssetHistoryEntry[]>([])
+async function loadHistory(): Promise<void> {
+  const propertyId = pid.value
+  history.value = []
+  if (propertyId === null || !canRead.value || !asset.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/{id}/history', { params: { path: { propertyId, id: assetId.value } } })
+    history.value = data ?? []
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+const detail = (e: AssetHistoryEntry, k: string): string => {
+  const v = (e.details as Record<string, unknown> | null | undefined)?.[k]
+  return v === null || v === undefined || v === '' ? '–' : String(v)
+}
+function historyText(e: AssetHistoryEntry): string {
+  switch (e.kind) {
+    case 'MOVE': {
+      const parts: string[] = []
+      if (detail(e, 'from_location') !== detail(e, 'to_location')) parts.push(t('assets.history.place', { from: detail(e, 'from_location'), to: detail(e, 'to_location') }))
+      if (detail(e, 'from_department') !== detail(e, 'to_department')) parts.push(t('assets.history.department', { from: detail(e, 'from_department'), to: detail(e, 'to_department') }))
+      return `${t('assets.history.kind.MOVE')}: ${parts.join('; ')}`
+    }
+    case 'LIFE': case 'RESIDUAL': case 'METHOD': case 'CATEGORY':
+      return `${t(`assets.history.kind.${e.kind}`)}: ${detail(e, 'old')} → ${detail(e, 'new')}`
+    case 'CAPITALIZE':
+      return `${t('assets.history.kind.CAPITALIZE')}${detail(e, 'amount') !== '–' ? `: ${formatMoney(detail(e, 'amount'))}` : ''}`
+    case 'DEPRECIATION':
+      return `${t('assets.history.kind.DEPRECIATION')} ${detail(e, 'month') !== '–' ? formatMonth(detail(e, 'month').slice(0, 7)) : ''}: ${formatMoney(detail(e, 'amount'))}${Number(detail(e, 'months')) > 1 ? ` (${t('assets.schedule.months', { n: detail(e, 'months') })})` : ''}`
+    case 'DISPOSAL': case 'DISPOSAL_REQUEST': {
+      const k = detail(e, 'kind')
+      return `${t(`assets.history.kind.${e.kind}`)}${te(`assets.dispose.kindShort.${k}`) ? `: ${t(`assets.dispose.kindShort.${k}`)}` : ''}`
+    }
+    default:
+      return te(`assets.history.kind.${e.kind}`) ? t(`assets.history.kind.${e.kind}`) : e.kind
+  }
+}
+/** The reason of an entry: a disposal keeps a code (SOLD, DAMAGED...), shown only when it has a text. */
+function historyReason(e: AssetHistoryEntry): string {
+  if (e.kind === 'DISPOSAL' || e.kind === 'DISPOSAL_REQUEST') return e.reason && te(`assets.dispose.reasonCode.${e.reason}`) ? t(`assets.dispose.reasonCode.${e.reason}`) : ''
+  return e.reason ?? ''
+}
+
 const kindText = (kind: string): string => (te(`assets.ledger.kind.${kind}`) ? t(`assets.ledger.kind.${kind}`) : kind)
 
 // the details
@@ -164,6 +213,47 @@ async function cancelAsset(): Promise<void> {
     busy.value = false
   }
 }
+
+// the changes of PR 3: move, change the terms or the category, add value, dispose
+const moving = ref(false)
+const revising = ref<'TERMS' | 'CATEGORY' | null>(null)
+const disposing = ref(false)
+const categories = ref<AssetCategory[]>([])
+const actionable = computed(() => !!asset.value && asset.value.status === 'ACTIVE' && !asset.value.disposal_pending)
+const isCip = computed(() => asset.value?.category_kind === 'CIP')
+async function openMove(): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/locations', { params: { path: { propertyId } } })
+    locations.value = data?.data ?? []
+  } catch {
+    locations.value = []
+  }
+  moving.value = true
+}
+async function openRevise(kind: 'TERMS' | 'CATEGORY'): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/categories', { params: { path: { propertyId } } })
+    categories.value = data?.data ?? []
+  } catch {
+    categories.value = []
+  }
+  revising.value = kind
+}
+async function changed(next: AssetDetail): Promise<void> {
+  moving.value = false
+  revising.value = null
+  asset.value = next
+  await loadSchedule()
+  await loadHistory()
+}
+async function disposed(): Promise<void> {
+  disposing.value = false
+  await load()
+}
 </script>
 
 <template>
@@ -175,11 +265,20 @@ async function cancelAsset(): Promise<void> {
     <PageHeader :title="asset.name" :description="`${asset.number} · ${asset.category_name}`">
       <template #actions>
         <Badge :variant="statusVariant" data-testid="asset-status">{{ t(`assets.status.${asset.status}`) }}</Badge>
+        <Badge v-if="asset.disposal_pending" variant="warning" data-testid="asset-disposal-pending">{{ t('assets.dispose.pendingBadge') }}</Badge>
         <Button v-if="canManage && asset.status === 'ACTIVE'" variant="outline" data-testid="asset-edit" @click="openEdit">{{ t('assets.asset.edit') }}</Button>
         <Button v-if="canManage && asset.status === 'ACTIVE'" variant="outline" data-testid="asset-cancel" @click="cancelling = true; formError = null; reason = ''">{{ t('assets.asset.cancel') }}</Button>
         <Button as-child variant="outline"><RouterLink :to="{ path: '/assets/labels', query: { ids: String(asset.id) } }" data-testid="asset-label">{{ t('assets.asset.label') }}</RouterLink></Button>
       </template>
     </PageHeader>
+    <p v-if="asset.disposal_pending" class="alert warning m-0" role="status" data-testid="disposal-pending-note">{{ t('assets.dispose.pendingNote') }} <RouterLink to="/assets/disposals" class="font-medium text-primary hover:underline">{{ t('assets.dispose.pendingLink') }}</RouterLink></p>
+    <div v-if="actionable && (canManage || canDispose)" class="flex flex-wrap gap-2" data-testid="asset-actions">
+      <Button v-if="canManage" variant="outline" size="sm" data-testid="act-move" @click="openMove">{{ t('assets.actions.move') }}</Button>
+      <Button v-if="canManage && !noDepreciation" variant="outline" size="sm" data-testid="act-terms" @click="openRevise('TERMS')">{{ t('assets.actions.terms') }}</Button>
+      <Button v-if="canManage && !noDepreciation" as-child variant="outline" size="sm"><RouterLink :to="{ path: '/assets/waiting', query: { addTo: String(asset.id) } }" data-testid="act-addvalue">{{ t('assets.actions.addValue') }}</RouterLink></Button>
+      <Button v-if="canManage" variant="outline" size="sm" data-testid="act-category" @click="openRevise('CATEGORY')">{{ isCip ? t('assets.actions.finish') : t('assets.actions.category') }}</Button>
+      <Button v-if="canDispose" variant="outline" size="sm" data-testid="act-dispose" @click="disposing = true">{{ t('assets.actions.dispose') }}</Button>
+    </div>
     <p class="text-sm text-muted-foreground" data-testid="asset-source">
       <template v-if="asset.source === 'OPENING'">{{ t('assets.asset.fromOpening', { number: asset.opening_import_number ?? '' }) }}</template>
       <template v-else-if="asset.source_link?.bill_number">{{ t('assets.asset.fromBill', { bill: asset.source_link.bill_number, line: asset.source_link.bill_line_no ?? '', journal: asset.source_link.journal_number }) }}</template>
@@ -257,7 +356,16 @@ async function cancelAsset(): Promise<void> {
     </Card>
     <Card v-else class="flex flex-col gap-2 p-4" data-testid="asset-history">
       <h2 class="m-0 text-base font-semibold">{{ t('assets.asset.history') }}</h2>
-      <p v-if="!asset.ledger.length" class="muted m-0">{{ t('assets.asset.noHistory') }}</p>
+      <ul v-if="history.length" class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="history-list">
+        <li v-for="(e, i) in history" :key="`${e.kind}-${e.at}-${i}`" class="flex flex-wrap items-baseline gap-x-3 border-b border-border py-1" :data-testid="`history-${i}`">
+          <b class="w-28 font-medium">{{ formatDate(e.date) }}</b>
+          <span class="flex-1">{{ historyText(e) }}<span v-if="historyReason(e)" class="text-muted-foreground"> · {{ historyReason(e) }}</span></span>
+          <span v-if="e.journal_number" class="text-xs text-muted-foreground">{{ e.journal_number }}</span>
+          <span v-if="e.by" class="text-xs text-muted-foreground">{{ e.by }}</span>
+        </li>
+      </ul>
+      <h3 v-if="asset.ledger.length" class="m-0 mt-2 text-sm font-semibold">{{ t('assets.asset.ledgerTitle') }}</h3>
+      <p v-if="!asset.ledger.length && !history.length" class="muted m-0">{{ t('assets.asset.noHistory') }}</p>
       <ul v-else class="m-0 flex list-none flex-col gap-1 p-0 text-sm">
         <li v-for="e in asset.ledger" :key="e.id" class="flex flex-wrap items-baseline gap-x-3 border-b border-border py-1" :data-testid="`ledger-${e.id}`">
           <b class="w-28 font-medium">{{ formatDate(e.event_date) }}</b>
@@ -269,6 +377,10 @@ async function cancelAsset(): Promise<void> {
     </Card>
   </template>
   <p v-else-if="loaded && !error" class="muted">{{ t('assets.asset.notFound') }}</p>
+
+  <AssetMoveDialog v-if="pid !== null" :asset="moving ? asset : null" :locations="locations" :property-id="pid" @close="moving = false" @done="changed" />
+  <AssetReviseDialog v-if="pid !== null" :asset="revising ? asset : null" :categories="categories" :property-id="pid" :initial-kind="revising ?? 'TERMS'" @close="revising = null" @done="changed" />
+  <AssetDisposeDialog v-if="pid !== null" :asset="disposing ? asset : null" :property-id="pid" @close="disposing = false" @done="disposed" />
 
   <Dialog :open="editing" @update:open="(v) => (editing = v)">
     <DialogContent class="max-h-[90dvh] max-w-lg overflow-y-auto p-5" data-testid="edit-dialog" @interact-outside.prevent>

@@ -323,6 +323,8 @@ const (
 	SeqFixedAsset SequenceType = "FIXED_ASSET"
 	// SeqFAOpening numbers the opening imports of the register (FAI-000001).
 	SeqFAOpening SequenceType = "FA_OPENING"
+	// SeqFADisposal numbers the disposals of assets (FAD-000001).
+	SeqFADisposal SequenceType = "FA_DISPOSAL"
 )
 
 // defaultSequences are created with every property.
@@ -362,4 +364,5 @@ var defaultSequences = []struct {
 	{SeqBanquetContract, "BQC-"},
 	{SeqFixedAsset, "FA-"},
 	{SeqFAOpening, "FAI-"},
+	{SeqFADisposal, "FAD-"},
 }

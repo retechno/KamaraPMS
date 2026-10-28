@@ -39,6 +39,8 @@ const (
 	KindInvCount        ApprovalKind = "INV_COUNT"
 	// The kind of the banquet (docs/architecture/36-banquet.md 7.2): a discount of an event line above what the property lets the banquet office give without one.
 	KindBanquetDiscount ApprovalKind = "BANQUET_DISCOUNT"
+	// The kind of the fixed assets (docs/architecture/37-fixed-assets.md 7.2): the disposal of an asset and the reversal of a disposal. The amount is the larger of the carrying value written off and the proceeds.
+	KindAssetDisposal ApprovalKind = "ASSET_DISPOSAL"
 )
 
 // KindInfo describes a kind: whether it has an amount (a rule DISTINCT_ABOVE needs one) and the permission its approver
@@ -76,6 +78,7 @@ var approvalKinds = []KindInfo{
 	{KindInvBillVariance, true, auth.PermInventoryApprove},
 	{KindInvCount, true, auth.PermInventoryApprove},
 	{KindBanquetDiscount, true, auth.PermBanquetConfirm},
+	{KindAssetDisposal, true, auth.PermAssetDispose},
 }
 
 // ApprovalKinds lists the kinds, in screen order.

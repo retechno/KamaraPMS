@@ -1943,7 +1943,9 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('fa_opening_imports', 'CHILD', 'of fa_assets: the totals of an import, whose assets are in the register'),
     ('fa_source_links', 'CHILD', 'of fa_assets: the cost of each unit made from a journal line, which the journal already holds'),
     ('fa_depr_runs', 'CHILD', 'of fa_ledger: the total of a month of depreciation, whose journal and ledger rows hold the money'),
-    ('fa_depr_lines', 'CHILD', 'of fa_ledger: the amount of an asset in a run');
+    ('fa_depr_lines', 'CHILD', 'of fa_ledger: the amount of an asset in a run'),
+    ('fa_disposals', 'CHILD', 'of fa_ledger: the amounts of a disposal, whose journal and ledger rows hold the money'),
+    ('fa_disposal_requests', 'CHILD', 'of fa_disposals: what was asked of a disposal that waits for an approver; the money is in the disposal once it is approved');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -2958,6 +2960,88 @@ SELECT expect_ok('a new property gets its settings, its fiscal groups and the se
         IF seed_fa_categories(tn('ABC'), pr('BALI'), 'id') <> 0 THEN RAISE EXCEPTION 'the seed is idempotent'; END IF;
     END $d$;$q$);
 SELECT expect_error('a language without names is refused by the seed of the register', '22023', $q$SELECT seed_fa_categories(tn('ABC'), pr('BALI'), 'fr')$q$);
+
+-- 00095: moves, revisions, disposals
+CREATE FUNCTION pms_test.fa_loc(p_code text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_locations (tenant_id, property_id, code, name, kind, label_code) VALUES (tn('ABC'), pr('BALI'), p_code, p_code, 'AREA', rpad(p_code, 12, 'X'))
+$$;
+CREATE FUNCTION pms_test.fa_move(p_date date, p_from text, p_to text, p_reason text DEFAULT 'because') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_moves (tenant_id, property_id, asset_id, effective_on, from_location_id, to_location_id, reason)
+    SELECT tn('ABC'), pr('BALI'), (SELECT id FROM fa_assets WHERE property_id = pr('BALI') AND number = 'FA-000001'),
+           p_date, (SELECT id FROM fa_locations WHERE property_id = pr('BALI') AND code = p_from), (SELECT id FROM fa_locations WHERE property_id = pr('BALI') AND code = p_to), p_reason
+$$;
+CREATE FUNCTION pms_test.fa_journal() RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_id bigint;
+BEGIN
+    INSERT INTO gl_journals (tenant_id, property_id, journal_number, journal_type, journal_date, description) VALUES (tn('ABC'), pr('BALI'), 'JV-FA95', 'MANUAL', DATE '2026-10-05', 'Disposal') RETURNING id INTO v_id;
+    INSERT INTO gl_journal_lines (tenant_id, property_id, journal_id, line_no, account_id, debit, credit, description)
+    SELECT tn('ABC'), pr('BALI'), v_id, v.n, (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = v.acc), v.dr, v.cr, 'x'
+      FROM (VALUES (1, '1530', 100, 0), (2, '1592', 0, 100)) AS v (n, acc, dr, cr);
+END $$;
+CREATE FUNCTION pms_test.fa_disposal(p_kind text DEFAULT 'WRITE_OFF', p_cost numeric DEFAULT 1000, p_accum numeric DEFAULT 400, p_proceeds numeric DEFAULT 0, p_gain numeric DEFAULT -600,
+                                     p_reason text DEFAULT 'DAMAGED', p_account text DEFAULT NULL, p_number text DEFAULT 'FAD-000001') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_disposals (tenant_id, property_id, number, asset_id, kind, disposal_date, cost_removed, accum_removed, carrying_removed, proceeds, proceeds_account_id, gain_loss, reason_code, journal_id)
+    SELECT tn('ABC'), pr('BALI'), p_number, (SELECT id FROM fa_assets WHERE property_id = pr('BALI') AND number = 'FA-000001'), p_kind, DATE '2026-10-05', p_cost, p_accum, p_cost - p_accum, p_proceeds,
+           (SELECT id FROM gl_accounts WHERE property_id = pr('BALI') AND code = p_account), p_gain, p_reason, (SELECT id FROM gl_journals WHERE property_id = pr('BALI') AND journal_number = 'JV-FA95')
+$$;
+SELECT expect_ok('a move changes the location', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_loc('B')$q$, $q$SELECT pms_test.fa_move(DATE '2026-10-05', 'A', 'B')$q$);
+SELECT expect_error('a move moves something', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_move(DATE '2026-10-05', 'A', 'A')$q$);
+SELECT expect_error('a move has a reason', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_loc('B')$q$, $q$SELECT pms_test.fa_move(DATE '2026-10-05', 'A', 'B', '  ')$q$);
+SELECT expect_error('a move is never backdated before the last one', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_loc('B')$q$,
+    $q$SELECT pms_test.fa_move(DATE '2026-10-05', 'A', 'B')$q$, $q$SELECT pms_test.fa_move(DATE '2026-10-04', 'B', 'A')$q$);
+SELECT expect_ok('two moves on the same day are accepted', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_loc('B')$q$,
+    $q$SELECT pms_test.fa_move(DATE '2026-10-05', 'A', 'B')$q$, $q$SELECT pms_test.fa_move(DATE '2026-10-05', 'B', 'A')$q$);
+SELECT expect_error('a move is kept', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_loc('A')$q$, $q$SELECT pms_test.fa_loc('B')$q$,
+    $q$SELECT pms_test.fa_move(DATE '2026-10-05', 'A', 'B')$q$, $q$DELETE FROM fa_moves$q$);
+SELECT expect_error('a revision is of a known kind', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, reason) SELECT tn('ABC'), pr('BALI'), id, 'COLOUR', DATE '2026-10-05', '{}', '{}', 'x' FROM fa_assets$q$);
+SELECT expect_ok('a revision of the life is accepted', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, reason) SELECT tn('ABC'), pr('BALI'), id, 'LIFE', DATE '2026-10-05', '{"life_months":96}', '{"life_months":120}', 'x' FROM fa_assets$q$);
+SELECT expect_error('only a value added comes from a journal line', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, reason) SELECT tn('ABC'), pr('BALI'), id, 'CAPITALIZE', DATE '2026-10-05', '{}', '{}', 'x' FROM fa_assets$q$);
+SELECT expect_error('a revision is kept', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$,
+    $q$INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, reason) SELECT tn('ABC'), pr('BALI'), id, 'LIFE', DATE '2026-10-05', '{}', '{}', 'x' FROM fa_assets$q$,
+    $q$UPDATE fa_revisions SET reason = 'y'$q$);
+SELECT expect_ok('a write-off is accepted', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$, $q$SELECT pms_test.fa_disposal()$q$);
+SELECT expect_ok('a sale is received into an account', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal('SALE', 1000, 400, 700, 100, 'SOLD', '1530')$q$);
+SELECT expect_error('the gain is the proceeds less the carrying value', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal('SALE', 1000, 400, 700, 99, 'SOLD', '1530')$q$);
+SELECT expect_error('a sale names the account it is received into', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal('SALE', 1000, 400, 700, 100, 'SOLD', NULL)$q$);
+SELECT expect_error('a write-off brings in nothing', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal('WRITE_OFF', 1000, 400, 50, -550, 'DAMAGED', '1530')$q$);
+SELECT expect_error('a sale has the reason sold, and only a sale', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal('WRITE_OFF', 1000, 400, 0, -600, 'SOLD')$q$);
+SELECT expect_error('the accumulated amount removed is not above the cost removed', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal('WRITE_OFF', 1000, 1100, 0, 100)$q$);
+SELECT expect_error('a disposal number is unique in the property', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal()$q$, $q$SELECT pms_test.fa_disposal()$q$);
+SELECT expect_error('a disposal is never deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal()$q$, $q$DELETE FROM fa_disposals$q$);
+SELECT expect_error('the facts of a disposal never change', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal()$q$, $q$UPDATE fa_disposals SET proceeds = 1, gain_loss = -599$q$);
+SELECT expect_error('a reversed disposal says when and why', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal()$q$, $q$UPDATE fa_disposals SET status = 'REVERSED'$q$);
+SELECT expect_ok('a posted disposal is reversed once', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal()$q$, $q$UPDATE fa_disposals SET status = 'REVERSED', reversal_journal_id = journal_id, reversed_at = now(), reversal_reason = 'wrong asset'$q$);
+SELECT expect_error('a reversed disposal is kept as it is', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_journal()$q$,
+    $q$SELECT pms_test.fa_disposal()$q$, $q$UPDATE fa_disposals SET status = 'REVERSED', reversal_journal_id = journal_id, reversed_at = now(), reversal_reason = 'wrong asset'$q$,
+    $q$UPDATE fa_disposals SET reversal_reason = 'other'$q$);
+
+CREATE FUNCTION pms_test.fa_dreq(p_status text DEFAULT 'PENDING', p_kind text DEFAULT 'WRITE_OFF', p_note text DEFAULT NULL, p_decided boolean DEFAULT false) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO fa_disposal_requests (tenant_id, property_id, asset_id, kind, disposal_date, reason_code, approval_amount, status, decided_at, decision_note)
+    SELECT tn('ABC'), pr('BALI'), (SELECT id FROM fa_assets WHERE property_id = pr('BALI') AND number = 'FA-000001'), p_kind, DATE '2026-10-05', CASE WHEN p_kind = 'SALE' THEN 'SOLD' ELSE 'DAMAGED' END, 100,
+           p_status, CASE WHEN p_decided THEN now() END, p_note
+$$;
+SELECT expect_ok('a disposal request waits', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq()$q$);
+SELECT expect_error('one request waits for an asset at a time', '23505', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq()$q$, $q$SELECT pms_test.fa_dreq()$q$);
+SELECT expect_error('a request waiting has no decision time', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('PENDING', 'WRITE_OFF', NULL, true)$q$);
+SELECT expect_error('a rejected request says why', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('REJECTED', 'WRITE_OFF', NULL, true)$q$);
+SELECT expect_ok('a rejected request is followed by another', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('REJECTED', 'WRITE_OFF', 'not now', true)$q$, $q$SELECT pms_test.fa_dreq()$q$);
+SELECT expect_error('an approved request points to its disposal', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('APPROVED', 'WRITE_OFF', NULL, true)$q$);
+SELECT expect_error('a sale request names the account it is received into', '23514', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq('PENDING', 'SALE')$q$);
+SELECT expect_error('a request is never deleted', '23001', $q$SELECT pms_test.fa_base()$q$, $q$SELECT pms_test.fa_asset()$q$, $q$SELECT pms_test.fa_dreq()$q$, $q$DELETE FROM fa_disposal_requests$q$);
 
 ------------------------------------------------------------------------------------------
 -- Summary

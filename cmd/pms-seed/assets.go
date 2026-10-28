@@ -29,6 +29,9 @@ import (
 //	            runs, the fiscal one is finished). The import also sets the start of the register (register_from). Its journal is dated the month end when the books allow, and one more journal
 //	            books a plot of land (750000000) in the ledger only, so that a REGISTER_ONLY import of that plot ties out (and any other file does not).
 //
+//	waiting     five cost lines nobody registered yet (a bill of two lines, the cashier, the bank, a manual journal), dated the business date (PR 2)
+//	disposals   the write-off of 50 pieces of the batch of linen, posted, and the sale of an old server that waits for an approver (the seed sets the rule of ASSET_DISPOSAL to DISTINCT) (PR 3)
+//
 // Safe to run again: locations that exist (by code) are left alone and the import is skipped once the register has one.
 
 type assetLocation struct{ code, name string }
@@ -80,6 +83,7 @@ func seedAssets(e *env, dryRun bool) error {
 	acct := accounting.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, iamSvc)
 	deps := departments.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
 	svc := assets.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, deps)
+	svc.SetApprover(iamSvc)
 	acct.SetAssetSource(svc)
 	tax := taxfiling.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc)
 	pay := payables.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, acct, iamSvc, tax)
@@ -88,7 +92,7 @@ func seedAssets(e *env, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	_, err = seedAssetsWith(e.ctx, svc, acct, &seedDeps{pay: pay, txm: e.txm, days: e.ten, depts: deps}, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
+	_, err = seedAssetsWith(e.ctx, svc, acct, &seedDeps{pay: pay, txm: e.txm, days: e.ten, depts: deps, rules: iam.NewRules(iamSvc, e.authz), iam: iamSvc}, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
 	return err
 }
 
@@ -139,7 +143,7 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 	}
 	if len(imports) > 0 {
 		_, _ = fmt.Fprintf(out, "opening balances exist (%s)\n", imports[0].Number)
-		n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, dryRun, out)
+		n, err := seedAfterOpening(ctx, svc, acct, d, pid, businessDate, dryRun, out)
 		return made + n, err
 	}
 
@@ -153,7 +157,7 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 	if dryRun && made > 0 { // the areas the rows name do not exist yet, so the import cannot be tried: say what the real run does
 		_, _ = fmt.Fprintf(out, "opening balances as at %s: %d assets to import\n", asOf, len(assetSpecs))
 		_, _ = fmt.Fprintln(out, "dry run: would create the import above")
-		n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, true, out)
+		n, err := seedAfterOpening(ctx, svc, acct, d, pid, businessDate, true, out)
 		return made + len(assetSpecs) + n, err
 	}
 	rows, err := assetRows(ctx, svc, pid, asOf, deptCodes)
@@ -174,7 +178,7 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 	made += len(res.Rows)
 	if dryRun {
 		_, _ = fmt.Fprintln(out, "dry run: would create the import above")
-		n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, true, out)
+		n, err := seedAfterOpening(ctx, svc, acct, d, pid, businessDate, true, out)
 		return made + n, err
 	}
 	if _, err := svc.ImportOpening(ctx, pid, assets.OpeningInput{AsOf: asOf, JournalDate: journalDate, Rows: rows, IdempotencyKey: "pms-seed-assets-opening"}); err != nil {
@@ -186,8 +190,18 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 			return made, err
 		}
 	}
-	n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, false, out)
+	n, err := seedAfterOpening(ctx, svc, acct, d, pid, businessDate, false, out)
 	return made + n, err
+}
+
+// seedAfterOpening makes what comes after the opening balances: the lines of the waiting list and the disposals (docs/architecture/37-fixed-assets.md, PR 2 and 3).
+func seedAfterOpening(ctx context.Context, svc *assets.Service, acct *accounting.Service, d *seedDeps, pid int64, businessDate civil.Date, dryRun bool, out io.Writer) (int, error) {
+	n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, dryRun, out)
+	if err != nil {
+		return n, err
+	}
+	m, err := seedDisposals(ctx, svc, acct, d, pid, businessDate, dryRun, out)
+	return n + m, err
 }
 
 // unregisteredLandCost is the cost of the plot that the ledger holds but the register does not (yet): an import in the mode REGISTER_ONLY with that one plot (category LAND, cost 750000000,

@@ -68,6 +68,8 @@ const (
 	KeyInvCogsBeverage  = "INV_COGS_BEVERAGE"
 	KeyInvStaffMeal     = "INV_STAFF_MEAL"
 	KeyInvEntertainment = "INV_ENTERTAINMENT"
+	// KeyAssetDisposal is where the gain or loss on the disposal of a fixed asset is booked (docs/architecture/37-fixed-assets.md 4.7, F10): the cash flow moves it to investing.
+	KeyAssetDisposal = "ASSET_DISPOSAL"
 )
 
 // mapKeys lists the keys with the account type each must point to ("" = any).
@@ -97,6 +99,7 @@ var mapKeys = []struct{ Key, Type, Meaning string }{
 	{KeyInvCogsBeverage, TypeExpense, "Cost of beverage sales: the cost of the stock that a beverage sale of an outlet uses"},
 	{KeyInvStaffMeal, TypeExpense, "Staff meals taken from stock"},
 	{KeyInvEntertainment, TypeExpense, "Entertainment and officer checks taken from stock"},
+	{KeyAssetDisposal, TypeExpense, "Gain or loss on the disposal of fixed assets (the cash flow reports it under investing)"},
 }
 
 // Account is an account of the chart.

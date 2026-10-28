@@ -95,6 +95,17 @@ type AssetSource interface {
 	ControlAccountIDs(ctx context.Context, tenantID, propertyID int64) ([]int64, error)
 }
 
+// DisposalFlows is what the disposals of a range took out of the cost accounts (by account) and the proceeds they brought.
+type DisposalFlows struct {
+	Proceeds    decimal.Decimal
+	CostRemoved map[int64]decimal.Decimal
+}
+
+// DisposalFlowSource is the optional second half of the AssetSource: the cash flow statement asks it for the proceeds of the disposals of a range, to show them on a line of their own under investing.
+type DisposalFlowSource interface {
+	DisposalFlows(ctx context.Context, tenantID, propertyID int64, from, to civil.Date) (DisposalFlows, error)
+}
+
 // JournalGuard is asked, inside the transaction and after the accounting settings are locked, before a journal is reversed: the fixed assets answer 409 JOURNAL_LINE_IS_ASSET for a journal that has
 // a line made an asset, because the register mirrors that line (docs/architecture/37-fixed-assets.md F8). The way out is to cancel the asset.
 type JournalGuard interface {

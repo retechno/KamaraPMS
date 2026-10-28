@@ -79,9 +79,22 @@ const current = computed(() => overview.value?.months.find((m) => ym(m.month) ==
 /** The journal as the ledger will hold it: one debit line per category and department, one credit line per accumulated account. */
 const debits = computed(() => preview.value?.groups ?? [])
 const credits = computed(() => {
-  const sums = new Map<string, bigint>()
-  for (const g of preview.value?.groups ?? []) sums.set(g.accumulated_account_code, (sums.get(g.accumulated_account_code) ?? 0n) + toMinor(g.amount, decimals.value))
-  return [...sums.entries()].map(([account, v]) => ({ account, amount: fromMinor(v, decimals.value) }))
+  const sums = new Map<string, { name: string; v: bigint }>()
+  for (const g of preview.value?.groups ?? []) {
+    const e = sums.get(g.accumulated_account_code) ?? { name: g.accumulated_account_name, v: 0n }
+    e.v += toMinor(g.amount, decimals.value)
+    sums.set(g.accumulated_account_code, e)
+  }
+  return [...sums.entries()].map(([account, e]) => ({ account, name: e.name, amount: fromMinor(e.v, decimals.value) }))
+})
+/** The months, oldest first (the register reads like a calendar). */
+const months = computed(() => [...(overview.value?.months ?? [])].sort((a, b) => a.month.localeCompare(b.month)))
+/** What the page has checked when nothing blocks the run: the sentence names the checks, and the one about departments only when every line has one. */
+const checks = computed(() => {
+  const list = [t('assets.depr.check.order'), t('assets.depr.check.accounts')]
+  if (debits.value.length && debits.value.every((g) => g.department_id != null)) list.push(t('assets.depr.check.departments'))
+  else list.push(t('assets.depr.check.departmentsRequired'))
+  return list.join(', ')
 })
 const assetsOf = (g: { category_id: number; department_id?: number | null }): string =>
   (preview.value?.lines ?? []).filter((l) => l.category_id === g.category_id && (l.department_id ?? null) === (g.department_id ?? null)).map((l) => l.asset_number).join(', ')
@@ -156,7 +169,7 @@ async function reverse(): Promise<void> {
     <Card v-else class="flex flex-col gap-2 p-4" data-testid="depr-months">
       <h2 class="m-0 text-base font-semibold">{{ t('assets.depr.months') }}</h2>
       <ul class="m-0 flex list-none flex-wrap gap-2 p-0">
-        <li v-for="m in overview.months" :key="m.month">
+        <li v-for="m in months" :key="m.month">
           <button type="button" class="flex min-h-11 flex-col rounded-lg border px-3 py-1 text-left text-sm" :class="ym(m.month) === month ? 'border-primary bg-primary/5' : 'border-border bg-card'" :data-testid="`month-${ym(m.month)}`" @click="choose(m)">
             <span class="font-medium">{{ formatMonth(ym(m.month)) }}</span>
             <Badge :variant="statusVariant(m)">{{ statusText(m) }}</Badge>
@@ -180,21 +193,21 @@ async function reverse(): Promise<void> {
           <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.depr.col.account') }}</th><th class="p-2">{{ t('assets.col.department') }}</th><th class="p-2">{{ t('assets.depr.col.assets') }}</th><th class="p-2 text-right">{{ t('assets.depr.col.debit') }}</th><th class="p-2 text-right">{{ t('assets.depr.col.credit') }}</th></tr></thead>
           <tbody>
             <tr v-for="(g, i) in debits" :key="`d${i}`" class="border-t border-border" :data-testid="`debit-${g.expense_account_code}`">
-              <td class="p-2">{{ g.expense_account_code }} · {{ g.category_name }}</td>
+              <td class="p-2">{{ g.expense_account_code }} · {{ g.expense_account_name }} <span class="text-xs text-muted-foreground">({{ g.category_name }})</span></td>
               <td class="p-2">{{ g.department_name ?? '–' }}</td>
               <td class="p-2 text-xs text-muted-foreground">{{ assetsOf(g) }}</td>
               <td class="p-2 text-right tabular-nums">{{ formatMoney(g.amount) }}</td><td class="p-2" />
             </tr>
             <tr v-for="c in credits" :key="c.account" class="border-t border-border" :data-testid="`credit-${c.account}`">
-              <td class="p-2" colspan="3">{{ c.account }}</td><td class="p-2" /><td class="p-2 text-right tabular-nums">{{ formatMoney(c.amount) }}</td>
+              <td class="p-2" colspan="3">{{ c.account }} · {{ c.name }}</td><td class="p-2" /><td class="p-2 text-right tabular-nums">{{ formatMoney(c.amount) }}</td>
             </tr>
             <tr class="border-t border-border font-semibold">
-              <td class="p-2" colspan="3">{{ t('assets.opening.total') }}</td><td class="p-2 text-right tabular-nums" data-testid="depr-total">{{ formatMoney(preview.total) }}</td><td class="p-2 text-right tabular-nums">{{ formatMoney(preview.total) }}</td>
+              <td class="p-2" colspan="3">{{ t('assets.depr.total') }}</td><td class="p-2 text-right tabular-nums" data-testid="depr-total">{{ formatMoney(preview.total) }}</td><td class="p-2 text-right tabular-nums">{{ formatMoney(preview.total) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p v-if="!preview.blockers.length && debits.length" class="m-0 text-xs text-muted-foreground" data-testid="depr-clear">{{ t('assets.depr.clear') }}</p>
+      <p v-if="!preview.blockers.length && debits.length" class="m-0 text-xs text-muted-foreground" data-testid="depr-clear">{{ t('assets.depr.clear', { checks }) }}</p>
       <div v-if="current?.status === 'POSTED'" class="flex flex-wrap items-center gap-2 text-sm" data-testid="depr-posted">
         <span>{{ t('assets.depr.postedAs', { number: current.journal_number ?? '' }) }}</span>
         <span class="flex-1" />
@@ -214,7 +227,7 @@ async function reverse(): Promise<void> {
         <DialogDescription>{{ t('assets.depr.reverseHint') }}</DialogDescription>
         <ErrorNotice v-if="formError" :error="formError" inline />
         <FormField :label="t('assets.asset.reason')" required :error="formError?.fieldMessage('reason')"><template #default="{ id }"><Input :id="id" v-model="reason" name="reason" maxlength="500" /></template></FormField>
-        <div class="flex justify-end gap-2"><Button type="button" variant="outline" @click="reversing = false">{{ t('common.cancel') }}</Button><Button type="submit" variant="destructive" :disabled="busy || !reason.trim()" data-testid="reverse-confirm">{{ t('assets.depr.reverse') }}</Button></div>
+        <div class="flex justify-end gap-2"><Button type="button" variant="outline" @click="reversing = false">{{ t('common.cancel') }}</Button><Button type="submit" variant="default" :disabled="busy || !reason.trim()" data-testid="reverse-confirm">{{ t('assets.depr.reverse') }}</Button></div>
       </form>
     </DialogContent>
   </Dialog>

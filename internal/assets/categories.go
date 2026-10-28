@@ -243,9 +243,9 @@ func sameInt64(a, b *int64) bool {
 }
 
 // ListAccounts lists the postable accounts of a type for the pickers of the setup (asset.setup): a plan with the inventory and without the accounting can set a category up without the
-// routes of the chart.
+// routes of the chart. The dialog of a disposal picks the cash, bank or receivable account of the price from the same list (asset.dispose).
 func (s *Service) ListAccounts(ctx context.Context, propertyID int64, accountType string) ([]AccountOption, error) {
-	p, err := s.require(ctx, propertyID, auth.PermAssetSetup)
+	p, err := s.require(ctx, propertyID, auth.PermAssetSetup, auth.PermAssetDispose)
 	if err != nil {
 		return nil, err
 	}

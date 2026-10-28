@@ -60,6 +60,14 @@ const (
 	sourceTypeRebuild    = "FA_REBUILD"
 	LedgerOpen           = "OPEN"
 	LedgerReversal       = "REVERSAL"
+	LedgerCapitalize     = "CAPITALIZE"
+	LedgerReclassOut     = "RECLASS_OUT"
+	LedgerReclassIn      = "RECLASS_IN"
+	LedgerDispose        = "DISPOSE"
+	sourceTypeDisposal   = "FA_DISPOSAL"
+	sourceTypeRevision   = "FA_REVISION"
+	linkUnit             = "UNIT"
+	linkCapitalize       = "CAPITALIZE"
 	journalSourceAsset   = "ASSET"
 	maxName              = 150
 	maxPageRow           = 200
@@ -295,6 +303,7 @@ type Asset struct {
 	FiscalMonthsDoneOpening *int32           `json:"fiscal_months_done_opening"`
 	FiscalOpeningAsOf       *civil.Date      `json:"fiscal_opening_as_of"`
 	FiscalOpeningEstimated  bool             `json:"fiscal_opening_estimated"`
+	DisposalPending         bool             `json:"disposal_pending"`
 	Version                 int32            `json:"version"`
 }
 

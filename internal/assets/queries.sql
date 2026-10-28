@@ -117,6 +117,22 @@ RETURNING *;
 SELECT DISTINCT accumulated_account_id::bigint FROM fa_categories
  WHERE tenant_id = @tenant_id AND property_id = @property_id AND accumulated_account_id IS NOT NULL;
 
+-- name: DisposalFlows :many
+-- What the disposals posted in a range took out of each cost account and the proceeds they brought, for the cash flow statement: a disposal counts on the date of its journal, and a reversed one is
+-- taken back on the date of the reversal journal, so what the books show for the range is what this returns.
+SELECT c.cost_account_id::bigint AS cost_account_id,
+       (COALESCE(SUM(d.cost_removed) FILTER (WHERE j.journal_date BETWEEN @from_date AND @to_date), 0)
+        - COALESCE(SUM(d.cost_removed) FILTER (WHERE rj.journal_date BETWEEN @from_date AND @to_date), 0))::numeric(18,3) AS cost_removed,
+       (COALESCE(SUM(d.proceeds) FILTER (WHERE j.journal_date BETWEEN @from_date AND @to_date), 0)
+        - COALESCE(SUM(d.proceeds) FILTER (WHERE rj.journal_date BETWEEN @from_date AND @to_date), 0))::numeric(18,3) AS proceeds
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  JOIN gl_journals j ON j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.id = d.reversal_journal_id
+ WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id
+ GROUP BY c.cost_account_id;
+
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Locations
 
@@ -186,7 +202,8 @@ SELECT id, code, name FROM departments WHERE tenant_id = @tenant_id AND property
 
 -- name: ListAssets :many
 SELECT a.*, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
-       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name
+       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name,
+       EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING') AS disposal_pending
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
   LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
@@ -217,7 +234,8 @@ SELECT count(*)::int AS total, COALESCE(SUM(a.cost), 0)::numeric(18,3) AS cost, 
 
 -- name: GetAsset :one
 SELECT a.*, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
-       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name
+       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name,
+       EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING') AS disposal_pending
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
   LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
@@ -227,7 +245,8 @@ SELECT a.*, c.code AS category_code, c.name AS category_name, c.kind AS category
 
 -- name: ListAssetsByIDs :many
 SELECT a.*, c.code AS category_code, c.name AS category_name, c.kind AS category_kind,
-       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name
+       l.code AS location_code, l.name AS location_name, d.code AS department_code, d.name AS department_name, s.code AS supplier_code, s.name AS supplier_name,
+       EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING') AS disposal_pending
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
   LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
@@ -446,8 +465,8 @@ UPDATE fa_source_dismissals SET restored_at = now(), restored_by = sqlc.narg(act
 SELECT * FROM fa_source_links WHERE property_id = @property_id AND idempotency_key = @idempotency_key ORDER BY unit_no;
 
 -- name: InsertSourceLink :exec
-INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, bill_id, bill_line_no, idempotency_key, created_by)
-VALUES (@tenant_id, @property_id, @journal_line_id, @unit_no, @asset_id, @cost, sqlc.narg(bill_id), sqlc.narg(bill_line_no), sqlc.narg(idempotency_key), sqlc.narg(actor_id));
+INSERT INTO fa_source_links (tenant_id, property_id, journal_line_id, unit_no, asset_id, cost, kind, bill_id, bill_line_no, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @journal_line_id, @unit_no, @asset_id, @cost, @kind, sqlc.narg(bill_id), sqlc.narg(bill_line_no), sqlc.narg(idempotency_key), sqlc.narg(actor_id));
 
 -- name: ReleaseLinksOfAsset :exec
 UPDATE fa_source_links SET released_at = now(), released_by = sqlc.narg(actor_id) WHERE property_id = @property_id AND asset_id = @asset_id AND released_at IS NULL;
@@ -459,7 +478,7 @@ SELECT k.journal_line_id, k.unit_no, k.cost, k.bill_id, k.bill_line_no, j.id AS 
   JOIN gl_journal_lines l ON l.property_id = k.property_id AND l.id = k.journal_line_id
   JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
   LEFT JOIN supplier_bills b ON b.id = k.bill_id
- WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND k.asset_id = @asset_id AND k.released_at IS NULL;
+ WHERE k.tenant_id = @tenant_id AND k.property_id = @property_id AND k.asset_id = @asset_id AND k.released_at IS NULL AND k.kind = 'UNIT';
 
 -- name: GuardBillAssets :many
 -- The live assets made from the lines of a bill (line_no 0: any line), whether the link knows its bill line or only its journal (a bill posted before migration 00094).
@@ -507,12 +526,13 @@ SELECT count(*) FILTER (WHERE NOT dismissed)::int AS waiting, COALESCE(sum(cost)
 -- Depreciation: the runs, their lines and the month close (depreciation.go)
 
 -- name: ListDepreciationAssets :many
--- The active assets that have months left to depreciate, with what the run needs of their category. The run decides who is due in its month.
+-- The active assets that have months left to depreciate, with what the run needs of their category. The run decides who is due in its month. An asset whose disposal waits for an approver is left out (the month of a disposal is not depreciated, Q5); if the request is rejected the next run catches the asset up.
 SELECT a.id, a.number, a.name, a.category_id, a.department_id, a.cost, a.residual_value, a.accum_depr, a.life_months, a.method, a.db_factor, a.dep_months_done, a.last_dep_month, a.first_dep_month,
        c.code AS category_code, c.name AS category_name, c.expense_account_id, c.accumulated_account_id, c.department_id AS category_department_id
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.method IS NOT NULL AND a.dep_months_done < a.life_months
+   AND NOT EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING')
  ORDER BY a.id;
 
 -- name: LastLiveRun :one
@@ -595,6 +615,7 @@ SELECT count(*)::int
   FROM fa_assets a
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.status = 'ACTIVE' AND a.life_months IS NOT NULL AND a.dep_months_done < a.life_months
    AND a.cost - a.accum_depr > a.residual_value
+   AND NOT EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING')
    AND GREATEST(CASE WHEN a.dep_months_done > 0 THEN (a.last_dep_month + INTERVAL '1 month')::date ELSE a.first_dep_month END, @register_from::date) <= @month::date;
 
 -- name: LiveRunFrom :one
@@ -608,3 +629,188 @@ SELECT l.id, l.run_id, r.period_month, j.journal_number, l.from_month, l.months,
   JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
  WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.asset_id = @asset_id
  ORDER BY r.period_month;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Moves and revisions (changes.go)
+
+-- name: LedgerMoveAsset :exec
+-- Where the asset stands and which department it belongs to (the history is fa_moves).
+UPDATE fa_assets SET location_id = sqlc.narg(location_id), department_id = sqlc.narg(department_id), version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: InsertMove :one
+INSERT INTO fa_moves (tenant_id, property_id, asset_id, effective_on, from_location_id, to_location_id, from_department_id, to_department_id, reason, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @asset_id, @effective_on, sqlc.narg(from_location_id), sqlc.narg(to_location_id), sqlc.narg(from_department_id), sqlc.narg(to_department_id), @reason,
+        sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: ListMovesByKey :many
+SELECT asset_id FROM fa_moves WHERE property_id = @property_id AND idempotency_key = @idempotency_key ORDER BY asset_id;
+
+-- name: ListMovesOfAssets :many
+-- Every move of the assets, in the order they happened: the department of an asset at a date is read from them (4.6).
+SELECT asset_id, effective_on, from_department_id, to_department_id
+  FROM fa_moves WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = ANY(@asset_ids::bigint[]) ORDER BY asset_id, effective_on, id;
+
+-- name: ListMovesOfAsset :many
+SELECT m.id, m.effective_on, m.reason, m.created_at, m.created_by, u.full_name AS created_by_name,
+       m.from_location_id, fl.name AS from_location_name, m.to_location_id, tl.name AS to_location_name,
+       m.from_department_id, fd.name AS from_department_name, m.to_department_id, td.name AS to_department_name
+  FROM fa_moves m
+  LEFT JOIN fa_locations fl ON fl.property_id = m.property_id AND fl.id = m.from_location_id
+  LEFT JOIN fa_locations tl ON tl.property_id = m.property_id AND tl.id = m.to_location_id
+  LEFT JOIN departments fd ON fd.property_id = m.property_id AND fd.id = m.from_department_id
+  LEFT JOIN departments td ON td.property_id = m.property_id AND td.id = m.to_department_id
+  LEFT JOIN users u ON u.id = m.created_by
+ WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.asset_id = @asset_id
+ ORDER BY m.effective_on, m.id;
+
+-- name: LedgerReviseAsset :exec
+-- The life, the residual value and the method of an asset, from the next run (a revision, 4.5).
+UPDATE fa_assets SET life_months = sqlc.narg(life_months), residual_value = @residual_value, method = sqlc.narg(method), db_factor = sqlc.narg(db_factor), version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: LedgerReclassAsset :exec
+-- The asset in its new category: the category, what depreciation it has (a construction in progress that is finished gets its life, method and start) and its fiscal group.
+UPDATE fa_assets SET category_id = @category_id, life_months = sqlc.narg(life_months), method = sqlc.narg(method), db_factor = sqlc.narg(db_factor), residual_value = @residual_value,
+       in_service_date = @in_service_date, start_rule = @start_rule, first_dep_month = sqlc.narg(first_dep_month), fiscal_group = @fiscal_group, fiscal_method = sqlc.narg(fiscal_method),
+       version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: InsertRevision :one
+INSERT INTO fa_revisions (tenant_id, property_id, asset_id, kind, effective_on, old_value, new_value, bill_id, bill_line_no, journal_line_id, journal_id, reason, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @asset_id, @kind, @effective_on, @old_value, @new_value, sqlc.narg(bill_id), sqlc.narg(bill_line_no), sqlc.narg(journal_line_id), sqlc.narg(journal_id), @reason,
+        sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: GetRevisionByKey :one
+SELECT * FROM fa_revisions WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: ListRevisionsOfAsset :many
+SELECT r.id, r.kind, r.effective_on, r.old_value, r.new_value, r.journal_id, j.journal_number, r.reason, r.created_at, r.created_by, u.full_name AS created_by_name
+  FROM fa_revisions r
+  LEFT JOIN gl_journals j ON j.property_id = r.property_id AND j.id = r.journal_id
+  LEFT JOIN users u ON u.id = r.created_by
+ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.asset_id = @asset_id
+ ORDER BY r.effective_on, r.id;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Disposals (37-fixed-assets.md 4.7, 4.8)
+
+-- name: InsertDisposalRequest :one
+INSERT INTO fa_disposal_requests (tenant_id, property_id, asset_id, kind, disposal_date, units, proceeds, proceeds_account_id, reason_code, note, approval_amount, requested_by, idempotency_key)
+VALUES (@tenant_id, @property_id, @asset_id, @kind, @disposal_date, @units, @proceeds, sqlc.narg(proceeds_account_id), @reason_code, sqlc.narg(note), @approval_amount, sqlc.narg(actor_id),
+        sqlc.narg(idempotency_key))
+RETURNING id;
+
+-- name: GetDisposalRequest :one
+SELECT r.*, a.number AS asset_number, a.name AS asset_name, ru.full_name AS requested_by_name, du.full_name AS decided_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name,
+       d.number AS disposal_number
+  FROM fa_disposal_requests r
+  JOIN fa_assets a ON a.property_id = r.property_id AND a.id = r.asset_id
+  LEFT JOIN users ru ON ru.id = r.requested_by
+  LEFT JOIN users du ON du.id = r.decided_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = r.property_id AND pa.id = r.proceeds_account_id
+  LEFT JOIN fa_disposals d ON d.property_id = r.property_id AND d.id = r.disposal_id
+ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND r.id = @id;
+
+-- name: GetDisposalRequestByKey :one
+SELECT id, asset_id FROM fa_disposal_requests WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: GetPendingRequestOfAsset :one
+SELECT id FROM fa_disposal_requests WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = @asset_id AND status = 'PENDING';
+
+-- name: ListDisposalRequests :many
+SELECT r.*, a.number AS asset_number, a.name AS asset_name, ru.full_name AS requested_by_name, du.full_name AS decided_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name,
+       d.number AS disposal_number
+  FROM fa_disposal_requests r
+  JOIN fa_assets a ON a.property_id = r.property_id AND a.id = r.asset_id
+  LEFT JOIN users ru ON ru.id = r.requested_by
+  LEFT JOIN users du ON du.id = r.decided_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = r.property_id AND pa.id = r.proceeds_account_id
+  LEFT JOIN fa_disposals d ON d.property_id = r.property_id AND d.id = r.disposal_id
+ WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
+ ORDER BY r.id DESC LIMIT 200;
+
+-- name: DecideDisposalRequest :exec
+UPDATE fa_disposal_requests SET status = @status, decided_by = sqlc.narg(actor_id), decided_at = @decided_at, decision_note = sqlc.narg(decision_note), disposal_id = sqlc.narg(disposal_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'PENDING';
+
+-- name: InsertDisposal :one
+INSERT INTO fa_disposals (tenant_id, property_id, number, asset_id, kind, disposal_date, units, cost_removed, accum_removed, carrying_removed, proceeds, proceeds_account_id, gain_loss, reason_code, note,
+                          journal_id, approved_by, idempotency_key, created_by)
+VALUES (@tenant_id, @property_id, @number, @asset_id, @kind, @disposal_date, @units, @cost_removed, @accum_removed, @carrying_removed, @proceeds, sqlc.narg(proceeds_account_id), @gain_loss, @reason_code,
+        sqlc.narg(note), @journal_id, sqlc.narg(approved_by), sqlc.narg(idempotency_key), sqlc.narg(actor_id))
+RETURNING id;
+
+-- name: GetDisposal :one
+SELECT d.*, a.number AS asset_number, a.name AS asset_name, j.journal_number, rj.journal_number AS reversal_journal_number, cu.full_name AS created_by_name, au.full_name AS approved_by_name,
+       ru.full_name AS reversed_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN gl_journals j ON j.property_id = d.property_id AND j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = d.property_id AND rj.id = d.reversal_journal_id
+  LEFT JOIN users cu ON cu.id = d.created_by
+  LEFT JOIN users au ON au.id = d.approved_by
+  LEFT JOIN users ru ON ru.id = d.reversed_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = d.property_id AND pa.id = d.proceeds_account_id
+ WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id AND d.id = @id;
+
+-- name: GetDisposalByKey :one
+SELECT id, asset_id FROM fa_disposals WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: ListDisposals :many
+SELECT d.*, a.number AS asset_number, a.name AS asset_name, j.journal_number, rj.journal_number AS reversal_journal_number, cu.full_name AS created_by_name, au.full_name AS approved_by_name,
+       ru.full_name AS reversed_by_name, pa.code AS proceeds_account_code, pa.name AS proceeds_account_name
+  FROM fa_disposals d
+  JOIN fa_assets a ON a.property_id = d.property_id AND a.id = d.asset_id
+  JOIN gl_journals j ON j.property_id = d.property_id AND j.id = d.journal_id
+  LEFT JOIN gl_journals rj ON rj.property_id = d.property_id AND rj.id = d.reversal_journal_id
+  LEFT JOIN users cu ON cu.id = d.created_by
+  LEFT JOIN users au ON au.id = d.approved_by
+  LEFT JOIN users ru ON ru.id = d.reversed_by
+  LEFT JOIN gl_accounts pa ON pa.property_id = d.property_id AND pa.id = d.proceeds_account_id
+ WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id AND (sqlc.narg(asset_id)::bigint IS NULL OR d.asset_id = sqlc.narg(asset_id))
+ ORDER BY d.id DESC LIMIT 200;
+
+-- name: MarkDisposalReversed :exec
+UPDATE fa_disposals SET status = 'REVERSED', reversal_journal_id = @reversal_journal_id, reversed_by = sqlc.narg(actor_id), reversed_at = @reversed_at, reversal_reason = @reversal_reason
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'POSTED';
+
+-- name: LedgerDisposeEntry :one
+-- The row of the ledger a disposal wrote (it is reversed by a REVERSAL row).
+SELECT * FROM fa_ledger WHERE tenant_id = @tenant_id AND property_id = @property_id AND kind = 'DISPOSE' AND source_type = 'FA_DISPOSAL' AND source_id = @disposal_id;
+
+-- name: LedgerSetDisposed :exec
+-- A whole asset leaves the register: the status and the day. Its state (cost, accumulated amount) stays as it was the day it left; the ledger holds the DISPOSE row that takes it to zero.
+UPDATE fa_assets SET status = 'DISPOSED', disposed_on = @disposed_on, version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: LedgerSetUnits :exec
+-- The pieces of a batch that are left after a partial disposal (or back after its reversal).
+UPDATE fa_assets SET unit_count = @unit_count, version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'ACTIVE';
+
+-- name: LedgerReinstate :exec
+-- The reversal of the disposal of a whole asset: it is active again (the caller restates it from the ledger).
+UPDATE fa_assets SET status = 'ACTIVE', disposed_on = NULL, version = version + 1, updated_by = sqlc.narg(actor_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'DISPOSED';
+
+-- name: CountPostedDisposals :one
+SELECT count(*)::int FROM fa_disposals WHERE tenant_id = @tenant_id AND property_id = @property_id AND asset_id = @asset_id AND status = 'POSTED';
+
+-- name: GetProceedsAccount :one
+-- An account that may receive the proceeds of a sale: its type and its statement group (CASH for the cash and bank accounts; 1230 is allowed by its code). Inactive or not postable is no account for it.
+SELECT code, account_type, statement_group FROM gl_accounts
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND is_active AND is_postable;
+
+-- name: PKPOnDate :one
+-- Whether the property is a taxable entrepreneur (PKP) on a date: the sale of an asset is then subject to VAT, which this module does not handle (4.7). No settings: not PKP.
+SELECT COALESCE((SELECT t.is_pkp FROM property_tax_settings t WHERE t.property_id = @property_id AND t.effective_from <= @on_date::date ORDER BY t.effective_from DESC, t.id DESC LIMIT 1), false)::boolean;
+
+-- name: LaterEntriesOfAsset :one
+-- What happened to the asset after a disposal that has not been undone: another disposal, a value added or a change of category. The disposal cannot be reversed over them.
+SELECT count(*)::int FROM fa_ledger e
+ WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND e.asset_id = @asset_id AND e.kind IN ('DISPOSE', 'RECLASS_OUT', 'RECLASS_IN', 'CAPITALIZE')
+   AND e.id > (SELECT d.id FROM fa_ledger d WHERE d.property_id = @property_id AND d.kind = 'DISPOSE' AND d.source_type = 'FA_DISPOSAL' AND d.source_id = @disposal_id)
+   AND NOT EXISTS (SELECT 1 FROM fa_ledger r WHERE r.property_id = e.property_id AND r.reverses_id = e.id);

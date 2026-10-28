@@ -78,8 +78,10 @@ type DepreciationGroup struct {
 	CategoryName           string          `json:"category_name"`
 	ExpenseAccountID       int64           `json:"expense_account_id"`
 	ExpenseAccountCode     string          `json:"expense_account_code"`
+	ExpenseAccountName     string          `json:"expense_account_name"`
 	AccumulatedAccountID   int64           `json:"accumulated_account_id"`
 	AccumulatedAccountCode string          `json:"accumulated_account_code"`
+	AccumulatedAccountName string          `json:"accumulated_account_name"`
 	DepartmentID           *int64          `json:"department_id"`
 	DepartmentCode         *string         `json:"department_code"`
 	DepartmentName         *string         `json:"department_name"`
@@ -272,6 +274,10 @@ func (s *Service) planRun(ctx context.Context, p auth.Principal, propertyID int6
 		block(blocker(BlockMonthInvalid, "the month has not ended", "reason", "NOT_ENDED", "month", monthLabel(month)))
 	}
 
+	moves, err := s.movesByAsset(ctx, p.TenantID, propertyID, pl.everyone)
+	if err != nil {
+		return nil, err
+	}
 	// the assets that are due in the month
 	for _, r := range rows {
 		from := firstDue(int(r.DepMonthsDone), r.LastDepMonth, r.FirstDepMonth, registerFrom)
@@ -290,7 +296,7 @@ func (s *Service) planRun(ctx context.Context, p auth.Principal, propertyID int6
 		pa.line = DepreciationLine{AssetID: r.ID, AssetNumber: r.Number, AssetName: r.Name, CategoryID: r.CategoryID, CategoryCode: r.CategoryCode, CategoryName: r.CategoryName,
 			ExpenseAccountID: *r.ExpenseAccountID, Months: int32(applied), FromMonth: from, CatchUp: applied > 1, Amount: total, AccumAfter: after.Accum, CarryingAfter: after.Carrying(), //nolint:gosec // G115: at most the life
 			MonthsDoneAfter: int32(after.MonthsDone)} //nolint:gosec // G115: at most the life
-		pa.dept = r.DepartmentID
+		pa.dept = departmentAt(r.DepartmentID, moves[r.ID], monthEnd) // the department the asset has at the end of the month, not the one it has today (4.6)
 		if pa.dept == nil {
 			pa.dept = r.CategoryDepartmentID
 		}
@@ -411,6 +417,13 @@ func (s *Service) groupPlan(ctx context.Context, propertyID int64, po *accountin
 		c, _, _, _, _ := po.AccountInfo(ctx, id)
 		return c
 	}
+	nameOf := func(id int64) string {
+		if po == nil {
+			return ""
+		}
+		_, n, _, _, _ := po.AccountInfo(ctx, id)
+		return n
+	}
 	type gkey struct {
 		cat  int64
 		dept int64
@@ -430,7 +443,8 @@ func (s *Service) groupPlan(ctx context.Context, propertyID int64, po *accountin
 		g := groups[k]
 		if g == nil {
 			g = &DepreciationGroup{CategoryID: a.line.CategoryID, CategoryCode: a.line.CategoryCode, CategoryName: a.line.CategoryName, ExpenseAccountID: a.line.ExpenseAccountID,
-				ExpenseAccountCode: a.line.ExpenseAccountCode, AccumulatedAccountID: a.accumulated, AccumulatedAccountCode: code(a.accumulated), DepartmentID: a.dept,
+				ExpenseAccountCode: a.line.ExpenseAccountCode, ExpenseAccountName: nameOf(a.line.ExpenseAccountID), AccumulatedAccountID: a.accumulated, AccumulatedAccountCode: code(a.accumulated),
+				AccumulatedAccountName: nameOf(a.accumulated), DepartmentID: a.dept,
 				DepartmentCode: a.line.DepartmentCode, DepartmentName: a.line.DepartmentName, Amount: decimal.Zero}
 			groups[k] = g
 		}

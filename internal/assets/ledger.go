@@ -126,3 +126,93 @@ func (s *Service) reverseDepreciation(ctx context.Context, p auth.Principal, pro
 	_, err = s.restateAsset(ctx, p, propertyID, e.AssetID)
 	return err
 }
+
+// moveAsset sets where an asset stands and which department it belongs to; the move itself (fa_moves) is written by the caller. The caller has locked the asset.
+func (s *Service) moveAsset(ctx context.Context, p auth.Principal, propertyID, assetID int64, location, department *int64) error {
+	return s.q(ctx).LedgerMoveAsset(ctx, assetsdb.LedgerMoveAssetParams{TenantID: p.TenantID, PropertyID: propertyID, ID: assetID, LocationID: location, DepartmentID: department, ActorID: p.ActorID()})
+}
+
+// reviseAsset sets the life, the residual value and the method of an asset (a revision, from the next run). The caller has locked the asset and checked the new values against its state.
+func (s *Service) reviseAsset(ctx context.Context, p auth.Principal, propertyID, assetID int64, life *int32, residual decimal.Decimal, method *string, factor *decimal.Decimal) error {
+	return s.q(ctx).LedgerReviseAsset(ctx, assetsdb.LedgerReviseAssetParams{TenantID: p.TenantID, PropertyID: propertyID, ID: assetID, LifeMonths: life, ResidualValue: residual, Method: method,
+		DbFactor: factor, ActorID: p.ActorID()})
+}
+
+// capitalizeAsset adds value to an asset: a row of the ledger (kind CAPITALIZE, the journal of the line that debited the account) and the state restated from the ledger. The revision row keys it.
+func (s *Service) capitalizeAsset(ctx context.Context, p auth.Principal, propertyID, assetID, categoryID, revisionID int64, day civil.Date, amount decimal.Decimal, journalID int64) error {
+	if _, err := s.q(ctx).LedgerInsertEntry(ctx, assetsdb.LedgerInsertEntryParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: assetID, CategoryID: categoryID, Kind: LedgerCapitalize,
+		EventDate: day, CostDelta: amount, AccumDelta: decimal.Zero, JournalID: &journalID, SourceType: sourceTypeRevision, SourceID: revisionID, ActorID: p.ActorID()}); err != nil {
+		return err
+	}
+	_, err := s.restateAsset(ctx, p, propertyID, assetID)
+	return err
+}
+
+// reclassAsset moves an asset to another category: the cost and the accumulated depreciation leave the old category (RECLASS_OUT) and enter the new one (RECLASS_IN), so the totals of the asset
+// are what they were and each category's recap sees the change. The attributes the new category brings (life, method, residual value, fiscal group, and for a finished construction the start of
+// the depreciation) are set with it. journalID is the journal that moved the accounts, or nil when both categories use the same accounts. The caller has locked the asset.
+func (s *Service) reclassAsset(ctx context.Context, p auth.Principal, propertyID int64, cur assetsdb.GetAssetRow, revisionID int64, day civil.Date, journalID *int64, to assetsdb.LedgerReclassAssetParams) error {
+	q := s.q(ctx)
+	for _, e := range []struct {
+		kind     string
+		category int64
+		sign     int
+	}{{LedgerReclassOut, cur.CategoryID, -1}, {LedgerReclassIn, to.CategoryID, 1}} {
+		cost, accum := cur.Cost, cur.AccumDepr
+		if e.sign < 0 {
+			cost, accum = cost.Neg(), accum.Neg()
+		}
+		if _, err := q.LedgerInsertEntry(ctx, assetsdb.LedgerInsertEntryParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: cur.ID, CategoryID: e.category, Kind: e.kind, EventDate: day,
+			CostDelta: cost, AccumDelta: accum, JournalID: journalID, SourceType: sourceTypeRevision, SourceID: revisionID, ActorID: p.ActorID()}); err != nil {
+			return err
+		}
+	}
+	to.TenantID, to.PropertyID, to.ID, to.ActorID = p.TenantID, propertyID, cur.ID, p.ActorID()
+	if err := q.LedgerReclassAsset(ctx, to); err != nil {
+		return err
+	}
+	_, err := s.restateAsset(ctx, p, propertyID, cur.ID)
+	return err
+}
+
+// disposeAsset takes the pieces of a disposal off the asset: a DISPOSE row of the ledger (the cost and the accumulated depreciation removed, the journal of the disposal) and the state. A whole asset is
+// DISPOSED with its day (its state stays as it was; the ledger nets to zero); a part of a batch leaves fewer pieces and the state is restated from the ledger. The caller has locked the asset.
+func (s *Service) disposeAsset(ctx context.Context, p auth.Principal, propertyID int64, cur assetsdb.GetAssetRow, disposalID, journalID int64, date civil.Date, cost, accum decimal.Decimal, units int32) error {
+	q := s.q(ctx)
+	if _, err := q.LedgerInsertEntry(ctx, assetsdb.LedgerInsertEntryParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: cur.ID, CategoryID: cur.CategoryID, Kind: LedgerDispose,
+		EventDate: date, CostDelta: cost.Neg(), AccumDelta: accum.Neg(), JournalID: &journalID, SourceType: sourceTypeDisposal, SourceID: disposalID, ActorID: p.ActorID()}); err != nil {
+		return err
+	}
+	if units == cur.UnitCount {
+		return q.LedgerSetDisposed(ctx, assetsdb.LedgerSetDisposedParams{TenantID: p.TenantID, PropertyID: propertyID, ID: cur.ID, DisposedOn: &date, ActorID: p.ActorID()})
+	}
+	if err := q.LedgerSetUnits(ctx, assetsdb.LedgerSetUnitsParams{TenantID: p.TenantID, PropertyID: propertyID, ID: cur.ID, UnitCount: cur.UnitCount - units, ActorID: p.ActorID()}); err != nil {
+		return err
+	}
+	_, err := s.restateAsset(ctx, p, propertyID, cur.ID)
+	return err
+}
+
+// reinstateDisposal undoes the DISPOSE row of a disposal that is reversed (a REVERSAL row carrying the journal that reverses it): the asset is active again, or has its pieces back, and its state is
+// restated from the ledger. The caller has locked the asset.
+func (s *Service) reinstateDisposal(ctx context.Context, p auth.Principal, propertyID int64, cur assetsdb.GetAssetRow, disposalID int64, units int32, reversalJournalID int64) error {
+	q := s.q(ctx)
+	e, err := q.LedgerDisposeEntry(ctx, assetsdb.LedgerDisposeEntryParams{TenantID: p.TenantID, PropertyID: propertyID, DisposalID: disposalID})
+	if err != nil {
+		return err
+	}
+	if _, err := q.LedgerInsertEntry(ctx, assetsdb.LedgerInsertEntryParams{TenantID: p.TenantID, PropertyID: propertyID, AssetID: cur.ID, CategoryID: e.CategoryID, Kind: LedgerReversal, EventDate: e.EventDate,
+		BookMonth: e.BookMonth, CostDelta: e.CostDelta.Neg(), AccumDelta: e.AccumDelta.Neg(), MonthsDelta: -e.MonthsDelta, JournalID: &reversalJournalID, SourceType: sourceTypeDisposal, SourceID: disposalID,
+		ReversesID: &e.ID, ActorID: p.ActorID()}); err != nil {
+		return err
+	}
+	if cur.Status == statusDisposed {
+		if err := q.LedgerReinstate(ctx, assetsdb.LedgerReinstateParams{TenantID: p.TenantID, PropertyID: propertyID, ID: cur.ID, ActorID: p.ActorID()}); err != nil {
+			return err
+		}
+	} else if err := q.LedgerSetUnits(ctx, assetsdb.LedgerSetUnitsParams{TenantID: p.TenantID, PropertyID: propertyID, ID: cur.ID, UnitCount: cur.UnitCount + units, ActorID: p.ActorID()}); err != nil {
+		return err
+	}
+	_, err = s.restateAsset(ctx, p, propertyID, cur.ID)
+	return err
+}
