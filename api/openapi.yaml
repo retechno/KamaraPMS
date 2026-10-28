@@ -15010,6 +15010,238 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/audits:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetAudits
+      summary: "The stock-takes of the property, newest first, up to 200 (any asset permission)"
+      tags: [assets]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [IN_PROGRESS, CLOSED] } }
+      responses:
+        "200":
+          description: The stock-takes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetAuditList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: startAssetAudit
+      summary: "Open a stock-take of one location, or of the whole property (asset.manage)"
+      description: "`Idempotency-Key` is required; the same key replays the stock-take. One stock-take of a location is open at a time (409 `AUDIT_ALREADY_OPEN`). Nothing is posted."
+      tags: [assets]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                location_id: { type: integer, format: int64, nullable: true, description: "Empty counts the whole property: every scan then names its location." }
+                note: { type: string, maxLength: 500 }
+      responses:
+        "201":
+          description: The stock-take.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetAuditDetail" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/audits/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getAssetAudit
+      summary: "A stock-take with its lines and, while it is open, the assets not scanned yet (any asset permission)"
+      tags: [assets]
+      responses:
+        "200":
+          description: The stock-take.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetAuditDetail" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/audits/{id}/lines:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: scanAssetAudit
+      summary: "Record one scan: an asset found in the place (asset.manage)"
+      description: "The asset is named by `code` (the QR `FA:...`, the label code or the number typed by hand) or by `asset_id`. A stock-take of the whole property needs `location_code` (the QR `FL:...`) or `location_id`. The result is FOUND, MOVED (the register says another place), UNEXPECTED (the register says no place) or DAMAGED (`damaged` with a `note`). A second scan of the same asset replaces the first. 409 `AUDIT_NOT_OPEN` for a closed stock-take, `ASSET_STATUS_INVALID` for an asset that is not active."
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+                asset_id: { type: integer, format: int64, nullable: true }
+                location_code: { type: string }
+                location_id: { type: integer, format: int64, nullable: true }
+                damaged: { type: boolean }
+                note: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: The line and the counts after the scan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetAuditScan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/audits/{id}/close:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: closeAssetAudit
+      summary: "Close a stock-take: what was expected and not scanned is MISSING, and every difference becomes a proposal (asset.manage)"
+      description: "No journal is posted and no asset changes: a person applies each proposal under their own permission. 409 `AUDIT_NOT_OPEN` when it was closed already."
+      tags: [assets]
+      responses:
+        "200":
+          description: The closed stock-take.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetAuditClose" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/proposals:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listAssetProposals
+      summary: "The proposals of the closed stock-takes, newest first, up to 500 (any asset permission)"
+      tags: [assets]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [PENDING, APPLIED, REJECTED] } }
+        - { name: audit_id, in: query, required: false, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The proposals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetProposalList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/proposals/{id}/apply:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: applyAssetProposal
+      summary: "Apply a proposal: a move (asset.manage) or a write-off (asset.dispose, with the approval of the kind `ASSET_DISPOSAL`)"
+      description: "The ordinary use case runs, so its rules apply. A write-off that needs an approver makes a disposal request (`result_type` DISPOSAL_REQUEST). 409 `PROPOSAL_NOT_PENDING` when it was decided already."
+      tags: [assets]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approval: { $ref: "#/components/schemas/Approval" }
+      responses:
+        "200":
+          description: The proposal, applied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposal]
+                properties:
+                  proposal: { $ref: "#/components/schemas/AssetProposal" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/proposals/{id}/reject:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: rejectAssetProposal
+      summary: "Leave a proposal as it is, with the reason (asset.manage or asset.dispose)"
+      tags: [assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: The proposal, rejected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetProposal" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/reports/audit-differences:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: getAssetAuditDifferencesReport
+      summary: "The differences of the stock-takes with the book value at risk and what became of each proposal (any asset permission); `format=csv` downloads it"
+      tags: [assets]
+      parameters:
+        - { name: audit_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: result, in: query, schema: { type: string, enum: [MOVED, UNEXPECTED, DAMAGED, MISSING] } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: The report, or the CSV.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetAuditDifferenceList" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/assets/{id}/maintenance:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getAssetMaintenance
+      summary: "The repair requests that name the asset, newest first (any asset permission); a request has no cost"
+      tags: [assets]
+      responses:
+        "200":
+          description: The requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRepairList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -20541,6 +20773,9 @@ components:
         room_id: { type: [integer, "null"], format: int64 }
         room_number: { type: string }
         location: { type: string }
+        asset_id: { type: [integer, "null"], format: int64, description: The fixed asset the request is about (needs the stock module in the plan). }
+        asset_number: { type: string }
+        asset_name: { type: string }
         category: { $ref: "#/components/schemas/MaintenanceCategory" }
         description: { type: string }
         priority: { $ref: "#/components/schemas/MaintenancePriority" }
@@ -20572,6 +20807,7 @@ components:
       additionalProperties: false
       properties:
         room_id: { type: [integer, "null"], format: int64 }
+        asset_id: { type: [integer, "null"], format: int64, description: "An active fixed asset; 403 MODULE_NOT_IN_PLAN without the stock module, 404 ASSET_NOT_FOUND, 409 ASSET_STATUS_INVALID." }
         location: { type: string, maxLength: 150 }
         category: { $ref: "#/components/schemas/MaintenanceCategory" }
         description: { type: string, maxLength: 1000 }
@@ -20580,6 +20816,7 @@ components:
       type: object
       additionalProperties: false
       properties:
+        asset_id: { type: [integer, "null"], format: int64, description: "The asset the request is about; 0 takes the link away." }
         location: { type: string, maxLength: 150 }
         category: { $ref: "#/components/schemas/MaintenanceCategory" }
         description: { type: string, maxLength: 1000 }
@@ -28036,6 +28273,180 @@ components:
         months_left: { type: [integer, "null"] }
         life_ending: { type: boolean }
         fully_depreciated: { type: boolean }
+    AssetAuditCounts:
+      type: object
+      required: [expected, found, moved, unexpected, damaged, missing, proposals]
+      properties:
+        expected: { type: integer }
+        found: { type: integer }
+        moved: { type: integer }
+        unexpected: { type: integer }
+        damaged: { type: integer }
+        missing: { type: integer }
+        proposals: { type: integer }
+    AssetAuditSummary:
+      type: object
+      required: [id, number, status, started_at, scanned, missing, pending_proposals]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        location_id: { type: integer, format: int64, nullable: true }
+        location_code: { type: string, nullable: true }
+        location_name: { type: string, nullable: true }
+        status: { type: string, enum: [IN_PROGRESS, CLOSED] }
+        started_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+        scanned: { type: integer }
+        missing: { type: integer }
+        pending_proposals: { type: integer }
+    AssetAuditList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetAuditSummary" } }
+    AssetAuditLine:
+      type: object
+      required: [asset_id, asset_number, asset_name, result]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        asset_number: { type: string }
+        asset_name: { type: string }
+        result: { type: string, enum: [FOUND, MOVED, UNEXPECTED, DAMAGED, MISSING] }
+        expected_location_id: { type: integer, format: int64, nullable: true }
+        expected_location_name: { type: string, nullable: true }
+        found_location_id: { type: integer, format: int64, nullable: true }
+        found_location_name: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        scanned_at: { type: string, format: date-time, nullable: true }
+        scanned_by: { type: integer, format: int64, nullable: true }
+        scanned_by_name: { type: string, nullable: true }
+    AssetAuditExpected:
+      type: object
+      required: [asset_id, number, name, carrying_value, disposal_pending]
+      properties:
+        asset_id: { type: integer, format: int64 }
+        number: { type: string }
+        name: { type: string }
+        location_id: { type: integer, format: int64, nullable: true }
+        location_name: { type: string, nullable: true }
+        carrying_value: { type: string, description: "Decimal string." }
+        disposal_pending: { type: boolean }
+    AssetAuditDetail:
+      type: object
+      required: [id, number, status, started_at, counts, lines, unscanned]
+      properties:
+        id: { type: integer, format: int64 }
+        number: { type: string }
+        location_id: { type: integer, format: int64, nullable: true }
+        location_code: { type: string, nullable: true }
+        location_name: { type: string, nullable: true }
+        status: { type: string, enum: [IN_PROGRESS, CLOSED] }
+        started_by: { type: integer, format: int64, nullable: true }
+        started_by_name: { type: string, nullable: true }
+        started_at: { type: string, format: date-time }
+        closed_by: { type: integer, format: int64, nullable: true }
+        closed_by_name: { type: string, nullable: true }
+        closed_at: { type: string, format: date-time, nullable: true }
+        note: { type: string, nullable: true }
+        counts: { $ref: "#/components/schemas/AssetAuditCounts" }
+        lines: { type: array, items: { $ref: "#/components/schemas/AssetAuditLine" } }
+        unscanned: { type: array, items: { $ref: "#/components/schemas/AssetAuditExpected" } }
+    AssetAuditScan:
+      type: object
+      required: [line, counts]
+      properties:
+        line: { $ref: "#/components/schemas/AssetAuditLine" }
+        counts: { $ref: "#/components/schemas/AssetAuditCounts" }
+    AssetAuditClose:
+      type: object
+      required: [audit, missing, proposals]
+      properties:
+        audit: { $ref: "#/components/schemas/AssetAuditDetail" }
+        missing: { type: integer }
+        proposals: { type: integer }
+    AssetProposal:
+      type: object
+      required: [id, audit_id, audit_number, asset_id, asset_number, asset_name, asset_status, kind, status, created_at, line_result, carrying_value]
+      properties:
+        id: { type: integer, format: int64 }
+        audit_id: { type: integer, format: int64 }
+        audit_number: { type: string }
+        asset_id: { type: integer, format: int64 }
+        asset_number: { type: string }
+        asset_name: { type: string }
+        asset_status: { type: string }
+        kind: { type: string, enum: [MOVE, WRITE_OFF] }
+        to_location_id: { type: integer, format: int64, nullable: true }
+        to_location_code: { type: string, nullable: true }
+        to_location_name: { type: string, nullable: true }
+        status: { type: string, enum: [PENDING, APPLIED, REJECTED] }
+        decided_by: { type: integer, format: int64, nullable: true }
+        decided_by_name: { type: string, nullable: true }
+        decided_at: { type: string, format: date-time, nullable: true }
+        decision_note: { type: string, nullable: true }
+        result_type: { type: string, enum: [MOVE, DISPOSAL, DISPOSAL_REQUEST], nullable: true }
+        result_id: { type: integer, format: int64, nullable: true }
+        created_at: { type: string, format: date-time }
+        line_result: { type: string, enum: [MOVED, UNEXPECTED, DAMAGED, MISSING] }
+        line_note: { type: string, nullable: true }
+        expected_location_id: { type: integer, format: int64, nullable: true }
+        expected_location_name: { type: string, nullable: true }
+        found_location_id: { type: integer, format: int64, nullable: true }
+        found_location_name: { type: string, nullable: true }
+        carrying_value: { type: string, description: "Decimal string." }
+    AssetProposalList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetProposal" } }
+    AssetAuditDifference:
+      type: object
+      required: [audit_id, audit_number, audit_status, started_at, asset_id, asset_number, asset_name, category_code, result, carrying_value, asset_status]
+      properties:
+        audit_id: { type: integer, format: int64 }
+        audit_number: { type: string }
+        audit_status: { type: string }
+        started_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+        asset_id: { type: integer, format: int64 }
+        asset_number: { type: string }
+        asset_name: { type: string }
+        category_code: { type: string }
+        result: { type: string, enum: [MOVED, UNEXPECTED, DAMAGED, MISSING] }
+        expected_location_name: { type: string, nullable: true }
+        found_location_name: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        carrying_value: { type: string, description: "Decimal string." }
+        asset_status: { type: string }
+        proposal_id: { type: integer, format: int64, nullable: true }
+        proposal_kind: { type: string, nullable: true }
+        proposal_status: { type: string, nullable: true }
+    AssetAuditDifferenceList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetAuditDifference" } }
+    AssetRepair:
+      type: object
+      required: [id, request_number, business_date, category, priority, status, description, reported_at]
+      properties:
+        id: { type: integer, format: int64 }
+        request_number: { type: string }
+        business_date: { type: string, format: date }
+        category: { type: string }
+        priority: { type: string }
+        status: { type: string }
+        description: { type: string }
+        resolution_note: { type: string, nullable: true }
+        reported_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+        room_number: { type: string, nullable: true }
+        location: { type: string, nullable: true }
+    AssetRepairList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/AssetRepair" } }
     AssetExpiringList:
       type: object
       required: [data]

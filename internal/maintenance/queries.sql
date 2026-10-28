@@ -2,9 +2,9 @@
 
 -- name: InsertRequest :one
 INSERT INTO maintenance_requests (
-    tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date, reported_by, reported_at
+    tenant_id, property_id, request_number, room_id, asset_id, location, category, description, priority, business_date, reported_by, reported_at
 ) VALUES (
-    @tenant_id, @property_id, @request_number, sqlc.narg(room_id), sqlc.narg(location), @category, @description, @priority, @business_date,
+    @tenant_id, @property_id, @request_number, sqlc.narg(room_id), sqlc.narg(asset_id), sqlc.narg(location), @category, @description, @priority, @business_date,
     sqlc.narg(actor_id), @now
 )
 RETURNING id;
@@ -14,11 +14,12 @@ SELECT * FROM maintenance_requests WHERE tenant_id = @tenant_id AND property_id 
 
 -- A request with the names around it: the room, who reported it, who works on it, and the block taken for it.
 -- name: ListRequests :many
-SELECT m.id, m.request_number, m.room_id, ro.room_number, m.location, m.category, m.description, m.priority, m.status, m.business_date,
+SELECT m.id, m.request_number, m.room_id, ro.room_number, m.asset_id, fa.number AS asset_number, fa.name AS asset_name, m.location, m.category, m.description, m.priority, m.status, m.business_date,
        m.reported_by, rep.full_name AS reporter_name, m.reported_at, m.assigned_to, asg.full_name AS assignee_name, m.started_at, m.closed_at,
        m.resolution_note, m.room_block_id, b.block_type, b.start_date AS block_start, b.end_date AS block_end, b.status AS block_status
 FROM maintenance_requests m
 LEFT JOIN rooms ro ON ro.property_id = m.property_id AND ro.id = m.room_id
+LEFT JOIN fa_assets fa ON fa.property_id = m.property_id AND fa.id = m.asset_id
 LEFT JOIN users rep ON rep.tenant_id = m.tenant_id AND rep.id = m.reported_by
 LEFT JOIN users asg ON asg.tenant_id = m.tenant_id AND asg.id = m.assigned_to
 LEFT JOIN room_blocks b ON b.property_id = m.property_id AND b.id = m.room_block_id
@@ -35,7 +36,7 @@ ORDER BY m.id DESC
 LIMIT @row_limit;
 
 -- name: UpdateRequestDetails :exec
-UPDATE maintenance_requests SET category = @category, description = @description, priority = @priority, location = sqlc.narg(location)
+UPDATE maintenance_requests SET category = @category, description = @description, priority = @priority, location = sqlc.narg(location), asset_id = sqlc.narg(asset_id)
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
 
 -- name: AssignRequest :exec
@@ -78,3 +79,7 @@ WHERE u.tenant_id = @tenant_id AND u.is_active
         JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code IN ('maintenance.report', 'maintenance.manage')
         WHERE up.user_id = u.id AND up.property_id = @property_id))
 ORDER BY u.full_name, u.id;
+
+-- name: AssetStatus :one
+-- The status of an asset a request names (the property is the one of the request; the foreign key holds the rest).
+SELECT status FROM fa_assets WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;

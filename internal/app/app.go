@@ -190,6 +190,7 @@ func New(d Deps) *App {
 	inventorySvc.SetOccupancy(nightOccupancy{fd: frontdeskSvc})                 // the amenities of the close need the rooms that were slept in
 	inventorySvc.SetPricer(posPricer{pos: posSvc})                              // the margin of a recipe reads the net price of the POS
 	inventorySvc.SetEntitlement(stockPlan{subs: subscriptionSvc})               // and a recipe is edited only when the plan has the module
+	maintenanceSvc.SetAssetModule(stockPlan{subs: subscriptionSvc})             // and a request names an asset only when the plan has the register (37-fixed-assets.md 4.11)
 	posSvc.SetStock(posStock{inv: inventorySvc, subs: subscriptionSvc})         // a POS line that is sold is queued for the deduction from stock, in the same transaction (5.6)
 	banquetSvc.SetStock(banquetStock{inv: inventorySvc, subs: subscriptionSvc}) // a posted session queues the deduction of its goods, in the same transaction (36 4.9)
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)

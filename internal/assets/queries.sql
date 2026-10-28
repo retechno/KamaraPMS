@@ -968,3 +968,178 @@ SELECT e.category_id, COALESCE(SUM(e.cost_delta), 0)::numeric(18,3) AS cost, COA
   JOIN fa_opening_imports i ON i.property_id = a.property_id AND i.id = a.opening_import_id
  WHERE e.tenant_id = @tenant_id AND e.property_id = @property_id AND i.mode = 'REGISTER_ONLY' AND COALESCE(o.kind, e.kind) = 'OPEN' AND e.event_date <= @as_of
  GROUP BY e.category_id;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- PR 4: the stock-take on a phone (docs/architecture/37-fixed-assets.md 4.10) and the link to Maintenance (4.11)
+
+-- name: InsertAudit :one
+INSERT INTO fa_audits (tenant_id, property_id, number, location_id, started_by, note, idempotency_key)
+VALUES (@tenant_id, @property_id, @number, sqlc.narg(location_id), sqlc.narg(actor_id), sqlc.narg(note), sqlc.narg(idempotency_key))
+RETURNING id;
+
+-- name: GetAuditByKey :one
+SELECT id FROM fa_audits WHERE property_id = @property_id AND idempotency_key = @idempotency_key;
+
+-- name: GetAudit :one
+-- One stock-take with its place, the people and the counts of its lines; expected_count is the assets that should be there: the active assets of the place while it is open, the lines that were
+-- expected there once it is closed.
+SELECT a.id, a.number, a.location_id, l.code AS location_code, l.name AS location_name, a.status, a.started_by, su.full_name AS started_by_name, a.started_at, a.closed_by,
+       cu.full_name AS closed_by_name, a.closed_at, a.note,
+       (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND x.result = 'FOUND')::int AS found_count,
+       (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND x.result = 'MOVED')::int AS moved_count,
+       (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND x.result = 'UNEXPECTED')::int AS unexpected_count,
+       (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND x.result = 'DAMAGED')::int AS damaged_count,
+       (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND x.result = 'MISSING')::int AS missing_count,
+       (CASE WHEN a.status = 'IN_PROGRESS'
+             THEN (SELECT count(*) FROM fa_assets e WHERE e.property_id = a.property_id AND e.status = 'ACTIVE' AND (a.location_id IS NULL OR e.location_id = a.location_id))
+             ELSE (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND (a.location_id IS NULL OR x.expected_location_id = a.location_id)) END)::int AS expected_count,
+       (SELECT count(*) FROM fa_proposals p WHERE p.audit_id = a.id)::int AS proposal_count
+  FROM fa_audits a
+  LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
+  LEFT JOIN users su ON su.id = a.started_by
+  LEFT JOIN users cu ON cu.id = a.closed_by
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.id = @id;
+
+-- name: ListAudits :many
+SELECT a.id, a.number, a.location_id, l.code AS location_code, l.name AS location_name, a.status, a.started_at, a.closed_at,
+       (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND x.result <> 'MISSING')::int AS scanned_count,
+       (SELECT count(*) FROM fa_audit_lines x WHERE x.audit_id = a.id AND x.result = 'MISSING')::int AS missing_count,
+       (SELECT count(*) FROM fa_proposals p WHERE p.audit_id = a.id AND p.status = 'PENDING')::int AS pending_proposals
+  FROM fa_audits a
+  LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND (sqlc.narg(status)::text IS NULL OR a.status = sqlc.narg(status))
+ ORDER BY a.id DESC
+ LIMIT 100;
+
+-- name: GetAuditState :one
+-- The status of the stock-take as it stands under the lock the caller took.
+SELECT status, location_id, number FROM fa_audits WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: FindAssetByCode :one
+-- An asset by what a label says: the code in the QR, or the number that is printed under it (typed by hand).
+SELECT a.id FROM fa_assets a
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND (a.label_code = @code::text OR upper(a.number) = upper(@code::text))
+ ORDER BY a.id LIMIT 1;
+
+-- name: FindLocationByLabel :one
+-- A place by the code in its QR, or by the code that is printed under it.
+SELECT l.id FROM fa_locations l
+ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND (l.label_code = @code::text OR upper(l.code) = upper(@code::text))
+ ORDER BY l.id LIMIT 1;
+
+-- name: UpsertAuditLine :exec
+-- A scan: the row of the asset in the audit; a second scan of the same asset is the same row.
+INSERT INTO fa_audit_lines (tenant_id, property_id, audit_id, asset_id, expected_location_id, result, found_location_id, note, scanned_at, scanned_by)
+VALUES (@tenant_id, @property_id, @audit_id, @asset_id, sqlc.narg(expected_location_id), @result, sqlc.narg(found_location_id), sqlc.narg(note), @scanned_at, sqlc.narg(actor_id))
+ON CONFLICT (audit_id, asset_id) DO UPDATE
+   SET expected_location_id = EXCLUDED.expected_location_id, result = EXCLUDED.result, found_location_id = EXCLUDED.found_location_id, note = EXCLUDED.note,
+       scanned_at = EXCLUDED.scanned_at, scanned_by = EXCLUDED.scanned_by;
+
+-- name: ListAuditLines :many
+SELECT x.asset_id, a.number AS asset_number, a.name AS asset_name, x.result, x.expected_location_id, el.name AS expected_location_name, x.found_location_id, fl.name AS found_location_name,
+       x.note, x.scanned_at, x.scanned_by, u.full_name AS scanned_by_name
+  FROM fa_audit_lines x
+  JOIN fa_assets a ON a.property_id = x.property_id AND a.id = x.asset_id
+  LEFT JOIN fa_locations el ON el.property_id = x.property_id AND el.id = x.expected_location_id
+  LEFT JOIN fa_locations fl ON fl.property_id = x.property_id AND fl.id = x.found_location_id
+  LEFT JOIN users u ON u.id = x.scanned_by
+ WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND x.audit_id = @audit_id
+ ORDER BY (x.scanned_at IS NULL), x.scanned_at DESC, a.number;
+
+-- name: ListAuditExpected :many
+-- The active assets that should be at the place of the audit (or anywhere, for an audit of the property) and have no line yet: what a close would call missing.
+SELECT a.id, a.number, a.name, a.location_id, l.name AS location_name, (a.cost - a.accum_depr)::numeric(18,3) AS carrying_value,
+       EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = a.property_id AND r.asset_id = a.id AND r.status = 'PENDING') AS disposal_pending
+  FROM fa_assets a
+  LEFT JOIN fa_locations l ON l.property_id = a.property_id AND l.id = a.location_id
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.status = 'ACTIVE'
+   AND (sqlc.narg(location_id)::bigint IS NULL OR a.location_id = sqlc.narg(location_id))
+   AND NOT EXISTS (SELECT 1 FROM fa_audit_lines x WHERE x.audit_id = @audit_id AND x.asset_id = a.id)
+ ORDER BY a.number;
+
+-- name: InsertMissingLines :many
+-- The close: every asset that was expected and not scanned becomes MISSING (the caller holds the assets locked).
+INSERT INTO fa_audit_lines (tenant_id, property_id, audit_id, asset_id, expected_location_id, result)
+SELECT a.tenant_id, a.property_id, @audit_id, a.id, a.location_id, 'MISSING'
+  FROM fa_assets a
+ WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.id = ANY(@ids::bigint[]) AND a.status = 'ACTIVE'
+   AND NOT EXISTS (SELECT 1 FROM fa_audit_lines x WHERE x.audit_id = @audit_id AND x.asset_id = a.id)
+RETURNING asset_id;
+
+-- name: InsertProposals :many
+-- What the close proposes: an asset found in another place is moved to where it was found; one that is missing or damaged is written off. Nothing is proposed for an asset whose disposal
+-- is waiting for an approver already.
+INSERT INTO fa_proposals (tenant_id, property_id, audit_id, asset_id, kind, to_location_id)
+SELECT x.tenant_id, x.property_id, x.audit_id, x.asset_id,
+       CASE WHEN x.result IN ('MOVED', 'UNEXPECTED') THEN 'MOVE' ELSE 'WRITE_OFF' END,
+       CASE WHEN x.result IN ('MOVED', 'UNEXPECTED') THEN x.found_location_id END
+  FROM fa_audit_lines x
+ WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND x.audit_id = @audit_id AND x.result <> 'FOUND'
+   AND NOT EXISTS (SELECT 1 FROM fa_disposal_requests r WHERE r.property_id = x.property_id AND r.asset_id = x.asset_id AND r.status = 'PENDING')
+RETURNING asset_id;
+
+-- name: CloseAudit :one
+UPDATE fa_audits SET status = 'CLOSED', closed_by = sqlc.narg(actor_id), closed_at = @closed_at
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'IN_PROGRESS'
+RETURNING id;
+
+-- name: ListProposals :many
+SELECT p.id, p.audit_id, au.number AS audit_number, p.asset_id, a.number AS asset_number, a.name AS asset_name, a.status AS asset_status, p.kind, p.to_location_id,
+       tl.code AS to_location_code, tl.name AS to_location_name, p.status, p.decided_by, du.full_name AS decided_by_name, p.decided_at, p.decision_note, p.result_type, p.result_id, p.created_at,
+       x.result AS line_result, x.note AS line_note, x.expected_location_id, el.name AS expected_location_name, x.found_location_id, fl.name AS found_location_name,
+       (a.cost - a.accum_depr)::numeric(18,3) AS carrying_value, a.unit_count
+  FROM fa_proposals p
+  JOIN fa_audits au ON au.property_id = p.property_id AND au.id = p.audit_id
+  JOIN fa_audit_lines x ON x.audit_id = p.audit_id AND x.asset_id = p.asset_id
+  JOIN fa_assets a ON a.property_id = p.property_id AND a.id = p.asset_id
+  LEFT JOIN fa_locations tl ON tl.property_id = p.property_id AND tl.id = p.to_location_id
+  LEFT JOIN fa_locations el ON el.property_id = p.property_id AND el.id = x.expected_location_id
+  LEFT JOIN fa_locations fl ON fl.property_id = p.property_id AND fl.id = x.found_location_id
+  LEFT JOIN users du ON du.id = p.decided_by
+ WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id
+   AND (sqlc.narg(id)::bigint IS NULL OR p.id = sqlc.narg(id))
+   AND (sqlc.narg(status)::text IS NULL OR p.status = sqlc.narg(status))
+   AND (sqlc.narg(audit_id)::bigint IS NULL OR p.audit_id = sqlc.narg(audit_id))
+ ORDER BY p.id DESC
+ LIMIT 500;
+
+-- name: DecideProposal :one
+-- A proposal is decided once: no row back means it was decided already.
+UPDATE fa_proposals
+   SET status = @status, decided_by = sqlc.narg(actor_id), decided_at = @decided_at, decision_note = sqlc.narg(decision_note), result_type = sqlc.narg(result_type), result_id = sqlc.narg(result_id)
+ WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'PENDING'
+RETURNING id;
+
+-- name: GetMoveByKey :one
+SELECT id FROM fa_moves WHERE property_id = @property_id AND idempotency_key = @idempotency_key AND asset_id = @asset_id;
+
+-- name: AuditDifferences :many
+-- The report of the differences: every line of a stock-take that is not "found", with the book value that is at risk and what became of the proposal.
+SELECT au.id AS audit_id, au.number AS audit_number, au.status AS audit_status, au.started_at, au.closed_at, x.asset_id, a.number AS asset_number, a.name AS asset_name, c.code AS category_code,
+       x.result, x.expected_location_id, el.name AS expected_location_name, x.found_location_id, fl.name AS found_location_name, x.note,
+       (a.cost - a.accum_depr)::numeric(18,3) AS carrying_value, a.status AS asset_status,
+       p.id AS proposal_id, p.kind AS proposal_kind, p.status AS proposal_status
+  FROM fa_audit_lines x
+  JOIN fa_audits au ON au.property_id = x.property_id AND au.id = x.audit_id
+  JOIN fa_assets a ON a.property_id = x.property_id AND a.id = x.asset_id
+  JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
+  LEFT JOIN fa_locations el ON el.property_id = x.property_id AND el.id = x.expected_location_id
+  LEFT JOIN fa_locations fl ON fl.property_id = x.property_id AND fl.id = x.found_location_id
+  LEFT JOIN fa_proposals p ON p.audit_id = x.audit_id AND p.asset_id = x.asset_id
+ WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND x.result <> 'FOUND'
+   AND (sqlc.narg(audit_id)::bigint IS NULL OR x.audit_id = sqlc.narg(audit_id))
+   AND (sqlc.narg(result)::text IS NULL OR x.result = sqlc.narg(result))
+   AND (sqlc.narg(date_from)::date IS NULL OR au.started_at::date >= sqlc.narg(date_from))
+   AND (sqlc.narg(date_to)::date IS NULL OR au.started_at::date <= sqlc.narg(date_to))
+ ORDER BY au.id DESC, a.number
+ LIMIT 2000;
+
+-- name: ListMaintenanceOfAsset :many
+-- The history of repairs of one asset: the requests that name it (no money: a request has none, Q17).
+SELECT m.id, m.request_number, m.business_date, m.category, m.priority, m.status, m.description, m.resolution_note, m.reported_at, m.closed_at,
+       ro.room_number, m.location
+  FROM maintenance_requests m
+  LEFT JOIN rooms ro ON ro.property_id = m.property_id AND ro.id = m.room_id
+ WHERE m.tenant_id = @tenant_id AND m.property_id = @property_id AND m.asset_id = @asset_id
+ ORDER BY m.id DESC
+ LIMIT 200;
