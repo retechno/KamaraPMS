@@ -11,6 +11,7 @@ import (
 	"kamarapms/internal/assets"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/maintenance"
 	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
@@ -24,8 +25,9 @@ type seedDeps struct {
 	txm   *db.TxManager
 	days  *tenancy.Service
 	depts *departments.Service
-	rules *iam.Rules   // the approval rule of the disposals, which the demo of the disposals sets
-	iam   *iam.Service // the clerk of the demo, who asks for the disposal that waits for approval
+	rules *iam.Rules           // the approval rule of the disposals, which the demo of the disposals sets
+	iam   *iam.Service         // the clerk of the demo, who asks for the disposal that waits for approval
+	maint *maintenance.Service // the repair request that names an asset
 }
 
 const (
