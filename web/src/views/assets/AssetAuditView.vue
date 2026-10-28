@@ -143,7 +143,7 @@ const progress = computed(() => {
 <template>
   <section class="mx-auto flex w-full max-w-md flex-col gap-3" data-testid="asset-audit">
     <PageHeader :title="audit ? `${audit.number}` : t('assets.audit.title')" :description="audit ? (audit.location_name ?? t('assets.audit.wholeProperty')) : undefined">
-      <RouterLink to="/assets/audits" class="text-sm">{{ t('assets.audit.back') }}</RouterLink>
+      <Button as-child variant="outline" size="sm"><RouterLink to="/assets/audits">{{ t('assets.audit.back') }}</RouterLink></Button>
     </PageHeader>
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>

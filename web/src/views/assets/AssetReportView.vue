@@ -122,7 +122,7 @@ const th = 'p-2 text-xs font-medium uppercase text-muted-foreground'
   <section class="flex flex-col gap-4" :data-testid="`asset-report-${kind}`">
     <PageHeader :title="t(`assets.reports.kind.${kind}.name`)" :description="t(`assets.reports.kind.${kind}.about`)">
       <div class="flex flex-wrap items-center gap-2 print:hidden">
-        <RouterLink to="/assets/reports" class="text-sm">{{ t('assets.reports.back') }}</RouterLink>
+        <Button as-child variant="outline" size="sm"><RouterLink to="/assets/reports">{{ t('assets.reports.back') }}</RouterLink></Button>
         <Button variant="outline" size="sm" data-testid="print" @click="print">{{ t('assets.reports.print') }}</Button>
         <Button variant="outline" size="sm" data-testid="export" @click="csv">{{ t('assets.reports.csv') }}</Button>
       </div>

@@ -125,7 +125,7 @@ const tabClass = (on: boolean): string => `min-h-9 rounded-full border px-3 text
 <template>
   <section class="flex flex-col gap-4" data-testid="asset-audits">
     <PageHeader :title="t('assets.audit.title')" :description="t('assets.audit.intro')">
-      <RouterLink to="/assets/reports/audit-differences" class="text-sm print:hidden">{{ t('assets.audit.differencesLink') }}</RouterLink>
+      <Button as-child variant="outline" size="sm" class="print:hidden"><RouterLink to="/assets/reports/audit-differences">{{ t('assets.audit.differencesLink') }}</RouterLink></Button>
     </PageHeader>
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>
