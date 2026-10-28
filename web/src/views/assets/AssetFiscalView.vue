@@ -38,8 +38,10 @@ async function load(): Promise<void> {
   try {
     const y = Number(year.value)
     const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/reports/fiscal', { params: { path: { propertyId }, query: { tax_year: Number.isInteger(y) && y > 0 ? y : undefined } } })
-    report.value = data ?? null
-    if (data) year.value = String(data.tax_year)
+    // the endpoint also answers text/csv, so the generated type of the body is a union with string
+    const body = typeof data === 'string' ? null : (data ?? null)
+    report.value = body
+    if (body) year.value = String(body.tax_year)
   } catch (e) {
     report.value = null
     error.value = e instanceof ApiError ? e : null

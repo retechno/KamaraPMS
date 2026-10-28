@@ -109,7 +109,7 @@ describe('the stock-take on the phone', () => {
     await w.get('[data-testid=audit-code]').setValue('FA:ABCDEFGHJKLM')
     await w.get('[data-testid=audit-manual-form]').trigger('submit')
     await flushPromises()
-    expect(PUT.mock.calls[0][1].body.code).toBe('FA:ABCDEFGHJKLM')
+    expect(PUT.mock.calls[0]![1].body.code).toBe('FA:ABCDEFGHJKLM')
     expect(w.get('[data-testid=audit-last]').text()).toContain('Found')
     expect(w.get('[data-testid=audit-progress]').text()).toBe('1 of 2 found')
     expect(w.find('[data-testid=audit-unscanned-FA-000012]').exists()).toBe(false)
@@ -128,7 +128,7 @@ describe('the stock-take on the phone', () => {
     await w.get('[data-testid=audit-code]').setValue('FA:ABCDEFGHJKLM')
     await w.get('[data-testid=audit-manual-form]').trigger('submit')
     await flushPromises()
-    expect(PUT.mock.calls[0][1].body).toMatchObject({ code: 'FA:ABCDEFGHJKLM', location_code: 'FL:ABCDEFGHJKLM' })
+    expect(PUT.mock.calls[0]![1].body).toMatchObject({ code: 'FA:ABCDEFGHJKLM', location_code: 'FL:ABCDEFGHJKLM' })
   })
 
   it('marks an unscanned asset as damaged', async () => {
@@ -140,7 +140,7 @@ describe('the stock-take on the phone', () => {
     input.dispatchEvent(new Event('input'))
     ;(document.body.querySelector('[data-testid=audit-damaged-confirm]') as HTMLElement).click()
     await flushPromises()
-    expect(PUT.mock.calls[0][1].body).toMatchObject({ asset_id: 3, damaged: true, note: 'cracked top' })
+    expect(PUT.mock.calls[0]![1].body).toMatchObject({ asset_id: 3, damaged: true, note: 'cracked top' })
   })
 
   it('closes into proposals and posts nothing itself', async () => {
@@ -149,7 +149,7 @@ describe('the stock-take on the phone', () => {
     await flushPromises()
     ;(document.body.querySelector('[data-testid=audit-close-confirm]') as HTMLElement).click()
     await flushPromises()
-    expect(POST.mock.calls[0][0]).toContain('/audits/{id}/close')
+    expect(POST.mock.calls[0]![0]).toContain('/audits/{id}/close')
     detail.status = 'CLOSED'
     expect(w.get('[data-testid=audit-closed]').text()).toContain('1 missing, 1 proposals made.')
   })

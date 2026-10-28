@@ -222,7 +222,7 @@ describe('MaintenanceView', () => {
     await w.get('input[name=description]').setValue('Ice machine does not freeze')
     await w.get('[data-testid=request-form]').trigger('submit')
     await flushPromises()
-    expect(POST.mock.calls[0][1].body.asset_id).toBe(4)
+    expect(POST.mock.calls[0]![1].body.asset_id).toBe(4)
   })
 
   it('does not offer the asset when the plan has no inventory module or the person cannot read the register', async () => {

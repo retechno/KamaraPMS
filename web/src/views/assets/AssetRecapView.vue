@@ -37,10 +37,12 @@ async function load(): Promise<void> {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/reports/recap', {
       params: { path: { propertyId }, query: { date_from: from.value || undefined, date_to: to.value || undefined } },
     })
-    report.value = data ?? null
-    if (data) {
-      from.value = data.date_from
-      to.value = data.date_to
+    // the endpoint also answers text/csv, so the generated type of the body is a union with string
+    const body = typeof data === 'string' ? null : (data ?? null)
+    report.value = body
+    if (body) {
+      from.value = body.date_from
+      to.value = body.date_to
     }
   } catch (e) {
     report.value = null
