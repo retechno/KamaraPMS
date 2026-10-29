@@ -407,6 +407,7 @@ type SetupIssue struct {
 type Reconciliation struct {
 	CategoryID       int64           `json:"category_id"`
 	CategoryCode     string          `json:"category_code"`
+	CategoryName     string          `json:"category_name"`
 	CostAccountCode  string          `json:"cost_account_code"`
 	RegisterCost     decimal.Decimal `json:"register_cost"`
 	LedgerCost       decimal.Decimal `json:"ledger_cost"`

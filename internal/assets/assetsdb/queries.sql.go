@@ -823,7 +823,7 @@ func (q *Queries) FindLocationByLabel(ctx context.Context, arg FindLocationByLab
 const fiscalBookAssets = `-- name: FiscalBookAssets :many
 
 SELECT a.id, a.number, a.name, a.category_id, c.code AS category_code, c.name AS category_name, a.source, a.status, a.acquisition_date, a.disposed_on, a.fiscal_group, a.fiscal_method,
-       a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated
+       a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated, a.first_dep_month
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
  WHERE a.tenant_id = $1 AND a.property_id = $2 AND a.fiscal_group <> 'NONE' AND a.status <> 'CANCELLED'
@@ -856,6 +856,7 @@ type FiscalBookAssetsRow struct {
 	FiscalMonthsDoneOpening *int32
 	FiscalOpeningAsOf       *civil.Date
 	FiscalOpeningEstimated  bool
+	FirstDepMonth           *civil.Date
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -892,6 +893,7 @@ func (q *Queries) FiscalBookAssets(ctx context.Context, arg FiscalBookAssetsPara
 			&i.FiscalMonthsDoneOpening,
 			&i.FiscalOpeningAsOf,
 			&i.FiscalOpeningEstimated,
+			&i.FirstDepMonth,
 		); err != nil {
 			return nil, err
 		}
@@ -3280,6 +3282,23 @@ func (q *Queries) LastLiveRun(ctx context.Context, arg LastLiveRunParams) (FaDep
 		&i.ReversalReason,
 	)
 	return i, err
+}
+
+const lastPostedRunMonth = `-- name: LastPostedRunMonth :one
+SELECT period_month FROM fa_depr_runs WHERE tenant_id = $1 AND property_id = $2 AND status = 'POSTED' ORDER BY period_month DESC LIMIT 1
+`
+
+type LastPostedRunMonthParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// The last month a depreciation run covers (the runs are in order and only the latest can be taken back, so the months of the live runs are a prefix).
+func (q *Queries) LastPostedRunMonth(ctx context.Context, arg LastPostedRunMonthParams) (civil.Date, error) {
+	row := q.db.QueryRow(ctx, lastPostedRunMonth, arg.TenantID, arg.PropertyID)
+	var period_month civil.Date
+	err := row.Scan(&period_month)
+	return period_month, err
 }
 
 const laterAssetEvents = `-- name: LaterAssetEvents :many

@@ -155,37 +155,41 @@ func TestFiscalReportOfAnOldAssetAndOfADisposal(t *testing.T) {
 	}
 	a0, b0 := f.asDetail(t, ids[0]), f.asDetail(t, ids[1])
 	rowA, rowB := byNumber[a0.Number], byNumber[b0.Number]
-	// the chair B: 750,000 a month, a whole year 9,000,000, against the one month of the register
-	wantAmount(t, "B fiscal", rowB.Fiscal, "9000000")
+	// the chair B: 750,000 a month by the rates, compared with the one month the register has depreciated (September), the same month
+	wantAmount(t, "B fiscal", rowB.Fiscal, "750000")
 	wantAmount(t, "B commercial", rowB.Commercial, "1000000")
-	wantAmount(t, "B difference", rowB.Difference, "-8000000")
-	if !rowB.Partial || rowB.FiscalGroup != "G1" {
+	wantAmount(t, "B difference", rowB.Difference, "250000")
+	if !rowB.Partial || rowB.FiscalGroup != "G1" || rowB.Months != 1 || rowB.FromMonth.String() != "2026-09-01" || rowB.ToMonth == nil || rowB.ToMonth.String() != "2026-09-01" || !rowB.UntilLastRun {
 		t.Errorf("B: %+v", rowB)
 	}
-	// the chair A left in October: its fiscal depreciation stops with that month (January to October: 7,500,000 after the 18,000,000 of the first two years)
-	wantAmount(t, "A fiscal", rowA.Fiscal, "7500000")
+	// the chair A left in October: the month of the disposal is not depreciated, so its period is September as well
+	wantAmount(t, "A fiscal", rowA.Fiscal, "750000")
 	wantAmount(t, "A commercial", rowA.Commercial, "1000000")
 	if len(rep.Disposals) != 1 {
 		t.Fatalf("%d disposals", len(rep.Disposals))
 	}
 	dp := rep.Disposals[0]
-	// fiscal book value 36,000,000 - 25,500,000 = 10,500,000: the fiscal gain is 7,500,000; the commercial carrying value was 14,000,000 (the run of September took 1,000,000), so its gain is 4,000,000
-	wantAmount(t, "fiscal book value", dp.FiscalBookValue, "10500000")
-	wantAmount(t, "fiscal gain", dp.FiscalGain, "7500000")
+	// fiscal accumulation up to September (33 months of 750,000 = 24,750,000): book value 11,250,000, so the fiscal gain is 6,750,000;
+	// the commercial carrying value was 14,000,000 (the run of September took 1,000,000), so its gain is 4,000,000
+	wantAmount(t, "fiscal book value", dp.FiscalBookValue, "11250000")
+	wantAmount(t, "fiscal gain", dp.FiscalGain, "6750000")
 	wantAmount(t, "commercial gain", dp.CommercialGain, "4000000")
-	wantAmount(t, "disposal difference", dp.Difference, "3500000")
-	wantAmount(t, "total fiscal", rep.Totals.Fiscal, "16500000")
+	wantAmount(t, "disposal difference", dp.Difference, "2750000")
+	wantAmount(t, "total fiscal", rep.Totals.Fiscal, "1500000")
 	wantAmount(t, "total commercial", rep.Totals.Commercial, "2000000")
-	wantAmount(t, "negative correction", rep.Totals.NegativeCorrection, "14500000")
-	wantAmount(t, "positive correction", rep.Totals.PositiveCorrection, "0")
-	wantAmount(t, "net", rep.Totals.NetCorrection, "-11000000")
+	wantAmount(t, "negative correction", rep.Totals.NegativeCorrection, "0")
+	wantAmount(t, "positive correction", rep.Totals.PositiveCorrection, "500000")
+	wantAmount(t, "net", rep.Totals.NetCorrection, "3250000")
+	if rep.RegisterFrom == nil || rep.RegisterFrom.String() != "2026-09-01" || !rep.YearStartsBeforeRegister || rep.LastRunMonth == nil || rep.LastRunMonth.String() != "2026-09-01" || !rep.YearOpen {
+		t.Errorf("period: %+v", rep)
+	}
 	if rep.Totals.PartialYearAssets != 2 {
 		t.Errorf("%d partial", rep.Totals.PartialYearAssets)
 	}
-	// 2027 holds only the chair B, whose fiscal life (four years from January 2024) ends in December 2027; the commercial book has nothing more to say about 2027 yet
+	// 2027: no run covers it yet, so there is nothing to compare
 	next, err := f.svc.FiscalReport(f.admin, f.propID, assets.FiscalFilter{TaxYear: ptr(2027)})
 	must(t, err)
-	wantAmount(t, "2027 fiscal", next.Totals.Fiscal, "9000000")
+	wantAmount(t, "2027 fiscal", next.Totals.Fiscal, "0")
 	wantAmount(t, "2027 commercial", next.Totals.Commercial, "0")
 	wantAmount(t, "2027 positive", next.Totals.PositiveCorrection, "0")
 	// a filter by asset

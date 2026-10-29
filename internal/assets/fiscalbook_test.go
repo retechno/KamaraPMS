@@ -63,17 +63,18 @@ func TestFiscalBookOldAssetFromOpening(t *testing.T) {
 	wantAmount(t, "three months later", half.Accumulated(d("2026-12-31")), "3750000")
 }
 
-// A part of the cost leaves: the part that left stops at its month, the part that stays goes on (4.9, the disposal).
+// A part of the cost leaves: the part that left stops at the month before the disposal (the month of the disposal is not
+// depreciated, like the commercial book), the part that stays goes on (4.9, the disposal).
 func TestFiscalBookDisposals(t *testing.T) {
 	layers := []assets.FiscalLayer{{Start: d("2026-01-05"), Cost: dec("12000000")}}
 	whole := book(t, assets.FiscalInput{Rate: g1(), Method: "SL", Layers: layers, Disposals: []assets.FiscalDisposalInput{{Date: d("2026-06-20"), CostRemoved: dec("12000000")}}})
-	wantAmount(t, "removed", whole.RemovedAccumulated(0), "1500000")
-	wantAmount(t, "frozen after the disposal", whole.Accumulated(d("2027-12-31")), "1500000")
+	wantAmount(t, "removed", whole.RemovedAccumulated(0), "1250000")
+	wantAmount(t, "frozen after the disposal", whole.Accumulated(d("2027-12-31")), "1250000")
 	wantAmount(t, "nothing in 2027", yearAmount(whole, 2027), "0")
 
 	part := book(t, assets.FiscalInput{Rate: g1(), Method: "SL", Layers: layers, Disposals: []assets.FiscalDisposalInput{{Date: d("2026-06-20"), CostRemoved: dec("6000000")}}})
-	wantAmount(t, "removed half", part.RemovedAccumulated(0), "750000")
-	wantAmount(t, "2026 both parts", yearAmount(part, 2026), "2250000")
+	wantAmount(t, "removed half", part.RemovedAccumulated(0), "625000")
+	wantAmount(t, "2026 both parts", yearAmount(part, 2026), "2125000")
 	wantAmount(t, "2027 the half that stays", yearAmount(part, 2027), "1500000")
 }
 

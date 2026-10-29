@@ -27402,13 +27402,14 @@ components:
         code: { type: string }
         severity: { type: string, enum: [ERROR, WARNING] }
         message: { type: string }
-        context: { type: object, additionalProperties: true }
+        context: { type: object, additionalProperties: true, description: "The parameters of the message by its code: category and category_name (code and name of a category), asset, location, account, field, cost_difference, accum_difference, balance." }
     AssetReconciliation:
       type: object
-      required: [category_id, category_code, cost_account_code, register_cost, ledger_cost, cost_difference, register_accum, ledger_accum, accum_difference]
+      required: [category_id, category_code, category_name, cost_account_code, register_cost, ledger_cost, cost_difference, register_accum, ledger_accum, accum_difference]
       properties:
         category_id: { type: integer, format: int64 }
         category_code: { type: string }
+        category_name: { type: string }
         cost_account_code: { type: string }
         register_cost: { type: string }
         ledger_cost: { type: string }
@@ -28079,6 +28080,8 @@ components:
         method: { type: [string, "null"] }
         fiscal_group: { type: [string, "null"] }
         fiscal_method: { type: [string, "null"] }
+        fiscal_rate_percent: { type: [string, "null"], description: "The yearly rate the fiscal group gives for that method." }
+        fiscal_life_years: { type: [integer, "null"] }
         rows: { type: array, items: { $ref: "#/components/schemas/AssetScheduleRow" } }
     AssetScheduleList:
       type: object
@@ -28166,7 +28169,7 @@ components:
         account_1590: { type: string, description: "The balance (credit positive) of the old single accumulated depreciation account, which belongs to no category." }
     AssetFiscalRow:
       type: object
-      required: [asset_id, number, name, category_code, fiscal_group, fiscal_method, commercial, fiscal, difference, fiscal_accumulated, partial_year, fiscal_estimated, from_opening, disposed_in_year]
+      required: [asset_id, number, name, category_code, fiscal_group, fiscal_method, commercial, fiscal, difference, fiscal_accumulated, from_month, to_month, months, fiscal_rate_percent, fiscal_life_years, partial_year, until_last_run, fiscal_estimated, from_opening, disposed_in_year]
       properties:
         asset_id: { type: integer, format: int64 }
         number: { type: string }
@@ -28177,8 +28180,14 @@ components:
         commercial: { type: string, description: "The depreciation of the ledger in the tax year." }
         fiscal: { type: string, description: "The fiscal depreciation of the tax year, computed." }
         difference: { type: string, description: "Commercial less fiscal: positive when the commercial expense is larger." }
-        fiscal_accumulated: { type: string, description: "At the end of the tax year." }
-        partial_year: { type: boolean, description: "The year starts before the register: the commercial months before it are not in the ledger." }
+        fiscal_accumulated: { type: string, description: "At the end of the period compared." }
+        from_month: { type: [string, "null"], format: date, description: "The first month compared: the commercial and the fiscal depreciation are both those of from_month through to_month. Null when no month is due." }
+        to_month: { type: [string, "null"], format: date }
+        months: { type: integer }
+        fiscal_rate_percent: { type: string, description: "The yearly rate the fiscal group gives for the method of the asset." }
+        fiscal_life_years: { type: integer }
+        partial_year: { type: boolean, description: "The asset depreciated before the register started: those months are in no ledger and outside this report." }
+        until_last_run: { type: boolean, description: "The period stops at the last month a run covers and the tax year is not over." }
         fiscal_estimated: { type: boolean, description: "The fiscal state of the opening balance was estimated, not given." }
         from_opening: { type: boolean }
         disposed_in_year: { type: boolean }
@@ -28220,7 +28229,7 @@ components:
         db_rate: { type: [string, "null"] }
     AssetFiscalReport:
       type: object
-      required: [tax_year, year_start, year_end, rows, disposals, totals, rates, rates_to_confirm]
+      required: [tax_year, year_start, year_end, rows, disposals, totals, rates, register_from, year_starts_before_register, last_run_month, year_open, rates_to_confirm]
       properties:
         tax_year: { type: integer, description: "Named by the calendar year in which the tax year starts." }
         year_start: { type: string, format: date }
@@ -28229,6 +28238,10 @@ components:
         disposals: { type: array, items: { $ref: "#/components/schemas/AssetFiscalDisposal" } }
         totals: { $ref: "#/components/schemas/AssetFiscalTotals" }
         rates: { type: array, items: { $ref: "#/components/schemas/AssetFiscalRate" } }
+        register_from: { type: [string, "null"], format: date, description: "The first month of the register." }
+        year_starts_before_register: { type: boolean, description: "The tax year starts before the register: the months before it are depreciated in no ledger of the register and their correction is outside this report." }
+        last_run_month: { type: [string, "null"], format: date, description: "The last month a depreciation run covers." }
+        year_open: { type: boolean, description: "The last run is before the end of the tax year: the year is compared up to it only." }
         rates_to_confirm: { type: boolean, description: "Always true: the rates are data and the tax consultant must confirm them." }
     AssetPlacementRow:
       type: object

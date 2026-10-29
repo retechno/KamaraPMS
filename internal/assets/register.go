@@ -389,10 +389,10 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupCheck,
 				return SetupCheck{}, err
 			}
 			if !a.IsActive || !a.IsPostable {
-				issue("CATEGORY_ACCOUNT_UNUSABLE", "ERROR", "the "+acc.field+" account of category "+c.Code+" is switched off or does not take postings", "category", c.Code, "account", a.Code)
+				issue("CATEGORY_ACCOUNT_UNUSABLE", "ERROR", "the "+acc.field+" account of category "+c.Code+" is switched off or does not take postings", "category", c.Code, "category_name", c.Name, "field", acc.field, "account", a.Code)
 			}
 			if acc.field == "expense" && a.DepartmentRequirement == "REQUIRED" && c.DepartmentID == nil {
-				issue("CATEGORY_NEEDS_DEPARTMENT", "WARNING", "the expense account of category "+c.Code+" requires a department and the category has none: the asset must carry one", "category", c.Code)
+				issue("CATEGORY_NEEDS_DEPARTMENT", "WARNING", "the expense account of category "+c.Code+" requires a department and the category has none: the asset must carry one", "category", c.Code, "category_name", c.Name)
 			}
 		}
 	}
@@ -437,7 +437,7 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupCheck,
 			if !c.IsActive {
 				continue
 			}
-			r := Reconciliation{CategoryID: c.ID, CategoryCode: c.Code, CostAccountCode: c.CostAccountCode, AccumAccountCode: c.AccumulatedAccountCode,
+			r := Reconciliation{CategoryID: c.ID, CategoryCode: c.Code, CategoryName: c.Name, CostAccountCode: c.CostAccountCode, AccumAccountCode: c.AccumulatedAccountCode,
 				RegisterCost: reg[c.ID].Cost, LedgerCost: bal[c.CostAccountID], RegisterAccum: reg[c.ID].Accum}
 			if c.AccumulatedAccountID != nil {
 				r.LedgerAccum = bal[*c.AccumulatedAccountID].Neg()
@@ -446,7 +446,7 @@ func (s *Service) SetupCheck(ctx context.Context, propertyID int64) (SetupCheck,
 			r.CostCauses, r.AccumCauses = causes[c.ID].costCauses(r.CostDifference), causes[c.ID].accumCauses(r.AccumDifference)
 			out.Reconciliation = append(out.Reconciliation, r)
 			if !r.CostDifference.IsZero() || !r.AccumDifference.IsZero() {
-				issue("GL_DIFFERENCE", "WARNING", "the general ledger and the register differ for category "+c.Code, "category", c.Code, "cost_difference", r.CostDifference.String(),
+				issue("GL_DIFFERENCE", "WARNING", "the general ledger and the register differ for category "+c.Code, "category", c.Code, "category_name", c.Name, "cost_difference", r.CostDifference.String(),
 					"accum_difference", r.AccumDifference.String())
 			}
 		}

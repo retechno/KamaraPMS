@@ -1015,9 +1015,12 @@ type AssetSchedule struct {
 	LifeMonths  *int32          `json:"life_months"`
 	Method      *string         `json:"method"`
 	// the fiscal group and method of the asset when it has them
-	FiscalGroup  *string       `json:"fiscal_group"`
-	FiscalMethod *string       `json:"fiscal_method"`
-	Rows         []ScheduleRow `json:"rows"`
+	FiscalGroup  *string `json:"fiscal_group"`
+	FiscalMethod *string `json:"fiscal_method"`
+	// the yearly rate and the useful life the fiscal group gives for that method
+	FiscalRatePercent *decimal.Decimal `json:"fiscal_rate_percent"`
+	FiscalLifeYears   *int             `json:"fiscal_life_years"`
+	Rows              []ScheduleRow    `json:"rows"`
 }
 
 // AssetSchedule lists the months of an asset: what the opening balances brought, what the runs posted and what is projected to the end of the life (asset.read).

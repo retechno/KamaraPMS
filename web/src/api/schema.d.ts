@@ -25723,6 +25723,7 @@ export interface components {
             /** @enum {string} */
             severity: "ERROR" | "WARNING";
             message: string;
+            /** @description The parameters of the message by its code: category and category_name (code and name of a category), asset, location, account, field, cost_difference, accum_difference, balance. */
             context?: {
                 [key: string]: unknown;
             };
@@ -25731,6 +25732,7 @@ export interface components {
             /** Format: int64 */
             category_id: number;
             category_code: string;
+            category_name: string;
             cost_account_code: string;
             register_cost: string;
             ledger_cost: string;
@@ -26524,6 +26526,9 @@ export interface components {
             method?: string | null;
             fiscal_group?: string | null;
             fiscal_method?: string | null;
+            /** @description The yearly rate the fiscal group gives for that method. */
+            fiscal_rate_percent?: string | null;
+            fiscal_life_years?: number | null;
             rows: components["schemas"]["AssetScheduleRow"][];
         };
         AssetScheduleList: {
@@ -26627,10 +26632,23 @@ export interface components {
             fiscal: string;
             /** @description Commercial less fiscal: positive when the commercial expense is larger. */
             difference: string;
-            /** @description At the end of the tax year. */
+            /** @description At the end of the period compared. */
             fiscal_accumulated: string;
-            /** @description The year starts before the register: the commercial months before it are not in the ledger. */
+            /**
+             * Format: date
+             * @description The first month compared: the commercial and the fiscal depreciation are both those of from_month through to_month. Null when no month is due.
+             */
+            from_month: string | null;
+            /** Format: date */
+            to_month: string | null;
+            months: number;
+            /** @description The yearly rate the fiscal group gives for the method of the asset. */
+            fiscal_rate_percent: string;
+            fiscal_life_years: number;
+            /** @description The asset depreciated before the register started: those months are in no ledger and outside this report. */
             partial_year: boolean;
+            /** @description The period stops at the last month a run covers and the tax year is not over. */
+            until_last_run: boolean;
             /** @description The fiscal state of the opening balance was estimated, not given. */
             fiscal_estimated: boolean;
             from_opening: boolean;
@@ -26683,6 +26701,20 @@ export interface components {
             disposals: components["schemas"]["AssetFiscalDisposal"][];
             totals: components["schemas"]["AssetFiscalTotals"];
             rates: components["schemas"]["AssetFiscalRate"][];
+            /**
+             * Format: date
+             * @description The first month of the register.
+             */
+            register_from: string | null;
+            /** @description The tax year starts before the register: the months before it are depreciated in no ledger of the register and their correction is outside this report. */
+            year_starts_before_register: boolean;
+            /**
+             * Format: date
+             * @description The last month a depreciation run covers.
+             */
+            last_run_month: string | null;
+            /** @description The last run is before the end of the tax year: the year is compared up to it only. */
+            year_open: boolean;
             /** @description Always true: the rates are data and the tax consultant must confirm them. */
             rates_to_confirm: boolean;
         };

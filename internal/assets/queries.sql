@@ -821,7 +821,7 @@ SELECT count(*)::int FROM fa_ledger e
 -- name: FiscalBookAssets :many
 -- The assets that have a fiscal group (land and construction in progress have none), cancelled ones left out.
 SELECT a.id, a.number, a.name, a.category_id, c.code AS category_code, c.name AS category_name, a.source, a.status, a.acquisition_date, a.disposed_on, a.fiscal_group, a.fiscal_method,
-       a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated
+       a.fiscal_accum_opening, a.fiscal_months_done_opening, a.fiscal_opening_as_of, a.fiscal_opening_estimated, a.first_dep_month
   FROM fa_assets a
   JOIN fa_categories c ON c.property_id = a.property_id AND c.id = a.category_id
  WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.fiscal_group <> 'NONE' AND a.status <> 'CANCELLED'
@@ -844,6 +844,10 @@ SELECT d.asset_id, d.number, d.disposal_date, d.cost_removed, d.accum_removed, d
   FROM fa_disposals d
  WHERE d.tenant_id = @tenant_id AND d.property_id = @property_id AND d.status = 'POSTED' AND (sqlc.narg(asset_id)::bigint IS NULL OR d.asset_id = sqlc.narg(asset_id))
  ORDER BY d.disposal_date, d.id;
+
+-- name: LastPostedRunMonth :one
+-- The last month a depreciation run covers (the runs are in order and only the latest can be taken back, so the months of the live runs are a prefix).
+SELECT period_month FROM fa_depr_runs WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'POSTED' ORDER BY period_month DESC LIMIT 1;
 
 -- name: CommercialDepreciationByMonth :many
 -- The depreciation the runs booked (and took back) per asset and book month.

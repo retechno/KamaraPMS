@@ -40,7 +40,7 @@ type FiscalInput struct {
 
 type fiscalPart struct {
 	frac decimal.Decimal
-	end  *civil.Date // the month a disposed part stops depreciating (inclusive); nil for the part that is still alive
+	end  *civil.Date // the last month a disposed part depreciates (inclusive): the month before its disposal, as in the commercial book (Q5); nil for the part that is still alive
 }
 
 // FiscalBook is the fiscal depreciation of one asset (4.9). The functions are linear in the cost, so a disposal splits the asset in two parts: the part that left, frozen at the month of the
@@ -62,8 +62,9 @@ func NewFiscalBook(in FiscalInput) *FiscalBook {
 	b := &FiscalBook{in: in}
 	alive := decimal.NewFromInt(1)
 	for _, d := range in.Disposals {
-		end := MonthStart(d.Date)
-		aliveCost := alive.Mul(b.costAt(end))
+		month := MonthStart(d.Date)
+		end := AddMonths(month, -1)
+		aliveCost := alive.Mul(b.costAt(month))
 		r := decimal.NewFromInt(1)
 		if aliveCost.IsPositive() {
 			r = d.CostRemoved.DivRound(aliveCost, 12)
@@ -179,20 +180,27 @@ type FiscalFilter struct {
 
 // FiscalRow is one asset in one tax year: the commercial depreciation of the ledger, the fiscal one, and the difference (positive when the commercial expense is larger).
 type FiscalRow struct {
-	AssetID        int64           `json:"asset_id"`
-	Number         string          `json:"number"`
-	Name           string          `json:"name"`
-	CategoryCode   string          `json:"category_code"`
-	FiscalGroup    string          `json:"fiscal_group"`
-	FiscalMethod   string          `json:"fiscal_method"`
-	Commercial     decimal.Decimal `json:"commercial"`
-	Fiscal         decimal.Decimal `json:"fiscal"`
-	Difference     decimal.Decimal `json:"difference"`
-	FiscalAccum    decimal.Decimal `json:"fiscal_accumulated"` // at the end of the tax year
-	Partial        bool            `json:"partial_year"`       // the year starts before the register: the commercial months before it are not in the ledger
-	Estimated      bool            `json:"fiscal_estimated"`   // the fiscal state of the opening balance was estimated, not given
-	FromOpening    bool            `json:"from_opening"`
-	DisposedInYear bool            `json:"disposed_in_year"`
+	AssetID      int64           `json:"asset_id"`
+	Number       string          `json:"number"`
+	Name         string          `json:"name"`
+	CategoryCode string          `json:"category_code"`
+	FiscalGroup  string          `json:"fiscal_group"`
+	FiscalMethod string          `json:"fiscal_method"`
+	Commercial   decimal.Decimal `json:"commercial"`
+	Fiscal       decimal.Decimal `json:"fiscal"`
+	Difference   decimal.Decimal `json:"difference"`
+	FiscalAccum  decimal.Decimal `json:"fiscal_accumulated"` // at the end of the period compared
+	// The months compared: the commercial and the fiscal depreciation are both those of FromMonth through ToMonth (4.9). Both are null when no month is due.
+	FromMonth         *civil.Date     `json:"from_month"`
+	ToMonth           *civil.Date     `json:"to_month"`
+	Months            int             `json:"months"`
+	FiscalRatePercent decimal.Decimal `json:"fiscal_rate_percent"` // the yearly rate the group gives for the method of the asset
+	FiscalLifeYears   int             `json:"fiscal_life_years"`
+	Partial           bool            `json:"partial_year"`     // the asset depreciated before the register started: those months are in no ledger and out of this report
+	UntilLastRun      bool            `json:"until_last_run"`   // the period stops at the last month a run covers and the year is not over
+	Estimated         bool            `json:"fiscal_estimated"` // the fiscal state of the opening balance was estimated, not given
+	FromOpening       bool            `json:"from_opening"`
+	DisposedInYear    bool            `json:"disposed_in_year"`
 }
 
 // FiscalDisposal is a disposal of the tax year with the commercial and the fiscal result.
@@ -240,12 +248,19 @@ type FiscalReport struct {
 	Disposals []FiscalDisposal `json:"disposals"`
 	Totals    FiscalTotals     `json:"totals"`
 	Rates     []FiscalRateInfo `json:"rates"`
+	// The register starts in RegisterFrom: when the tax year starts before it, the months before are depreciated in no ledger of the register and the correction of those months is outside this report.
+	RegisterFrom             *civil.Date `json:"register_from"`
+	YearStartsBeforeRegister bool        `json:"year_starts_before_register"`
+	// LastRunMonth is the last month a depreciation run covers; YearOpen is true when it is before the end of the tax year (the year is compared up to it only).
+	LastRunMonth *civil.Date `json:"last_run_month"`
+	YearOpen     bool        `json:"year_open"`
 	// RatesToConfirm is always true: the rates are data and the tax consultant must confirm them (Q15).
 	RatesToConfirm bool `json:"rates_to_confirm"`
 }
 
 type fiscalAsset struct {
 	row        assetsdb.FiscalBookAssetsRow
+	rate       FiscalRate
 	book       *FiscalBook
 	disposals  []assetsdb.FiscalBookDisposalsRow
 	commercial map[civil.Date]decimal.Decimal
@@ -254,6 +269,7 @@ type fiscalAsset struct {
 type fiscalData struct {
 	startMonth   int
 	registerFrom *civil.Date
+	lastRun      *civil.Date // the last month a live run covers
 	decimals     int32
 	rates        []FiscalRateInfo
 	assets       []*fiscalAsset
@@ -282,6 +298,11 @@ func (s *Service) loadFiscal(ctx context.Context, tenantID, propertyID int64, ca
 		return nil, err
 	}
 	out := &fiscalData{decimals: prop.CurrencyDecimals, registerFrom: cfg.RegisterFrom, startMonth: s.taxYearStartMonth(ctx, tenantID, propertyID, cfg.TaxYearStartMonth)}
+	if m, err := q.LastPostedRunMonth(ctx, assetsdb.LastPostedRunMonthParams{TenantID: tenantID, PropertyID: propertyID}); err == nil {
+		out.lastRun = &m
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
 	groups, err := q.ListFiscalGroups(ctx, assetsdb.ListFiscalGroupsParams{TenantID: tenantID, PropertyID: propertyID})
 	if err != nil {
 		return nil, err
@@ -355,7 +376,7 @@ func (s *Service) loadFiscal(ctx context.Context, tenantID, propertyID int64, ca
 		for _, d := range disposals[a.ID] {
 			in.Disposals = append(in.Disposals, FiscalDisposalInput{Date: d.DisposalDate, CostRemoved: d.CostRemoved})
 		}
-		out.assets = append(out.assets, &fiscalAsset{row: a, book: NewFiscalBook(in), disposals: disposals[a.ID], commercial: commercial[a.ID]})
+		out.assets = append(out.assets, &fiscalAsset{row: a, rate: rate, book: NewFiscalBook(in), disposals: disposals[a.ID], commercial: commercial[a.ID]})
 	}
 	return out, nil
 }
@@ -383,21 +404,39 @@ func (s *Service) FiscalReport(ctx context.Context, propertyID int64, f FiscalFi
 	}
 	start := civil.NewDate(year, time.Month(data.startMonth), 1)
 	end, prev := AddMonths(start, 11), AddMonths(start, -1)
-	out := FiscalReport{TaxYear: year, YearStart: start, YearEnd: MonthEnd(end), Rows: []FiscalRow{}, Disposals: []FiscalDisposal{}, Rates: data.rates, RatesToConfirm: true}
+	out := FiscalReport{TaxYear: year, YearStart: start, YearEnd: MonthEnd(end), Rows: []FiscalRow{}, Disposals: []FiscalDisposal{}, Rates: data.rates, RatesToConfirm: true,
+		RegisterFrom: data.registerFrom, LastRunMonth: data.lastRun}
 	if out.Rates == nil {
 		out.Rates = []FiscalRateInfo{}
 	}
+	var registerMonth *civil.Date
+	if data.registerFrom != nil {
+		m := MonthStart(*data.registerFrom)
+		registerMonth = &m
+		out.YearStartsBeforeRegister = m.After(start) && !m.After(end)
+	}
+	out.YearOpen = data.lastRun == nil || data.lastRun.Before(end)
 	for _, a := range data.assets {
-		commercial := decimal.Zero
-		for m, v := range a.commercial {
-			if !m.Before(start) && !m.After(end) {
-				commercial = commercial.Add(v)
+		pd := fiscalPeriodOf(start, end, registerMonth, a.row.FirstDepMonth, data.lastRun, a.row.DisposedOn)
+		commercial, fiscal := decimal.Zero, decimal.Zero
+		accAt := prev
+		if data.lastRun != nil {
+			accAt = end
+			if data.lastRun.Before(end) {
+				accAt = *data.lastRun
 			}
 		}
-		endAccum := a.book.Accumulated(end)
-		fiscal := endAccum.Sub(a.book.Accumulated(prev))
+		if pd.months > 0 {
+			for m, v := range a.commercial {
+				if !m.Before(pd.from) && !m.After(pd.to) {
+					commercial = commercial.Add(v)
+				}
+			}
+			fiscal = a.book.Accumulated(pd.to).Sub(a.book.Accumulated(AddMonths(pd.from, -1)))
+		}
+		endAccum := a.book.Accumulated(accAt)
 		fromOpening := a.row.Source == sourceOpening
-		partial := fromOpening && data.registerFrom != nil && start.Before(*data.registerFrom) && !end.Before(MonthStart(*data.registerFrom))
+		partial := registerMonth != nil && registerMonth.After(start) && !registerMonth.After(end) && pd.depreciatedBefore(*registerMonth)
 		disposedInYear := false
 		for i, d := range a.disposals {
 			if d.DisposalDate.Before(start) || d.DisposalDate.After(out.YearEnd) {
@@ -416,9 +455,19 @@ func (s *Service) FiscalReport(ctx context.Context, propertyID int64, f FiscalFi
 			continue
 		}
 		diff := commercial.Sub(fiscal)
-		out.Rows = append(out.Rows, FiscalRow{AssetID: a.row.ID, Number: a.row.Number, Name: a.row.Name, CategoryCode: a.row.CategoryCode, FiscalGroup: a.row.FiscalGroup,
-			FiscalMethod: orString(a.row.FiscalMethod, MethodSL), Commercial: commercial, Fiscal: fiscal, Difference: diff, FiscalAccum: endAccum, Partial: partial,
-			Estimated: a.row.FiscalOpeningEstimated, FromOpening: fromOpening, DisposedInYear: disposedInYear})
+		method := orString(a.row.FiscalMethod, MethodSL)
+		annual := a.rate.SLRate
+		if method == MethodDB && a.rate.DBRate.IsPositive() {
+			annual = a.rate.DBRate
+		}
+		row := FiscalRow{AssetID: a.row.ID, Number: a.row.Number, Name: a.row.Name, CategoryCode: a.row.CategoryCode, FiscalGroup: a.row.FiscalGroup,
+			FiscalMethod: method, Commercial: commercial, Fiscal: fiscal, Difference: diff, FiscalAccum: endAccum, Months: pd.months, FiscalRatePercent: annual, FiscalLifeYears: a.rate.LifeYears,
+			Partial: partial, UntilLastRun: pd.untilLastRun, Estimated: a.row.FiscalOpeningEstimated, FromOpening: fromOpening, DisposedInYear: disposedInYear}
+		if pd.months > 0 {
+			f, t := pd.from, pd.to
+			row.FromMonth, row.ToMonth = &f, &t
+		}
+		out.Rows = append(out.Rows, row)
 		t := &out.Totals
 		t.Commercial, t.Fiscal = t.Commercial.Add(commercial), t.Fiscal.Add(fiscal)
 		switch {
@@ -440,6 +489,48 @@ func (s *Service) FiscalReport(ctx context.Context, propertyID int64, f FiscalFi
 	return out, nil
 }
 
+// fiscalPeriod is the stretch of months of a tax year in which the commercial and the fiscal depreciation of an asset are compared: both are those of the same months (4.9).
+type fiscalPeriod struct {
+	from, to     civil.Date
+	months       int
+	untilLastRun bool // the period ends at the last month a run covers, and the year is not over
+	firstMonth   civil.Date
+}
+
+// depreciatedBefore tells whether the asset was already to depreciate before the month: those months are in no ledger of the register.
+func (p fiscalPeriod) depreciatedBefore(m civil.Date) bool { return p.firstMonth.Before(m) }
+
+// fiscalPeriodOf is the period of an asset in the tax year start..end (months): it begins at the latest of the start of the year, the first month of the register and the first month the asset depreciates,
+// and ends at the earliest of the end of the year, the last month a run covers and the month before the disposal of the whole asset (the month of a disposal is not depreciated, Q5).
+func fiscalPeriodOf(start, end civil.Date, registerMonth, firstDep, lastRun, disposedOn *civil.Date) fiscalPeriod {
+	from := start
+	if registerMonth != nil && registerMonth.After(from) {
+		from = *registerMonth
+	}
+	first := start
+	if firstDep != nil {
+		if m := MonthStart(*firstDep); m.After(first) {
+			first = m
+		}
+		if m := MonthStart(*firstDep); m.After(from) {
+			from = m
+		}
+	}
+	to := end
+	untilLastRun := false
+	if lastRun == nil {
+		to = AddMonths(from, -1)
+	} else if lastRun.Before(to) {
+		to, untilLastRun = *lastRun, true
+	}
+	if disposedOn != nil {
+		if m := AddMonths(MonthStart(*disposedOn), -1); m.Before(to) {
+			to, untilLastRun = m, false
+		}
+	}
+	return fiscalPeriod{from: from, to: to, months: MonthsBetween(from, to), untilLastRun: untilLastRun, firstMonth: first}
+}
+
 // fillFiscalSchedule adds the fiscal amount and accumulated depreciation to each month of an asset's schedule (the column "fiscal" of the tab).
 func (s *Service) fillFiscalSchedule(ctx context.Context, tenantID, propertyID, assetID int64, sch *AssetSchedule) error {
 	data, err := s.loadFiscal(ctx, tenantID, propertyID, nil, &assetID)
@@ -449,6 +540,11 @@ func (s *Service) fillFiscalSchedule(ctx context.Context, tenantID, propertyID, 
 	a := data.assets[0]
 	g, m := a.row.FiscalGroup, orString(a.row.FiscalMethod, MethodSL)
 	sch.FiscalGroup, sch.FiscalMethod = &g, &m
+	annual, years := a.rate.SLRate, a.rate.LifeYears
+	if m == MethodDB && a.rate.DBRate.IsPositive() {
+		annual = a.rate.DBRate
+	}
+	sch.FiscalRatePercent, sch.FiscalLifeYears = &annual, &years
 	for i := range sch.Rows {
 		r := &sch.Rows[i]
 		after := a.book.Accumulated(r.Month)
