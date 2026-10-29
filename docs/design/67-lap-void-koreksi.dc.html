@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Void, koreksi, diskon dan allowance</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lbl{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:4px}
+.chip{height:34px;padding:0 12px;border:1px solid #e3e6ea;border-radius:17px;background:#fff;font:inherit;font-size:12.5px;color:#1c2128}
+.on{background:#1f6f5c;color:#fff;border-color:#1f6f5c}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:7px 8px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:6px 8px;border-bottom:1px solid #eef0f2;font-size:12.5px;white-space:nowrap;vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:10px;font-size:10.5px;font-weight:600;background:#eef0f2;color:#4a5361}
+.pv{background:#fde8e1;color:#7c2d12}
+.pa{background:#fdf1dc;color:#5c3608}
+.pd{background:#e3f2ee;color:#185a4a}
+.pr{background:#e6eefb;color:#1e3a8a}
+.tot td{font-weight:700;background:#f6f7f9}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.ck{display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;font-variant-numeric:tabular-nums}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">LAPORAN</div>
+    <a href="#" class="nav">Ringkasan harian</a>
+    <a href="63-lap-daily-flash.dc.html" class="nav">Daily flash</a>
+    <a href="64-lap-pembatalan-no-show.dc.html" class="nav">Pembatalan &amp; no-show</a>
+    <a href="65-lap-guest-ledger.dc.html" class="nav">Guest ledger</a>
+    <a href="66-lap-ledger-deposit.dc.html" class="nav">Ledger deposit</a>
+    <a href="67-lap-void-koreksi.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Void &amp; koreksi</a>
+    <a href="68-lap-z-semua-laci.dc.html" class="nav">Z semua laci</a>
+    <a href="#" class="nav">Laporan lain</a>
+    <div class="sec">AKHIR HARI</div>
+    <a href="69-na-selesai-paket.dc.html" class="nav">Night audit</a>
+    <a href="70-na-arsip.dc.html" class="nav">Arsip night audit</a>
+    <a href="71-na-penerima.dc.html" class="nav">Penerima paket</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:flex-end;gap:10px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <h1 style="margin:0;font-size:24px">Void, koreksi, diskon &amp; allowance</h1>
+        <span style="font-size:12.5px;color:#4a5361">Semua yang dibatalkan, dikurangi atau diberikan gratis, di folio dan POS: siapa, disetujui siapa, dan alasannya.</span>
+      </div>
+      <button class="btn">Cetak PDF</button><button class="btn">Unduh CSV</button>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap">
+      <label class="lbl">Dari<input class="inp" value="28/10/2026" style="width:120px"></label>
+      <label class="lbl">Sampai<input class="inp" value="28/10/2026" style="width:120px"></label>
+      <div style="display:flex;gap:5px;padding-bottom:3px"><button class="chip on">Semua</button><button class="chip">Void</button><button class="chip">Koreksi</button><button class="chip">Allowance</button><button class="chip">Refund</button><button class="chip">Diskon</button><button class="chip">Komplimen</button><button class="chip">Void POS</button></div>
+      <label class="lbl">Pengguna<select class="inp" style="width:140px"><option>Semua</option></select></label>
+      <label class="lbl">Outlet<select class="inp" style="width:140px"><option>Semua</option></select></label>
+    </div>
+
+    <section class="card" style="overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Jam</th><th class="th">Jenis</th><th class="th">Folio / bill</th><th class="th">Pos</th><th class="th">Asal</th><th class="th thr">Neto</th><th class="th thr">Servis</th><th class="th thr">Pajak</th><th class="th thr">Bruto</th><th class="th">Alasan</th><th class="th">Oleh · disetujui</th></tr></thead>
+        <tbody>
+          <tr><td class="td">09.14</td><td class="td"><span class="pill pv">Void</span></td><td class="td">F-10231<div class="sub">Michael Brown · 204</div></td><td class="td">Minibar</td><td class="td sub">FI-88412 · 27 Okt</td><td class="td num">−250.000</td><td class="td num">−25.000</td><td class="td num">−27.500</td><td class="td num">−302.500</td><td class="td">Salah kamar</td><td class="td">Dewi · Rina</td></tr>
+          <tr><td class="td">11.02</td><td class="td"><span class="pill pv">Void bayar</span></td><td class="td">F-10236<div class="sub">Lina Gunawan · 311</div></td><td class="td">Kartu kredit</td><td class="td sub">PAY-23011</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">−1.500.000</td><td class="td">Gesek dua kali</td><td class="td">Agus · Rina</td></tr>
+          <tr><td class="td">13.40</td><td class="td"><span class="pill pa">Koreksi</span></td><td class="td">F-10240<div class="sub">Master SMA 5</div></td><td class="td">Laundry</td><td class="td sub">FI-88233 · 26 Okt</td><td class="td num">−120.000</td><td class="td num">−12.000</td><td class="td num">−13.200</td><td class="td num">−145.200</td><td class="td">Harga per kg salah</td><td class="td">Dewi · Rina</td></tr>
+          <tr><td class="td">14.05</td><td class="td"><span class="pill pa">Allowance</span></td><td class="td">F-10187<div class="sub">Daniel Ho · 109</div></td><td class="td">4160 Allowance kamar</td><td class="td sub">–</td><td class="td num">−500.000</td><td class="td num">−50.000</td><td class="td num">−55.000</td><td class="td num">−605.000</td><td class="td">AC rusak satu malam</td><td class="td">Rina · Hendro</td></tr>
+          <tr><td class="td">16.20</td><td class="td"><span class="pill pr">Refund</span></td><td class="td">F-10219<div class="sub">Nadia Putri</div></td><td class="td">Transfer bank</td><td class="td sub">deposit</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">−750.000</td><td class="td">Batal sesuai kebijakan</td><td class="td">Agus · Rina</td></tr>
+          <tr><td class="td">12.30</td><td class="td"><span class="pill pd">Diskon</span></td><td class="td">B-3381<div class="sub">Restoran · meja 4</div></td><td class="td">Makanan</td><td class="td sub">–</td><td class="td num">−96.000</td><td class="td num">−9.600</td><td class="td num">−10.560</td><td class="td num">−116.160</td><td class="td">Member 10%</td><td class="td">Tia</td></tr>
+          <tr><td class="td">19.45</td><td class="td"><span class="pill pd">Komplimen</span></td><td class="td">B-3402<div class="sub">Bar · meja 2</div></td><td class="td">2 × Bintang</td><td class="td sub">nilai daftar</td><td class="td num">−110.000</td><td class="td num">–</td><td class="td num">–</td><td class="td num">−110.000</td><td class="td">Welcome drink VIP</td><td class="td">Tia · Hendro</td></tr>
+          <tr><td class="td">20.10</td><td class="td"><span class="pill pv">Void POS</span></td><td class="td">B-3410<div class="sub">Restoran · meja 9</div></td><td class="td">Nasi goreng</td><td class="td sub">sudah ke dapur</td><td class="td num">−85.000</td><td class="td num">−8.500</td><td class="td num">−9.350</td><td class="td num">−102.850</td><td class="td">Tamu batal pesan</td><td class="td">Joko · Tia</td></tr>
+          <tr class="tot"><td class="td" colspan="5">Total 8 kejadian</td><td class="td num">−1.161.000</td><td class="td num">−105.100</td><td class="td num">−115.610</td><td class="td num">−3.631.710</td><td class="td" colspan="2"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div style="display:flex;gap:10px">
+      <section class="card" style="flex:1;padding:10px 14px"><strong style="font-size:13px">Per jenis (neto)</strong>
+        <div class="ck"><span>Void folio · koreksi · allowance</span><span>3 · −870.000</span></div>
+        <div class="ck"><span>Diskon · komplimen · void POS</span><span>3 · −291.000</span></div>
+        <div class="ck"><span>Void bayar · refund (uang, bukan pendapatan)</span><span>2 · −2.250.000</span></div>
+      </section>
+      <section class="card" style="flex:1;padding:10px 14px"><strong style="font-size:13px">Per pengguna (dikerjakan)</strong>
+        <div class="ck"><span>Dewi</span><span>2 · −370.000</span></div>
+        <div class="ck"><span>Agus</span><span>2 · −2.250.000</span></div>
+        <div class="ck"><span>Rina · Tia · Joko</span><span>4 · −791.000</span></div>
+      </section>
+      <section class="card" style="flex:1;padding:10px 14px"><strong style="font-size:13px">Terhadap pendapatan</strong>
+        <div class="ck"><span>Pendapatan neto 28 Okt</span><span>139.480.000</span></div>
+        <div class="ck"><span>Dikurangi atau diberikan (neto)</span><span>1.161.000</span></div>
+        <div class="ck"><span>Porsi</span><span style="font-weight:700">0,83%</span></div>
+      </section>
+    </div>
+    <div style="font-size:11.5px;color:#4a5361">Void baris POS yang masih draf tidak tampil: belum pernah masuk ledger. Credit note dan write-off city ledger punya laporan sendiri.</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

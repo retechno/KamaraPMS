@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Arsip night audit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 14px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:13.5px;color:#1c2128}
+.btnp{height:44px;padding:0 16px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lbl{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:4px}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:8px 10px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.td{padding:9px 10px;border-bottom:1px solid #eef0f2;font-size:13px;white-space:nowrap;vertical-align:top}
+.sel td{background:#f1f8f5}
+.sub{font-size:11.5px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600}
+.ok{background:#e3f2ee;color:#185a4a}
+.wr{background:#fdf1dc;color:#5c3608}
+.er{background:#fde8e1;color:#7c2d12}
+.no{background:#eef0f2;color:#4a5361}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.dl{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #eef0f2;font-size:12.5px}
+.cb{display:flex;align-items:center;gap:8px;font-size:13px;min-height:32px}
+.cb input{width:18px;height:18px;margin:0;accent-color:#1f6f5c}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#4a5361}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">LAPORAN</div>
+    <a href="#" class="nav">Ringkasan harian</a>
+    <a href="63-lap-daily-flash.dc.html" class="nav">Daily flash</a>
+    <a href="64-lap-pembatalan-no-show.dc.html" class="nav">Pembatalan &amp; no-show</a>
+    <a href="65-lap-guest-ledger.dc.html" class="nav">Guest ledger</a>
+    <a href="66-lap-ledger-deposit.dc.html" class="nav">Ledger deposit</a>
+    <a href="67-lap-void-koreksi.dc.html" class="nav">Void &amp; koreksi</a>
+    <a href="68-lap-z-semua-laci.dc.html" class="nav">Z semua laci</a>
+    <a href="#" class="nav">Laporan lain</a>
+    <div class="sec">AKHIR HARI</div>
+    <a href="69-na-selesai-paket.dc.html" class="nav">Night audit</a>
+    <a href="70-na-arsip.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Arsip night audit</a>
+    <a href="71-na-penerima.dc.html" class="nav">Penerima paket</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;gap:14px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:flex-end;gap:10px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+          <h1 style="margin:0;font-size:24px">Arsip night audit</h1>
+          <span style="font-size:12.5px;color:#4a5361">Satu paket per hari yang ditutup, disimpan saat night audit. Unduh lagi, kirim ulang, atau lihat riwayat pengiriman.</span>
+        </div>
+        <label class="lbl">Dari<input class="inp" value="01/10/2026" style="width:120px"></label>
+        <label class="lbl">Sampai<input class="inp" value="28/10/2026" style="width:120px"></label>
+      </div>
+      <section class="card" style="overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th class="th">Tanggal bisnis</th><th class="th">Paket</th><th class="th">Bagian</th><th class="th">E-mail</th><th class="th">Ditutup</th></tr></thead>
+          <tbody>
+            <tr><td class="td"><strong>Rab, 28 Okt</strong></td><td class="td"><span class="pill ok">Lengkap</span></td><td class="td">15 OK</td><td class="td">2 terkirim · 2 diantre</td><td class="td">Budi · 00.42</td></tr>
+            <tr><td class="td"><strong>Sel, 27 Okt</strong></td><td class="td"><span class="pill ok">Lengkap</span></td><td class="td">15 OK</td><td class="td">4 terkirim</td><td class="td">Budi · 00.37</td></tr>
+            <tr class="sel"><td class="td"><strong>Sen, 26 Okt</strong></td><td class="td"><span class="pill ok">Lengkap</span></td><td class="td">15 OK</td><td class="td"><span class="pill er">1 gagal</span> 3 terkirim</td><td class="td">Budi · 00.38</td></tr>
+            <tr><td class="td"><strong>Min, 25 Okt</strong></td><td class="td"><span class="pill wr">Sebagian</span></td><td class="td">14 OK · Z semua laci dibangun ulang<div class="sub">oleh Rina, 25 Okt 09.10</div></td><td class="td">4 terkirim<div class="sub">tanpa Z semua laci</div></td><td class="td">Dewi · 00.51</td></tr>
+            <tr><td class="td"><strong>Sab, 24 Okt</strong></td><td class="td"><span class="pill ok">Lengkap</span></td><td class="td">15 OK</td><td class="td">4 terkirim</td><td class="td">Dewi · 00.33</td></tr>
+            <tr><td class="td"><strong>Jum, 23 Okt</strong></td><td class="td"><span class="pill ok">Lengkap</span></td><td class="td">15 OK</td><td class="td"><span class="pill no">E-mail mati</span></td><td class="td">Budi · 00.40</td></tr>
+            <tr><td class="td"><strong>Sel, 20 Okt</strong></td><td class="td"><span class="pill no">Dibangun ulang</span></td><td class="td">11 OK · 4 tidak tersedia<div class="sub">sebelum fitur ini; dari ledger</div></td><td class="td sub">tidak dikirim</td><td class="td">Agus · 00.45</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <span class="sub">Hari sebelum fitur ini tidak punya paket. Pengguna berizin dapat membangunnya dari ledger (maks. 400 hari), tanpa e-mail. Tamu menginap, besok, catatan audit dan kamar OOO tidak bisa disusun ulang untuk tanggal lampau.</span>
+    </div>
+
+    <section class="card" style="width:460px;flex-shrink:0;padding:16px 18px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px"><strong style="font-size:16px;flex:1">Paket Senin, 26 Okt 2026</strong><span class="pill ok">Lengkap</span></div>
+      <div style="display:flex;gap:8px"><button class="btn" style="flex:1">Unduh PDF (15 bagian)</button><button class="btn" style="flex:1">Pilih bagian…</button></div>
+
+      <strong style="font-size:13px;padding-top:4px">Riwayat pengiriman</strong>
+      <div class="dl"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><strong>gm@kamarabali.com</strong><span class="sub">2 bagian · diantre oleh Budi 00.38</span><span class="mono">SHA-256 9f3a…c21e · renderer v1</span></div><span class="pill ok">Terkirim 00.38</span></div>
+      <div class="dl"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><strong>finance@kamarabali.com</strong><span class="sub">9 bagian · diantre oleh Budi 00.38</span><span class="mono">SHA-256 41bd…07a9 · renderer v1</span></div><span class="pill ok">Terkirim 00.39</span></div>
+      <div class="dl"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><strong>owner@kamaragroup.co.id</strong><span class="sub">2 bagian · diantre oleh Budi 00.38</span><span class="mono">SHA-256 9f3a…c21e · renderer v1</span></div><span class="pill ok">Terkirim 00.39</span></div>
+      <div class="dl"><div style="flex:1;display:flex;flex-direction:column;gap:1px"><strong>fom@kamarabali.com</strong><span class="sub">6 bagian · 5 kali coba, terakhir 09.12</span><span class="sub" style="color:#7c2d12">550 5.1.1 mailbox unavailable</span></div><span class="pill er">Gagal</span></div>
+
+      <strong style="font-size:13px;padding-top:6px">Kirim ulang</strong>
+      <label class="cb"><input type="checkbox" checked>fom@kamarabali.com <span class="sub">· 6 bagian</span></label>
+      <label class="cb"><input type="checkbox">gm@kamarabali.com <span class="sub">· 2 bagian</span></label>
+      <label class="cb"><input type="checkbox">finance@kamarabali.com <span class="sub">· 9 bagian</span></label>
+      <label class="cb"><input type="checkbox">owner@kamaragroup.co.id <span class="sub">· 2 bagian</span></label>
+      <span class="sub">Hanya ke penerima terdaftar yang aktif, dengan bagian pilihannya. Alamat lain: tambahkan dulu di Penerima paket.</span>
+      <div style="flex:1"></div>
+      <button class="btnp">Kirim ulang ke 1 penerima</button>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
