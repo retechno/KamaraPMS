@@ -59,6 +59,30 @@ describe('the recap by category', () => {
     expect(w.find('[data-testid=cause-OTHER]').exists()).toBe(false)
   })
 
+  it('hides the change-of-category columns unless a category changed, and matches the ledger in its own table', async () => {
+    const row = recapRow({ accum_difference: '250000' })
+    GET = vi.fn(async () => ({ data: { date_from: '2026-10-01', date_to: '2026-10-31', rows: [row], total: row, account_1590: '0' } }))
+    const w = await setup(AssetRecapView, '/assets/reports/recap', '/assets/reports/recap')
+    expect(w.find('[data-testid=recap-reclass-head]').exists()).toBe(false)
+    expect(w.get('[data-testid=recap-table]').text()).not.toContain('Change of category')
+    expect(w.get('[data-testid=recap-table]').text()).not.toContain('40,000,000')
+    const ledger = w.get('[data-testid=recap-ledger-row-FFE]').text()
+    expect(ledger).toContain('36,000,000')
+    expect(ledger).toContain('40,000,000')
+    expect(w.get('[data-testid=recap-diff-FFE]').text()).toContain('4,000,000')
+    expect(w.get('[data-testid=recap-accum-diff-FFE]').text()).toContain('250,000')
+    expect(w.get('[data-testid=recap-ledger-total]').text()).toContain('40,000,000')
+  })
+
+  it('shows the change-of-category columns when a category changed in the period', async () => {
+    const row = recapRow({ cost_reclass: '5000000', accum_reclass: '1200000' })
+    GET = vi.fn(async () => ({ data: { date_from: '2026-10-01', date_to: '2026-10-31', rows: [row], total: row, account_1590: '0' } }))
+    const w = await setup(AssetRecapView, '/assets/reports/recap', '/assets/reports/recap')
+    expect(w.find('[data-testid=recap-reclass-head]').exists()).toBe(true)
+    expect(w.get('[data-testid=recap-row-FFE]').text()).toContain('5,000,000')
+    expect(w.get('[data-testid=recap-row-FFE]').text()).toContain('1,200,000')
+  })
+
   it('says so when the register and the ledger agree', async () => {
     const row = recapRow({ ledger_cost_closing: '36000000', cost_difference: '0', cost_causes: [] })
     GET = vi.fn(async () => ({ data: { date_from: '2026-10-01', date_to: '2026-10-31', rows: [row], total: row, account_1590: '0' } }))

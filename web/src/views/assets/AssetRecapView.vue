@@ -75,6 +75,8 @@ const differences = computed<Difference[]>(() => {
   }
   return out
 })
+/** The change-of-category columns appear only when a category changed in the period. */
+const reclassed = computed(() => [report.value?.total, ...(report.value?.rows ?? [])].some((r) => r && (!isZero(r.cost_reclass) || !isZero(r.accum_reclass))))
 const accum1590 = computed(() => !isZero(report.value?.account_1590))
 function print(): void {
   window.print()
@@ -105,34 +107,57 @@ const th = 'px-1.5 py-2 text-right text-[11px] font-medium uppercase leading-tig
           <thead>
             <tr class="border-b border-border">
               <th rowspan="2" class="p-2 text-left text-xs font-medium uppercase text-muted-foreground">{{ t('assets.reports.recap.category') }}</th>
-              <th colspan="5" class="p-2 text-center text-xs font-medium uppercase text-muted-foreground">{{ t('assets.reports.recap.cost') }}</th>
-              <th colspan="6" class="border-l border-border p-2 text-center text-xs font-medium uppercase text-muted-foreground">{{ t('assets.reports.recap.accum') }}</th>
+              <th :colspan="reclassed ? 5 : 4" class="p-2 text-center text-xs font-medium uppercase text-muted-foreground">{{ t('assets.reports.recap.cost') }}</th>
+              <th :colspan="reclassed ? 6 : 5" class="border-l border-border p-2 text-center text-xs font-medium uppercase text-muted-foreground">{{ t('assets.reports.recap.accum') }}</th>
               <th rowspan="2" :class="th">{{ t('assets.reports.recap.carrying') }}</th>
-              <th colspan="2" class="border-l border-border p-2 text-center text-xs font-medium uppercase text-muted-foreground">{{ t('assets.reports.recap.ledger') }}</th>
             </tr>
             <tr class="border-b border-border">
-              <th :class="th">{{ t('assets.reports.recap.opening') }}</th><th :class="th">{{ t('assets.reports.recap.additions') }}</th><th :class="th">{{ t('assets.reports.recap.reclass') }}</th><th :class="th">{{ t('assets.reports.recap.disposals') }}</th><th :class="th">{{ t('assets.reports.recap.closing') }}</th>
-              <th :class="th" class="border-l border-border">{{ t('assets.reports.recap.opening') }}</th><th :class="th">{{ t('assets.reports.recap.additions') }}</th><th :class="th">{{ t('assets.reports.recap.depreciation') }}</th><th :class="th">{{ t('assets.reports.recap.reclass') }}</th><th :class="th">{{ t('assets.reports.recap.disposals') }}</th><th :class="th">{{ t('assets.reports.recap.closing') }}</th>
-              <th :class="th" class="border-l border-border">{{ t('assets.reports.recap.ledgerCost') }}</th><th :class="th">{{ t('assets.reports.recap.difference') }}</th>
+              <th :class="th">{{ t('assets.reports.recap.opening') }}</th><th :class="th">{{ t('assets.reports.recap.additions') }}</th><th v-if="reclassed" :class="th" data-testid="recap-reclass-head">{{ t('assets.reports.recap.reclass') }}</th><th :class="th">{{ t('assets.reports.recap.disposals') }}</th><th :class="th">{{ t('assets.reports.recap.closing') }}</th>
+              <th :class="th" class="border-l border-border">{{ t('assets.reports.recap.opening') }}</th><th :class="th">{{ t('assets.reports.recap.additions') }}</th><th :class="th">{{ t('assets.reports.recap.depreciation') }}</th><th v-if="reclassed" :class="th">{{ t('assets.reports.recap.reclass') }}</th><th :class="th">{{ t('assets.reports.recap.disposals') }}</th><th :class="th">{{ t('assets.reports.recap.closing') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in report.rows" :key="r.category_id" class="border-b border-border" :data-testid="`recap-row-${r.category_code}`">
               <td class="min-w-32 p-2">{{ r.category_name }}<br><span class="text-[11px] text-muted-foreground">{{ r.cost_account_code }}{{ r.accumulated_account_code ? `/${r.accumulated_account_code}` : '' }}</span></td>
-              <td class="p-2 text-right">{{ money(r.cost_opening) }}</td><td class="p-2 text-right">{{ money(r.cost_additions) }}</td><td class="p-2 text-right">{{ money(r.cost_reclass) }}</td><td class="p-2 text-right">{{ money(r.cost_disposals) }}</td><td class="p-2 text-right font-medium">{{ money(r.cost_closing) }}</td>
-              <td class="border-l border-border p-2 text-right">{{ money(r.accum_opening) }}</td><td class="p-2 text-right">{{ money(r.accum_additions) }}</td><td class="p-2 text-right">{{ money(r.accum_depreciation) }}</td><td class="p-2 text-right">{{ money(r.accum_reclass) }}</td><td class="p-2 text-right">{{ money(r.accum_disposals) }}</td><td class="p-2 text-right font-medium">{{ money(r.accum_closing) }}</td>
+              <td class="p-2 text-right">{{ money(r.cost_opening) }}</td><td class="p-2 text-right">{{ money(r.cost_additions) }}</td><td v-if="reclassed" class="p-2 text-right">{{ money(r.cost_reclass) }}</td><td class="p-2 text-right">{{ money(r.cost_disposals) }}</td><td class="p-2 text-right font-medium">{{ money(r.cost_closing) }}</td>
+              <td class="border-l border-border p-2 text-right">{{ money(r.accum_opening) }}</td><td class="p-2 text-right">{{ money(r.accum_additions) }}</td><td class="p-2 text-right">{{ money(r.accum_depreciation) }}</td><td v-if="reclassed" class="p-2 text-right">{{ money(r.accum_reclass) }}</td><td class="p-2 text-right">{{ money(r.accum_disposals) }}</td><td class="p-2 text-right font-medium">{{ money(r.accum_closing) }}</td>
               <td class="p-2 text-right font-medium">{{ money(r.carrying_closing) }}</td>
-              <td class="border-l border-border p-2 text-right">{{ money(r.ledger_cost_closing) }}</td>
-              <td class="p-2 text-right" :class="isZero(r.cost_difference) ? '' : 'font-semibold text-warning-foreground'" :data-testid="`recap-diff-${r.category_code}`">{{ isZero(r.cost_difference) ? '0' : formatMoney(r.cost_difference) }}</td>
             </tr>
           </tbody>
           <tfoot>
             <tr class="font-semibold" data-testid="recap-total">
               <td class="p-2">{{ t('assets.reports.recap.total') }}</td>
-              <td class="p-2 text-right">{{ money(report.total.cost_opening) }}</td><td class="p-2 text-right">{{ money(report.total.cost_additions) }}</td><td class="p-2 text-right">{{ money(report.total.cost_reclass) }}</td><td class="p-2 text-right">{{ money(report.total.cost_disposals) }}</td><td class="p-2 text-right">{{ money(report.total.cost_closing) }}</td>
-              <td class="border-l border-border p-2 text-right">{{ money(report.total.accum_opening) }}</td><td class="p-2 text-right">{{ money(report.total.accum_additions) }}</td><td class="p-2 text-right">{{ money(report.total.accum_depreciation) }}</td><td class="p-2 text-right">{{ money(report.total.accum_reclass) }}</td><td class="p-2 text-right">{{ money(report.total.accum_disposals) }}</td><td class="p-2 text-right">{{ money(report.total.accum_closing) }}</td>
+              <td class="p-2 text-right">{{ money(report.total.cost_opening) }}</td><td class="p-2 text-right">{{ money(report.total.cost_additions) }}</td><td v-if="reclassed" class="p-2 text-right">{{ money(report.total.cost_reclass) }}</td><td class="p-2 text-right">{{ money(report.total.cost_disposals) }}</td><td class="p-2 text-right">{{ money(report.total.cost_closing) }}</td>
+              <td class="border-l border-border p-2 text-right">{{ money(report.total.accum_opening) }}</td><td class="p-2 text-right">{{ money(report.total.accum_additions) }}</td><td class="p-2 text-right">{{ money(report.total.accum_depreciation) }}</td><td v-if="reclassed" class="p-2 text-right">{{ money(report.total.accum_reclass) }}</td><td class="p-2 text-right">{{ money(report.total.accum_disposals) }}</td><td class="p-2 text-right">{{ money(report.total.accum_closing) }}</td>
               <td class="p-2 text-right">{{ money(report.total.carrying_closing) }}</td>
-              <td class="border-l border-border p-2 text-right">{{ money(report.total.ledger_cost_closing) }}</td><td class="p-2 text-right">{{ isZero(report.total.cost_difference) ? '0' : formatMoney(report.total.cost_difference) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </Card>
+      <h2 v-if="report" class="m-0 text-base font-semibold">{{ t('assets.reports.recap.matchTitle') }}</h2>
+      <Card v-if="report" class="overflow-x-auto p-0">
+        <table class="w-full border-collapse text-xs tabular-nums [&_td]:px-1.5 [&_td]:py-2 [&_th]:px-1.5 [&_td:not(:first-child)]:whitespace-nowrap" data-testid="recap-ledger-table">
+          <thead>
+            <tr class="border-b border-border">
+              <th class="p-2 text-left text-xs font-medium uppercase text-muted-foreground">{{ t('assets.reports.recap.category') }}</th>
+              <th :class="th">{{ t('assets.reports.recap.registerCost') }}</th><th :class="th">{{ t('assets.reports.recap.ledgerCost') }}</th><th :class="th">{{ t('assets.reports.recap.difference') }}</th>
+              <th :class="th" class="border-l border-border">{{ t('assets.reports.recap.registerAccum') }}</th><th :class="th">{{ t('assets.reports.recap.ledgerAccum') }}</th><th :class="th">{{ t('assets.reports.recap.difference') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in report.rows" :key="r.category_id" class="border-b border-border" :data-testid="`recap-ledger-row-${r.category_code}`">
+              <td class="min-w-32 p-2">{{ r.category_name }}</td>
+              <td class="p-2 text-right">{{ money(r.cost_closing) }}</td><td class="p-2 text-right">{{ money(r.ledger_cost_closing) }}</td>
+              <td class="p-2 text-right" :class="isZero(r.cost_difference) ? '' : 'font-semibold text-warning-foreground'" :data-testid="`recap-diff-${r.category_code}`">{{ isZero(r.cost_difference) ? '0' : formatMoney(r.cost_difference) }}</td>
+              <td class="border-l border-border p-2 text-right">{{ money(r.accum_closing) }}</td><td class="p-2 text-right">{{ money(r.ledger_accum_closing) }}</td>
+              <td class="p-2 text-right" :class="isZero(r.accum_difference) ? '' : 'font-semibold text-warning-foreground'" :data-testid="`recap-accum-diff-${r.category_code}`">{{ isZero(r.accum_difference) ? '0' : formatMoney(r.accum_difference) }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="font-semibold" data-testid="recap-ledger-total">
+              <td class="p-2">{{ t('assets.reports.recap.total') }}</td>
+              <td class="p-2 text-right">{{ money(report.total.cost_closing) }}</td><td class="p-2 text-right">{{ money(report.total.ledger_cost_closing) }}</td><td class="p-2 text-right">{{ isZero(report.total.cost_difference) ? '0' : formatMoney(report.total.cost_difference) }}</td>
+              <td class="border-l border-border p-2 text-right">{{ money(report.total.accum_closing) }}</td><td class="p-2 text-right">{{ money(report.total.ledger_accum_closing) }}</td><td class="p-2 text-right">{{ isZero(report.total.accum_difference) ? '0' : formatMoney(report.total.accum_difference) }}</td>
             </tr>
           </tfoot>
         </table>

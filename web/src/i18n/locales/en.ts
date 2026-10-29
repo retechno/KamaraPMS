@@ -6415,8 +6415,9 @@ export const en = {
       },
       recap: {
         intro: 'The movement of cost and accumulated depreciation of each category, with the general ledger beside it. A difference is explained by its causes.', period: 'Period {from} to {to}', category: 'Category',
-        cost: 'Cost', accum: 'Accumulated depreciation', carrying: 'Book value', ledger: 'General ledger', opening: 'Opening', additions: 'Additions', reclass: 'Change of category', disposals: 'Disposals', closing: 'Closing', depreciation: 'Depreciation',
-        ledgerCost: 'Ledger', difference: 'Difference', total: 'Total', causesTitle: 'Causes of the differences', noDifference: 'The register and the general ledger agree.',
+        cost: 'Cost', accum: 'Accumulated depreciation', carrying: 'Book value', opening: 'Opening', additions: 'Additions', reclass: 'Change of category', disposals: 'Disposals', closing: 'Closing', depreciation: 'Depreciation',
+        matchTitle: 'Matched to the general ledger', registerCost: 'Register cost', ledgerCost: 'Ledger cost', registerAccum: 'Register accumulated', ledgerAccum: 'Ledger accumulated',
+        difference: 'Difference', total: 'Total', causesTitle: 'Causes of the differences', noDifference: 'The register and the general ledger agree.',
         what: { cost: 'cost', accum: 'accumulated depreciation' },
         note1590: 'Account 1590 holds {amount} of accumulated depreciation that is not split by category.',
         footnote: 'Matched to the general ledger at the end of the period. A difference with no known cause is shown as Other and needs a look.',

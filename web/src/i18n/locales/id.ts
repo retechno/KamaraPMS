@@ -6413,8 +6413,9 @@ export const id: Messages = {
       },
       recap: {
         intro: 'Pergerakan harga perolehan dan akumulasi penyusutan tiap kategori, dengan buku besar di sebelahnya. Selisih dijelaskan oleh penyebabnya.', period: 'Periode {from} sampai {to}', category: 'Kategori',
-        cost: 'Harga perolehan', accum: 'Akumulasi penyusutan', carrying: 'Nilai buku', ledger: 'Buku besar', opening: 'Awal', additions: 'Penambahan', reclass: 'Pindah kategori', disposals: 'Pelepasan', closing: 'Akhir', depreciation: 'Penyusutan',
-        ledgerCost: 'Buku besar', difference: 'Selisih', total: 'Total', causesTitle: 'Penyebab selisih', noDifference: 'Daftar aset dan buku besar sama.',
+        cost: 'Harga perolehan', accum: 'Akumulasi penyusutan', carrying: 'Nilai buku', opening: 'Awal', additions: 'Penambahan', reclass: 'Pindah kategori', disposals: 'Pelepasan', closing: 'Akhir', depreciation: 'Penyusutan',
+        matchTitle: 'Dicocokkan dengan buku besar', registerCost: 'Harga register', ledgerCost: 'Harga buku besar', registerAccum: 'Akumulasi register', ledgerAccum: 'Akumulasi buku besar',
+        difference: 'Selisih', total: 'Total', causesTitle: 'Penyebab selisih', noDifference: 'Daftar aset dan buku besar sama.',
         what: { cost: 'harga perolehan', accum: 'akumulasi penyusutan' },
         note1590: 'Akun 1590 menyimpan akumulasi penyusutan {amount} yang tidak dipecah per kategori.',
         footnote: 'Dicocokkan dengan buku besar pada akhir periode. Selisih tanpa penyebab yang dikenal ditampilkan sebagai Lainnya dan perlu diperiksa.',
