@@ -3478,6 +3478,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reports/daily-flash": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Daily flash report of a business date (report.view)
+         * @description The daily flash report (doc 38, 7.1): room statistics, activity, covers, net revenue in groups A (rooms), B (food and beverage) and C (other) by the statement group of the revenue account, the payments received (GTP) by cashier and by method, and the control balance (GTR - GTP + refunds - city ledger = the change of the guest ledger; shown, never blocking). Each row has the figures of today, month to date, the same days of last month, the same dates of last year, the month budget pro rata with its variance, and year to date from the fiscal year start. The open day is an interim flash with no control balance. Without `date` it is the last closed business day, or the open day for a property that never closed one.
+         */
+        get: operations["getDailyFlashReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/daily-flash.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Daily flash report as PDF with the signature block (report.view) */
+        get: operations["getDailyFlashPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reports/free-rooms": {
         parameters: {
             query?: {
@@ -17451,6 +17498,111 @@ export interface components {
             service_charges: components["schemas"]["TaxReportLine"][];
             tax_total: components["schemas"]["Amount"];
             service_charge_total: components["schemas"]["Amount"];
+        };
+        FlashLine: {
+            key: string;
+            /** @description The English text of the row; the only name of a row that is data (a charge code, an outlet, a room type, a method). */
+            label: string;
+            /** @enum {string} */
+            kind: "MONEY" | "COUNT" | "PERCENT" | "RATIO";
+            today: string;
+            mtd: string;
+            last_month: string;
+            last_year: string;
+            /** @description Null for a row with no budget. */
+            budget: string | null;
+            variance: string | null;
+            variance_percent: string | null;
+            favourable: boolean | null;
+            ytd: string;
+        };
+        FlashBlock: {
+            /** @enum {string} */
+            kind: "ROOMS" | "HOTEL" | "OUTLET" | "BANQUET" | "UNMAPPED";
+            title: string;
+            rows: components["schemas"]["FlashLine"][];
+            total: components["schemas"]["FlashLine"];
+        };
+        FlashRevenueGroup: {
+            /** @enum {string} */
+            code: "A" | "B" | "C";
+            title: string;
+            blocks: components["schemas"]["FlashBlock"][];
+            total: components["schemas"]["FlashLine"];
+        };
+        FlashRevenueSection: {
+            groups: components["schemas"]["FlashRevenueGroup"][];
+            total_net: components["schemas"]["FlashLine"];
+            service: components["schemas"]["FlashLine"];
+            tax: components["schemas"]["FlashLine"];
+            gtr: components["schemas"]["FlashLine"];
+            /** @description Revenue posted by a journal and not from a folio; null when there is no accounting or for the open day. */
+            journal: components["schemas"]["FlashLine"] | null;
+            by_source: components["schemas"]["FlashLine"][];
+        };
+        FlashPaymentsSection: {
+            by_cashier: components["schemas"]["FlashLine"][];
+            by_method: components["schemas"]["FlashLine"][];
+            gtp: components["schemas"]["FlashLine"];
+            refunds: components["schemas"]["FlashLine"][];
+            refunds_total: components["schemas"]["FlashLine"];
+            to_city_ledger: components["schemas"]["FlashLine"];
+        };
+        FlashControlColumn: {
+            gtr: string;
+            gtp: string;
+            refunds: string;
+            to_city_ledger: string;
+            expected_change: string;
+            actual_change: string;
+            difference: string;
+        };
+        FlashControl: {
+            today: components["schemas"]["FlashControlColumn"];
+            mtd: components["schemas"]["FlashControlColumn"];
+            balanced: boolean;
+        };
+        FlashRange: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+        };
+        FlashRanges: {
+            today: components["schemas"]["FlashRange"];
+            mtd: components["schemas"]["FlashRange"];
+            last_month: components["schemas"]["FlashRange"];
+            last_year: components["schemas"]["FlashRange"];
+            ytd: components["schemas"]["FlashRange"];
+        };
+        FlashWarning: {
+            /** @description UNMAPPED_REVENUE, CONTROL_DIFFERENCE, BANQUET_PAX_FALLBACK or BILLS_WITHOUT_COVERS. */
+            code: string;
+            params?: {
+                [key: string]: string;
+            };
+        };
+        FlashSignatures: {
+            prepared_by: string;
+            /** Format: date-time */
+            prepared_at: string | null;
+        };
+        DailyFlash: {
+            business_date: components["schemas"]["Date"];
+            status: string;
+            /** @description The flash of the open day; no control balance, no signatures. */
+            interim: boolean;
+            decimals: number;
+            ranges: components["schemas"]["FlashRanges"];
+            fiscal_year_start: components["schemas"]["Date"];
+            has_budget: boolean;
+            rooms: components["schemas"]["FlashLine"][];
+            sold_by_type: components["schemas"]["FlashLine"][];
+            activity: components["schemas"]["FlashLine"][];
+            covers: components["schemas"]["FlashLine"][];
+            revenue: components["schemas"]["FlashRevenueSection"];
+            payments: components["schemas"]["FlashPaymentsSection"];
+            control: components["schemas"]["FlashControl"] | null;
+            signatures: components["schemas"]["FlashSignatures"];
+            warnings: components["schemas"]["FlashWarning"][];
         };
         CashierReport: {
             from: components["schemas"]["Date"];
@@ -32492,6 +32644,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CashierReport"];
                     "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDailyFlashReport: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description A business date of the property. */
+                date?: components["schemas"]["Date"];
+                /** @description csv answers the whole report as one table (section, key, label and the cells). */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyFlash"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDailyFlashPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                date?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
             403: components["responses"]["Problem"];

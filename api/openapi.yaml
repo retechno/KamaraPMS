@@ -4181,6 +4181,48 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/daily-flash:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getDailyFlashReport
+      summary: Daily flash report of a business date (report.view)
+      description: "The daily flash report (doc 38, 7.1): room statistics, activity, covers, net revenue in groups A (rooms), B (food and beverage) and C (other) by the statement group of the revenue account, the payments received (GTP) by cashier and by method, and the control balance (GTR - GTP + refunds - city ledger = the change of the guest ledger; shown, never blocking). Each row has the figures of today, month to date, the same days of last month, the same dates of last year, the month budget pro rata with its variance, and year to date from the fiscal year start. The open day is an interim flash with no control balance. Without `date` it is the last closed business day, or the open day for a property that never closed one."
+      tags: [reports]
+      parameters:
+        - { name: date, in: query, schema: { $ref: "#/components/schemas/Date" }, description: A business date of the property. }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json }, description: "csv answers the whole report as one table (section, key, label and the cells)." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DailyFlash" }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/reports/daily-flash.pdf:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Lang"
+    get:
+      operationId: getDailyFlashPdf
+      summary: Daily flash report as PDF with the signature block (report.view)
+      tags: [documents]
+      parameters:
+        - { name: date, in: query, schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: The report as a PDF (inline, never cached).
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/reports/free-rooms:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -19541,6 +19583,129 @@ components:
           items: { $ref: "#/components/schemas/TaxReportLine" }
         tax_total: { $ref: "#/components/schemas/Amount" }
         service_charge_total: { $ref: "#/components/schemas/Amount" }
+    FlashLine:
+      type: object
+      required: [key, label, kind, today, mtd, last_month, last_year, budget, variance, variance_percent, favourable, ytd]
+      properties:
+        key: { type: string }
+        label: { type: string, description: "The English text of the row; the only name of a row that is data (a charge code, an outlet, a room type, a method)." }
+        kind: { type: string, enum: [MONEY, COUNT, PERCENT, RATIO] }
+        today: { type: string }
+        mtd: { type: string }
+        last_month: { type: string }
+        last_year: { type: string }
+        budget: { type: string, nullable: true, description: Null for a row with no budget. }
+        variance: { type: string, nullable: true }
+        variance_percent: { type: string, nullable: true }
+        favourable: { type: boolean, nullable: true }
+        ytd: { type: string }
+    FlashBlock:
+      type: object
+      required: [kind, title, rows, total]
+      properties:
+        kind: { type: string, enum: [ROOMS, HOTEL, OUTLET, BANQUET, UNMAPPED] }
+        title: { type: string }
+        rows: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        total: { $ref: "#/components/schemas/FlashLine" }
+    FlashRevenueGroup:
+      type: object
+      required: [code, title, blocks, total]
+      properties:
+        code: { type: string, enum: [A, B, C] }
+        title: { type: string }
+        blocks: { type: array, items: { $ref: "#/components/schemas/FlashBlock" } }
+        total: { $ref: "#/components/schemas/FlashLine" }
+    FlashRevenueSection:
+      type: object
+      required: [groups, total_net, service, tax, gtr, journal, by_source]
+      properties:
+        groups: { type: array, items: { $ref: "#/components/schemas/FlashRevenueGroup" } }
+        total_net: { $ref: "#/components/schemas/FlashLine" }
+        service: { $ref: "#/components/schemas/FlashLine" }
+        tax: { $ref: "#/components/schemas/FlashLine" }
+        gtr: { $ref: "#/components/schemas/FlashLine" }
+        journal:
+          description: Revenue posted by a journal and not from a folio; null when there is no accounting or for the open day.
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/FlashLine" }]
+        by_source: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+    FlashPaymentsSection:
+      type: object
+      required: [by_cashier, by_method, gtp, refunds, refunds_total, to_city_ledger]
+      properties:
+        by_cashier: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        by_method: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        gtp: { $ref: "#/components/schemas/FlashLine" }
+        refunds: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        refunds_total: { $ref: "#/components/schemas/FlashLine" }
+        to_city_ledger: { $ref: "#/components/schemas/FlashLine" }
+    FlashControlColumn:
+      type: object
+      required: [gtr, gtp, refunds, to_city_ledger, expected_change, actual_change, difference]
+      properties:
+        gtr: { type: string }
+        gtp: { type: string }
+        refunds: { type: string }
+        to_city_ledger: { type: string }
+        expected_change: { type: string }
+        actual_change: { type: string }
+        difference: { type: string }
+    FlashControl:
+      type: object
+      required: [today, mtd, balanced]
+      properties:
+        today: { $ref: "#/components/schemas/FlashControlColumn" }
+        mtd: { $ref: "#/components/schemas/FlashControlColumn" }
+        balanced: { type: boolean }
+    FlashRange:
+      type: object
+      required: [from, to]
+      properties:
+        from: { $ref: "#/components/schemas/Date" }
+        to: { $ref: "#/components/schemas/Date" }
+    FlashRanges:
+      type: object
+      required: [today, mtd, last_month, last_year, ytd]
+      properties:
+        today: { $ref: "#/components/schemas/FlashRange" }
+        mtd: { $ref: "#/components/schemas/FlashRange" }
+        last_month: { $ref: "#/components/schemas/FlashRange" }
+        last_year: { $ref: "#/components/schemas/FlashRange" }
+        ytd: { $ref: "#/components/schemas/FlashRange" }
+    FlashWarning:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, description: "UNMAPPED_REVENUE, CONTROL_DIFFERENCE, BANQUET_PAX_FALLBACK or BILLS_WITHOUT_COVERS." }
+        params: { type: object, additionalProperties: { type: string } }
+    FlashSignatures:
+      type: object
+      required: [prepared_by, prepared_at]
+      properties:
+        prepared_by: { type: string }
+        prepared_at: { type: string, format: date-time, nullable: true }
+    DailyFlash:
+      type: object
+      required: [business_date, status, interim, decimals, ranges, fiscal_year_start, has_budget, rooms, sold_by_type, activity, covers, revenue, payments, control, signatures, warnings]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        status: { type: string }
+        interim: { type: boolean, description: "The flash of the open day; no control balance, no signatures." }
+        decimals: { type: integer }
+        ranges: { $ref: "#/components/schemas/FlashRanges" }
+        fiscal_year_start: { $ref: "#/components/schemas/Date" }
+        has_budget: { type: boolean }
+        rooms: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        sold_by_type: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        activity: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        covers: { type: array, items: { $ref: "#/components/schemas/FlashLine" } }
+        revenue: { $ref: "#/components/schemas/FlashRevenueSection" }
+        payments: { $ref: "#/components/schemas/FlashPaymentsSection" }
+        control:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/FlashControl" }]
+        signatures: { $ref: "#/components/schemas/FlashSignatures" }
+        warnings: { type: array, items: { $ref: "#/components/schemas/FlashWarning" } }
     CashierReport:
       type: object
       required: [from, to, lines, by_method, net]

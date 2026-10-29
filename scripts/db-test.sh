@@ -42,11 +42,11 @@ else
   base="${PMS_TEST_DATABASE_URL%%\?*}"          # postgres://user:pw@host:port/db
   query="${PMS_TEST_DATABASE_URL#"$base"}"      # ?sslmode=... (may be empty)
   TARGET="${base%/*}/$DBNAME$query"
-  psql -X -q -v ON_ERROR_STOP=1 "$PMS_TEST_DATABASE_URL" -c "CREATE DATABASE $DBNAME" >/dev/null
-  cleanup() { psql -X -q "$PMS_TEST_DATABASE_URL" -c "DROP DATABASE IF EXISTS $DBNAME WITH (FORCE)" >/dev/null 2>&1 || true; }
+  psql -X -q -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DBNAME" "$PMS_TEST_DATABASE_URL" >/dev/null
+  cleanup() { psql -X -q -c "DROP DATABASE IF EXISTS $DBNAME WITH (FORCE)" "$PMS_TEST_DATABASE_URL" >/dev/null 2>&1 || true; }
   trap cleanup EXIT
-  psql_run() { psql -X -q "$TARGET" -v ON_ERROR_STOP=1 "$@"; }
-  TARGET_DESC="PostgreSQL $(psql -X -tA "$TARGET" -c "SHOW server_version" | cut -d' ' -f1) (external server)"
+  psql_run() { psql -X -q -v ON_ERROR_STOP=1 "$@" "$TARGET"; }  # the database last: the Windows psql ignores options after it
+  TARGET_DESC="PostgreSQL $(psql -X -tA -c "SHOW server_version" "$TARGET" | cut -d' ' -f1) (external server)"
 fi
 
 section() { awk -v want="$1" '/^-- \+goose Up/{s="up";next} /^-- \+goose Down/{s="down";next} s==want' "$2"; }

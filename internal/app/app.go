@@ -196,6 +196,7 @@ func New(d Deps) *App {
 	budgetSvc := budget.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, iamSvc)
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)
+	documentsSvc.SetReports(reportsSvc)
 	budgetSvc.SetDepartments(departmentsSvc) // and a row of the budget its department
 
 	// Business API: every route requires an authenticated principal.

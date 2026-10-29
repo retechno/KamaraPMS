@@ -3124,6 +3124,9 @@ SELECT expect_error('a request of Maintenance names an asset of its own property
     $q$INSERT INTO maintenance_requests (tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date, asset_id)
        VALUES (tn('ABC'), pr('BALI'), 'MNT96', NULL, 'Lobby', 'FURNITURE', 'x', 'NORMAL', '2026-10-01', 999999)$q$);
 
+-- 00097: the audit log is read by business date and action
+SELECT expect_ok('the index of the audit log by business date and action is there', $q$DO $$ BEGIN IF to_regclass('audit_logs_bd_action_idx') IS NULL THEN RAISE EXCEPTION 'the index is missing'; END IF; END $$$q$);
+
 ------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------

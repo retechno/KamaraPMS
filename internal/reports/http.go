@@ -21,6 +21,7 @@ func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 // Register mounts the routes.
 func (h *Handler) Register(mux *http.ServeMux) {
+	h.RegisterFlash(mux)
 	const p = "/api/v1/properties/{propertyId}/reports"
 	mux.Handle("GET "+p+"/daily-summary", httpx.HandlerFunc(h.dated(func(r *http.Request, pid int64, d civil.Date) (any, error) {
 		return h.svc.DailySummary(r.Context(), pid, d)
