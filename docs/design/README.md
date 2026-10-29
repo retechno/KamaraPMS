@@ -103,6 +103,27 @@ Bagian dari modul Inventory (A17). Pola layar sama: daftar selebar layar lalu ha
 
 Contoh angka aset saling cocok antarlayar: register 15 aset, harga 9.208.800.000, akumulasi 899.483.334, nilai buku 8.309.316.666 per 31 Okt 2026; penyusutan Oktober 16.091.667; rekap FF&E selisih 186.800.000 = genset dan lampu taman di daftar tunggu; pelepasan sofa lobi 36.000.000 / 21.000.000 dijual 18.000.000, laba 3.000.000 (37 bagian 10.6); aset lama lemari kayu sesuai 37 bagian 10.15.
 
+## Laporan & paket night audit (`docs/architecture/38-reports-night-audit-pack.md`)
+
+Lima laporan baru di halaman Laporan dan paket night audit yang dikirim lewat e-mail. Layar aplikasi berbahasa Indonesia; e-mail dan PDF paket berbahasa Inggris (K4). Daily flash report mengikuti struktur DFR hotel (K7).
+
+| File | Isi | PR laporan |
+|---|---|---|
+| `63-lap-daily-flash.dc.html` | Daily flash report: hari ini, MTD, MTD bulan lalu, MTD tahun lalu, anggaran MTD, selisih, YTD; statistik kamar per tipe, aktivitas, cover; pendapatan A kamar, B F&B per outlet dan banquet, C lain-lain (kelompok dari `statement_group` akun), GTR; pembayaran per kasir dan metode; control balance terhadap guest ledger; tanda tangan | 1 |
+| `64-lap-pembatalan-no-show.dc.html` | Pembatalan & no-show per kejadian: nilai hilang, lead time, alasan, denda yang diposting (kosong bila belum), deposit, diaktifkan lagi; per alasan dan sumber | 1 |
+| `65-lap-guest-ledger.dc.html` | Guest ledger per tanggal: saldo setiap folio, deposit ditahan, umur; dicocokkan dengan akun 1210 | 1 |
+| `66-lap-ledger-deposit.dc.html` | Ledger deposit: awal, diterima, dipakai, dikembalikan, akhir; dicocokkan dengan akun 2310 dan guest ledger | 1 |
+| `67-lap-void-koreksi.dc.html` | Void, koreksi, allowance, refund, diskon, komplimen, void POS: alasan, pembuat, penyetuju; porsi terhadap pendapatan | 1 |
+| `68-lap-z-semua-laci.dc.html` | Laporan Z semua laci: setiap shift (X untuk yang masih terbuka), tunai di luar shift, back office; dicocokkan dengan laporan kasir | 1 |
+| `69-na-selesai-paket.dc.html` | Night audit selesai: status 15 bagian paket, e-mail per penerima, peringatan pengiriman gagal | 2 (e-mail: 3) |
+| `70-na-arsip.dc.html` | Arsip night audit: paket per hari (lengkap, sebagian, dibangun ulang, e-mail mati); riwayat pengiriman dengan SHA-256 dan versi renderer; kirim ulang ke penerima terdaftar | 2 (riwayat, kirim ulang: 3) |
+| `71-na-penerima.dc.html` | Penerima paket: daftar alamat, bagian yang dipilih (label nama tamu / kas), aktif, hapus | 3 |
+| `72-na-email-paket.dc.html` | E-mail paket (Inggris): angka utama di badan hanya untuk penerima SUMMARY/FLASH, lampiran PDF, tanpa tautan | 3 |
+| `73-na-pdf-sampul.dc.html` | PDF paket: sampul dengan bagian yang dipilih penerima dan ringkasan satu baris | 2 |
+| `74-na-pdf-daily-flash.dc.html` | PDF paket: halaman daily flash report (pendapatan, pembayaran, kontrol, tanda tangan) | 2 |
+
+Contoh angka saling cocok antarlayar untuk tanggal bisnis 28 Okt 2026: pendapatan neto 139.480.000 (A 96.200.000, B 32.100.000, C 11.180.000), GTR 168.770.800, pembayaran 148.920.000 (sama di daily flash dan Z semua laci), control balance 0; guest ledger 74.655.000 + deposit ditahan 12.490.000 = akun 1210 87.145.000; ledger deposit 22.750.000 + 3.000.000 − 12.510.000 − 750.000 = 12.490.000; void dan koreksi neto 1.161.000 = 0,83% pendapatan. Angka anggaran: bulan Oktober kamar 2.650.000.000, F&B 950.000.000, lain 336.500.000, pro rata 28/31.
+
 Cara membaca:
 - Nilai warna, ukuran font, radius, jarak, dan tinggi tombol ada di atribut `style="…"`. Itu nilai yang dimaksud.
 - `<x-dc>`, `<helmet>`, `<sc-for>`, `<sc-if>` adalah format editor desain: `sc-for` = `v-for`, `sc-if` = `v-if`, dan `{{x}}` diisi dari `renderVals()` di bagian bawah file (data contoh).

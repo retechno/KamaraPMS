@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Night audit selesai</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128;text-decoration:none;display:inline-flex;align-items:center}
+.btnp{height:40px;padding:0 16px;border:0;border-radius:10px;background:#1f6f5c;font:inherit;font-weight:600;font-size:14px;color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.kpi{flex:1;display:flex;flex-direction:column;gap:2px;padding:12px 16px;border-right:1px solid #eef0f2}
+.kl{font-size:12px;color:#4a5361}
+.kv{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.sub{font-size:11.5px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;font-size:11px;font-weight:600}
+.ok{background:#e3f2ee;color:#185a4a}
+.off{background:#eef0f2;color:#4a5361}
+.wr{background:#fdf1dc;color:#5c3608}
+.sc{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #eef0f2;font-size:13px}
+.rc{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eef0f2;font-size:13px}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">LAPORAN</div>
+    <a href="#" class="nav">Ringkasan harian</a>
+    <a href="63-lap-daily-flash.dc.html" class="nav">Daily flash</a>
+    <a href="64-lap-pembatalan-no-show.dc.html" class="nav">Pembatalan &amp; no-show</a>
+    <a href="65-lap-guest-ledger.dc.html" class="nav">Guest ledger</a>
+    <a href="66-lap-ledger-deposit.dc.html" class="nav">Ledger deposit</a>
+    <a href="67-lap-void-koreksi.dc.html" class="nav">Void &amp; koreksi</a>
+    <a href="68-lap-z-semua-laci.dc.html" class="nav">Z semua laci</a>
+    <a href="#" class="nav">Laporan lain</a>
+    <div class="sec">AKHIR HARI</div>
+    <a href="69-na-selesai-paket.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Night audit</a>
+    <a href="70-na-arsip.dc.html" class="nav">Arsip night audit</a>
+    <a href="71-na-penerima.dc.html" class="nav">Penerima paket</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#1f6f5c" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <h1 style="margin:0;font-size:24px">Night audit selesai · 28 Okt 2026 ditutup</h1>
+        <span style="font-size:13px;color:#4a5361">Tanggal bisnis sekarang Kamis, 29 Okt 2026. Ditutup oleh Budi pukul 00.42. 74 biaya kamar diposting.</span>
+      </div>
+      <a href="70-na-arsip.dc.html" class="btn">Buka arsip</a>
+      <a href="#" class="btnp">Unduh PDF paket</a>
+    </div>
+
+    <section class="card" style="display:flex">
+      <div class="kpi"><span class="kl">Okupansi</span><span class="kv">76,53%</span></div>
+      <div class="kpi"><span class="kl">ADR</span><span class="kv">1.300.000</span></div>
+      <div class="kpi"><span class="kl">RevPAR</span><span class="kv">981.633</span></div>
+      <div class="kpi"><span class="kl">Pendapatan neto</span><span class="kv">139.480.000</span></div>
+      <div class="kpi"><span class="kl">Pembayaran</span><span class="kv">148.920.000</span></div>
+      <div class="kpi" style="border-right:0"><span class="kl">Datang · pergi · no-show</span><span class="kv">22 · 19 · 2</span></div>
+    </section>
+
+    <div style="display:flex;gap:12px;flex:1;min-height:0">
+      <section class="card" style="flex:1.2;padding:14px 18px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;padding-bottom:6px"><strong style="font-size:15px;flex:1">Paket night audit</strong><span class="pill ok">Lengkap · 15 bagian</span></div>
+        <span class="sub" style="padding-bottom:4px">Disusun di transaksi penutupan hari, dalam 1,8 detik. Angkanya sama dengan buku per 28 Okt.</span>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px">
+          <div class="sc"><span style="flex:1">Ringkasan night audit</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Daily flash</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Pendapatan hari ini</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Pajak hari ini</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Pembayaran hari ini</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Z semua laci</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Guest ledger</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Ledger deposit</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Void &amp; koreksi</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Pembatalan &amp; no-show</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Tamu menginap saat tutup</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Besok: datang &amp; pergi</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Catatan audit</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Outlet (POS)</span><span class="pill ok">OK</span></div>
+          <div class="sc"><span style="flex:1">Kamar OOO/OOS</span><span class="pill ok">OK</span></div>
+        </div>
+      </section>
+
+      <section class="card" style="flex:1;padding:14px 18px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;padding-bottom:6px"><strong style="font-size:15px;flex:1">E-mail paket</strong><span class="pill wr">4 diantre</span></div>
+        <span class="sub" style="padding-bottom:4px">Dikirim di latar belakang setelah penutupan; server e-mail yang lambat tidak menahan night audit.</span>
+        <div class="rc"><div style="flex:1;display:flex;flex-direction:column"><strong>gm@kamarabali.com</strong><span class="sub">General Manager · 2 bagian</span></div><span class="pill ok">Terkirim 00.43</span></div>
+        <div class="rc"><div style="flex:1;display:flex;flex-direction:column"><strong>finance@kamarabali.com</strong><span class="sub">Finance · 9 bagian</span></div><span class="pill ok">Terkirim 00.43</span></div>
+        <div class="rc"><div style="flex:1;display:flex;flex-direction:column"><strong>fom@kamarabali.com</strong><span class="sub">Front office manager · 6 bagian</span></div><span class="pill wr">Diantre</span></div>
+        <div class="rc"><div style="flex:1;display:flex;flex-direction:column"><strong>owner@kamaragroup.co.id</strong><span class="sub">Pemilik · 2 bagian</span></div><span class="pill wr">Diantre</span></div>
+        <div style="flex:1"></div>
+        <div style="background:#fdf1dc;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#5c3608;display:flex;flex-direction:column;gap:3px">
+          <strong>Peringatan dari hari sebelumnya</strong>
+          <span>Paket 26 Okt gagal terkirim ke fom@kamarabali.com setelah 5 kali coba (alamat ditolak server). Buka arsip untuk kirim ulang.</span>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

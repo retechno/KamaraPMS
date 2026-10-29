@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Daily flash report</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px;overflow:hidden}
+.t{width:100%;border-collapse:collapse}
+.th{font-size:10.5px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:right;padding:7px 8px;border-bottom:1px solid #e3e6ea;white-space:nowrap;background:#fbfbfc}
+.td{padding:4px 8px;border-bottom:1px solid #f0f2f4;font-size:12px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.tdl{text-align:left}
+.i1{padding-left:22px}
+.i2{padding-left:38px;color:#4a5361}
+.bl{border-left:1px solid #e3e6ea}
+.sh td{font-size:11px;font-weight:700;color:#1c2128;text-transform:uppercase;letter-spacing:.05em;background:#eef6f3;text-align:left;padding:7px 8px}
+.gh td{font-weight:700;font-size:11.5px;color:#4a5361;text-align:left;padding-top:8px}
+.st td{font-weight:700;border-bottom:1px solid #e3e6ea}
+.tot td{font-weight:700;background:#f6f7f9;border-top:1px solid #c9ced4;border-bottom:1px solid #c9ced4}
+.gt td{font-weight:700;font-size:12.5px;background:#1f6f5c;color:#fff}
+.na{color:#9aa1ab}
+.up{color:#185a4a;font-weight:600}
+.dn{color:#9a3412;font-weight:600}
+.kpi{flex:1;background:#fff;border:1px solid #e3e6ea;border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:1px}
+.kl{font-size:11.5px;color:#4a5361}
+.kv{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.ks{font-size:11px;color:#626b77}
+.ok{color:#185a4a;font-weight:700}
+</style>
+</helmet>
+<div style="width:1440px;height:2560px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">LAPORAN</div>
+    <a href="#" class="nav">Ringkasan harian</a>
+    <a href="63-lap-daily-flash.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Daily flash</a>
+    <a href="64-lap-pembatalan-no-show.dc.html" class="nav">Pembatalan &amp; no-show</a>
+    <a href="65-lap-guest-ledger.dc.html" class="nav">Guest ledger</a>
+    <a href="66-lap-ledger-deposit.dc.html" class="nav">Ledger deposit</a>
+    <a href="67-lap-void-koreksi.dc.html" class="nav">Void &amp; koreksi</a>
+    <a href="68-lap-z-semua-laci.dc.html" class="nav">Z semua laci</a>
+    <a href="#" class="nav">Laporan lain</a>
+    <div class="sec">AKHIR HARI</div>
+    <a href="69-na-selesai-paket.dc.html" class="nav">Night audit</a>
+    <a href="70-na-arsip.dc.html" class="nav">Arsip night audit</a>
+    <a href="71-na-penerima.dc.html" class="nav">Penerima paket</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:flex-end;gap:10px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <h1 style="margin:0;font-size:24px">Daily flash report</h1>
+        <span style="font-size:12.5px;color:#4a5361">Rabu, 28 Okt 2026 · semua pendapatan operasional hotel, outlet POS dan banquet, statistik kamar, pembayaran, dan kontrol terhadap guest ledger.</span>
+      </div>
+      <label style="font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:4px">Tanggal bisnis<input class="inp" value="28/10/2026" aria-label="Tanggal bisnis" style="width:150px"></label>
+      <button class="btn">Cetak PDF</button><button class="btn">Unduh CSV</button>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <div class="kpi"><span class="kl">Pendapatan neto hari ini</span><span class="kv">139.480.000</span><span class="ks">GTR termasuk pajak &amp; servis 168.770.800</span></div>
+      <div class="kpi"><span class="kl">Hotel (kamar &amp; front office)</span><span class="kv">97.530.000</span><span class="ks">okupansi 76,53% · ARR 1.300.000</span></div>
+      <div class="kpi"><span class="kl">Outlet POS</span><span class="kv">24.250.000</span><span class="ks">restoran, bar, room service, spa</span></div>
+      <div class="kpi"><span class="kl">Banquet</span><span class="kv">17.050.000</span><span class="ks">2 acara · 160 pax</span></div>
+      <div class="kpi"><span class="kl">Control balance</span><span class="kv ok">0</span><span class="ks">pendapatan − pembayaran = perubahan ledger</span></div>
+    </div>
+
+    <section class="card">
+      <table class="t">
+        <thead><tr><th class="th" style="text-align:left;width:250px"></th><th class="th">Hari ini</th><th class="th bl">MTD</th><th class="th">MTD bln lalu</th><th class="th">MTD thn lalu</th><th class="th">Anggaran MTD</th><th class="th">Selisih MTD</th><th class="th bl">YTD</th></tr></thead>
+        <tbody>
+          <tr class="sh"><td class="td" colspan="8">Statistik kamar</td></tr>
+          <tr><td class="td tdl">Jumlah kamar</td><td class="td">100</td><td class="td bl">2.800</td><td class="td">2.800</td><td class="td">2.800</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">30.100</td></tr>
+          <tr><td class="td tdl">Out of order</td><td class="td">2</td><td class="td bl">52</td><td class="td">56</td><td class="td">30</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">640</td></tr>
+          <tr><td class="td tdl">Kamar tersedia</td><td class="td">98</td><td class="td bl">2.748</td><td class="td">2.744</td><td class="td">2.770</td><td class="td">2.744</td><td class="td">+4</td><td class="td bl">29.460</td></tr>
+          <tr class="st"><td class="td tdl">Kamar terjual (berbayar)</td><td class="td">74</td><td class="td bl">1.903</td><td class="td">1.820</td><td class="td">1.795</td><td class="td">1.761,3</td><td class="td up">+141,7</td><td class="td bl">19.850</td></tr>
+          <tr><td class="td tdl i2">Superior</td><td class="td">32</td><td class="td bl">820</td><td class="td">790</td><td class="td">772</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">8.560</td></tr>
+          <tr><td class="td tdl i2">Deluxe</td><td class="td">27</td><td class="td bl">702</td><td class="td">668</td><td class="td">661</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">7.310</td></tr>
+          <tr><td class="td tdl i2">Junior Suite</td><td class="td">10</td><td class="td bl">251</td><td class="td">240</td><td class="td">238</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">2.640</td></tr>
+          <tr><td class="td tdl i2">Suite</td><td class="td">5</td><td class="td bl">130</td><td class="td">122</td><td class="td">124</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">1.340</td></tr>
+          <tr><td class="td tdl">Komplimen</td><td class="td">1</td><td class="td bl">21</td><td class="td">19</td><td class="td">18</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">260</td></tr>
+          <tr><td class="td tdl">House use</td><td class="td">0</td><td class="td bl">6</td><td class="td">5</td><td class="td">4</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">71</td></tr>
+          <tr><td class="td tdl">Kamar kosong</td><td class="td">23</td><td class="td bl">824</td><td class="td">905</td><td class="td">957</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">9.350</td></tr>
+          <tr><td class="td tdl">Walk-in</td><td class="td">1</td><td class="td bl">17</td><td class="td">14</td><td class="td">12</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">160</td></tr>
+          <tr><td class="td tdl">Tamu menginap (orang, tanpa house use)</td><td class="td">141</td><td class="td bl">3.620</td><td class="td">3.410</td><td class="td">3.380</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">37.900</td></tr>
+          <tr class="st"><td class="td tdl">Okupansi (terjual + komplimen)</td><td class="td">76,53%</td><td class="td bl">70,01%</td><td class="td">67,02%</td><td class="td">65,45%</td><td class="td">64,19%</td><td class="td up">+5,82 poin</td><td class="td bl">68,26%</td></tr>
+          <tr><td class="td tdl">Okupansi berbayar</td><td class="td">75,51%</td><td class="td bl">69,25%</td><td class="td">66,33%</td><td class="td">64,80%</td><td class="td">64,19%</td><td class="td up">+5,06 poin</td><td class="td bl">67,38%</td></tr>
+          <tr><td class="td tdl">Okupansi dobel ((tamu − kamar terisi) ÷ kamar terisi)</td><td class="td">88,00%</td><td class="td bl">88,15%</td><td class="td">85,43%</td><td class="td">86,43%</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">88,46%</td></tr>
+          <tr class="st"><td class="td tdl">Average room rate (ARR)</td><td class="td">1.300.000</td><td class="td bl">1.280.084</td><td class="td">1.252.747</td><td class="td">1.210.028</td><td class="td">1.358.974</td><td class="td dn">−5,81%</td><td class="td bl">1.239.798</td></tr>
+          <tr><td class="td tdl">ARR termasuk komplimen</td><td class="td">1.282.667</td><td class="td bl">1.266.112</td><td class="td">1.239.804</td><td class="td">1.198.014</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">1.223.769</td></tr>
+          <tr class="st"><td class="td tdl">RevPAR</td><td class="td">981.633</td><td class="td bl">886.463</td><td class="td">830.904</td><td class="td">784.116</td><td class="td">872.284</td><td class="td up">+1,63%</td><td class="td bl">835.370</td></tr>
+          <tr><td class="td tdl">Rata-rata lama menginap (ALOS)</td><td class="td">2,45</td><td class="td bl">2,38</td><td class="td">2,31</td><td class="td">2,29</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">2,41</td></tr>
+
+          <tr class="sh"><td class="td" colspan="8">Aktivitas kamar</td></tr>
+          <tr><td class="td tdl">Reservasi dibuat</td><td class="td">31</td><td class="td bl">742</td><td class="td">698</td><td class="td">655</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">7.410</td></tr>
+          <tr><td class="td tdl">Pembatalan · no-show</td><td class="td">0 · 2</td><td class="td bl">41 · 23</td><td class="td">37 · 19</td><td class="td">35 · 19</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">388 · 214</td></tr>
+          <tr><td class="td tdl">Early check-out · late check-out</td><td class="td">1 · 3</td><td class="td bl">18 · 64</td><td class="td">15 · 58</td><td class="td">14 · 51</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">171 · 602</td></tr>
+          <tr><td class="td tdl">Kamar datang · pergi</td><td class="td">22 · 19</td><td class="td bl">512 · 498</td><td class="td">486 · 470</td><td class="td">476 · 470</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">5.204 · 5.131</td></tr>
+          <tr><td class="td tdl">Besok: datang · pergi</td><td class="td">18 · 25</td><td class="td bl na">–</td><td class="td na">–</td><td class="td na">–</td><td class="td na">–</td><td class="td na">–</td><td class="td bl na">–</td></tr>
+
+          <tr class="sh"><td class="td" colspan="8">Cover &amp; rata-rata per cover</td></tr>
+          <tr><td class="td tdl">Restoran</td><td class="td">142 · 94.718</td><td class="td bl">3.810 · 95.144</td><td class="td">3.640 · 94.203</td><td class="td">3.520 · 94.034</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">37.600 · 94.681</td></tr>
+          <tr><td class="td tdl">Bar</td><td class="td">96 · 55.208</td><td class="td bl">2.540 · 55.591</td><td class="td">2.410 · 55.436</td><td class="td">2.330 · 55.150</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">24.900 · 55.422</td></tr>
+          <tr><td class="td tdl">Room service (pesanan)</td><td class="td">31 · 85.484</td><td class="td bl">845 · 84.379</td><td class="td">800 · 84.875</td><td class="td">770 · 83.377</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">8.200 · 84.146</td></tr>
+          <tr><td class="td tdl">Banquet (pax, F&amp;B per pax)</td><td class="td">160 · 66.875</td><td class="td bl">4.120 · 70.000</td><td class="td">3.890 · 70.051</td><td class="td">3.710 · 69.973</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">41.800 · 70.574</td></tr>
+
+          <tr class="sh"><td class="td" colspan="8">Pendapatan neto</td></tr>
+          <tr class="gh"><td class="td" colspan="8">A. Kamar</td></tr>
+          <tr><td class="td tdl i1">Room charge</td><td class="td">93.950.000</td><td class="td bl">2.401.250.000</td><td class="td">2.245.600.000</td><td class="td">2.141.300.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">24.262.000.000</td></tr>
+          <tr><td class="td tdl i1">Extra bed</td><td class="td">450.000</td><td class="td bl">12.600.000</td><td class="td">11.900.000</td><td class="td">10.800.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">121.000.000</td></tr>
+          <tr><td class="td tdl i1">Early check-in</td><td class="td">0</td><td class="td bl">2.400.000</td><td class="td">2.100.000</td><td class="td">1.900.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">22.000.000</td></tr>
+          <tr><td class="td tdl i1">Late check-out</td><td class="td">500.000</td><td class="td bl">9.150.000</td><td class="td">8.400.000</td><td class="td">7.600.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">92.000.000</td></tr>
+          <tr><td class="td tdl i1">Denda batal &amp; no-show</td><td class="td">1.300.000</td><td class="td bl">10.600.000</td><td class="td">12.000.000</td><td class="td">10.400.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">113.000.000</td></tr>
+          <tr class="st"><td class="td tdl">Jumlah kamar (A)</td><td class="td">96.200.000</td><td class="td bl">2.436.000.000</td><td class="td">2.280.000.000</td><td class="td">2.172.000.000</td><td class="td">2.393.548.387</td><td class="td up">+1,77%</td><td class="td bl">24.610.000.000</td></tr>
+
+          <tr class="gh"><td class="td" colspan="8">B. Makanan &amp; minuman per outlet</td></tr>
+          <tr><td class="td tdl i1">Restoran · makanan</td><td class="td">10.870.000</td><td class="td bl">292.300.000</td><td class="td">276.800.000</td><td class="td">266.700.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">2.870.000.000</td></tr>
+          <tr><td class="td tdl i1">Restoran · minuman</td><td class="td">2.580.000</td><td class="td bl">70.200.000</td><td class="td">66.100.000</td><td class="td">64.300.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">690.000.000</td></tr>
+          <tr><td class="td tdl i1">Bar · makanan</td><td class="td">1.150.000</td><td class="td bl">31.400.000</td><td class="td">29.900.000</td><td class="td">28.500.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">305.000.000</td></tr>
+          <tr><td class="td tdl i1">Bar · minuman</td><td class="td">4.150.000</td><td class="td bl">109.800.000</td><td class="td">103.700.000</td><td class="td">100.000.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">1.075.000.000</td></tr>
+          <tr><td class="td tdl i1">Room service</td><td class="td">2.650.000</td><td class="td bl">71.300.000</td><td class="td">67.900.000</td><td class="td">64.200.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">690.000.000</td></tr>
+          <tr><td class="td tdl i1">Banquet · makanan &amp; minuman</td><td class="td">10.700.000</td><td class="td bl">288.400.000</td><td class="td">272.500.000</td><td class="td">259.600.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">2.950.000.000</td></tr>
+          <tr class="st"><td class="td tdl">Jumlah F&amp;B (B)</td><td class="td">32.100.000</td><td class="td bl">863.400.000</td><td class="td">816.900.000</td><td class="td">783.300.000</td><td class="td">858.064.516</td><td class="td up">+0,62%</td><td class="td bl">8.580.000.000</td></tr>
+
+          <tr class="gh"><td class="td" colspan="8">C. Pendapatan lain</td></tr>
+          <tr><td class="td tdl i1">Spa</td><td class="td">2.850.000</td><td class="td bl">78.700.000</td><td class="td">74.400.000</td><td class="td">70.100.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">760.000.000</td></tr>
+          <tr><td class="td tdl i1">Laundry</td><td class="td">780.000</td><td class="td bl">19.900.000</td><td class="td">18.800.000</td><td class="td">17.800.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">179.000.000</td></tr>
+          <tr><td class="td tdl i1">Transport</td><td class="td">450.000</td><td class="td bl">11.600.000</td><td class="td">11.000.000</td><td class="td">10.400.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">104.000.000</td></tr>
+          <tr><td class="td tdl i1">Telepon &amp; lain front office</td><td class="td">100.000</td><td class="td bl">2.400.000</td><td class="td">2.300.000</td><td class="td">2.200.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">22.000.000</td></tr>
+          <tr><td class="td tdl i1">Banquet · sewa ruang &amp; lainnya</td><td class="td">6.350.000</td><td class="td bl">177.900.000</td><td class="td">170.300.000</td><td class="td">164.200.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">1.735.000.000</td></tr>
+          <tr><td class="td tdl i1">Pendapatan lain (komisi, sewa)</td><td class="td">650.000</td><td class="td bl">14.250.000</td><td class="td">13.500.000</td><td class="td">12.900.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">141.000.000</td></tr>
+          <tr class="st"><td class="td tdl">Jumlah lain (C)</td><td class="td">11.180.000</td><td class="td bl">304.750.000</td><td class="td">290.300.000</td><td class="td">277.600.000</td><td class="td">303.935.484</td><td class="td up">+0,27%</td><td class="td bl">2.941.000.000</td></tr>
+
+          <tr class="tot"><td class="td tdl">Total pendapatan neto (A + B + C)</td><td class="td">139.480.000</td><td class="td bl">3.604.150.000</td><td class="td">3.387.200.000</td><td class="td">3.232.900.000</td><td class="td">3.555.548.387</td><td class="td up">+1,37%</td><td class="td bl">36.131.000.000</td></tr>
+          <tr><td class="td tdl i1">Service charge</td><td class="td">13.948.000</td><td class="td bl">360.415.000</td><td class="td">338.720.000</td><td class="td">323.290.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">3.613.100.000</td></tr>
+          <tr><td class="td tdl i1">Pajak (PB1)</td><td class="td">15.342.800</td><td class="td bl">396.456.500</td><td class="td">372.592.000</td><td class="td">355.619.000</td><td class="td na">–</td><td class="td na">–</td><td class="td bl">3.974.410.000</td></tr>
+          <tr class="gt"><td class="td tdl">Grand total revenue (GTR)</td><td class="td">168.770.800</td><td class="td bl">4.361.021.500</td><td class="td">4.098.512.000</td><td class="td">3.911.809.000</td><td class="td"></td><td class="td"></td><td class="td bl">43.718.510.000</td></tr>
+          <tr><td class="td tdl" style="color:#4a5361">Per sumber: hotel · outlet POS · banquet · lain</td><td class="td" colspan="7" style="text-align:left;color:#4a5361">hari ini 97.530.000 · 24.250.000 · 17.050.000 · 650.000 &#160;&#160;|&#160;&#160; MTD 2.469.900.000 · 653.700.000 · 466.300.000 · 14.250.000</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div style="display:flex;gap:10px">
+      <section class="card" style="flex:1.15">
+        <table class="t">
+          <thead><tr><th class="th" style="text-align:left">Pembayaran (GTP)</th><th class="th">Hari ini</th><th class="th">MTD</th></tr></thead>
+          <tbody>
+            <tr class="gh"><td class="td" colspan="3">Kasir front office</td></tr>
+            <tr><td class="td tdl i1">Tunai</td><td class="td">12.370.000</td><td class="td">318.400.000</td></tr>
+            <tr><td class="td tdl i1">Kartu kredit/debit</td><td class="td">68.000.000</td><td class="td">1.902.600.000</td></tr>
+            <tr><td class="td tdl i1">Transfer bank</td><td class="td">15.000.000</td><td class="td">412.300.000</td></tr>
+            <tr><td class="td tdl i1">QRIS</td><td class="td">3.370.000</td><td class="td">96.500.000</td></tr>
+            <tr class="gh"><td class="td" colspan="3">Kasir outlet (POS)</td></tr>
+            <tr><td class="td tdl i1">Tunai</td><td class="td">3.960.000</td><td class="td">112.800.000</td></tr>
+            <tr><td class="td tdl i1">Kartu kredit/debit</td><td class="td">7.400.000</td><td class="td">221.400.000</td></tr>
+            <tr><td class="td tdl i1">QRIS</td><td class="td">2.880.000</td><td class="td">79.680.000</td></tr>
+            <tr class="gh"><td class="td" colspan="3">Back office</td></tr>
+            <tr><td class="td tdl i1">Transfer bank (tanpa laci)</td><td class="td">35.940.000</td><td class="td">1.169.200.000</td></tr>
+            <tr class="tot"><td class="td tdl">Grand total payment (GTP)</td><td class="td">148.920.000</td><td class="td">4.312.880.000</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="card" style="flex:1">
+        <table class="t">
+          <thead><tr><th class="th" style="text-align:left">Kontrol</th><th class="th">Hari ini</th><th class="th">MTD</th></tr></thead>
+          <tbody>
+            <tr><td class="td tdl">Grand total revenue (GTR)</td><td class="td">168.770.800</td><td class="td">4.361.021.500</td></tr>
+            <tr><td class="td tdl">Dikurangi pembayaran (GTP)</td><td class="td">−148.920.000</td><td class="td">−4.312.880.000</td></tr>
+            <tr><td class="td tdl">Ditambah refund</td><td class="td">1.250.000</td><td class="td">18.400.000</td></tr>
+            <tr><td class="td tdl">Dikurangi pindah ke city ledger</td><td class="td">−4.500.000</td><td class="td">−52.300.000</td></tr>
+            <tr class="st"><td class="td tdl">Seharusnya perubahan guest ledger</td><td class="td">16.600.800</td><td class="td">14.241.500</td></tr>
+            <tr><td class="td tdl">Guest ledger akhir (saldo folio)</td><td class="td">74.655.000</td><td class="td">74.655.000</td></tr>
+            <tr><td class="td tdl">Guest ledger awal</td><td class="td">58.054.200</td><td class="td">60.413.500</td></tr>
+            <tr class="st"><td class="td tdl">Perubahan guest ledger</td><td class="td">16.600.800</td><td class="td">14.241.500</td></tr>
+            <tr class="tot"><td class="td tdl">Control balance</td><td class="td ok">0</td><td class="td ok">0</td></tr>
+            <tr><td class="td tdl" style="color:#4a5361">Termasuk deposit ditahan: awal → akhir</td><td class="td" style="color:#4a5361">22.750.000 → 12.490.000</td><td class="td" style="color:#4a5361">19.300.000 → 12.490.000</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:stretch">
+      <div style="flex:1;font-size:11.5px;color:#4a5361;display:flex;flex-direction:column;gap:3px">
+        <span>Pendapatan neto, tanpa pajak dan servis; total A + B + C sama dengan laba rugi. Anggaran per kelompok akun (kamar, F&amp;B, lain); MTD = pro rata bulan 28/31. Selisih okupansi dalam poin persentase.</span>
+        <span>MTD bulan lalu = 1–28 Sep 2026; MTD tahun lalu = 1–28 Okt 2025. Control balance harus 0; bila tidak, ada transaksi yang tidak lewat folio dan harus diperiksa.</span>
+      </div>
+      <div style="display:flex;gap:40px;padding:0 20px;font-size:12px;color:#4a5361">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:28px"><span>Disiapkan oleh</span><span style="border-top:1px solid #9aa1ab;padding-top:4px;width:150px;text-align:center">Night audit · Budi</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:28px"><span>Disetujui oleh</span><span style="border-top:1px solid #9aa1ab;padding-top:4px;width:150px;text-align:center">Accounting</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2560}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

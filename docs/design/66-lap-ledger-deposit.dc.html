@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Ledger deposit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lbl{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:4px}
+.seg{display:inline-flex;border:1px solid #e3e6ea;border-radius:10px;overflow:hidden;background:#fff}
+.sg{height:38px;padding:0 16px;display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#1c2128;text-decoration:none}
+.sgon{background:#1f6f5c;color:#fff}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:7px 8px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thr{text-align:right}
+.td{padding:7px 8px;border-bottom:1px solid #eef0f2;font-size:12.5px;white-space:nowrap}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:11px;color:#626b77}
+.tot td{font-weight:700;background:#f6f7f9}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.ck{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;font-variant-numeric:tabular-nums}
+.ok{color:#185a4a;font-weight:600}
+.pill{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:10px;font-size:10.5px;font-weight:600;background:#eef0f2;color:#4a5361}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">LAPORAN</div>
+    <a href="#" class="nav">Ringkasan harian</a>
+    <a href="63-lap-daily-flash.dc.html" class="nav">Daily flash</a>
+    <a href="64-lap-pembatalan-no-show.dc.html" class="nav">Pembatalan &amp; no-show</a>
+    <a href="65-lap-guest-ledger.dc.html" class="nav">Guest ledger</a>
+    <a href="66-lap-ledger-deposit.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Ledger deposit</a>
+    <a href="67-lap-void-koreksi.dc.html" class="nav">Void &amp; koreksi</a>
+    <a href="68-lap-z-semua-laci.dc.html" class="nav">Z semua laci</a>
+    <a href="#" class="nav">Laporan lain</a>
+    <div class="sec">AKHIR HARI</div>
+    <a href="69-na-selesai-paket.dc.html" class="nav">Night audit</a>
+    <a href="70-na-arsip.dc.html" class="nav">Arsip night audit</a>
+    <a href="71-na-penerima.dc.html" class="nav">Penerima paket</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:flex-end;gap:10px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <h1 style="margin:0;font-size:24px">Ledger deposit</h1>
+        <span style="font-size:12.5px;color:#4a5361">Deposit yang ditahan per folio dan pergerakannya pada tanggal bisnis itu. Saldo akhir = kewajiban di akun 2310.</span>
+      </div>
+      <div class="seg"><a href="65-lap-guest-ledger.dc.html" class="sg">Guest ledger</a><a href="66-lap-ledger-deposit.dc.html" class="sg sgon">Ledger deposit</a></div>
+      <label class="lbl">Per tanggal<input class="inp" value="28/10/2026" style="width:130px"></label>
+      <button class="btn">Cetak PDF</button><button class="btn">Unduh CSV</button>
+    </div>
+
+    <section class="card" style="overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th class="th">Folio</th><th class="th">Pemilik</th><th class="th">Datang</th><th class="th thr">Awal (27 Okt)</th><th class="th thr">Diterima</th><th class="th thr">Dipakai</th><th class="th thr">Dikembalikan</th><th class="th thr">Akhir (28 Okt)</th><th class="th">Keterangan</th></tr></thead>
+        <tbody>
+          <tr><td class="td">F-10233</td><td class="td">Seminar Bank Daerah<div class="sub">acara · Ballroom</div></td><td class="td">28 Okt</td><td class="td num">10.000.000</td><td class="td num">–</td><td class="td num">10.000.000</td><td class="td num">–</td><td class="td num">0</td><td class="td sub">dipakai membayar tagihan acara</td></tr>
+          <tr><td class="td">F-10198</td><td class="td">Hendra W. · PT Sinar Jaya<div class="sub">RSV-0001790 · batal 27 Okt</div></td><td class="td">5 Nov</td><td class="td num">5.000.000</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">5.000.000</td><td class="td"><span class="pill">batal · belum ada denda</span></td></tr>
+          <tr><td class="td">F-10255</td><td class="td">Yuki Tanaka<div class="sub">RSV-0001873</div></td><td class="td">2 Nov</td><td class="td num">–</td><td class="td num">3.000.000</td><td class="td num">–</td><td class="td num">–</td><td class="td num">3.000.000</td><td class="td sub">transfer bank</td></tr>
+          <tr><td class="td">F-10244</td><td class="td">Raka Putra<div class="sub">Kamar 118</div></td><td class="td">28 Okt</td><td class="td num">2.500.000</td><td class="td num">–</td><td class="td num">1.210.000</td><td class="td num">–</td><td class="td num">1.290.000</td><td class="td sub">sisa dipakai malam berikutnya</td></tr>
+          <tr><td class="td">F-10201</td><td class="td">Andi Pratama<div class="sub">RSV-0001842 · no-show 28 Okt</div></td><td class="td">28 Okt</td><td class="td num">1.300.000</td><td class="td num">–</td><td class="td num">1.300.000</td><td class="td num">–</td><td class="td num">0</td><td class="td sub">dipakai denda no-show</td></tr>
+          <tr><td class="td">F-10219</td><td class="td">Nadia Putri<div class="sub">RSV-0001744 · batal 20 Okt</div></td><td class="td">1 Nov</td><td class="td num">750.000</td><td class="td num">–</td><td class="td num">–</td><td class="td num">750.000</td><td class="td num">0</td><td class="td sub">refund disetujui Rina</td></tr>
+          <tr><td class="td sub" colspan="3">9 folio lain tanpa pergerakan</td><td class="td num">3.200.000</td><td class="td num">–</td><td class="td num">–</td><td class="td num">–</td><td class="td num">3.200.000</td><td class="td"></td></tr>
+          <tr class="tot"><td class="td" colspan="3">Total 15 folio</td><td class="td num">22.750.000</td><td class="td num">3.000.000</td><td class="td num">12.510.000</td><td class="td num">750.000</td><td class="td num">12.490.000</td><td class="td"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div style="display:flex;gap:10px">
+      <section class="card" style="flex:1;padding:12px 16px">
+        <strong style="font-size:13px">Pergerakan</strong>
+        <div class="ck"><span>Awal + diterima − dipakai − dikembalikan</span><span>22.750.000 + 3.000.000 − 12.510.000 − 750.000</span></div>
+        <div class="ck" style="border-top:1px solid #e3e6ea;margin-top:2px"><span>Akhir</span><span>12.490.000</span></div>
+        <div class="ck"><span>Sama dengan deposit ditahan di guest ledger</span><span class="ok">12.490.000 · cocok</span></div>
+      </section>
+      <section class="card" style="flex:1;padding:12px 16px">
+        <strong style="font-size:13px">Dicocokkan dengan buku besar</strong>
+        <div class="ck"><span>Akun 2310 Deposit tamu per 27 Okt</span><span>22.750.000</span></div>
+        <div class="ck"><span>Akun 2310 Deposit tamu per 28 Okt</span><span>12.490.000</span></div>
+        <div class="ck"><span>Selisih dengan laporan</span><span class="ok">0 · cocok</span></div>
+      </section>
+      <section class="card" style="flex:1;padding:12px 16px;font-size:12px;color:#4a5361;display:flex;flex-direction:column;gap:5px">
+        <strong style="font-size:13px;color:#1c2128">Cara membaca</strong>
+        <span>Dipakai = deposit yang membayar tagihan hari itu (pelepasan harian), atau dilepas saat folio ditutup bila properti memakai pelepasan saat tutup.</span>
+        <span>Deposit dari reservasi batal atau no-show tetap ditahan sampai denda diposting atau dikembalikan.</span>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

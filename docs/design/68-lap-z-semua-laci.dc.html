@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Laporan Z semua laci</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1f6f5c}a:hover{color:#185a4a}
+.nav{padding:8px 10px;border-radius:8px;text-decoration:none;color:#1c2128}
+.sec{font-size:11px;font-weight:600;color:#626b77;padding:12px 8px 4px;letter-spacing:.06em}
+.btn{height:40px;padding:0 16px;border:1px solid #e3e6ea;border-radius:10px;background:#fff;font:inherit;font-weight:600;font-size:14px;color:#1c2128}
+.inp{height:40px;box-sizing:border-box;border:1px solid #e3e6ea;border-radius:8px;background:#fff;font:inherit;font-size:13px;padding:0 10px}
+.lbl{font-size:12px;font-weight:600;color:#4a5361;display:flex;flex-direction:column;gap:4px}
+.th{font-size:11px;font-weight:600;color:#626b77;text-transform:uppercase;letter-spacing:.04em;text-align:right;padding:7px 8px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
+.thl{text-align:left}
+.grp{text-align:center;font-size:11px;font-weight:600;color:#4a5361;text-transform:uppercase;letter-spacing:.05em;padding:7px 8px;border-bottom:1px solid #e3e6ea;background:#fbfbfc}
+.td{padding:7px 8px;border-bottom:1px solid #eef0f2;font-size:12.5px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;vertical-align:top}
+.tdl{text-align:left}
+.bl{border-left:1px solid #e3e6ea}
+.sub{font-size:11px;color:#626b77}
+.pill{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:10px;font-size:10.5px;font-weight:600}
+.pz{background:#e3f2ee;color:#185a4a}
+.px{background:#fdf1dc;color:#5c3608}
+.tot td{font-weight:700;background:#f6f7f9}
+.neg{color:#9a3412;font-weight:600}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:14px}
+.ck{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:4px 0;font-variant-numeric:tabular-nums}
+.ok{color:#185a4a;font-weight:600}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9;display:flex">
+  <aside style="width:220px;flex-shrink:0;border-right:1px solid #e3e6ea;padding:20px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px">
+    <div style="font-weight:700;padding:0 8px 8px">KamaraPMS</div>
+    <div class="sec">LAPORAN</div>
+    <a href="#" class="nav">Ringkasan harian</a>
+    <a href="63-lap-daily-flash.dc.html" class="nav">Daily flash</a>
+    <a href="64-lap-pembatalan-no-show.dc.html" class="nav">Pembatalan &amp; no-show</a>
+    <a href="65-lap-guest-ledger.dc.html" class="nav">Guest ledger</a>
+    <a href="66-lap-ledger-deposit.dc.html" class="nav">Ledger deposit</a>
+    <a href="67-lap-void-koreksi.dc.html" class="nav">Void &amp; koreksi</a>
+    <a href="68-lap-z-semua-laci.dc.html" class="nav" style="background:#e3f2ee;font-weight:600">Z semua laci</a>
+    <a href="#" class="nav">Laporan lain</a>
+    <div class="sec">AKHIR HARI</div>
+    <a href="69-na-selesai-paket.dc.html" class="nav">Night audit</a>
+    <a href="70-na-arsip.dc.html" class="nav">Arsip night audit</a>
+    <a href="71-na-penerima.dc.html" class="nav">Penerima paket</a>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:18px 24px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:flex-end;gap:10px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <h1 style="margin:0;font-size:24px">Laporan Z semua laci</h1>
+        <span style="font-size:12.5px;color:#4a5361">Semua shift kasir pada tanggal bisnis itu dalam satu laporan. Shift yang masih terbuka tampil sebagai X (sementara). Butuh izin lihat laporan dan kelola shift kasir.</span>
+      </div>
+      <label class="lbl">Tanggal bisnis<input class="inp" value="28/10/2026" style="width:130px"></label>
+      <button class="btn">Cetak PDF</button><button class="btn">Unduh CSV</button>
+    </div>
+
+    <section class="card" style="overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr><th class="grp" style="text-align:left" colspan="2"></th><th class="grp bl" colspan="7">Tunai di laci</th><th class="grp bl" colspan="2">Hasil hitung</th><th class="grp bl" colspan="3">Non-tunai</th></tr>
+          <tr><th class="th thl">Shift · laci · kasir</th><th class="th thl">Buka – tutup</th><th class="th bl">Modal</th><th class="th">Bayar tunai</th><th class="th">Terima CL</th><th class="th">Pay-in/out</th><th class="th">Setor</th><th class="th">Diharapkan</th><th class="th">Dihitung</th><th class="th bl">Selisih</th><th class="th">Alasan</th><th class="th bl">Kartu</th><th class="th">Transfer</th><th class="th">QRIS</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td tdl"><span class="pill pz">Z</span> S-0412 · FO-1<div class="sub">Dewi</div></td><td class="td tdl">07.00 – 15.05</td><td class="td bl">2.000.000</td><td class="td">6.450.000</td><td class="td">–</td><td class="td">−150.000</td><td class="td">−5.000.000</td><td class="td">3.300.000</td><td class="td">3.300.000</td><td class="td bl">0</td><td class="td tdl sub">–</td><td class="td bl">38.400.000</td><td class="td">12.000.000</td><td class="td">2.150.000</td></tr>
+          <tr><td class="td tdl"><span class="pill pz">Z</span> S-0413 · FO-2<div class="sub">Agus</div></td><td class="td tdl">15.00 – 23.10</td><td class="td bl">2.000.000</td><td class="td">4.820.000</td><td class="td">1.500.000</td><td class="td">–</td><td class="td">−4.000.000</td><td class="td">4.320.000</td><td class="td">4.300.000</td><td class="td bl neg">−20.000</td><td class="td tdl">Kembalian<div class="sub">disetujui Rina</div></td><td class="td bl">29.600.000</td><td class="td">3.000.000</td><td class="td">1.220.000</td></tr>
+          <tr><td class="td tdl"><span class="pill pz">Z</span> S-0414 · Restoran<div class="sub">Tia</div></td><td class="td tdl">10.00 – 22.30</td><td class="td bl">1.000.000</td><td class="td">3.960.000</td><td class="td">–</td><td class="td">–</td><td class="td">−3.000.000</td><td class="td">1.960.000</td><td class="td">1.960.000</td><td class="td bl">0</td><td class="td tdl sub">–</td><td class="td bl">7.400.000</td><td class="td">–</td><td class="td">2.880.000</td></tr>
+          <tr><td class="td tdl"><span class="pill px">X</span> S-0415 · FO-3<div class="sub">Budi · masih terbuka</div></td><td class="td tdl">23.00 – …</td><td class="td bl">2.000.000</td><td class="td">1.100.000</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td">3.100.000</td><td class="td sub">belum</td><td class="td bl sub">–</td><td class="td tdl sub">–</td><td class="td bl">–</td><td class="td">–</td><td class="td">–</td></tr>
+          <tr><td class="td tdl sub" colspan="2">Tunai di luar shift</td><td class="td bl">–</td><td class="td">0</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td">–</td><td class="td bl">–</td><td class="td"></td><td class="td bl sub" colspan="3" style="text-align:left">Back office (tanpa laci): transfer 35.940.000</td></tr>
+          <tr class="tot"><td class="td tdl" colspan="2">Total properti</td><td class="td bl">7.000.000</td><td class="td">16.330.000</td><td class="td">1.500.000</td><td class="td">−150.000</td><td class="td">−12.000.000</td><td class="td">12.680.000</td><td class="td">9.560.000</td><td class="td bl neg">−20.000</td><td class="td"></td><td class="td bl">75.400.000</td><td class="td">50.940.000</td><td class="td">6.250.000</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div style="display:flex;gap:10px">
+      <section class="card" style="flex:1.3;padding:12px 16px">
+        <strong style="font-size:13px">Dicocokkan dengan laporan kasir 28 Okt</strong>
+        <div class="ck"><span>Bayar tunai semua shift + di luar shift</span><span>16.330.000 = 16.330.000 <span class="ok">cocok</span></span></div>
+        <div class="ck"><span>Penerimaan city ledger tunai</span><span>1.500.000 = 1.500.000 <span class="ok">cocok</span></span></div>
+        <div class="ck"><span>Kartu · transfer · QRIS</span><span>75.400.000 · 50.940.000 · 6.250.000 <span class="ok">cocok</span></span></div>
+        <div class="ck" style="border-top:1px solid #e3e6ea;margin-top:2px"><span>Total pembayaran folio (sama dengan daily flash)</span><span style="font-weight:700">148.920.000</span></div>
+      </section>
+      <section class="card" style="flex:1;padding:12px 16px">
+        <strong style="font-size:13px">Catatan hari ini</strong>
+        <div class="ck"><span>Selisih kas total</span><span class="neg">−20.000</span></div>
+        <div class="ck"><span>Void dari shift tertutup yang masuk shift terbuka</span><span>0</span></div>
+        <div class="ck"><span>Refund (transfer 750.000 · kartu 500.000)</span><span>1.250.000</span></div>
+        <div class="ck"><span>Shift X: dihitung setelah ditutup, tampil sebagai Z di laporan besok</span><span></span></div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
