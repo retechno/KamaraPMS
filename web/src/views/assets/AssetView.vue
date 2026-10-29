@@ -20,6 +20,7 @@ import { toast } from '@/composables/useToast'
 import { t, te } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney, formatMonth } from '@/utils/format'
+import { fiscalGroupLabel } from './fiscalGroup'
 import AssetDisposeDialog from './AssetDisposeDialog.vue'
 import AssetMoveDialog from './AssetMoveDialog.vue'
 import AssetReviseDialog from './AssetReviseDialog.vue'
@@ -332,7 +333,7 @@ async function disposed(): Promise<void> {
         </dl>
         <h3 class="m-0 mt-3 text-sm font-semibold">{{ t('assets.asset.fiscal') }}</h3>
         <dl class="m-0 grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1 text-sm tabular-nums" data-testid="asset-fiscal">
-          <dt class="text-muted-foreground">{{ t('assets.asset.fiscalGroup') }}</dt><dd class="m-0">{{ asset.fiscal_group === 'NONE' ? '–' : `${t(`assets.fiscalGroup.${asset.fiscal_group}`)}${asset.fiscal_method ? ` · ${t(`assets.method.${asset.fiscal_method}`)}` : ''}` }}</dd>
+          <dt class="text-muted-foreground">{{ t('assets.asset.fiscalGroup') }}</dt><dd class="m-0">{{ asset.fiscal_group === 'NONE' ? '–' : `${fiscalGroupLabel(asset.fiscal_group, schedule?.fiscal_rate_percent)}${asset.fiscal_method ? ` · ${t(`assets.method.${asset.fiscal_method}`)}` : ''}` }}</dd>
           <template v-if="asset.fiscal_accum_opening !== null && asset.fiscal_accum_opening !== undefined">
             <dt class="text-muted-foreground">{{ t('assets.asset.fiscalOpening', { date: formatDate(asset.fiscal_opening_as_of) }) }}</dt>
             <dd class="m-0">{{ formatMoney(asset.fiscal_accum_opening) }}<Badge v-if="asset.fiscal_opening_estimated" variant="warning" class="ml-2" data-testid="fiscal-estimated">{{ t('assets.asset.fiscalEstimated') }}</Badge></dd>

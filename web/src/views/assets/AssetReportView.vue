@@ -46,6 +46,8 @@ const PATHS: Record<Kind, string> = {
   expiring: '/api/v1/properties/{propertyId}/assets/reports/expiring',
   'audit-differences': '/api/v1/properties/{propertyId}/assets/reports/audit-differences',
 }
+/** The schedule is of one asset or of one category: without either the server refuses it, so nothing is asked and the button stays off. */
+const canRun = computed(() => kind.value !== 'schedule' || Number(route.query.asset_id) > 0 || f.value.category_id > 0)
 /** The query of the report as it stands in the form: empty values are left out. */
 function query(): Record<string, unknown> {
   const v = f.value
@@ -82,6 +84,11 @@ async function load(): Promise<void> {
     return
   }
   const k = kind.value
+  if (!canRun.value) {
+    schedules.value = []
+    loaded.value = true
+    return
+  }
   const get = api.GET as unknown as (path: string, init: object) => Promise<{ data?: Record<string, unknown> }>
   busy.value = true
   try {
@@ -124,7 +131,7 @@ const th = 'p-2 text-xs font-medium uppercase text-muted-foreground'
       <div class="flex flex-wrap items-center gap-2 print:hidden">
         <Button as-child variant="outline" size="sm"><RouterLink to="/assets/reports">{{ t('assets.reports.back') }}</RouterLink></Button>
         <Button variant="outline" size="sm" data-testid="print" @click="print">{{ t('assets.reports.print') }}</Button>
-        <Button variant="outline" size="sm" data-testid="export" @click="csv">{{ t('assets.reports.csv') }}</Button>
+        <Button variant="outline" size="sm" data-testid="export" :disabled="!canRun" @click="csv">{{ t('assets.reports.csv') }}</Button>
       </div>
     </PageHeader>
     <ErrorNotice :error="error" />
@@ -137,7 +144,7 @@ const th = 'p-2 text-xs font-medium uppercase text-muted-foreground'
           <FormField :label="t('assets.reports.location')"><template #default="{ id }"><NativeSelect :id="id" v-model.number="f.location_id" name="location_id" data-testid="f-location"><option :value="0">{{ t('assets.reports.all') }}</option><option v-for="l in locations" :key="l.id" :value="l.id">{{ l.name }}</option></NativeSelect></template></FormField>
         </template>
         <template v-else-if="kind === 'schedule'">
-          <FormField :label="t('assets.reports.category')"><template #default="{ id }"><NativeSelect :id="id" v-model.number="f.category_id" name="category_id" data-testid="f-category"><option :value="0">{{ t('assets.reports.pick') }}</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></NativeSelect></template></FormField>
+          <FormField :label="t('assets.reports.category')"><template #default="{ id }"><NativeSelect :id="id" v-model.number="f.category_id" name="category_id" data-testid="f-category"><option :value="0">{{ t('assets.reports.choose') }}</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></NativeSelect></template></FormField>
         </template>
         <template v-else-if="kind === 'expiring'">
           <FormField :label="t('assets.reports.days')"><template #default="{ id }"><Input :id="id" v-model="f.days" type="number" min="1" name="days" class="w-24" data-testid="f-days" /></template></FormField>
@@ -148,7 +155,7 @@ const th = 'p-2 text-xs font-medium uppercase text-muted-foreground'
           <FormField :label="t('assets.reports.from')"><template #default="{ id }"><Input :id="id" v-model="f.date_from" type="date" name="date_from" /></template></FormField>
           <FormField :label="t('assets.reports.to')"><template #default="{ id }"><Input :id="id" v-model="f.date_to" type="date" name="date_to" /></template></FormField>
         </template>
-        <Button type="submit" size="sm" :disabled="busy" data-testid="report-run">{{ t('assets.reports.run') }}</Button>
+        <Button type="submit" size="sm" :disabled="busy || !canRun" data-testid="report-run">{{ t('assets.reports.run') }}</Button>
       </form>
 
       <!-- the register as at a date -->

@@ -9,6 +9,7 @@ import AssetAuditView from './AssetAuditView.vue'
 import AssetAuditsView from './AssetAuditsView.vue'
 import AssetFiscalView from './AssetFiscalView.vue'
 import AssetRecapView from './AssetRecapView.vue'
+import AssetReportView from './AssetReportView.vue'
 
 /** PR 4 of the fixed assets: the recap with the causes of its differences, the fiscal correction with its warning, and the stock-take on the phone. */
 let GET = vi.fn()
@@ -82,6 +83,27 @@ describe('the fiscal correction', () => {
     expect(w.get('[data-testid=fiscal-row-FA-000012]').text()).toContain('−1,125,000')
     expect(w.findAll('[data-testid=rate-confirm]').length).toBe(1)
     expect(w.get('[data-testid=fiscal-net]').text()).toContain('−1,125,000')
+  })
+
+  it('names the group with its percent, shows the months compared and the banner of a register that started mid-year', async () => {
+    const totals = { commercial: '10000000', fiscal: '10000000', depreciation_net: '0', positive_correction: '0', negative_correction: '0', disposal_correction: '0', net_correction: '0', partial_year_assets: 1, estimated_fiscal_assets: 0 }
+    const rows = [
+      { asset_id: 2, number: 'FA-000020', name: 'Building', category_code: 'BLD', fiscal_group: 'BLD_PERMANENT', fiscal_rate_percent: '5.000', fiscal_method: 'SL', commercial: '10000000', fiscal: '10000000', difference: '0', partial_year: true, fiscal_estimated: false, from_opening: true, disposed_in_year: false, from_month: '2026-10-01', to_month: '2026-10-01', months: 1, until_last_run: true },
+      { asset_id: 3, number: 'FA-000021', name: 'Chairs', category_code: 'FFE', fiscal_group: 'G2', fiscal_rate_percent: '12.500', fiscal_method: 'SL', commercial: '0', fiscal: '0', difference: '0', partial_year: false, fiscal_estimated: false, from_opening: false, disposed_in_year: false, from_month: '2026-10-01', to_month: '2026-10-01', months: 1, until_last_run: true },
+    ]
+    GET = vi.fn(async () => ({ data: { tax_year: 2026, year_start: '2026-01-01', year_end: '2026-12-31', register_from: '2026-10-01', year_starts_before_register: true, last_run_month: '2026-10-01', year_open: true, rows, disposals: [], totals, rates: [] } }))
+    setLocale('id')
+    const w = await setup(AssetFiscalView, '/assets/reports/fiscal', '/assets/reports/fiscal')
+    setLocale('id')
+    await flushPromises()
+    const text = w.text()
+    expect(text).toContain('Bangunan permanen · 5%')
+    expect(text).toContain('Kelompok 2 · 12,5%')
+    expect(text).not.toContain('BLD_PERMANENT')
+    expect(w.get('[data-testid=fiscal-register-banner]').text()).toContain('hanya memuat')
+    expect(w.get('[data-testid=fiscal-range-FA-000020]').text()).toMatch(/Okt/)
+    expect(w.find('[data-testid=fiscal-open]').exists()).toBe(true)
+    setLocale('en')
   })
 })
 
@@ -169,6 +191,17 @@ describe('the stock-take on the phone', () => {
   })
 })
 
+describe('the schedule report', () => {
+  it('keeps the button off until a category is chosen and asks nothing before', async () => {
+    GET = vi.fn(async (path: string) => ({ data: path.endsWith('/assets/categories') ? { data: [{ id: 2, code: 'FFE', name: 'Furniture' }] } : { data: [] } }))
+    const w = await setup(AssetReportView, '/assets/reports/schedule', '/assets/reports/:kind')
+    expect(w.get('[data-testid=report-run]').attributes('disabled')).toBeDefined()
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/reports/schedule'))).toBe(false)
+    await w.get('[data-testid=f-category]').setValue(2)
+    expect(w.get('[data-testid=report-run]').attributes('disabled')).toBeUndefined()
+  })
+})
+
 describe('the list of stock-takes and proposals', () => {
   it('lets whoever manages the assets decide a move but not a write-off', async () => {
     const proposal = (id: number, kind: string) => ({ id, status: 'PENDING', kind, audit_number: 'FAO-000005', asset_id: id, asset_number: `FA-00001${id}`, asset_name: 'Chair', line_result: kind === 'MOVE' ? 'MOVED' : 'MISSING', to_location_name: 'Lobby', carrying_value: '1000000' })
@@ -181,5 +214,7 @@ describe('the list of stock-takes and proposals', () => {
     expect(w.find('[data-testid=proposal-apply-1]').exists()).toBe(true)
     expect(w.find('[data-testid=proposal-apply-2]').exists()).toBe(false)
     expect(w.get('[data-testid=proposal-2]').text()).toContain('Needs another permission')
+    expect(w.get('[data-testid=proposal-apply-1]').text()).toBe('Apply')
+    expect(w.get('[data-testid=proposal-1]').text()).not.toBe('Apply')
   })
 })

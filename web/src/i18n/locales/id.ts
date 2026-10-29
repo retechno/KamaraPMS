@@ -6319,6 +6319,16 @@ export const id: Messages = {
       locations: 'Lokasi', newArea: 'Area bebas baru', areaHint: 'Tempat yang bukan kamar, ruang pertemuan, atau gudang.', assetCount: '{n} aset', deactivate: 'Matikan', activate: 'Aktifkan',
       ensureKind: 'Buat lokasi dari', ensureRef: 'Yang mana', ensure: 'Buat lokasi',
       fiscalRates: 'Tarif fiskal', fiscalNote: 'Tarif pasal 11 UU PPh, perlu dikonfirmasi konsultan pajak. Hanya dipakai laporan koreksi fiskal.', lifeYears: 'Umur (tahun)', slRate: 'Garis lurus', dbRate: 'Saldo menurun',
+      issue: {
+        REGISTER_NOT_STARTED: 'Register belum punya bulan mulai: tetapkan di pengaturan atau lewat saldo awal.',
+        CATEGORY_ACCOUNT_UNUSABLE: 'Akun {field} {account} pada kategori {category} dinonaktifkan atau tidak menerima posting.',
+        CATEGORY_NEEDS_DEPARTMENT: 'Akun biaya pada kategori {category} mewajibkan departemen, sedangkan kategorinya belum punya: setiap asetnya harus membawa departemen.',
+        LEDGER_DRIFT: 'Keadaan aset {asset} berbeda dari baris buku besarnya: bangun ulang keadaannya.',
+        ASSET_IN_INACTIVE_LOCATION: 'Aset {asset} berada di lokasi yang dinonaktifkan ({location}).',
+        GL_DIFFERENCE: 'Buku besar dan register berbeda untuk kategori {category}.',
+        OUTSIDE_REGISTER_1590: 'Akun 1590 menyimpan saldo {balance} yang bukan milik kategori mana pun di register.',
+      },
+      issueField: { cost: 'harga perolehan', accumulated: 'akumulasi penyusutan', expense: 'beban penyusutan' },
       check: 'Pemeriksaan register', checkOk: 'Register cocok dengan dirinya sendiri dan dengan buku besar.', registerCost: 'Harga register', ledgerCost: 'Harga buku besar', registerAccum: 'Akumulasi register', ledgerAccum: 'Akumulasi buku besar',
     },
     waiting: {
@@ -6389,8 +6399,8 @@ export const id: Messages = {
     },
     reports: {
       title: 'Laporan aset', intro: 'Setiap laporan bisa diunduh sebagai CSV atau dicetak. Laporan hanya membaca daftar aset; tidak ada yang diposting.', denied: 'Anda tidak punya akses ke aset tetap properti ini.', back: 'Semua laporan', print: 'Cetak', csv: 'Unduh CSV', run: 'Tampilkan',
-      from: 'Dari', to: 'Sampai', asOf: 'Per tanggal', category: 'Kategori', location: 'Lokasi', all: 'Semua', pick: 'Semua kategori', days: 'Garansi berakhir dalam (hari)', months: 'Umur berakhir dalam (bulan)', result: 'Hasil',
-      totalOf: '{n} aset', scheduleEmpty: 'Pilih kategori atau lokasi untuk melihat jadwalnya.', expiringEmpty: 'Tidak ada garansi atau umur manfaat yang berakhir pada periode ini.', diffEmpty: 'Tidak ada selisih.',
+      from: 'Dari', to: 'Sampai', asOf: 'Per tanggal', category: 'Kategori', location: 'Lokasi', all: 'Semua', choose: 'Pilih kategori', days: 'Garansi berakhir dalam (hari)', months: 'Umur berakhir dalam (bulan)', result: 'Hasil',
+      totalOf: '{n} aset', scheduleEmpty: 'Pilih satu kategori untuk melihat jadwalnya.', expiringEmpty: 'Tidak ada garansi atau umur manfaat yang berakhir pada periode ini.', diffEmpty: 'Tidak ada selisih.',
       col: { number: 'Nomor', name: 'Nama', category: 'Kategori', location: 'Lokasi', cost: 'Harga', accum: 'Akumulasi', carrying: 'Nilai buku', status: 'Status' },
       kind: {
         register: { name: 'Daftar aset per tanggal', about: 'Aset dengan harga perolehan, akumulasi penyusutan dan nilai buku pada tanggal tertentu. Lokasi dan departemen yang tampil adalah yang sekarang.' },
@@ -6417,12 +6427,15 @@ export const id: Messages = {
       intro: 'Penyusutan komersial dibanding penyusutan fiskal untuk satu tahun pajak. Tidak ada yang diposting: ini dasar koreksi SPT tahunan.',
       confirm: 'Tarif fiskal adalah data, bukan nasihat: perlu dikonfirmasi konsultan pajak.',
       taxYear: 'Tahun pajak', period: 'Tahun pajak {year}: {from} sampai {to}', asset: 'Aset', group: 'Golongan dan tarif', commercial: 'Komersial', fiscal: 'Fiskal', correction: 'Koreksi', notes: 'Catatan',
-      note: { partial: 'Sebagian tahun', estimated: 'Saldo awal fiskal perkiraan', opening: 'Dari saldo awal', disposed: 'Dilepas dalam tahun ini' },
+      note: { partial: 'Disusutkan sebelum register', estimated: 'Saldo awal fiskal perkiraan', opening: 'Dari saldo awal', disposed: 'Dilepas dalam tahun ini' },
       none: 'Tidak ada aset yang disusutkan pada tahun pajak ini.', total: 'Total {n} aset', disposalsTitle: 'Pelepasan dalam tahun ini', disposal: 'Pelepasan', proceeds: 'Hasil penjualan', commercialGain: 'Laba atau rugi komersial', fiscalGain: 'Laba atau rugi fiskal',
       disposalsHint: 'Koreksi adalah laba fiskal dikurangi laba komersial: positif menambah penghasilan kena pajak.',
       summaryTitle: 'Koreksi SPT tahunan', positive: 'Koreksi positif (komersial lebih besar dari fiskal)', negative: 'Koreksi negatif (fiskal lebih besar dari komersial)', disposalCorrection: 'Koreksi atas pelepasan', net: 'Koreksi bersih',
-      positiveHint: 'Angka positif menambah penghasilan kena pajak, angka negatif menguranginya.', partialCount: '{n} aset disusutkan hanya sebagian tahun.', estimatedCount: '{n} aset memakai saldo awal fiskal perkiraan.',
+      positiveHint: 'Angka positif menambah penghasilan kena pajak, angka negatif menguranginya.', partialCount: '{n} aset sudah disusutkan sebelum register mulai: bulan-bulan itu di luar laporan ini.', estimatedCount: '{n} aset memakai saldo awal fiskal perkiraan.',
       ratesTitle: 'Tarif yang dipakai', years: '{n} tahun', rateBadge: 'perlu dikonfirmasi',
+      months: 'Bulan dibandingkan', range: '{from} – {to}', monthsCount: '{n} bulan', untilLastRun: 'sampai {month}, bulan terakhir yang dijalankan', yearOpen: 'Tahun pajak belum selesai: dibandingkan sampai {month}, bulan terakhir yang dijalankan.',
+      registerBanner: 'Register mulai {register}: tahun pajak {year} hanya memuat {from} sampai {to}. Penyusutan {beforeFrom} sampai {beforeTo} dicatat sebelum register dan koreksinya dihitung di luar laporan ini.',
+      registerAfterYear: 'Register mulai {register}, setelah tahun pajak {year}: tidak ada bulan tahun ini yang dibandingkan di sini.',
     },
     repairs: { tab: 'Perbaikan', title: 'Permintaan perbaikan aset ini', none: 'Belum ada perbaikan yang diminta untuk aset ini.', noCost: 'Biaya tidak ditampilkan di sini.' },
     audit: {
@@ -6439,7 +6452,7 @@ export const id: Messages = {
       closedTitle: 'Opname ditutup', closedResult: '{missing} hilang, {proposals} usulan dibuat.', countsMissing: '{n} hilang', toProposals: 'Ke usulan', progress: '{done} dari {total} ditemukan', countsLine: '{found} ditemukan, {moved} di lokasi lain, {unexpected} tidak diharapkan, {damaged} rusak', back: 'Semua opname',
     },
     proposal: {
-      hint: 'Usulan pindah diputuskan oleh pengelola aset, hapus buku oleh pihak yang berwenang melepas aset. Hapus buku masih bisa memerlukan persetujuan.', none: 'Tidak ada usulan yang menunggu.', carrying: 'Nilai buku {amount}', applyMove: 'Pindahkan aset', applyWriteOff: 'Hapus buku', reject: 'Tolak',
+      hint: 'Usulan pindah diputuskan oleh pengelola aset, hapus buku oleh pihak yang berwenang melepas aset. Hapus buku masih bisa memerlukan persetujuan.', none: 'Tidak ada usulan yang menunggu.', carrying: 'Nilai buku {amount}', applyMove: 'Terapkan', applyWriteOff: 'Terapkan', reject: 'Tolak',
       needsPermission: 'Perlu izin lain', decided: 'Sudah diputuskan', applied: 'Usulan dijalankan.', appliedRequest: 'Permintaan pelepasan dibuat dan menunggu persetujuan.', rejected: 'Usulan ditolak.', rejectTitle: 'Tolak usulan', reason: 'Alasan',
     },
     dispose: {

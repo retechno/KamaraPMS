@@ -13,8 +13,9 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { t } from '@/i18n'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate, formatMoney, formatMonth } from '@/utils/format'
 import { downloadCsv, money } from '@/views/accounting/reportApi'
+import { fiscalGroupLabel, fiscalGroupName, ratePercent } from './fiscalGroup'
 
 /**
  * Commercial against fiscal depreciation for a tax year, and the correction of the annual return (docs/architecture/37-fixed-assets.md 4.9, mockup 60). It is computed from the rates of the fiscal groups
@@ -75,12 +76,28 @@ const notes = (r: AssetFiscalReport['rows'][number]): string[] => {
   if (r.disposed_in_year) out.push(t('assets.fiscalReport.note.disposed'))
   return out
 }
-const rateOf = (code: string) => report.value?.rates.find((x) => x.code === code)
-const groupText = (code: string, method: string): string => {
-  const r = rateOf(code)
-  const rate = r ? (method === 'DB' && r.db_rate ? r.db_rate : r.sl_rate) : ''
-  return `${code}${rate ? ` · ${rate}` : ''}`
+/** The group by its name and the yearly rate of the method of the asset, never by its code. */
+const groupText = (r: AssetFiscalReport['rows'][number]): string => fiscalGroupLabel(r.fiscal_group, r.fiscal_rate_percent)
+const ym = (date: string): string => date.slice(0, 7)
+const prevMonth = (m: string): string => {
+  const y = Number(m.slice(0, 4))
+  const mo = Number(m.slice(5, 7))
+  return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`
 }
+/** The months of one asset that the commercial and the fiscal figures are both about. */
+const rangeText = (r: AssetFiscalReport['rows'][number]): string =>
+  r.from_month && r.to_month ? `${t('assets.fiscalReport.range', { from: formatMonth(ym(r.from_month)), to: formatMonth(ym(r.to_month)) })} (${t('assets.fiscalReport.monthsCount', { n: r.months })})` : '–'
+/** What the register leaves out of a tax year that starts before it: the months before the register started are in no ledger of it. */
+const registerNote = computed(() => {
+  const r = report.value
+  if (!r || !r.year_starts_before_register || !r.register_from) return ''
+  const first = ym(r.register_from)
+  const last = ym(r.year_end)
+  const before = { from: formatMonth(ym(r.year_start)), to: formatMonth(prevMonth(first)) }
+  if (first > last) return t('assets.fiscalReport.registerAfterYear', { register: formatMonth(first), year: r.tax_year })
+  return t('assets.fiscalReport.registerBanner', { register: formatMonth(first), year: r.tax_year, from: formatMonth(first), to: formatMonth(last), beforeFrom: before.from, beforeTo: before.to })
+})
+const openNote = computed(() => (report.value?.year_open && report.value.last_run_month ? t('assets.fiscalReport.yearOpen', { month: formatMonth(ym(report.value.last_run_month)) }) : ''))
 const hasNotes = computed(() => (report.value?.rows ?? []).some((r) => notes(r).length))
 </script>
 
@@ -102,12 +119,13 @@ const hasNotes = computed(() => (report.value?.rows ?? []).some((r) => notes(r).
         <Button type="submit" size="sm" :disabled="busy" data-testid="fiscal-run">{{ t('assets.reports.run') }}</Button>
       </form>
       <template v-if="report">
-        <p class="m-0 text-sm text-muted-foreground" data-testid="fiscal-period">{{ t('assets.fiscalReport.period', { year: report.tax_year, from: formatDate(report.year_start), to: formatDate(report.year_end) }) }}</p>
+        <p v-if="registerNote" class="m-0 rounded-md border border-warning bg-warning/15 p-3 text-sm" role="note" data-testid="fiscal-register-banner">{{ registerNote }}</p>
+        <p class="m-0 text-sm text-muted-foreground" data-testid="fiscal-period">{{ t('assets.fiscalReport.period', { year: report.tax_year, from: formatDate(report.year_start), to: formatDate(report.year_end) }) }}<template v-if="openNote"> · <span data-testid="fiscal-open">{{ openNote }}</span></template></p>
         <Card class="overflow-x-auto p-0">
           <table class="w-full border-collapse text-sm tabular-nums" data-testid="fiscal-table">
             <thead>
               <tr class="border-b border-border text-xs uppercase text-muted-foreground">
-                <th class="p-2 text-left">{{ t('assets.fiscalReport.asset') }}</th><th class="p-2 text-left">{{ t('assets.fiscalReport.group') }}</th>
+                <th class="p-2 text-left">{{ t('assets.fiscalReport.asset') }}</th><th class="p-2 text-left">{{ t('assets.fiscalReport.group') }}</th><th class="p-2 text-left">{{ t('assets.fiscalReport.months') }}</th>
                 <th class="p-2 text-right">{{ t('assets.fiscalReport.commercial') }}</th><th class="p-2 text-right">{{ t('assets.fiscalReport.fiscal') }}</th><th class="p-2 text-right">{{ t('assets.fiscalReport.correction') }}</th>
                 <th v-if="hasNotes" class="p-2 text-left">{{ t('assets.fiscalReport.notes') }}</th>
               </tr>
@@ -115,15 +133,16 @@ const hasNotes = computed(() => (report.value?.rows ?? []).some((r) => notes(r).
             <tbody>
               <tr v-for="r in report.rows" :key="r.asset_id" class="border-b border-border" :data-testid="`fiscal-row-${r.number}`">
                 <td class="p-2"><RouterLink :to="`/assets/${r.asset_id}`">{{ r.number }}</RouterLink> · {{ r.name }}</td>
-                <td class="p-2">{{ groupText(r.fiscal_group, r.fiscal_method) }} <Badge variant="outline" class="ml-1" data-testid="rate-confirm">{{ t('assets.fiscalReport.rateBadge') }}</Badge></td>
+                <td class="p-2" :data-testid="`fiscal-group-${r.number}`">{{ groupText(r) }} <Badge variant="outline" class="ml-1" data-testid="rate-confirm">{{ t('assets.fiscalReport.rateBadge') }}</Badge></td>
+                <td class="p-2 text-xs" :data-testid="`fiscal-range-${r.number}`">{{ rangeText(r) }}<template v-if="r.until_last_run && r.to_month"><br><span class="text-muted-foreground">{{ t('assets.fiscalReport.untilLastRun', { month: formatMonth(ym(r.to_month)) }) }}</span></template></td>
                 <td class="p-2 text-right">{{ formatMoney(r.commercial) }}</td><td class="p-2 text-right">{{ formatMoney(r.fiscal) }}</td><td class="p-2 text-right font-medium">{{ signed(r.difference) }}</td>
                 <td v-if="hasNotes" class="p-2 text-xs text-muted-foreground">{{ notes(r).join(' · ') }}</td>
               </tr>
-              <tr v-if="!report.rows.length"><td :colspan="hasNotes ? 6 : 5" class="p-3 muted">{{ t('assets.fiscalReport.none') }}</td></tr>
+              <tr v-if="!report.rows.length"><td :colspan="hasNotes ? 7 : 6" class="p-3 muted">{{ t('assets.fiscalReport.none') }}</td></tr>
             </tbody>
             <tfoot>
               <tr class="font-semibold" data-testid="fiscal-total">
-                <td class="p-2" colspan="2">{{ t('assets.fiscalReport.total', { n: report.rows.length }) }}</td>
+                <td class="p-2" colspan="3">{{ t('assets.fiscalReport.total', { n: report.rows.length }) }}</td>
                 <td class="p-2 text-right">{{ formatMoney(report.totals.commercial) }}</td><td class="p-2 text-right">{{ formatMoney(report.totals.fiscal) }}</td><td class="p-2 text-right">{{ signed(report.totals.depreciation_net) }}</td>
                 <td v-if="hasNotes" />
               </tr>
@@ -158,7 +177,7 @@ const hasNotes = computed(() => (report.value?.rows ?? []).some((r) => notes(r).
         <Card class="flex flex-col gap-2 p-4" data-testid="fiscal-rates">
           <h2 class="m-0 text-base font-semibold">{{ t('assets.fiscalReport.ratesTitle') }}</h2>
           <ul class="m-0 flex list-none flex-wrap gap-2 p-0 text-sm">
-            <li v-for="r in report.rates" :key="r.code"><Badge variant="outline">{{ r.code }} · {{ t('assets.fiscalReport.years', { n: r.life_years }) }} · SL {{ r.sl_rate }}<template v-if="r.db_rate"> · DB {{ r.db_rate }}</template></Badge></li>
+            <li v-for="r in report.rates" :key="r.code"><Badge variant="outline" :data-testid="`fiscal-rate-${r.code}`">{{ fiscalGroupName(r.code) }} · {{ t('assets.fiscalReport.years', { n: r.life_years }) }} · SL {{ ratePercent(r.sl_rate) }}<template v-if="r.db_rate"> · DB {{ ratePercent(r.db_rate) }}</template></Badge></li>
           </ul>
           <p class="m-0 text-xs text-muted-foreground">{{ t('assets.fiscalReport.confirm') }}</p>
         </Card>

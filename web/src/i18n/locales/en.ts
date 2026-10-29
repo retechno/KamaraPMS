@@ -6321,6 +6321,16 @@ export const en = {
       locations: 'Locations', newArea: 'New free area', areaHint: 'A place that is not a room, a meeting room or a warehouse.', assetCount: '{n} assets', deactivate: 'Switch off', activate: 'Switch on',
       ensureKind: 'Make a location from', ensureRef: 'Which', ensure: 'Make location',
       fiscalRates: 'Fiscal rates', fiscalNote: 'The rates of article 11 of the income tax law, to be confirmed by the tax consultant. They only feed the report of the fiscal correction.', lifeYears: 'Life (years)', slRate: 'Straight line', dbRate: 'Declining',
+      issue: {
+        REGISTER_NOT_STARTED: 'The register has no start month yet: set it in the settings or with the opening balances.',
+        CATEGORY_ACCOUNT_UNUSABLE: 'The {field} account {account} of the category {category} is switched off or does not take postings.',
+        CATEGORY_NEEDS_DEPARTMENT: 'The expense account of the category {category} requires a department and the category has none: every asset of it must carry one.',
+        LEDGER_DRIFT: 'The state of asset {asset} differs from its ledger rows: rebuild the state.',
+        ASSET_IN_INACTIVE_LOCATION: 'Asset {asset} stands in a location that is switched off ({location}).',
+        GL_DIFFERENCE: 'The general ledger and the register differ for the category {category}.',
+        OUTSIDE_REGISTER_1590: 'Account 1590 holds a balance of {balance} that belongs to no category of the register.',
+      },
+      issueField: { cost: 'cost', accumulated: 'accumulated depreciation', expense: 'depreciation expense' },
       check: 'Check of the register', checkOk: 'The register agrees with itself and with the ledger.', registerCost: 'Register cost', ledgerCost: 'Ledger cost', registerAccum: 'Register accumulated', ledgerAccum: 'Ledger accumulated',
     },
     waiting: {
@@ -6391,8 +6401,8 @@ export const en = {
     },
     reports: {
       title: 'Asset reports', intro: 'Every report can be downloaded as CSV or printed. They only read the register; nothing is posted.', denied: 'You do not have access to the fixed assets of this property.', back: 'All reports', print: 'Print', csv: 'Download CSV', run: 'Show',
-      from: 'From', to: 'To', asOf: 'As at', category: 'Category', location: 'Location', all: 'All', pick: 'Any category', days: 'Warranty ends within (days)', months: 'Life ends within (months)', result: 'Result',
-      totalOf: '{n} assets', scheduleEmpty: 'Pick a category or a location to see the schedules.', expiringEmpty: 'No warranty or useful life ends in this period.', diffEmpty: 'No differences found.',
+      from: 'From', to: 'To', asOf: 'As at', category: 'Category', location: 'Location', all: 'All', choose: 'Choose a category', days: 'Warranty ends within (days)', months: 'Life ends within (months)', result: 'Result',
+      totalOf: '{n} assets', scheduleEmpty: 'Choose a category to see the schedules.', expiringEmpty: 'No warranty or useful life ends in this period.', diffEmpty: 'No differences found.',
       col: { number: 'Number', name: 'Name', category: 'Category', location: 'Location', cost: 'Cost', accum: 'Accumulated', carrying: 'Book value', status: 'Status' },
       kind: {
         register: { name: 'Register as at a date', about: 'The assets with their cost, accumulated depreciation and book value on a chosen date. The location and department shown are the current ones.' },
@@ -6419,12 +6429,15 @@ export const en = {
       intro: 'Commercial depreciation against fiscal depreciation for a tax year. Nothing is posted: this is what the annual return is corrected by.',
       confirm: 'The fiscal rates are data, not advice: they need to be confirmed by the tax consultant (perlu dikonfirmasi konsultan pajak).',
       taxYear: 'Tax year', period: 'Tax year {year}: {from} to {to}', asset: 'Asset', group: 'Group and rate', commercial: 'Commercial', fiscal: 'Fiscal', correction: 'Correction', notes: 'Notes',
-      note: { partial: 'Part of the year', estimated: 'Fiscal opening estimated', opening: 'From an opening balance', disposed: 'Disposed in the year' },
+      note: { partial: 'Depreciated before the register', estimated: 'Fiscal opening estimated', opening: 'From an opening balance', disposed: 'Disposed in the year' },
       none: 'No asset is depreciated in this tax year.', total: 'Total of {n} assets', disposalsTitle: 'Disposals in the year', disposal: 'Disposal', proceeds: 'Proceeds', commercialGain: 'Commercial gain or loss', fiscalGain: 'Fiscal gain or loss',
       disposalsHint: 'The correction is the fiscal gain minus the commercial gain: positive raises taxable income.',
       summaryTitle: 'Correction of the annual return', positive: 'Positive correction (commercial more than fiscal)', negative: 'Negative correction (fiscal more than commercial)', disposalCorrection: 'Correction on disposals', net: 'Net correction',
-      positiveHint: 'A positive figure raises taxable income, a negative one lowers it.', partialCount: '{n} assets were depreciated for part of the year only.', estimatedCount: '{n} assets have an estimated fiscal opening balance.',
+      positiveHint: 'A positive figure raises taxable income, a negative one lowers it.', partialCount: '{n} assets were already depreciated before the register started: those months are outside this report.', estimatedCount: '{n} assets have an estimated fiscal opening balance.',
       ratesTitle: 'Rates used', years: '{n} years', rateBadge: 'to be confirmed',
+      months: 'Months compared', range: '{from} – {to}', monthsCount: '{n} months', untilLastRun: 'up to {month}, the last month run', yearOpen: 'The tax year is not over: compared up to {month}, the last month run.',
+      registerBanner: 'The register starts in {register}: tax year {year} holds only {from} to {to}. The depreciation of {beforeFrom} to {beforeTo} was recorded before the register and its correction is calculated outside this report.',
+      registerAfterYear: 'The register starts in {register}, after tax year {year}: nothing of this year is compared here.',
     },
     repairs: { tab: 'Repairs', title: 'Repair requests for this asset', none: 'No repair has been requested for this asset.', noCost: 'Costs are not shown here.' },
     audit: {
@@ -6441,7 +6454,7 @@ export const en = {
       closedTitle: 'Stock-take closed', closedResult: '{missing} missing, {proposals} proposals made.', countsMissing: '{n} missing', toProposals: 'Go to the proposals', progress: '{done} of {total} found', countsLine: '{found} found, {moved} other location, {unexpected} unexpected, {damaged} damaged', back: 'All stock-takes',
     },
     proposal: {
-      hint: 'A move is decided by whoever manages the assets, a write-off by whoever disposes of them. A write-off may still need an approval.', none: 'No proposal is waiting.', carrying: 'Book value {amount}', applyMove: 'Move the asset', applyWriteOff: 'Write off', reject: 'Reject',
+      hint: 'A move is decided by whoever manages the assets, a write-off by whoever disposes of them. A write-off may still need an approval.', none: 'No proposal is waiting.', carrying: 'Book value {amount}', applyMove: 'Apply', applyWriteOff: 'Apply', reject: 'Reject',
       needsPermission: 'Needs another permission', decided: 'Decided', applied: 'Proposal applied.', appliedRequest: 'A disposal request was made and waits for approval.', rejected: 'Proposal rejected.', rejectTitle: 'Reject the proposal', reason: 'Reason',
     },
     dispose: {

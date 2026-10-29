@@ -34,6 +34,18 @@ const locations = ref<AssetLocation[]>([])
 const fiscal = ref<AssetFiscalGroup[]>([])
 const settings = ref<AssetSettings | null>(null)
 const check = ref<AssetSetupCheck | null>(null)
+const ISSUES = new Set(['REGISTER_NOT_STARTED', 'CATEGORY_ACCOUNT_UNUSABLE', 'CATEGORY_NEEDS_DEPARTMENT', 'LEDGER_DRIFT', 'ASSET_IN_INACTIVE_LOCATION', 'GL_DIFFERENCE', 'OUTSIDE_REGISTER_1590'])
+/** An issue of the check in the language of the page, made from its code and its parameters; the text of the server is only for a code that this page does not know. */
+function issueText(i: AssetSetupCheck['issues'][number]): string {
+  if (!ISSUES.has(i.code)) return i.message
+  const c = i.context ?? {}
+  const text = (v: unknown): string => (v === undefined || v === null ? '' : String(v))
+  const field = text(c.field)
+  return t(`assets.settings.issue.${i.code}`, {
+    category: text(c.category_name) || text(c.category), account: text(c.account), asset: text(c.asset), location: text(c.location),
+    field: field ? t(`assets.settings.issueField.${field}`) : '', balance: c.balance === undefined ? '' : formatMoney(text(c.balance)),
+  })
+}
 const assetAccounts = ref<AssetAccountOption[]>([])
 const expenseAccounts = ref<AssetAccountOption[]>([])
 
@@ -335,14 +347,14 @@ watch([ensureKind, canSetup], loadEnsure, { immediate: true })
     <Card v-if="check" class="flex flex-col gap-3 p-4" data-testid="check-card">
       <h2 class="m-0 text-base font-semibold">{{ t('assets.settings.check') }} <span class="text-sm font-normal text-muted-foreground">{{ formatDate(check.as_of) }}</span></h2>
       <p v-if="!check.issues.length" class="m-0 text-sm text-success-text" data-testid="check-ok">{{ t('assets.settings.checkOk') }}</p>
-      <ul v-else class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="check-issues"><li v-for="(i, n) in check.issues" :key="n"><Badge :variant="i.severity === 'ERROR' ? 'destructive' : 'warning'" class="mr-2">{{ t(`assets.severity.${i.severity}`) }}</Badge>{{ i.message }}</li></ul>
+      <ul v-else class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="check-issues"><li v-for="(i, n) in check.issues" :key="n"><Badge :variant="i.severity === 'ERROR' ? 'destructive' : 'warning'" class="mr-2">{{ t(`assets.severity.${i.severity}`) }}</Badge>{{ issueText(i) }}</li></ul>
       <div v-if="check.reconciliation.length" class="overflow-x-auto">
         <table class="w-full border-collapse text-sm tabular-nums" data-testid="check-reconciliation">
           <thead><tr class="text-left text-xs uppercase text-muted-foreground"><th class="p-2">{{ t('assets.col.category') }}</th><th class="p-2 text-right">{{ t('assets.settings.registerCost') }}</th><th class="p-2 text-right">{{ t('assets.settings.ledgerCost') }}</th><th class="p-2 text-right">{{ t('assets.settings.registerAccum') }}</th><th class="p-2 text-right">{{ t('assets.settings.ledgerAccum') }}</th></tr></thead>
           <tbody>
             <template v-for="r in check.reconciliation" :key="r.category_id">
             <tr class="border-t border-border">
-              <td class="p-2">{{ r.category_code }}</td><td class="p-2 text-right">{{ formatMoney(r.register_cost) }}</td><td class="p-2 text-right" :class="Number(r.cost_difference) !== 0 ? 'text-destructive' : ''">{{ formatMoney(r.ledger_cost) }}</td>
+              <td class="p-2">{{ r.category_name }}</td><td class="p-2 text-right">{{ formatMoney(r.register_cost) }}</td><td class="p-2 text-right" :class="Number(r.cost_difference) !== 0 ? 'text-destructive' : ''">{{ formatMoney(r.ledger_cost) }}</td>
               <td class="p-2 text-right">{{ formatMoney(r.register_accum) }}</td><td class="p-2 text-right" :class="Number(r.accum_difference) !== 0 ? 'text-destructive' : ''">{{ formatMoney(r.ledger_accum) }}</td>
             </tr>
             <tr v-if="(r.cost_causes?.length ?? 0) + (r.accum_causes?.length ?? 0)" :data-testid="`check-causes-${r.category_code}`">
