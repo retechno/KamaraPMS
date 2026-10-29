@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { useSubscriptionStore } from '@/stores/subscription'
 import MaintenanceView from './MaintenanceView.vue'
 
 let GET = vi.fn()
@@ -26,15 +27,17 @@ const requests = [
 const staff = [{ id: 9, full_name: 'Joko', email: 'joko@hotel.test' }]
 const ALL = ['maintenance.report', 'maintenance.manage', 'room_block.manage']
 
-function mountView(permissions = ALL, query: Record<string, string> = {}) {
+function mountView(permissions = ALL, query: Record<string, string> = {}, modules: string[] | null = null) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
+  useSubscriptionStore().modules = modules
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-09-30' } as never
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/maintenance-staff')) return { data: { data: staff } }
+    if (path.endsWith('/assets/lookup')) return { data: { data: [{ id: 4, number: 'FA-000004', name: 'Ice machine', location_name: 'Kitchen' }] } }
     if (path.endsWith('/housekeeping')) return { data: { data: [{ room_id: 11, room_number: '101', room_type_code: 'DLX' }, { room_id: 12, room_number: '102', room_type_code: 'DLX' }] } }
     return { data: { data: requests } }
   })
@@ -208,5 +211,29 @@ describe('MaintenanceView', () => {
     await flushPromises()
     expect(w.get('[data-testid=notice]').text()).toBe('Dimulai.')
     setLocale('en')
+  })
+
+  it('lets the request name a fixed asset, when the plan has the module and the person reads the register', async () => {
+    const w = await mountView([...ALL, 'asset.read'], {}, ['CORE', 'INVENTORY'])
+    await flushPromises()
+    await w.get('[data-testid=new-request]').trigger('click')
+    expect(w.find('[data-testid=request-asset]').exists()).toBe(true)
+    await w.get('select[name=asset_id]').setValue(4)
+    await w.get('input[name=description]').setValue('Ice machine does not freeze')
+    await w.get('[data-testid=request-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]![1].body.asset_id).toBe(4)
+  })
+
+  it('does not offer the asset when the plan has no inventory module or the person cannot read the register', async () => {
+    const noModule = await mountView([...ALL, 'asset.read'], {}, ['CORE'])
+    await flushPromises()
+    await noModule.get('[data-testid=new-request]').trigger('click')
+    expect(noModule.find('[data-testid=request-asset]').exists()).toBe(false)
+    expect(GET.mock.calls.some(([p]) => String(p).endsWith('/assets/lookup'))).toBe(false)
+    const noPermission = await mountView(ALL, {}, ['CORE', 'INVENTORY'])
+    await flushPromises()
+    await noPermission.get('[data-testid=new-request]').trigger('click')
+    expect(noPermission.find('[data-testid=request-asset]').exists()).toBe(false)
   })
 })

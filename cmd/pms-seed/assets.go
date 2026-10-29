@@ -15,6 +15,7 @@ import (
 	"kamarapms/internal/assets"
 	"kamarapms/internal/departments"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/maintenance"
 	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/taxfiling"
@@ -92,7 +93,7 @@ func seedAssets(e *env, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	_, err = seedAssetsWith(e.ctx, svc, acct, &seedDeps{pay: pay, txm: e.txm, days: e.ten, depts: deps, rules: iam.NewRules(iamSvc, e.authz), iam: iamSvc}, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
+	_, err = seedAssetsWith(e.ctx, svc, acct, &seedDeps{pay: pay, txm: e.txm, days: e.ten, depts: deps, rules: iam.NewRules(iamSvc, e.authz), iam: iamSvc, maint: maintenance.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, e.rm)}, e.propertyID, day.BusinessDate, dryRun, os.Stdout)
 	return err
 }
 
@@ -194,14 +195,18 @@ func seedAssetsWith(ctx context.Context, svc *assets.Service, acct *accounting.S
 	return made + n, err
 }
 
-// seedAfterOpening makes what comes after the opening balances: the lines of the waiting list and the disposals (docs/architecture/37-fixed-assets.md, PR 2 and 3).
+// seedAfterOpening makes what comes after the opening balances: the lines of the waiting list, the disposals, and the stock-take with the repair request (docs/architecture/37-fixed-assets.md, PR 2 to 4).
 func seedAfterOpening(ctx context.Context, svc *assets.Service, acct *accounting.Service, d *seedDeps, pid int64, businessDate civil.Date, dryRun bool, out io.Writer) (int, error) {
 	n, err := seedWaiting(ctx, svc, acct, d, pid, businessDate, dryRun, out)
 	if err != nil {
 		return n, err
 	}
 	m, err := seedDisposals(ctx, svc, acct, d, pid, businessDate, dryRun, out)
-	return n + m, err
+	if err != nil {
+		return n + m, err
+	}
+	k, err := seedAudit(ctx, svc, d, pid, businessDate, dryRun, out)
+	return n + m + k, err
 }
 
 // unregisteredLandCost is the cost of the plot that the ledger holds but the register does not (yet): an import in the mode REGISTER_ONLY with that one plot (category LAND, cost 750000000,

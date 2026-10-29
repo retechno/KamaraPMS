@@ -999,6 +999,9 @@ type ScheduleRow struct {
 	MonthsDone    int             `json:"months_done"`
 	RunMonth      *civil.Date     `json:"run_month"`      // the month of the run that booked it (later than Month for a catch-up)
 	JournalNumber *string         `json:"journal_number"` // the journal of that run
+	// the fiscal book (4.9) for the same month: what the rates give, computed, never posted; absent for an asset without a fiscal group
+	FiscalAmount     *decimal.Decimal `json:"fiscal_amount"`
+	FiscalAccumAfter *decimal.Decimal `json:"fiscal_accum_after"`
 }
 
 // AssetSchedule is the commercial depreciation schedule of an asset.
@@ -1011,7 +1014,13 @@ type AssetSchedule struct {
 	Residual    decimal.Decimal `json:"residual_value"`
 	LifeMonths  *int32          `json:"life_months"`
 	Method      *string         `json:"method"`
-	Rows        []ScheduleRow   `json:"rows"`
+	// the fiscal group and method of the asset when it has them
+	FiscalGroup  *string `json:"fiscal_group"`
+	FiscalMethod *string `json:"fiscal_method"`
+	// the yearly rate and the useful life the fiscal group gives for that method
+	FiscalRatePercent *decimal.Decimal `json:"fiscal_rate_percent"`
+	FiscalLifeYears   *int             `json:"fiscal_life_years"`
+	Rows              []ScheduleRow    `json:"rows"`
 }
 
 // AssetSchedule lists the months of an asset: what the opening balances brought, what the runs posted and what is projected to the end of the life (asset.read).
@@ -1077,6 +1086,9 @@ func (s *Service) AssetSchedule(ctx context.Context, propertyID, assetID int64) 
 		for _, m := range Project(st, from) {
 			out.Rows = append(out.Rows, ScheduleRow{Month: m.Month, Kind: ScheduleProjected, Months: 1, Amount: m.Amount, AccumAfter: m.Accum, CarryingAfter: m.Carrying, MonthsDone: m.MonthsDone})
 		}
+	}
+	if err := s.fillFiscalSchedule(ctx, p.TenantID, propertyID, assetID, &out); err != nil {
+		return out, err
 	}
 	return out, nil
 }

@@ -55,6 +55,9 @@ type Request struct {
 	RequestNumber  string      `json:"request_number"`
 	RoomID         *int64      `json:"room_id"`
 	RoomNumber     string      `json:"room_number,omitempty"`
+	AssetID        *int64      `json:"asset_id"`
+	AssetNumber    string      `json:"asset_number,omitempty"`
+	AssetName      string      `json:"asset_name,omitempty"`
 	Location       string      `json:"location,omitempty"`
 	Category       string      `json:"category"`
 	Description    string      `json:"description"`
@@ -82,6 +85,7 @@ type Staff struct {
 // CreateInput reports a problem.
 type CreateInput struct {
 	RoomID      *int64 `json:"room_id"`
+	AssetID     *int64 `json:"asset_id"` // the asset the problem is about (the plan needs the stock module, docs/architecture/37-fixed-assets.md 4.11)
 	Location    string `json:"location"`
 	Category    string `json:"category"`
 	Description string `json:"description"`
@@ -90,6 +94,7 @@ type CreateInput struct {
 
 // Patch changes the details of an open request; nil fields stay as they are.
 type Patch struct {
+	AssetID     *int64  `json:"asset_id"` // the asset the request is about; 0 takes the link away
 	Location    *string `json:"location"`
 	Category    *string `json:"category"`
 	Description *string `json:"description"`
@@ -128,6 +133,40 @@ type Service struct {
 	authz auth.Authorizer
 	days  *tenancy.Service
 	rooms *rooms.Service
+	// assetModule says whether the plan has the stock module; a request names an asset only then (internal/app wires it)
+	assetModule AssetModule
+}
+
+// AssetModule says whether the plan of a tenant has the stock module, which the register of fixed assets belongs to (docs/architecture/37-fixed-assets.md 4.11).
+type AssetModule interface {
+	HasInventory(ctx context.Context, tenantID int64) (bool, error)
+}
+
+// SetAssetModule wires the plan check of the link to an asset; without it the module is taken as on.
+func (s *Service) SetAssetModule(m AssetModule) { s.assetModule = m }
+
+// checkAsset says whether a request may name the asset: the plan has the register, the asset is in the property of the request and it is in use.
+func (s *Service) checkAsset(ctx context.Context, p auth.Principal, propertyID, assetID int64) error {
+	if s.assetModule != nil {
+		on, err := s.assetModule.HasInventory(ctx, p.TenantID)
+		if err != nil {
+			return err
+		}
+		if !on {
+			return apperr.Forbidden("MODULE_NOT_IN_PLAN", "the asset register is not part of the subscription plan").WithContext("module", "INVENTORY")
+		}
+	}
+	status, err := s.q(ctx).AssetStatus(ctx, maintenancedb.AssetStatusParams{TenantID: p.TenantID, PropertyID: propertyID, ID: assetID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperr.NotFound("ASSET_NOT_FOUND", "the asset does not exist in this property")
+		}
+		return err
+	}
+	if status != "ACTIVE" {
+		return apperr.Conflict("ASSET_STATUS_INVALID", "a request is about an asset that is in use").WithContext("status", status)
+	}
+	return nil
 }
 
 // NewService wires the service.
@@ -183,7 +222,8 @@ func entry(p auth.Principal, propertyID int64, bd civil.Date, action string, id 
 
 func view(r maintenancedb.ListRequestsRow) Request {
 	out := Request{
-		ID: r.ID, RequestNumber: r.RequestNumber, RoomID: r.RoomID, RoomNumber: deref(r.RoomNumber), Location: deref(r.Location), Category: r.Category,
+		ID: r.ID, RequestNumber: r.RequestNumber, RoomID: r.RoomID, RoomNumber: deref(r.RoomNumber), AssetID: r.AssetID, AssetNumber: deref(r.AssetNumber), AssetName: deref(r.AssetName),
+		Location: deref(r.Location), Category: r.Category,
 		Description: r.Description, Priority: r.Priority, Status: r.Status, BusinessDate: r.BusinessDate, ReportedBy: r.ReportedBy, ReporterName: deref(r.ReporterName),
 		ReportedAt: r.ReportedAt, AssignedTo: r.AssignedTo, AssigneeName: deref(r.AssigneeName), StartedAt: r.StartedAt, ClosedAt: r.ClosedAt,
 		ResolutionNote: deref(r.ResolutionNote),
@@ -315,6 +355,9 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in CreateInput) 
 	if in.RoomID != nil && *in.RoomID < 1 {
 		in.RoomID = nil
 	}
+	if in.AssetID != nil && *in.AssetID < 1 {
+		in.AssetID = nil
+	}
 	if fields := validate(in.Category, in.Description, in.Priority, in.Location, in.RoomID != nil); len(fields) > 0 {
 		return Request{}, apperr.Invalid("the request is invalid", fields...)
 	}
@@ -333,19 +376,24 @@ func (s *Service) Create(ctx context.Context, propertyID int64, in CreateInput) 
 				return err
 			}
 		}
+		if in.AssetID != nil {
+			if err := s.checkAsset(ctx, p, propertyID, *in.AssetID); err != nil {
+				return err
+			}
+		}
 		number, err := s.days.NextDocumentNumber(ctx, propertyID, tenancy.SeqMaintenance) // last in the lock order
 		if err != nil {
 			return err
 		}
 		id, err = q.InsertRequest(ctx, maintenancedb.InsertRequestParams{
-			TenantID: p.TenantID, PropertyID: propertyID, RequestNumber: number, RoomID: in.RoomID, Location: nullable(in.Location), Category: in.Category,
+			TenantID: p.TenantID, PropertyID: propertyID, RequestNumber: number, RoomID: in.RoomID, AssetID: in.AssetID, Location: nullable(in.Location), Category: in.Category,
 			Description: in.Description, Priority: in.Priority, BusinessDate: day.BusinessDate, ActorID: p.ActorID(), Now: s.clock.Now(),
 		})
 		if err != nil {
 			return err
 		}
 		return s.audit.Write(ctx, entry(p, propertyID, day.BusinessDate, "maintenance.reported", id, number, nil, map[string]any{
-			"request_number": number, "room_id": in.RoomID, "location": in.Location, "category": in.Category, "priority": in.Priority,
+			"request_number": number, "room_id": in.RoomID, "asset_id": in.AssetID, "location": in.Location, "category": in.Category, "priority": in.Priority,
 		}))
 	})
 	if err != nil {
@@ -417,12 +465,24 @@ func (s *Service) Update(ctx context.Context, propertyID, id int64, patch Patch)
 		if fields := validate(category, description, priority, location, cur.RoomID != nil); len(fields) > 0 {
 			return "", nil, apperr.Invalid("the request is invalid", fields...)
 		}
+		assetID := cur.AssetID
+		if patch.AssetID != nil {
+			switch {
+			case *patch.AssetID < 1:
+				assetID = nil
+			case cur.AssetID == nil || *cur.AssetID != *patch.AssetID:
+				if err := s.checkAsset(ctx, p, cur.PropertyID, *patch.AssetID); err != nil {
+					return "", nil, err
+				}
+				assetID = patch.AssetID
+			}
+		}
 		if err := s.q(ctx).UpdateRequestDetails(ctx, maintenancedb.UpdateRequestDetailsParams{
-			TenantID: p.TenantID, PropertyID: cur.PropertyID, ID: cur.ID, Category: category, Description: description, Priority: priority, Location: nullable(location),
+			TenantID: p.TenantID, PropertyID: cur.PropertyID, ID: cur.ID, Category: category, Description: description, Priority: priority, Location: nullable(location), AssetID: assetID,
 		}); err != nil {
 			return "", nil, err
 		}
-		return "maintenance.updated", map[string]any{"category": category, "priority": priority, "location": location}, nil
+		return "maintenance.updated", map[string]any{"category": category, "priority": priority, "location": location, "asset_id": assetID}, nil
 	})
 }
 

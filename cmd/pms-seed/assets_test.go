@@ -11,6 +11,7 @@ import (
 	"kamarapms/internal/assets"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/iam"
+	"kamarapms/internal/maintenance"
 	"kamarapms/internal/rooms/roomstest"
 )
 
@@ -24,7 +25,7 @@ func TestSeedAssets(t *testing.T) {
 	iamSvc := iam.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.TokenConfig{Secret: randomSecret(), AccessTTL: time.Minute, RefreshTTL: time.Minute})
 	svc.SetApprover(iamSvc)
 	standardDepartments(t, e, tn.ID, p.ID)
-	deps := &seedDeps{pay: e.Payables, txm: e.TxM, days: e.Tenancy, depts: e.Departments, rules: iam.NewRules(iamSvc, iam.NewAuthorizer(e.TxM)), iam: iamSvc}
+	deps := &seedDeps{pay: e.Payables, txm: e.TxM, days: e.Tenancy, depts: e.Departments, rules: iam.NewRules(iamSvc, iam.NewAuthorizer(e.TxM)), iam: iamSvc, maint: e.Maintenance}
 	day, err := e.Tenancy.CurrentBusinessDay(ctx, p.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +44,7 @@ func TestSeedAssets(t *testing.T) {
 	}
 
 	n, out := run(true)
-	if n != len(assetAreas)+len(assetSpecs)+waitingRows+disposalRows || !strings.Contains(out, "dry run") {
+	if n != len(assetAreas)+len(assetSpecs)+waitingRows+disposalRows+auditRows || !strings.Contains(out, "dry run") {
 		t.Fatalf("dry run: %d %q", n, out)
 	}
 	if locs, _ := svc.ListLocations(ctx, p.ID, "", nil); len(locs) != 0 {
@@ -104,6 +105,36 @@ func TestSeedAssets(t *testing.T) {
 	}
 	if len(reqs) != 1 || reqs[0].AssetID != byName[demoDisposalPendingAsset].ID || reqs[0].Kind != assets.DisposalSale {
 		t.Fatalf("the pending sale: %+v", reqs)
+	}
+
+	// the stock-take stays open with a scan of each kind and some assets not scanned; the repair request names an asset
+	audits, err := svc.ListAudits(ctx, p.ID, assets.AuditInProgress)
+	if err != nil || len(audits) != 1 || audits[0].Scanned < 2 {
+		t.Fatalf("the open stock-take: %+v %v", audits, err)
+	}
+	detail, err := svc.GetAudit(ctx, p.ID, audits[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]int{}
+	for _, l := range detail.Lines {
+		kinds[l.Result]++
+	}
+	if kinds[assets.ScanFound] != 1 || kinds[assets.ScanMoved] != 1 || kinds[assets.ScanDamaged] != 1 || len(detail.Unscanned) == 0 {
+		t.Fatalf("the scans %v, unscanned %d", kinds, len(detail.Unscanned))
+	}
+	repairs, err := e.Maintenance.List(ctx, p.ID, maintenance.Filter{}, nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	named := 0
+	for _, r := range repairs {
+		if r.AssetID != nil && r.Description == demoRepairDesc {
+			named++
+		}
+	}
+	if named != 1 {
+		t.Fatalf("%d repair requests about an asset", named)
 	}
 
 	// the register-only demo: the plot that only the ledger holds ties out, any other file does not

@@ -60,7 +60,7 @@ function ok(path: string): unknown {
   if (path.endsWith('/assets/locations')) return { data: { data: locations } }
   if (path.endsWith('/assets/fiscal-groups')) return { data: { data: fiscalGroups } }
   if (path.endsWith('/assets/settings')) return { data: settings }
-  if (path.endsWith('/assets/setup-check')) return { data: { as_of: '2026-10-26', issues: [{ code: 'NO_LOCATION', severity: 'WARNING', message: 'one asset has no location' }], reconciliation: [{ category_id: 2, category_code: 'FFE', cost_account_code: '1530', register_cost: '36000000', ledger_cost: '36000000', cost_difference: '0', register_accum: '13000000', ledger_accum: '12000000', accum_difference: '1000000' }] } }
+  if (path.endsWith('/assets/setup-check')) return { data: { as_of: '2026-10-26', issues: [{ code: 'NO_LOCATION', severity: 'WARNING', message: 'one asset has no location' }, { code: 'GL_DIFFERENCE', severity: 'ERROR', message: 'server text', context: { category: 'FFE', category_name: 'Furniture' } }], reconciliation: [{ category_id: 2, category_code: 'FFE', category_name: 'Furniture', cost_account_code: '1530', register_cost: '36000000', ledger_cost: '36000000', cost_difference: '0', register_accum: '13000000', ledger_accum: '12000000', accum_difference: '1000000', cost_causes: [], accum_causes: [{ code: 'MANUAL_JOURNAL', amount: '-1000000', lines: 1 }] }] } }
   if (path.endsWith('/assets/accounts')) return { data: { data: [{ id: 10, code: '1510', name: 'Land', account_type: 'ASSET' }, { id: 11, code: '1530', name: 'FF&E', account_type: 'ASSET' }] } }
   if (path.endsWith('/assets/opening/imports')) return { data: { data: [{ id: 1, number: 'FAI-000001', as_of: '2026-09-30', mode: 'WITH_JOURNAL', journal_number: 'JV-000100', asset_count: 2, total_cost: '250000000', total_accum: '110000000' }] } }
   if (path.endsWith('/assets/{id}')) return { data: detail }
@@ -333,6 +333,10 @@ describe('categories and settings', () => {
     expect(body('[data-testid=category-LAND]').text()).toContain('not depreciated')
     expect(body('[data-testid=check-issues]').text()).toContain('one asset has no location')
     expect(body('[data-testid=check-reconciliation]').text()).toContain('12,000,000')
+    expect(body('[data-testid=check-issues]').text()).toContain('differ for the category Furniture')
+    expect(body('[data-testid=check-issues]').text()).not.toContain('server text')
+    expect(body('[data-testid=check-reconciliation]').text()).toContain('Furniture')
+    expect(body('[data-testid=check-causes-FFE]').text()).toContain('Manual journal on an asset account')
   })
 
   it('saves the settings with the version', async () => {

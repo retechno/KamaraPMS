@@ -122,9 +122,11 @@ M92="$(ls "$ROOT"/migrations/00092_*.sql)"
 M93="$(ls "$ROOT"/migrations/00093_*.sql)"
 M94="$(ls "$ROOT"/migrations/00094_*.sql)"
 M95="$(ls "$ROOT"/migrations/00095_*.sql)"
+M96="$(ls "$ROOT"/migrations/00096_*.sql)"
 # 00092 (the stock of the banquet) stands on the inventory tables of 00084, 00087 and 00088, so it goes first and comes back after 00088 does
 # 00088 stands on 00087, 00087 on 00086, 00086 on 00085 and 00085 on 00084: they go first, and come back after 00084 does
-# 00093 (the fixed assets) has a foreign key to the warehouses of 00084, so it goes first of all and comes back last, and 00094 (their acquisition and depreciation) stands on 00093: it goes before it, and 00095 (their changes) on 00094
+# 00093 (the fixed assets) has a foreign key to the warehouses of 00084, so it goes first of all and comes back last, and 00094 (their acquisition and depreciation) stands on 00093: it goes before it, and 00095 (their changes) on 00094, and 00096 (their stock-take) on 00095
+section down "$M96" | psql_run
 section down "$M95" | psql_run
 section down "$M94" | psql_run
 section down "$M93" | psql_run
@@ -251,6 +253,13 @@ psql_run < "$ROOT/db/tests/migration_00095_post.sql" 2>&1 | sed -E -n -e 's/^(ps
 section down "$M95" | psql_run
 psql_run < "$ROOT/db/tests/migration_00095_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M95" | psql_run >/dev/null
+
+echo "==> migration 00096 (stock-take, Maintenance): the sequence and the asset of a request"
+section up "$M96" | psql_run >/dev/null
+psql_run < "$ROOT/db/tests/migration_00096_post.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section down "$M96" | psql_run
+psql_run < "$ROOT/db/tests/migration_00096_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M96" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

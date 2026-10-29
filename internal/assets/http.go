@@ -55,6 +55,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/disposal-requests", httpx.HandlerFunc(h.listDisposalRequests))
 	mux.Handle("POST "+p+"/disposal-requests/{id}/approve", httpx.HandlerFunc(h.approveDisposal))
 	mux.Handle("POST "+p+"/disposal-requests/{id}/reject", httpx.HandlerFunc(h.rejectDisposal))
+	h.registerReports(mux)
+	h.registerAudits(mux)
 	mux.Handle("GET "+p, httpx.HandlerFunc(h.listAssets))
 	mux.Handle("GET "+p+"/{id}", httpx.HandlerFunc(h.getAsset))
 	mux.Handle("PATCH "+p+"/{id}", httpx.HandlerFunc(h.updateAsset))

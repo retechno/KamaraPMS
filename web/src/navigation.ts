@@ -106,6 +106,8 @@ export const navigation: NavSection[] = [
       { id: 'assetWaiting', to: '/assets/waiting', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
       { id: 'assetDisposals', to: '/assets/disposals', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
       { id: 'assetDepreciation', to: '/assets/depreciation', permission: 'asset.depreciate', module: 'INVENTORY' },
+      { id: 'assetReports', to: '/assets/reports', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
+      { id: 'assetAudits', to: '/assets/audits', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
       { id: 'assetOpening', to: '/assets/opening', permission: 'asset.setup', module: 'INVENTORY' },
       { id: 'assetLabels', to: '/assets/labels', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
       { id: 'assetSettings', to: '/assets/settings', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },

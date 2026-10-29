@@ -33,4 +33,5 @@ type MaintenanceRequest struct {
 	RoomBlockID    *int64
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	AssetID        *int64
 }

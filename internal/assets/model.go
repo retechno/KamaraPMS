@@ -407,6 +407,7 @@ type SetupIssue struct {
 type Reconciliation struct {
 	CategoryID       int64           `json:"category_id"`
 	CategoryCode     string          `json:"category_code"`
+	CategoryName     string          `json:"category_name"`
 	CostAccountCode  string          `json:"cost_account_code"`
 	RegisterCost     decimal.Decimal `json:"register_cost"`
 	LedgerCost       decimal.Decimal `json:"ledger_cost"`
@@ -415,6 +416,9 @@ type Reconciliation struct {
 	RegisterAccum    decimal.Decimal `json:"register_accum"`
 	LedgerAccum      decimal.Decimal `json:"ledger_accum"`
 	AccumDifference  decimal.Decimal `json:"accum_difference"`
+	// the known causes of each difference, "general ledger less register" (5.3); what nothing explains is OTHER
+	CostCauses  []DifferenceCause `json:"cost_causes"`
+	AccumCauses []DifferenceCause `json:"accum_causes"`
 }
 
 // SetupCheck is the answer of the setup check.

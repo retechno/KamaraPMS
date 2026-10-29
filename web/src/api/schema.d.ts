@@ -12657,6 +12657,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/assets/reports/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The register as of a date: the assets with the sums of their ledger up to it (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetRegisterReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The depreciation schedules of one asset or of the active assets of a category: the months posted and the months to come, with the fiscal columns (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetScheduleReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/recap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The recap by category for a period: cost and accumulated depreciation (opening, additions, changes of category, disposals, depreciation, closing), the general ledger beside it and the difference with its causes (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetRecapReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/fiscal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Commercial against fiscal for a tax year and the correction of the annual return: computed from the rates of the fiscal groups, nothing is posted (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetFiscalReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The count, cost and carrying value of the active assets of each location and each department, sub-departments included (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetPlacementReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/expiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Assets whose warranty ends soon, whose life is nearly over, or that are fully depreciated and still in use (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetExpiringReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/assets/moves": {
         parameters: {
             query?: never;
@@ -12886,6 +13000,196 @@ export interface paths {
         put?: never;
         /** Refuse a disposal that waits, or withdraw it, with the reason (asset.dispose) */
         post: operations["rejectAssetDisposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/audits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The stock-takes of the property, newest first, up to 200 (any asset permission) */
+        get: operations["listAssetAudits"];
+        put?: never;
+        /**
+         * Open a stock-take of one location, or of the whole property (asset.manage)
+         * @description `Idempotency-Key` is required; the same key replays the stock-take. One stock-take of a location is open at a time (409 `AUDIT_ALREADY_OPEN`). Nothing is posted.
+         */
+        post: operations["startAssetAudit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/audits/{id}/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** A stock-take with its lines and, while it is open, the assets not scanned yet (any asset permission) */
+        get: operations["getAssetAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/audits/{id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record one scan: an asset found in the place (asset.manage)
+         * @description The asset is named by `code` (the QR `FA:...`, the label code or the number typed by hand) or by `asset_id`. A stock-take of the whole property needs `location_code` (the QR `FL:...`) or `location_id`. The result is FOUND, MOVED (the register says another place), UNEXPECTED (the register says no place) or DAMAGED (`damaged` with a `note`). A second scan of the same asset replaces the first. 409 `AUDIT_NOT_OPEN` for a closed stock-take, `ASSET_STATUS_INVALID` for an asset that is not active.
+         */
+        put: operations["scanAssetAudit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/audits/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close a stock-take: what was expected and not scanned is MISSING, and every difference becomes a proposal (asset.manage)
+         * @description No journal is posted and no asset changes: a person applies each proposal under their own permission. 409 `AUDIT_NOT_OPEN` when it was closed already.
+         */
+        post: operations["closeAssetAudit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The proposals of the closed stock-takes, newest first, up to 500 (any asset permission) */
+        get: operations["listAssetProposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/proposals/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply a proposal: a move (asset.manage) or a write-off (asset.dispose, with the approval of the kind `ASSET_DISPOSAL`)
+         * @description The ordinary use case runs, so its rules apply. A write-off that needs an approver makes a disposal request (`result_type` DISPOSAL_REQUEST). 409 `PROPOSAL_NOT_PENDING` when it was decided already.
+         */
+        post: operations["applyAssetProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/proposals/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Leave a proposal as it is, with the reason (asset.manage or asset.dispose) */
+        post: operations["rejectAssetProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/reports/audit-differences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** The differences of the stock-takes with the book value at risk and what became of each proposal (any asset permission); `format=csv` downloads it */
+        get: operations["getAssetAuditDifferencesReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/assets/{id}/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The repair requests that name the asset, newest first (any asset permission); a request has no cost */
+        get: operations["getAssetMaintenance"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18346,6 +18650,13 @@ export interface components {
             room_id: number | null;
             room_number?: string;
             location?: string;
+            /**
+             * Format: int64
+             * @description The fixed asset the request is about (needs the stock module in the plan).
+             */
+            asset_id?: number | null;
+            asset_number?: string;
+            asset_name?: string;
             category: components["schemas"]["MaintenanceCategory"];
             description: string;
             priority: components["schemas"]["MaintenancePriority"];
@@ -18374,12 +18685,22 @@ export interface components {
         CreateMaintenanceRequest: {
             /** Format: int64 */
             room_id?: number | null;
+            /**
+             * Format: int64
+             * @description An active fixed asset; 403 MODULE_NOT_IN_PLAN without the stock module, 404 ASSET_NOT_FOUND, 409 ASSET_STATUS_INVALID.
+             */
+            asset_id?: number | null;
             location?: string;
             category: components["schemas"]["MaintenanceCategory"];
             description: string;
             priority?: components["schemas"]["MaintenancePriority"];
         };
         PatchMaintenanceRequest: {
+            /**
+             * Format: int64
+             * @description The asset the request is about; 0 takes the link away.
+             */
+            asset_id?: number | null;
             location?: string;
             category?: components["schemas"]["MaintenanceCategory"];
             description?: string;
@@ -25402,6 +25723,7 @@ export interface components {
             /** @enum {string} */
             severity: "ERROR" | "WARNING";
             message: string;
+            /** @description The parameters of the message by its code: category and category_name (code and name of a category), asset, location, account, field, cost_difference, accum_difference, balance. */
             context?: {
                 [key: string]: unknown;
             };
@@ -25410,6 +25732,7 @@ export interface components {
             /** Format: int64 */
             category_id: number;
             category_code: string;
+            category_name: string;
             cost_account_code: string;
             register_cost: string;
             ledger_cost: string;
@@ -25418,6 +25741,9 @@ export interface components {
             register_accum: string;
             ledger_accum: string;
             accum_difference: string;
+            /** @description The known parts of the cost difference, general ledger less register; what nothing explains is OTHER. */
+            cost_causes?: components["schemas"]["AssetDifferenceCause"][];
+            accum_causes?: components["schemas"]["AssetDifferenceCause"][];
         };
         AssetSetupCheck: {
             issues: components["schemas"]["AssetSetupIssue"][];
@@ -25950,6 +26276,9 @@ export interface components {
              */
             run_month?: string | null;
             journal_number?: string | null;
+            /** @description The fiscal depreciation of the same month (4.9), computed; null for an asset without a fiscal group. */
+            fiscal_amount?: string | null;
+            fiscal_accum_after?: string | null;
         };
         AssetMoveRequest: {
             /** @description The assets to move (the batch route; the route of one asset takes it from the path). */
@@ -26195,7 +26524,437 @@ export interface components {
             residual_value: string;
             life_months?: number | null;
             method?: string | null;
+            fiscal_group?: string | null;
+            fiscal_method?: string | null;
+            /** @description The yearly rate the fiscal group gives for that method. */
+            fiscal_rate_percent?: string | null;
+            fiscal_life_years?: number | null;
             rows: components["schemas"]["AssetScheduleRow"][];
+        };
+        AssetScheduleList: {
+            data: components["schemas"]["AssetSchedule"][];
+        };
+        AssetDifferenceCause: {
+            /** @enum {string} */
+            code: "WAITING_LIST" | "DISMISSED" | "MANUAL_JOURNAL" | "REGISTER_ONLY" | "OTHER";
+            /** @description Its share of the general ledger less the register. */
+            amount: string;
+            lines?: number;
+        };
+        AssetRegisterRow: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            category_code: string;
+            category_name: string;
+            location_name?: string | null;
+            department_name?: string | null;
+            supplier_name?: string | null;
+            /** Format: date */
+            acquisition_date: string;
+            /** Format: date */
+            in_service_date: string;
+            cost: string;
+            accum_depr: string;
+            carrying_value: string;
+            life_months?: number | null;
+            months_done: number;
+            months_left?: number | null;
+            method?: string | null;
+            status: string;
+            serial_no?: string | null;
+            /** Format: date */
+            warranty_until?: string | null;
+        };
+        AssetRegisterReport: {
+            /** Format: date */
+            as_of: string;
+            rows: components["schemas"]["AssetRegisterRow"][];
+            count: number;
+            cost: string;
+            accum_depr: string;
+            carrying_value: string;
+        };
+        AssetRecapRow: {
+            /** Format: int64 */
+            category_id: number;
+            category_code: string;
+            category_name: string;
+            cost_account_code: string;
+            accumulated_account_code?: string | null;
+            cost_opening: string;
+            /** @description The opening balances, the acquisitions and the values added. */
+            cost_additions: string;
+            /** @description Changes of category, in and out. */
+            cost_reclass: string;
+            cost_disposals: string;
+            cost_closing: string;
+            accum_opening: string;
+            accum_additions: string;
+            accum_depreciation: string;
+            accum_reclass: string;
+            accum_disposals: string;
+            accum_closing: string;
+            carrying_closing: string;
+            ledger_cost_opening: string;
+            ledger_cost_closing: string;
+            ledger_accum_opening: string;
+            ledger_accum_closing: string;
+            /** @description General ledger less register at the end of the period. */
+            cost_difference: string;
+            accum_difference: string;
+            cost_causes: components["schemas"]["AssetDifferenceCause"][];
+            accum_causes: components["schemas"]["AssetDifferenceCause"][];
+        };
+        AssetRecapReport: {
+            /** Format: date */
+            date_from: string;
+            /** Format: date */
+            date_to: string;
+            rows: components["schemas"]["AssetRecapRow"][];
+            total: components["schemas"]["AssetRecapRow"];
+            /** @description The balance (credit positive) of the old single accumulated depreciation account, which belongs to no category. */
+            account_1590: string;
+        };
+        AssetFiscalRow: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            category_code: string;
+            fiscal_group: string;
+            /** @enum {string} */
+            fiscal_method: "SL" | "DB";
+            /** @description The depreciation of the ledger in the tax year. */
+            commercial: string;
+            /** @description The fiscal depreciation of the tax year, computed. */
+            fiscal: string;
+            /** @description Commercial less fiscal: positive when the commercial expense is larger. */
+            difference: string;
+            /** @description At the end of the period compared. */
+            fiscal_accumulated: string;
+            /**
+             * Format: date
+             * @description The first month compared: the commercial and the fiscal depreciation are both those of from_month through to_month. Null when no month is due.
+             */
+            from_month: string | null;
+            /** Format: date */
+            to_month: string | null;
+            months: number;
+            /** @description The yearly rate the fiscal group gives for the method of the asset. */
+            fiscal_rate_percent: string;
+            fiscal_life_years: number;
+            /** @description The asset depreciated before the register started: those months are in no ledger and outside this report. */
+            partial_year: boolean;
+            /** @description The period stops at the last month a run covers and the tax year is not over. */
+            until_last_run: boolean;
+            /** @description The fiscal state of the opening balance was estimated, not given. */
+            fiscal_estimated: boolean;
+            from_opening: boolean;
+            disposed_in_year: boolean;
+        };
+        AssetFiscalDisposal: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            disposal_number: string;
+            /** Format: date */
+            disposal_date: string;
+            cost_removed: string;
+            proceeds: string;
+            /** @description A loss is negative. */
+            commercial_gain: string;
+            fiscal_book_value: string;
+            fiscal_gain: string;
+            /** @description Fiscal gain less commercial gain: positive raises the taxable income. */
+            difference: string;
+        };
+        AssetFiscalTotals: {
+            commercial: string;
+            fiscal: string;
+            /** @description Where the commercial expense is larger. */
+            positive_correction: string;
+            /** @description Where the fiscal expense is larger, as a positive amount. */
+            negative_correction: string;
+            depreciation_net: string;
+            disposal_correction: string;
+            net_correction: string;
+            partial_year_assets: number;
+            estimated_fiscal_assets: number;
+        };
+        AssetFiscalRate: {
+            code: string;
+            life_years: number;
+            sl_rate: string;
+            db_rate?: string | null;
+        };
+        AssetFiscalReport: {
+            /** @description Named by the calendar year in which the tax year starts. */
+            tax_year: number;
+            /** Format: date */
+            year_start: string;
+            /** Format: date */
+            year_end: string;
+            rows: components["schemas"]["AssetFiscalRow"][];
+            disposals: components["schemas"]["AssetFiscalDisposal"][];
+            totals: components["schemas"]["AssetFiscalTotals"];
+            rates: components["schemas"]["AssetFiscalRate"][];
+            /**
+             * Format: date
+             * @description The first month of the register.
+             */
+            register_from: string | null;
+            /** @description The tax year starts before the register: the months before it are depreciated in no ledger of the register and their correction is outside this report. */
+            year_starts_before_register: boolean;
+            /**
+             * Format: date
+             * @description The last month a depreciation run covers.
+             */
+            last_run_month: string | null;
+            /** @description The last run is before the end of the tax year: the year is compared up to it only. */
+            year_open: boolean;
+            /** @description Always true: the rates are data and the tax consultant must confirm them. */
+            rates_to_confirm: boolean;
+        };
+        AssetPlacementRow: {
+            /** Format: int64 */
+            id?: number | null;
+            /** Format: int64 */
+            parent_id?: number | null;
+            code: string;
+            name: string;
+            kind?: string;
+            is_active: boolean;
+            assets: number;
+            cost: string;
+            accum_depr: string;
+            carrying_value: string;
+            /** @description With the sub-departments of a department. */
+            total_assets: number;
+            total_cost: string;
+            total_accum_depr: string;
+            total_carrying_value: string;
+        };
+        AssetPlacementReport: {
+            locations: components["schemas"]["AssetPlacementRow"][];
+            no_location: components["schemas"]["AssetPlacementRow"];
+            departments: components["schemas"]["AssetPlacementRow"][];
+            no_department: components["schemas"]["AssetPlacementRow"];
+        };
+        AssetExpiringRow: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            category_code: string;
+            location_name?: string | null;
+            cost: string;
+            carrying_value: string;
+            /** Format: date */
+            warranty_until?: string | null;
+            warranty_ending: boolean;
+            warranty_expired: boolean;
+            months_left?: number | null;
+            life_ending: boolean;
+            fully_depreciated: boolean;
+        };
+        AssetAuditCounts: {
+            expected: number;
+            found: number;
+            moved: number;
+            unexpected: number;
+            damaged: number;
+            missing: number;
+            proposals: number;
+        };
+        AssetAuditSummary: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** Format: int64 */
+            location_id?: number | null;
+            location_code?: string | null;
+            location_name?: string | null;
+            /** @enum {string} */
+            status: "IN_PROGRESS" | "CLOSED";
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            closed_at?: string | null;
+            scanned: number;
+            missing: number;
+            pending_proposals: number;
+        };
+        AssetAuditList: {
+            data: components["schemas"]["AssetAuditSummary"][];
+        };
+        AssetAuditLine: {
+            /** Format: int64 */
+            asset_id: number;
+            asset_number: string;
+            asset_name: string;
+            /** @enum {string} */
+            result: "FOUND" | "MOVED" | "UNEXPECTED" | "DAMAGED" | "MISSING";
+            /** Format: int64 */
+            expected_location_id?: number | null;
+            expected_location_name?: string | null;
+            /** Format: int64 */
+            found_location_id?: number | null;
+            found_location_name?: string | null;
+            note?: string | null;
+            /** Format: date-time */
+            scanned_at?: string | null;
+            /** Format: int64 */
+            scanned_by?: number | null;
+            scanned_by_name?: string | null;
+        };
+        AssetAuditExpected: {
+            /** Format: int64 */
+            asset_id: number;
+            number: string;
+            name: string;
+            /** Format: int64 */
+            location_id?: number | null;
+            location_name?: string | null;
+            /** @description Decimal string. */
+            carrying_value: string;
+            disposal_pending: boolean;
+        };
+        AssetAuditDetail: {
+            /** Format: int64 */
+            id: number;
+            number: string;
+            /** Format: int64 */
+            location_id?: number | null;
+            location_code?: string | null;
+            location_name?: string | null;
+            /** @enum {string} */
+            status: "IN_PROGRESS" | "CLOSED";
+            /** Format: int64 */
+            started_by?: number | null;
+            started_by_name?: string | null;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: int64 */
+            closed_by?: number | null;
+            closed_by_name?: string | null;
+            /** Format: date-time */
+            closed_at?: string | null;
+            note?: string | null;
+            counts: components["schemas"]["AssetAuditCounts"];
+            lines: components["schemas"]["AssetAuditLine"][];
+            unscanned: components["schemas"]["AssetAuditExpected"][];
+        };
+        AssetAuditScan: {
+            line: components["schemas"]["AssetAuditLine"];
+            counts: components["schemas"]["AssetAuditCounts"];
+        };
+        AssetAuditClose: {
+            audit: components["schemas"]["AssetAuditDetail"];
+            missing: number;
+            proposals: number;
+        };
+        AssetProposal: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            audit_id: number;
+            audit_number: string;
+            /** Format: int64 */
+            asset_id: number;
+            asset_number: string;
+            asset_name: string;
+            asset_status: string;
+            /** @enum {string} */
+            kind: "MOVE" | "WRITE_OFF";
+            /** Format: int64 */
+            to_location_id?: number | null;
+            to_location_code?: string | null;
+            to_location_name?: string | null;
+            /** @enum {string} */
+            status: "PENDING" | "APPLIED" | "REJECTED";
+            /** Format: int64 */
+            decided_by?: number | null;
+            decided_by_name?: string | null;
+            /** Format: date-time */
+            decided_at?: string | null;
+            decision_note?: string | null;
+            /** @enum {string|null} */
+            result_type?: "MOVE" | "DISPOSAL" | "DISPOSAL_REQUEST" | null;
+            /** Format: int64 */
+            result_id?: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** @enum {string} */
+            line_result: "MOVED" | "UNEXPECTED" | "DAMAGED" | "MISSING";
+            line_note?: string | null;
+            /** Format: int64 */
+            expected_location_id?: number | null;
+            expected_location_name?: string | null;
+            /** Format: int64 */
+            found_location_id?: number | null;
+            found_location_name?: string | null;
+            /** @description Decimal string. */
+            carrying_value: string;
+        };
+        AssetProposalList: {
+            data: components["schemas"]["AssetProposal"][];
+        };
+        AssetAuditDifference: {
+            /** Format: int64 */
+            audit_id: number;
+            audit_number: string;
+            audit_status: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            closed_at?: string | null;
+            /** Format: int64 */
+            asset_id: number;
+            asset_number: string;
+            asset_name: string;
+            category_code: string;
+            /** @enum {string} */
+            result: "MOVED" | "UNEXPECTED" | "DAMAGED" | "MISSING";
+            expected_location_name?: string | null;
+            found_location_name?: string | null;
+            note?: string | null;
+            /** @description Decimal string. */
+            carrying_value: string;
+            asset_status: string;
+            /** Format: int64 */
+            proposal_id?: number | null;
+            proposal_kind?: string | null;
+            proposal_status?: string | null;
+        };
+        AssetAuditDifferenceList: {
+            data: components["schemas"]["AssetAuditDifference"][];
+        };
+        AssetRepair: {
+            /** Format: int64 */
+            id: number;
+            request_number: string;
+            /** Format: date */
+            business_date: string;
+            category: string;
+            priority: string;
+            status: string;
+            description: string;
+            resolution_note?: string | null;
+            /** Format: date-time */
+            reported_at: string;
+            /** Format: date-time */
+            closed_at?: string | null;
+            room_number?: string | null;
+            location?: string | null;
+        };
+        AssetRepairList: {
+            data: components["schemas"]["AssetRepair"][];
+        };
+        AssetExpiringList: {
+            data: components["schemas"]["AssetExpiringRow"][];
         };
     };
     responses: {
@@ -46992,6 +47751,206 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    getAssetRegisterReport: {
+        parameters: {
+            query?: {
+                /** @description Default: the business date */
+                as_of?: string;
+                category_id?: number;
+                location_id?: number;
+                department_id?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRegisterReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetScheduleReport: {
+        parameters: {
+            query?: {
+                asset_id?: number;
+                /** @description The first 300 active assets of the category */
+                category_id?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The schedules, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetScheduleList"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetRecapReport: {
+        parameters: {
+            query?: {
+                /** @description Default: 1 January of the year of the end date */
+                date_from?: string;
+                /** @description Default: the business date */
+                date_to?: string;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recap, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRecapReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetFiscalReport: {
+        parameters: {
+            query?: {
+                /** @description The calendar year in which the tax year starts; default: the tax year of the business date */
+                tax_year?: number;
+                category_id?: number;
+                asset_id?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetFiscalReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetPlacementReport: {
+        parameters: {
+            query?: {
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetPlacementReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetExpiringReport: {
+        parameters: {
+            query?: {
+                /** @description The warranty ends within this many days (default 90) */
+                days?: number;
+                /** @description This many months or fewer are left to depreciate (default 6) */
+                months?: number;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetExpiringList"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     moveAssets: {
         parameters: {
             query?: never;
@@ -47357,6 +48316,322 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    listAssetAudits: {
+        parameters: {
+            query?: {
+                status?: "IN_PROGRESS" | "CLOSED";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stock-takes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetAuditList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    startAssetAudit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: int64
+                     * @description Empty counts the whole property: every scan then names its location.
+                     */
+                    location_id?: number | null;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The stock-take. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetAuditDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stock-take. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetAuditDetail"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    scanAssetAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code?: string;
+                    /** Format: int64 */
+                    asset_id?: number | null;
+                    location_code?: string;
+                    /** Format: int64 */
+                    location_id?: number | null;
+                    damaged?: boolean;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The line and the counts after the scan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetAuditScan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    closeAssetAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The closed stock-take. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetAuditClose"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listAssetProposals: {
+        parameters: {
+            query?: {
+                status?: "PENDING" | "APPLIED" | "REJECTED";
+                audit_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The proposals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetProposalList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    applyAssetProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    approval?: components["schemas"]["Approval"];
+                };
+            };
+        };
+        responses: {
+            /** @description The proposal, applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        proposal: components["schemas"]["AssetProposal"];
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    rejectAssetProposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The proposal, rejected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetProposal"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetAuditDifferencesReport: {
+        parameters: {
+            query?: {
+                audit_id?: number;
+                result?: "MOVED" | "UNEXPECTED" | "DAMAGED" | "MISSING";
+                date_from?: string;
+                date_to?: string;
+                format?: "json" | "csv";
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report, or the CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetAuditDifferenceList"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAssetMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetRepairList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
 }

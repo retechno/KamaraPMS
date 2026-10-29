@@ -12,6 +12,24 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const assetStatus = `-- name: AssetStatus :one
+SELECT status FROM fa_assets WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type AssetStatusParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+// The status of an asset a request names (the property is the one of the request; the foreign key holds the rest).
+func (q *Queries) AssetStatus(ctx context.Context, arg AssetStatusParams) (string, error) {
+	row := q.db.QueryRow(ctx, assetStatus, arg.TenantID, arg.PropertyID, arg.ID)
+	var status string
+	err := row.Scan(&status)
+	return status, err
+}
+
 const assignRequest = `-- name: AssignRequest :exec
 UPDATE maintenance_requests
 SET assigned_to = $1, assigned_at = CASE WHEN $1::bigint IS NULL THEN NULL ELSE $2::timestamptz END
@@ -67,7 +85,7 @@ func (q *Queries) CloseRequest(ctx context.Context, arg CloseRequestParams) erro
 }
 
 const getRequestForUpdate = `-- name: GetRequestForUpdate :one
-SELECT id, tenant_id, property_id, request_number, room_id, location, category, description, priority, status, business_date, reported_by, reported_at, assigned_to, assigned_at, started_at, closed_at, closed_by, resolution_note, room_block_id, created_at, updated_at FROM maintenance_requests WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
+SELECT id, tenant_id, property_id, request_number, room_id, location, category, description, priority, status, business_date, reported_by, reported_at, assigned_to, assigned_at, started_at, closed_at, closed_by, resolution_note, room_block_id, created_at, updated_at, asset_id FROM maintenance_requests WHERE tenant_id = $1 AND property_id = $2 AND id = $3 FOR UPDATE
 `
 
 type GetRequestForUpdateParams struct {
@@ -102,6 +120,7 @@ func (q *Queries) GetRequestForUpdate(ctx context.Context, arg GetRequestForUpda
 		&i.RoomBlockID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AssetID,
 	)
 	return i, err
 }
@@ -109,10 +128,10 @@ func (q *Queries) GetRequestForUpdate(ctx context.Context, arg GetRequestForUpda
 const insertRequest = `-- name: InsertRequest :one
 
 INSERT INTO maintenance_requests (
-    tenant_id, property_id, request_number, room_id, location, category, description, priority, business_date, reported_by, reported_at
+    tenant_id, property_id, request_number, room_id, asset_id, location, category, description, priority, business_date, reported_by, reported_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9,
-    $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+    $11, $12
 )
 RETURNING id
 `
@@ -122,6 +141,7 @@ type InsertRequestParams struct {
 	PropertyID    int64
 	RequestNumber string
 	RoomID        *int64
+	AssetID       *int64
 	Location      *string
 	Category      string
 	Description   string
@@ -138,6 +158,7 @@ func (q *Queries) InsertRequest(ctx context.Context, arg InsertRequestParams) (i
 		arg.PropertyID,
 		arg.RequestNumber,
 		arg.RoomID,
+		arg.AssetID,
 		arg.Location,
 		arg.Category,
 		arg.Description,
@@ -220,11 +241,12 @@ func (q *Queries) ListMaintenanceStaff(ctx context.Context, arg ListMaintenanceS
 }
 
 const listRequests = `-- name: ListRequests :many
-SELECT m.id, m.request_number, m.room_id, ro.room_number, m.location, m.category, m.description, m.priority, m.status, m.business_date,
+SELECT m.id, m.request_number, m.room_id, ro.room_number, m.asset_id, fa.number AS asset_number, fa.name AS asset_name, m.location, m.category, m.description, m.priority, m.status, m.business_date,
        m.reported_by, rep.full_name AS reporter_name, m.reported_at, m.assigned_to, asg.full_name AS assignee_name, m.started_at, m.closed_at,
        m.resolution_note, m.room_block_id, b.block_type, b.start_date AS block_start, b.end_date AS block_end, b.status AS block_status
 FROM maintenance_requests m
 LEFT JOIN rooms ro ON ro.property_id = m.property_id AND ro.id = m.room_id
+LEFT JOIN fa_assets fa ON fa.property_id = m.property_id AND fa.id = m.asset_id
 LEFT JOIN users rep ON rep.tenant_id = m.tenant_id AND rep.id = m.reported_by
 LEFT JOIN users asg ON asg.tenant_id = m.tenant_id AND asg.id = m.assigned_to
 LEFT JOIN room_blocks b ON b.property_id = m.property_id AND b.id = m.room_block_id
@@ -260,6 +282,9 @@ type ListRequestsRow struct {
 	RequestNumber  string
 	RoomID         *int64
 	RoomNumber     *string
+	AssetID        *int64
+	AssetNumber    *string
+	AssetName      *string
 	Location       *string
 	Category       string
 	Description    string
@@ -308,6 +333,9 @@ func (q *Queries) ListRequests(ctx context.Context, arg ListRequestsParams) ([]L
 			&i.RequestNumber,
 			&i.RoomID,
 			&i.RoomNumber,
+			&i.AssetID,
+			&i.AssetNumber,
+			&i.AssetName,
 			&i.Location,
 			&i.Category,
 			&i.Description,
@@ -399,8 +427,8 @@ func (q *Queries) StartRequest(ctx context.Context, arg StartRequestParams) erro
 }
 
 const updateRequestDetails = `-- name: UpdateRequestDetails :exec
-UPDATE maintenance_requests SET category = $1, description = $2, priority = $3, location = $4
-WHERE tenant_id = $5 AND property_id = $6 AND id = $7
+UPDATE maintenance_requests SET category = $1, description = $2, priority = $3, location = $4, asset_id = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8
 `
 
 type UpdateRequestDetailsParams struct {
@@ -408,6 +436,7 @@ type UpdateRequestDetailsParams struct {
 	Description string
 	Priority    string
 	Location    *string
+	AssetID     *int64
 	TenantID    int64
 	PropertyID  int64
 	ID          int64
@@ -419,6 +448,7 @@ func (q *Queries) UpdateRequestDetails(ctx context.Context, arg UpdateRequestDet
 		arg.Description,
 		arg.Priority,
 		arg.Location,
+		arg.AssetID,
 		arg.TenantID,
 		arg.PropertyID,
 		arg.ID,
