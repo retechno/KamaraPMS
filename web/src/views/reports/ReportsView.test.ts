@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -26,7 +27,9 @@ function mountView(permissions = ['report.view']) {
   property.currentId = 7
   property.clock = { business_date: '2026-09-30' } as never
   GET = vi.fn().mockResolvedValue({ data: revenue })
-  return mount(ReportsView, { global: { plugins: [pinia] } })
+  // the page links to the reports of the day, so it needs a router
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+  return mount(ReportsView, { global: { plugins: [pinia, router] } })
 }
 
 describe('ReportsView', () => {
