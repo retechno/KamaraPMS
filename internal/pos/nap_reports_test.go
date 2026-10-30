@@ -101,7 +101,7 @@ func TestTheReportsOverTheSalesOfAnOutlet(t *testing.T) {
 		t.Fatalf("void: %+v", v)
 	}
 	cp := got[reports.CorrComp][0]
-	if cp.Gross != "121000" || cp.Net != "0" || cp.ChargeCode != "COMP" || cp.Outlet != "Restoran" || cp.DoneBy == "" {
+	if cp.Gross != "121000" || cp.Net != "0" || cp.ChargeCode != "" || cp.PaymentMethod != "COMP" || cp.Outlet != "Restoran" || cp.DoneBy == "" {
 		t.Fatalf("comp: %+v", cp)
 	}
 	nets := map[string]bool{}
@@ -201,7 +201,7 @@ func TestAComplimentaryBillIsOneRowOfTheCorrectionsInBothTreatments(t *testing.T
 			}
 			switch treatment {
 			case "PAYMENT_COMP":
-				if row.Net != "0" || row.Service != "0" || row.Tax != "0" || row.Gross != "121000" || row.ChargeCode != "COMP" {
+				if row.Net != "0" || row.Service != "0" || row.Tax != "0" || row.Gross != "121000" || row.ChargeCode != "" || row.PaymentMethod != "COMP" {
 					t.Fatalf("the comp payment: %+v", row)
 				}
 				if r.RevenueTakenBack != "0" || r.NetRevenue != "100000" || r.SharePercent == nil || *r.SharePercent != "0.00" {
