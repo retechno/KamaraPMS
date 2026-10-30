@@ -128,7 +128,7 @@ func AccessLog(next http.Handler) http.Handler {
 			"path", r.URL.Path,
 			"status", rec.status,
 			"bytes", rec.bytes,
-			"duration_ms", time.Since(start).Milliseconds(),
+			"duration_ms", time.Since(start).Milliseconds(), //nolint:forbidigo // request latency is a server-time measurement, see start
 		)
 	})
 }

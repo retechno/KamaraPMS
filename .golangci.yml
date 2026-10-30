@@ -19,6 +19,9 @@ linters:
         # time.Now in business code is how "server date used as hotel date" bugs start.
         - pattern: ^time\.Now$
           msg: "use platform/clock (server instants) or tenancy.BusinessDayService (business dates)"
+        # time.Until and time.Since read the wall clock too: a cookie lifetime built with them from a fake clock's instants goes negative once the real date passes the fake one.
+        - pattern: ^time\.(Until|Since)$
+          msg: "use platform/clock (clock.Now().Sub(t) or t.Sub(clock.Now())), never the wall clock"
         # Money is never a float.
         - pattern: ^decimal\.NewFromFloat(32)?$
           msg: "build money from strings or integers (money.Parse / decimal.NewFromInt), never floats"
