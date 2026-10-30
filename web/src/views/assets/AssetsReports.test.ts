@@ -242,3 +242,38 @@ describe('the list of stock-takes and proposals', () => {
     expect(w.get('[data-testid=proposal-1]').text()).not.toBe('Apply')
   })
 })
+
+describe('the buttons in the header of the reports', () => {
+  // PageHeader renders only its named slots: a button put in the default slot is dropped and the page loses it.
+  beforeEach(() => {
+    const totals = { commercial: '0', fiscal: '0', depreciation_net: '0', positive_correction: '0', negative_correction: '0', disposal_correction: '0', net_correction: '0', partial_year_assets: 0, estimated_fiscal_assets: 0 }
+    GET = vi.fn(async (path: string) => {
+      if (String(path).endsWith('/reports/recap')) return { data: { date_from: '2026-10-01', date_to: '2026-10-31', rows: [], total: recapRow({}), account_1590: '0' } }
+      if (String(path).endsWith('/reports/fiscal')) return { data: { tax_year: 2026, year_start: '2026-01-01', year_end: '2026-12-31', rows: [], disposals: [], totals, rates: [] } }
+      return { data: { data: [] } }
+    })
+  })
+
+  it.each([
+    ['the recap', AssetRecapView, '/assets/reports/recap', '/assets/reports/recap'],
+    ['the fiscal correction', AssetFiscalView, '/assets/reports/fiscal', '/assets/reports/fiscal'],
+    ['the schedule report', AssetReportView, '/assets/reports/schedule', '/assets/reports/:kind'],
+  ])('puts back, print and CSV in the actions of %s', async (_name, component, path, route) => {
+    const w = await setup(component, path, route)
+    const actions = w.get('[data-slot=page-actions]')
+    expect(actions.find('a[href="/assets/reports"]').exists()).toBe(true)
+    expect(actions.get('[data-testid=print]').text()).toBe('Print')
+    expect(actions.get('[data-testid=export]').text()).toBe('Download CSV')
+  })
+
+  it('puts the link to the differences in the actions of the stock-takes', async () => {
+    const w = await setup(AssetAuditsView, '/assets/audits', '/assets/audits', MANAGE)
+    expect(w.get('[data-slot=page-actions]').find('a[href="/assets/reports/audit-differences"]').exists()).toBe(true)
+  })
+
+  it('puts the way back in the actions of a stock-take', async () => {
+    GET = vi.fn(async () => ({ data: JSON.parse(JSON.stringify(auditBase)) }))
+    const w = await setup(AssetAuditView, '/assets/audits/5', '/assets/audits/:id', MANAGE)
+    expect(w.get('[data-slot=page-actions]').find('a[href="/assets/audits"]').exists()).toBe(true)
+  })
+})

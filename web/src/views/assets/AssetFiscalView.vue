@@ -104,11 +104,11 @@ const hasNotes = computed(() => (report.value?.rows ?? []).some((r) => notes(r).
 <template>
   <section class="flex flex-col gap-4" data-testid="asset-fiscal">
     <PageHeader :title="t('assets.reports.kind.fiscal.name')" :description="t('assets.fiscalReport.intro')">
-      <div class="flex flex-wrap items-center gap-2 print:hidden">
+      <template #actions>
         <Button as-child variant="outline" size="sm"><RouterLink to="/assets/reports">{{ t('assets.reports.back') }}</RouterLink></Button>
         <Button variant="outline" size="sm" data-testid="print" @click="print">{{ t('assets.reports.print') }}</Button>
         <Button variant="outline" size="sm" data-testid="export" :disabled="!report" @click="csv">{{ t('assets.reports.csv') }}</Button>
-      </div>
+      </template>
     </PageHeader>
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>
