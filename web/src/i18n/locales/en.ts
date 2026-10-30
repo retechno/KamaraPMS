@@ -7550,6 +7550,7 @@ export const en = {
     BUSINESS_DAY_EXISTS: 'The business day already exists.',
     BUSINESS_DAY_NOT_CONSECUTIVE: 'Business days must be consecutive.',
     BUSINESS_DAY_NOT_FOUND: 'The posting business date does not exist.',
+    DATE_NOT_CLOSED: 'This report is for a closed business day: choose a day that was closed by the night audit.',
     CHARGE_CODE_INACTIVE: 'The charge code is inactive.',
     CHARGE_CODE_IN_USE: 'An active rate plan still sells through this charge code.',
     CHARGE_CODE_NOT_FOUND: 'The charge code does not exist in this property.',

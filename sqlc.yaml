@@ -191,6 +191,7 @@ sql:
     queries:
       - internal/reports/queries.sql
       - internal/reports/queries_flash.sql
+      - internal/reports/queries_nap.sql
     gen:
       go:
         package: reportsdb

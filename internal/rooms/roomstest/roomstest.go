@@ -143,6 +143,7 @@ func Setup(t *testing.T) *Env {
 	docs.SetShifts(sh)
 	reportsSvc := reports.NewService(txm, authz, ten, na)
 	docs.SetReports(reportsSvc)
+	reportsSvc.SetShifts(sh)
 	bud.SetDepartments(dept)
 	return &Env{Rules: iam.NewRules(ia, authz), Departments: dept, Budget: bud, Shifts: sh, TaxInvoice: taxInv, Docs: docs, Audit: na, Reports: reportsSvc, IAM: ia, Folios: fo, Front: fd, Charges: rc, Pool: pool, TxM: txm, Clock: c, Tenancy: ten, HK: hk, Rooms: rm, Guests: gs, Billing: billing, Rates: rt,
 		Avail: avail, Res: rs,

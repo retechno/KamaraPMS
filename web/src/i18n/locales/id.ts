@@ -7548,6 +7548,7 @@ export const id: Messages = {
     BUSINESS_DAY_EXISTS: 'Hari bisnis ini sudah ada.',
     BUSINESS_DAY_NOT_CONSECUTIVE: 'Hari bisnis harus berurutan.',
     BUSINESS_DAY_NOT_FOUND: 'Tanggal bisnis untuk posting ini tidak ada.',
+    DATE_NOT_CLOSED: 'Laporan ini untuk hari bisnis yang sudah ditutup: pilih hari yang ditutup oleh night audit.',
     CHARGE_CODE_INACTIVE: 'Kode biaya tidak aktif.',
     CHARGE_CODE_IN_USE: 'Masih ada paket tarif aktif yang menjual lewat kode biaya ini.',
     CHARGE_CODE_NOT_FOUND: 'Kode biaya tidak ditemukan di properti ini.',

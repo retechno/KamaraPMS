@@ -3525,6 +3525,241 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/reports/cancellations": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Cancellations and no-shows of a period (report.view)
+         * @description The cancellations and no-shows (doc 38, 7.2): one row for each event of the reservation module dated in the range, with the reason, the rooms and nights, the value of the nights lost, the fee posted (null when none), the deposit held and whether the reservation was reinstated; totals by kind, reason, source and company.
+         */
+        get: operations["getCancellationsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/cancellations.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Cancellations and no-shows of a period as PDF (report.view) */
+        get: operations["getCancellationsPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/guest-ledger": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Guest ledger of a closed business date (report.view)
+         * @description The guest ledger as of a closed day (doc 38, 7.3): each folio with a balance or a deposit, the charges, settlements and deposits to the date, the aging of the debts, and the comparison with the control sources and with the guest ledger account.
+         */
+        get: operations["getGuestLedgerReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/guest-ledger.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Guest ledger of a closed business date as PDF (report.view) */
+        get: operations["getGuestLedgerPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/deposit-ledger": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Deposit ledger of a closed business date (report.view)
+         * @description The deposit ledger as of a closed day (doc 38, 7.3): the liability of each folio that held or moved a deposit, opening + received - applied - refunded = closing, and the comparison with the deposits held and with the advance deposits account.
+         */
+        get: operations["getDepositLedgerReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/deposit-ledger.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Deposit ledger of a closed business date as PDF (report.view) */
+        get: operations["getDepositLedgerPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/corrections": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Voids, corrections, discounts and allowances of a period (report.view)
+         * @description What was voided, corrected, discounted, allowed, refunded or given as a comp (doc 38, 7.4), folio and POS, by whom and with whose approval, with totals and the share of the net revenue.
+         */
+        get: operations["getCorrectionsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/corrections.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Voids, corrections, discounts and allowances of a period as PDF (report.view) */
+        get: operations["getCorrectionsPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/z-reports": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Z report of all drawers of a business date (report.view and cashier.shift_manage)
+         * @description One block for each cashier shift closed on the date or open at any time of it (Z; X while open), a consolidation by drawer, and the check against the cashier report (doc 38, 7.5). Needs report.view and cashier.shift_manage.
+         */
+        get: operations["getZReportsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/reports/z-reports.pdf": {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Z report of all drawers of a business date as PDF (report.view and cashier.shift_manage) */
+        get: operations["getZReportsPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/reports/free-rooms": {
         parameters: {
             query?: {
@@ -17603,6 +17838,260 @@ export interface components {
             control: components["schemas"]["FlashControl"] | null;
             signatures: components["schemas"]["FlashSignatures"];
             warnings: components["schemas"]["FlashWarning"][];
+        };
+        CancellationEvent: {
+            business_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            event_at: string;
+            user_name: string;
+            /** @enum {string} */
+            kind: "CANCELLED" | "ROOM_CANCELLED" | "NO_SHOW";
+            /** Format: int64 */
+            reservation_id: number;
+            confirmation_number: string;
+            /** Format: int64 */
+            reservation_room_id: number | null;
+            guest: string;
+            company: string;
+            source: string;
+            market: string;
+            room_type: string;
+            rate_plan: string;
+            rooms: number;
+            arrival: components["schemas"]["Date"] | null;
+            departure: components["schemas"]["Date"] | null;
+            nights: number | null;
+            /** @description Days from the event date to the arrival; negative for a no-show. */
+            lead_days: number | null;
+            value_lost: string | null;
+            reason: string;
+            fee_code?: string;
+            /** @description Null when no fee was posted (not zero). */
+            fee_net: string | null;
+            fee_gross: string | null;
+            fee_date: components["schemas"]["Date"] | null;
+            fee_reversed: boolean;
+            deposit_at_event: string;
+            deposit_now: string;
+            reinstated: boolean;
+        };
+        CancellationGroup: {
+            key: string;
+            events: number;
+            rooms: number;
+            nights: number;
+            value: string;
+        };
+        CancellationReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            kind: string;
+            events: components["schemas"]["CancellationEvent"][];
+            by_kind: components["schemas"]["CancellationGroup"][];
+            by_reason: components["schemas"]["CancellationGroup"][];
+            by_source: components["schemas"]["CancellationGroup"][];
+            by_company: components["schemas"]["CancellationGroup"][];
+            fees_posted: string;
+            fee_count: number;
+            deposits_held: string;
+        };
+        LedgerCheck: {
+            key: string;
+            title: string;
+            account?: string;
+            report: string;
+            other: string;
+            difference: string;
+        };
+        GuestLedgerRow: {
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            folio_type: string;
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED";
+            /** Format: int64 */
+            reservation_id: number | null;
+            confirmation_number: string;
+            room: string;
+            owner: string;
+            arrival: components["schemas"]["Date"] | null;
+            departure: components["schemas"]["Date"] | null;
+            charges: string;
+            settlements: string;
+            deposits: string;
+            balance: string;
+            deposit_held: string;
+            age_days: number | null;
+            age_bucket: string;
+        };
+        AgeTotal: {
+            bucket: string;
+            folios: number;
+            balance: string;
+        };
+        GuestLedgerReport: {
+            as_of: components["schemas"]["Date"];
+            release_mode: string;
+            rows: components["schemas"]["GuestLedgerRow"][];
+            charges: string;
+            settlements: string;
+            deposits: string;
+            balance: string;
+            deposit_held: string;
+            aging: components["schemas"]["AgeTotal"][];
+            checks: components["schemas"]["LedgerCheck"][];
+            reconciled: boolean;
+        };
+        DepositLedgerRow: {
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            folio_type: string;
+            /** Format: int64 */
+            reservation_id: number | null;
+            confirmation_number: string;
+            owner: string;
+            arrival: components["schemas"]["Date"] | null;
+            opening: string;
+            received: string;
+            applied: string;
+            refunded: string;
+            closing: string;
+            balanced: boolean;
+            expected_use: components["schemas"]["Date"] | null;
+            overdue: boolean;
+        };
+        DepositLedgerReport: {
+            as_of: components["schemas"]["Date"];
+            release_mode: string;
+            rows: components["schemas"]["DepositLedgerRow"][];
+            opening: string;
+            received: string;
+            applied: string;
+            refunded: string;
+            closing: string;
+            checks: components["schemas"]["LedgerCheck"][];
+            reconciled: boolean;
+        };
+        CorrectionRow: {
+            business_date: components["schemas"]["Date"];
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            kind: "VOID" | "ADJUSTMENT" | "ALLOWANCE" | "REFUND" | "DISCOUNT" | "COMP" | "POS_VOID";
+            folio: string;
+            reservation: string;
+            bill: string;
+            outlet: string;
+            charge_code: string;
+            department: string;
+            description: string;
+            /** Format: int64 */
+            original_item_id: number | null;
+            original_date: components["schemas"]["Date"] | null;
+            /** @description Signed as the ledger moves it: a reversal or a discount is negative. A refund, a payment void and a comp carry zero. */
+            net: string;
+            service: string;
+            tax: string;
+            gross: string;
+            reason: string;
+            done_by: string;
+            approved_by: string;
+        };
+        CorrectionTotal: {
+            key: string;
+            count: number;
+            net: string;
+            gross: string;
+        };
+        CorrectionReport: {
+            from: components["schemas"]["Date"];
+            to: components["schemas"]["Date"];
+            kind: string;
+            rows: components["schemas"]["CorrectionRow"][];
+            by_kind: components["schemas"]["CorrectionTotal"][];
+            by_reason: components["schemas"]["CorrectionTotal"][];
+            by_user: components["schemas"]["CorrectionTotal"][];
+            by_outlet: components["schemas"]["CorrectionTotal"][];
+            revenue_taken_back: string;
+            net_revenue: string;
+            /** @description Null when the net revenue of the period is not positive. */
+            share_percent: string | null;
+        };
+        ZTender: {
+            method: string;
+            /** @enum {string} */
+            kind: "PAYMENT" | "REFUND";
+            count: number;
+            amount: string;
+        };
+        ZBlock: {
+            /** @enum {string} */
+            kind: "Z" | "X";
+            /** Format: int64 */
+            shift_id: number;
+            number: string;
+            drawer: string;
+            cashier: string;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
+            business_date_opened: components["schemas"]["Date"];
+            business_date_closed: components["schemas"]["Date"] | null;
+            opening_float: string;
+            cash_payments: string;
+            cash_refunds: string;
+            cash_receipts: string;
+            voided_after_close: string;
+            pay_ins: string;
+            pay_outs: string;
+            drops: string;
+            expected_cash: string;
+            counted_cash: string | null;
+            over_short: string | null;
+            variance_reason: string;
+            closed_by: string;
+            approved_by: string;
+            handed_over_to: string;
+            tenders: components["schemas"]["ZTender"][];
+            total_takings: string;
+        };
+        ZDrawer: {
+            /** @description Empty for the whole property. */
+            drawer: string;
+            shifts: number;
+            opening_float: string;
+            cash_payments: string;
+            cash_refunds: string;
+            cash_receipts: string;
+            voided_after_close: string;
+            pay_ins: string;
+            pay_outs: string;
+            drops: string;
+            expected_cash: string;
+            counted_cash: string | null;
+            over_short: string | null;
+            total_takings: string;
+        };
+        ZTaking: {
+            method: string;
+            on_shift: string;
+            off_shift: string;
+            total: string;
+            cashier_report: string;
+            difference: string;
+        };
+        ZReport: {
+            date: components["schemas"]["Date"];
+            blocks: components["schemas"]["ZBlock"][];
+            drawers: components["schemas"]["ZDrawer"][];
+            property: components["schemas"]["ZDrawer"];
+            cash_off_shift: string;
+            voided_after_close: string;
+            takings: components["schemas"]["ZTaking"][];
+            reconciled: boolean;
         };
         CashierReport: {
             from: components["schemas"]["Date"];
@@ -32685,6 +33174,335 @@ export interface operations {
         };
     };
     getDailyFlashPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                date?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCancellationsReport: {
+        parameters: {
+            query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+                kind?: "ALL" | "CANCELLED" | "NO_SHOW";
+                source?: string;
+                company_id?: number;
+                /** @description csv answers the list of the rows as one table. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCancellationsPdf: {
+        parameters: {
+            query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+                kind?: "ALL" | "CANCELLED" | "NO_SHOW";
+                source?: string;
+                company_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGuestLedgerReport: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description A closed business date; the last closed day when absent. The open day and the future are refused with DATE_NOT_CLOSED. */
+                as_of?: components["schemas"]["Date"];
+                /** @description csv answers the list of the rows as one table. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestLedgerReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getGuestLedgerPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description A closed business date; the last closed day when absent. The open day and the future are refused with DATE_NOT_CLOSED. */
+                as_of?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDepositLedgerReport: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description A closed business date; the last closed day when absent. The open day and the future are refused with DATE_NOT_CLOSED. */
+                as_of?: components["schemas"]["Date"];
+                /** @description csv answers the list of the rows as one table. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepositLedgerReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getDepositLedgerPdf: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                /** @description A closed business date; the last closed day when absent. The open day and the future are refused with DATE_NOT_CLOSED. */
+                as_of?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCorrectionsReport: {
+        parameters: {
+            query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+                kind?: "ALL" | "VOID" | "ADJUSTMENT" | "ALLOWANCE" | "REFUND" | "DISCOUNT" | "COMP" | "POS_VOID";
+                user_id?: number;
+                outlet_id?: number;
+                /** @description csv answers the list of the rows as one table. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrectionReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getCorrectionsPdf: {
+        parameters: {
+            query: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                from: components["schemas"]["Date"];
+                to: components["schemas"]["Date"];
+                kind?: "ALL" | "VOID" | "ADJUSTMENT" | "ALLOWANCE" | "REFUND" | "DISCOUNT" | "COMP" | "POS_VOID";
+                user_id?: number;
+                outlet_id?: number;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report as a PDF (inline, never cached). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getZReportsReport: {
+        parameters: {
+            query?: {
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+                date?: components["schemas"]["Date"];
+                /** @description csv answers the list of the rows as one table. */
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZReport"];
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getZReportsPdf: {
         parameters: {
             query?: {
                 /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */

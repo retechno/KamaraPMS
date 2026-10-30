@@ -215,7 +215,7 @@ All five take their money from the append-only ledger by business date, are scop
 | MTD | the first of the month of D to D |
 | MTD last month | days 1 to n of the month before, where n is the day of D, cut at the length of that month (D = 31 Oct compares with 1 to 30 Sep) |
 | MTD last year | the same range a year before (Q5: the same calendar date; 29 February compares with 28 February) |
-| Budget MTD | the budget of the month times n over the days of the month (pro rata, Q4) |
+| Budget MTD | the budget of the month times n over the days of the month (pro rata, Q4). **The total budget is the sum of the groups that have a budget** (a group without a budget row is blank and adds nothing), so the total variance compares only what was budgeted |
 | MTD variance | MTD less budget MTD, in amount and in percent; favourable or not by the type of the line, as the budget report does |
 | YTD | the first day of the fiscal year of the property's budget calendar (`YearStart`, Q18) to D |
 
@@ -381,7 +381,7 @@ The movement identity `Opening + Received - Applied - Refunded = Closing` holds 
 | `ALLOWANCE` | an adjustment or a charge that posts to an allowance or rebate account | the same items whose `revenue_account_code` is a revenue account with a DEBIT normal side (4160, 4290, 4390) | idem |
 | `REFUND` | a refund of a payment | `payments` where `payment_type = REFUND` | `payments.business_date` |
 | `DISCOUNT` | a discount on a posted charge or a POS line | `folio_items.discount_amount > 0`; `pos_bill_lines.discount_amount > 0` (a bill discount is already allocated to the lines) | the folio item's date |
-| `COMP` | a complimentary POS line or payment | `pos_bill_lines.is_comp`; `payments.payment_method = 'COMP'` | idem |
+| `COMP` | a complimentary POS line or payment, **one row per bill under either treatment of the outlet** | `payments.payment_method = 'COMP'` under `PAYMENT_COMP`; under `DISCOUNT_100` the adjustment that cancels the line (`pos_bill_lines.is_comp`, reason "Complimentary: ...", net negative), which is not also listed as `ADJUSTMENT` or `DISCOUNT` | idem |
 | `POS_VOID` | a POS line voided after it was sent | `pos_bill_lines.status = VOID` with `voided_item_id` (the reversal or adjustment it caused) | the business date of that item |
 
 | Column | Source |

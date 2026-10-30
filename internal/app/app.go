@@ -197,6 +197,7 @@ func New(d Deps) *App {
 	documentsSvc.SetBudget(budgetSvc)
 	documentsSvc.SetShifts(shiftsSvc)
 	documentsSvc.SetReports(reportsSvc)
+	reportsSvc.SetShifts(shiftsSvc)
 	budgetSvc.SetDepartments(departmentsSvc) // and a row of the budget its department
 
 	// Business API: every route requires an authenticated principal.

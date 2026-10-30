@@ -488,6 +488,7 @@ func (f *flash) revenue(out *DailyFlash, bm budgetMonth, haveAccounting bool) (*
 	groups := []struct{ code, title string }{{"A", "Rooms"}, {"B", "Food and beverage"}, {"C", "Other"}}
 	rev := FlashRevenueSection{Groups: []FlashRevenueGroup{}}
 	var totalNet vals
+	groupMTD := map[string]decimal.Decimal{}
 	for _, g := range groups {
 		grp := FlashRevenueGroup{Code: g.code, Title: g.title, Blocks: []FlashBlock{}}
 		type blk struct {
@@ -534,19 +535,29 @@ func (f *flash) revenue(out *DailyFlash, bm budgetMonth, haveAccounting bool) (*
 			gTotal = gTotal.add(bTotal)
 		}
 		grp.Total = f.line("group:"+g.code, "Total "+g.title, FlashMoney, gTotal)
+		groupMTD[g.code] = gTotal.v[colMTD]
 		if haveBudget {
-			grp.Total = f.withBudget(grp.Total, gTotal.v[colMTD], budgetOf(g.code))
+			if b, ok := budgetOf(g.code); ok {
+				grp.Total = f.withBudget(grp.Total, gTotal.v[colMTD], b)
+			}
 		}
 		rev.Groups = append(rev.Groups, grp)
 		totalNet = totalNet.add(gTotal)
 	}
 	rev.TotalNet = f.line("total_net", "Total revenue (net)", FlashMoney, totalNet)
-	if haveBudget {
-		var all decimal.Decimal
+	if haveBudget { // the total of the groups that have a budget, against the actual of those groups
+		var all, actual decimal.Decimal
+		have := false
 		for _, g := range []string{"A", "B", "C"} {
-			all = all.Add(budgetOf(g))
+			if b, ok := budgetOf(g); ok {
+				have = true
+				all = all.Add(b)
+				actual = actual.Add(groupMTD[g])
+			}
 		}
-		rev.TotalNet = f.withBudget(rev.TotalNet, totalNet.v[colMTD], all)
+		if have {
+			rev.TotalNet = f.withBudget(rev.TotalNet, actual, all)
+		}
 	}
 	service := set.sum(func(r *revRow) *[nCols]decimal.Decimal { return &r.service }, nil)
 	tax := set.sum(func(r *revRow) *[nCols]decimal.Decimal { return &r.tax }, nil)
@@ -588,7 +599,7 @@ func (f *flash) revenue(out *DailyFlash, bm budgetMonth, haveAccounting bool) (*
 }
 
 // groupBudget is the money budget of the month to date of a revenue group (A rooms, B food and beverage, C the rest).
-func (f *flash) groupBudget(bm budgetMonth) (func(string) decimal.Decimal, bool) {
+func (f *flash) groupBudget(bm budgetMonth) (func(string) (decimal.Decimal, bool), bool) {
 	if bm.id == 0 {
 		return nil, false
 	}
@@ -600,7 +611,11 @@ func (f *flash) groupBudget(bm budgetMonth) (func(string) decimal.Decimal, bool)
 	for _, r := range rows {
 		by[groupOf(r.StatementGroup)] = by[groupOf(r.StatementGroup)].Add(r.Amount)
 	}
-	return func(g string) decimal.Decimal { return bm.prorata(by[g]).Round(f.decimals) }, true
+	// a group with no budget line has no budget: its cells stay blank, they are not zero
+	return func(g string) (decimal.Decimal, bool) {
+		v, ok := by[g]
+		return bm.prorata(v).Round(f.decimals), ok
+	}, true
 }
 
 // payments fills the money taken (GTP) by cashier and by method, the refunds, the transfers to the city ledger and the control balance.
