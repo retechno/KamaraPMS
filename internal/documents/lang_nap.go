@@ -22,6 +22,10 @@ func init() {
 		"Outside a shift": "Di luar shift", "Cashier report": "Laporan kasir", "Approved by": "Disetujui oleh",
 		"PAYMENT": "Pembayaran", "REFUND": "Refund",
 		"VOID": "Void", "ADJUSTMENT": "Penyesuaian", "ALLOWANCE": "Allowance", "DISCOUNT": "Diskon", "COMP": "Komplimen", "POS_VOID": "Void POS",
+		"Cash": "Tunai", "Card": "Kartu", "Bank transfer": "Transfer bank", "City ledger": "Piutang perusahaan", "Phone": "Telepon", "E-mail": "E-mail", "Website": "Situs web", "OTA": "OTA", "Agent": "Agen",
+		"Every day": "Setiap hari", "On close": "Saat tutup", "Void": "Void", "Adjustment": "Penyesuaian", "Allowance": "Allowance", "Discount": "Diskon", "POS void": "Void POS", "Payment": "Pembayaran", "Refund": "Refund",
+		"Item": "Pos", "Totals": "Total", "Service": "Servis", "Revenue reduced": "Pendapatan dikurangi", "Money cancelled or returned": "Uang dibatalkan/dikembalikan",
+		"No reason": "Tanpa alasan", "No source": "Tanpa sumber", "No company": "Tanpa perusahaan",
 	} {
 		if _, ok := idExact[k]; !ok {
 			idExact[k] = v

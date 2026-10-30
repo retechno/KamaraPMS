@@ -291,7 +291,7 @@ const correctionFolioItems = `-- name: CorrectionFolioItems :many
 
 SELECT fi.id, fi.business_date, fi.transaction_at, fi.transaction_type, fi.folio_id, f.folio_number, f.folio_type, COALESCE(f.outlet_id, 0)::bigint AS outlet_id, COALESCE(po.name, '')::text AS outlet_name,
        COALESCE(r.confirmation_number, '')::text AS confirmation_number, COALESCE(pb.bill_number, '')::text AS bill_number, COALESCE(pb.id, 0)::bigint AS bill_id,
-       COALESCE(fi.reverses_item_id, 0)::bigint AS original_item_id, orig.business_date AS original_date, COALESCE(cc.code, '')::text AS charge_code, COALESCE(dep.name, '')::text AS department,
+       COALESCE(fi.reverses_item_id, 0)::bigint AS original_item_id, orig.business_date AS original_date, COALESCE(cc.code, '')::text AS charge_code, COALESCE(cc.name, '')::text AS charge_code_name, COALESCE(dep.name, '')::text AS department,
        fi.net_amount, fi.service_charge_total, fi.tax_total, (fi.debit - fi.credit)::numeric AS gross, fi.discount_amount,
        COALESCE(fi.reason, '')::text AS reason, COALESCE(pl.discount_reason, '')::text AS discount_reason, fi.description,
        COALESCE(fi.created_by, 0)::bigint AS done_by_id, COALESCE(cu.full_name, '')::text AS done_by,
@@ -351,6 +351,7 @@ type CorrectionFolioItemsRow struct {
 	OriginalItemID     int64
 	OriginalDate       *civil.Date
 	ChargeCode         string
+	ChargeCodeName     string
 	Department         string
 	NetAmount          decimal.Decimal
 	ServiceChargeTotal decimal.Decimal
@@ -406,6 +407,7 @@ func (q *Queries) CorrectionFolioItems(ctx context.Context, arg CorrectionFolioI
 			&i.OriginalItemID,
 			&i.OriginalDate,
 			&i.ChargeCode,
+			&i.ChargeCodeName,
 			&i.Department,
 			&i.NetAmount,
 			&i.ServiceChargeTotal,
@@ -571,7 +573,7 @@ const correctionPosVoids = `-- name: CorrectionPosVoids :many
 SELECT l.id AS line_id, l.product_name, l.quantity, COALESCE(l.void_reason, '')::text AS void_reason, COALESCE(l.voided_at, vi.transaction_at) AS voided_at,
        vi.id AS item_id, vi.business_date, vi.net_amount, vi.service_charge_total, vi.tax_total, (vi.debit - vi.credit)::numeric AS gross,
        orig.business_date AS original_date, COALESCE(orig.id, 0)::bigint AS original_item_id,
-       b.id AS bill_id, b.bill_number, COALESCE(b.outlet_id, 0)::bigint AS outlet_id, COALESCE(po.name, '')::text AS outlet_name, COALESCE(cc.code, '')::text AS charge_code,
+       b.id AS bill_id, b.bill_number, COALESCE(b.outlet_id, 0)::bigint AS outlet_id, COALESCE(po.name, '')::text AS outlet_name, COALESCE(cc.code, '')::text AS charge_code, COALESCE(cc.name, '')::text AS charge_code_name,
        COALESCE(dep.name, '')::text AS department,
        COALESCE(l.voided_by, 0)::bigint AS done_by_id, COALESCE(vu.full_name, '')::text AS done_by,
        COALESCE(l.void_approved_by, 0)::bigint AS approved_by_id, COALESCE(au.full_name, '')::text AS approved_by
@@ -618,6 +620,7 @@ type CorrectionPosVoidsRow struct {
 	OutletID           int64
 	OutletName         string
 	ChargeCode         string
+	ChargeCodeName     string
 	Department         string
 	DoneByID           int64
 	DoneBy             string
@@ -662,6 +665,7 @@ func (q *Queries) CorrectionPosVoids(ctx context.Context, arg CorrectionPosVoids
 			&i.OutletID,
 			&i.OutletName,
 			&i.ChargeCode,
+			&i.ChargeCodeName,
 			&i.Department,
 			&i.DoneByID,
 			&i.DoneBy,
@@ -1053,14 +1057,22 @@ func (q *Queries) ZShiftIDs(ctx context.Context, arg ZShiftIDsParams) ([]int64, 
 
 const zTakingsByMethod = `-- name: ZTakingsByMethod :many
 SELECT method::text AS method,
-       COALESCE(sum(CASE WHEN shift_id IS NOT NULL THEN amount ELSE 0 END), 0)::numeric AS on_shift,
-       COALESCE(sum(CASE WHEN shift_id IS NULL THEN amount ELSE 0 END), 0)::numeric AS off_shift
+       COALESCE(sum(CASE WHEN on_shift THEN amount ELSE 0 END), 0)::numeric AS on_shift,
+       COALESCE(sum(CASE WHEN NOT on_shift THEN amount ELSE 0 END), 0)::numeric AS off_shift
 FROM (
-    SELECT p.payment_method AS method, p.shift_id, CASE WHEN p.payment_type = 'REFUND' THEN -p.amount ELSE p.amount END AS amount
+    SELECT p.payment_method AS method, CASE WHEN p.payment_type = 'REFUND' THEN -p.amount ELSE p.amount END AS amount,
+           CASE WHEN p.payment_method = 'CASH' THEN p.shift_id IS NOT NULL
+                ELSE EXISTS (SELECT 1 FROM cashier_shifts s
+                              WHERE s.tenant_id = p.tenant_id AND s.property_id = p.property_id AND s.user_id = p.created_by
+                                AND s.opened_at <= p.paid_at AND (s.status = 'OPEN' OR s.closed_at >= p.paid_at)) END AS on_shift
       FROM payments p
      WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.business_date = $3::date AND p.status = 'POSTED'
     UNION ALL
-    SELECT r.payment_method, r.shift_id, r.amount
+    SELECT r.payment_method, r.amount,
+           CASE WHEN r.payment_method = 'CASH' THEN r.shift_id IS NOT NULL
+                ELSE EXISTS (SELECT 1 FROM cashier_shifts s
+                              WHERE s.tenant_id = r.tenant_id AND s.property_id = r.property_id AND s.user_id = r.created_by
+                                AND s.opened_at <= r.paid_at AND (s.status = 'OPEN' OR s.closed_at >= r.paid_at)) END
       FROM city_ledger_receipts r
      WHERE r.tenant_id = $1 AND r.property_id = $2 AND r.business_date = $3::date AND r.status = 'POSTED'
 ) x
@@ -1080,7 +1092,8 @@ type ZTakingsByMethodRow struct {
 	OffShift decimal.Decimal
 }
 
-// What was taken on the business date, by method: on a shift, and without one (payments and, for cash, the receipts of the city ledger; refunds are taken off).
+// What was taken on the business date, by method: on a shift, and without one (payments and, for cash, the receipts of the city ledger; refunds are taken off). Cash is on a shift when the payment
+// carries one. Another method carries no shift: it is on a shift when its cashier had a shift open at the time of it, which is how the report of the shift counts its other tenders (ShiftOtherTenders).
 func (q *Queries) ZTakingsByMethod(ctx context.Context, arg ZTakingsByMethodParams) ([]ZTakingsByMethodRow, error) {
 	rows, err := q.db.Query(ctx, zTakingsByMethod, arg.TenantID, arg.PropertyID, arg.Day)
 	if err != nil {

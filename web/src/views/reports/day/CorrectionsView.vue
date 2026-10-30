@@ -15,6 +15,7 @@ import { addDays } from '@/utils/dates'
 import { formatDateShort, formatDateTime, formatMoney, formatPercent } from '@/utils/format'
 import { money } from '@/views/accounting/reportApi'
 import DayReportActions from './DayReportActions.vue'
+import { methodName } from './dayLabels'
 import { useDayReport } from './useDayReport'
 
 /** Voids, corrections, discounts and allowances (docs/architecture/38-reports-night-audit-pack.md 7.4, mockup 67), folio and POS, with who did it and who approved it. */
@@ -31,8 +32,13 @@ watch([allowed, businessDate], ([ok, bd]) => {
 }, { immediate: true })
 
 const report = computed(() => data.value)
-const sum = (pick: (r: CorrectionRow) => string): string => String((report.value?.rows ?? []).reduce((s, r) => s + Number(pick(r)), 0))
 const kindName = (k: string): string => t(`dayReports.corrections.kind.${k}` as 'dayReports.corrections.kind.VOID')
+/** A void of a payment is another thing than a void of a charge: money went back, no revenue was reduced. */
+const isPayment = (r: CorrectionRow): boolean => r.payment_method !== ''
+const rowKind = (r: CorrectionRow): string => (r.kind === 'VOID' && isPayment(r) ? 'PAYMENT_VOID' : r.kind)
+/** What was corrected: the name of the charge, or the method of the payment; never the code. */
+const item = (r: CorrectionRow): string => (isPayment(r) ? methodName(r.payment_method) : r.charge_code_name)
+const figure = (r: CorrectionRow, v: string): string => (isPayment(r) ? '–' : money(v))
 /** The reference of a row: the folio, or the bill of the POS. */
 const reference = (r: CorrectionRow): string => r.folio || r.bill
 const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-muted-foreground'
@@ -74,18 +80,22 @@ const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-m
             <tbody>
               <tr v-for="(r, i) in report.rows" :key="i" class="border-b border-border align-top" :data-testid="`co-row-${i}`">
                 <td class="px-2 py-2">{{ formatDateTime(r.at) }}</td>
-                <td class="px-2 py-2"><Badge variant="secondary" :data-testid="`co-kind-${i}`">{{ kindName(r.kind) }}</Badge></td>
+                <td class="px-2 py-2"><Badge variant="secondary" :data-testid="`co-kind-${i}`">{{ kindName(rowKind(r)) }}</Badge></td>
                 <td class="px-2 py-2">{{ reference(r) }}<div v-if="r.outlet" class="text-muted-foreground">{{ r.outlet }}</div><div v-else-if="r.reservation" class="text-muted-foreground">{{ r.reservation }}</div></td>
-                <td class="px-2 py-2">{{ r.description }}<div class="text-muted-foreground">{{ r.charge_code }}<span v-if="r.original_date"> · {{ formatDateShort(r.original_date) }}</span></div></td>
-                <td class="px-2 py-2 text-right">{{ money(r.net) }}</td><td class="px-2 py-2 text-right">{{ money(r.service) }}</td><td class="px-2 py-2 text-right">{{ money(r.tax) }}</td><td class="px-2 py-2 text-right">{{ money(r.gross) }}</td>
+                <td class="px-2 py-2">{{ r.description }}<div class="text-muted-foreground">{{ item(r) }}<span v-if="r.original_date"> · {{ formatDateShort(r.original_date) }}</span></div></td>
+                <td class="px-2 py-2 text-right">{{ figure(r, r.net) }}</td><td class="px-2 py-2 text-right">{{ figure(r, r.service) }}</td><td class="px-2 py-2 text-right">{{ figure(r, r.tax) }}</td><td class="px-2 py-2 text-right">{{ money(r.gross) }}</td>
                 <td class="px-2 py-2">{{ r.reason }}</td>
                 <td class="px-2 py-2">{{ r.done_by }}<span v-if="r.approved_by" class="text-muted-foreground"> · {{ r.approved_by }}</span></td>
               </tr>
             </tbody>
             <tfoot>
-              <tr class="font-semibold" data-testid="co-total">
-                <td class="px-2 py-2" colspan="4">{{ t('dayReports.total') }} · {{ t('dayReports.corrections.events', { n: report.rows.length }) }}</td>
-                <td class="px-2 py-2 text-right">{{ formatMoney(sum((r) => r.net)) }}</td><td class="px-2 py-2 text-right">{{ formatMoney(sum((r) => r.service)) }}</td><td class="px-2 py-2 text-right">{{ formatMoney(sum((r) => r.tax)) }}</td><td class="px-2 py-2 text-right">{{ formatMoney(sum((r) => r.gross)) }}</td><td colspan="2" />
+              <tr class="border-b border-border font-semibold" data-testid="co-reduced">
+                <td class="px-2 py-2" colspan="4">{{ t('dayReports.corrections.reduced') }} · {{ t('dayReports.corrections.events', { n: report.reduced.count }) }}<div class="font-normal text-muted-foreground">{{ t('dayReports.corrections.reducedHint') }}</div></td>
+                <td class="px-2 py-2 text-right">{{ formatMoney(report.reduced.net) }}</td><td class="px-2 py-2 text-right">{{ formatMoney(report.reduced.service) }}</td><td class="px-2 py-2 text-right">{{ formatMoney(report.reduced.tax) }}</td><td class="px-2 py-2 text-right">{{ formatMoney(report.reduced.gross) }}</td><td colspan="2" />
+              </tr>
+              <tr class="font-semibold" data-testid="co-money-back">
+                <td class="px-2 py-2" colspan="4">{{ t('dayReports.corrections.moneyBack') }} · {{ t('dayReports.corrections.events', { n: report.money_back.count }) }}<div class="font-normal text-muted-foreground">{{ t('dayReports.corrections.moneyBackHint') }}</div></td>
+                <td class="px-2 py-2 text-right">–</td><td class="px-2 py-2 text-right">–</td><td class="px-2 py-2 text-right">–</td><td class="px-2 py-2 text-right">{{ formatMoney(report.money_back.amount) }}</td><td colspan="2" />
               </tr>
             </tfoot>
           </table>
@@ -95,7 +105,7 @@ const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-m
           <Card v-for="g in (['by_kind', 'by_user', 'by_outlet'] as const)" :key="g" class="p-4" :data-testid="`co-${g}`">
             <h2 class="mb-2 mt-0 text-sm font-semibold">{{ t(`dayReports.corrections.${g}` as 'dayReports.corrections.by_kind') }}</h2>
             <ul class="m-0 flex list-none flex-col gap-1 p-0 text-sm">
-              <li v-for="x in report[g]" :key="x.key" class="flex justify-between gap-3"><span>{{ g === 'by_kind' ? kindName(x.key) : x.key || '–' }} · {{ x.count }}</span><span class="tabular-nums">{{ formatMoney(x.net) }}</span></li>
+              <li v-for="x in report[g]" :key="x.key" class="flex justify-between gap-3"><span>{{ g === 'by_kind' ? kindName(x.key) : g === 'by_outlet' && !x.key ? t('dayReports.corrections.hotelFolios') : x.key || '–' }} · {{ x.count }}</span><span class="tabular-nums">{{ formatMoney(x.net) }}</span></li>
             </ul>
           </Card>
         </div>

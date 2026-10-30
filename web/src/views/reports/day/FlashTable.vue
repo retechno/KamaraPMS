@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FlashLine } from '@/api/types'
 import { t } from '@/i18n'
+import FlashCols from './FlashCols.vue'
 import { flashValue, flashVariance, rowLabel } from './flashLabels'
 
 /** A block of rows of the daily flash with the seven columns of the mockup (docs/design/63). A row without a budget has no budget and no variance. */
@@ -9,7 +10,8 @@ const th = 'whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-medium upp
 </script>
 
 <template>
-  <table class="w-full border-collapse text-sm tabular-nums" :data-testid="testid">
+  <table class="w-full table-fixed border-collapse text-sm tabular-nums" :data-testid="testid">
+    <FlashCols :has-budget="hasBudget" />
     <thead>
       <tr class="border-b border-border">
         <th class="px-2 py-1.5 text-left text-[11px] font-medium uppercase text-muted-foreground">{{ heading }}</th>

@@ -15,6 +15,7 @@ import { addDays } from '@/utils/dates'
 import { formatDate, formatDateShort, formatDateTime, formatMoney } from '@/utils/format'
 import { money } from '@/views/accounting/reportApi'
 import DayReportActions from './DayReportActions.vue'
+import { sourceName } from './dayLabels'
 import { useDayReport } from './useDayReport'
 
 /** The cancellations and no-shows (docs/architecture/38-reports-night-audit-pack.md 7.2, mockup 64): one row for each event, and the fee only when it was posted. */
@@ -33,6 +34,12 @@ const report = computed(() => data.value)
 const nights = computed(() => (report.value?.events ?? []).reduce((n, e) => n + (e.nights ?? 0) * e.rooms, 0))
 const valueLost = computed(() => (report.value?.by_kind ?? []).reduce((s, g) => s + Number(g.value), 0))
 const withFee = computed(() => (report.value?.events ?? []).filter((e) => e.fee_net !== null).length)
+/** The name of a group: the reason, the source (named, not its code) or the company; the empty key says what is missing. */
+const groupKey = (g: 'by_reason' | 'by_source' | 'by_company', key: string): string => {
+  if (g === 'by_source') return key ? sourceName(key) : t('dayReports.cancellations.noSource')
+  if (g === 'by_company') return key || t('dayReports.cancellations.noCompany')
+  return key || t('dayReports.cancellations.noReason')
+}
 const held = (g: CancellationGroup): string => `${g.events} · ${money(g.value)}`
 const th = 'whitespace-nowrap px-2 py-2 text-left text-[11px] font-medium uppercase text-muted-foreground'
 </script>
@@ -86,7 +93,7 @@ const th = 'whitespace-nowrap px-2 py-2 text-left text-[11px] font-medium upperc
                 <td class="px-2 py-2"><Badge :variant="e.kind === 'NO_SHOW' ? 'destructive' : 'secondary'">{{ t(`dayReports.cancellations.kind.${e.kind}` as 'dayReports.cancellations.kind.NO_SHOW') }}</Badge><Badge v-if="e.reinstated" variant="outline" class="ml-1" data-testid="cx-reinstated">{{ t('dayReports.cancellations.reinstated') }}</Badge></td>
                 <td class="px-2 py-2">{{ e.confirmation_number }}</td>
                 <td class="px-2 py-2">{{ e.guest }}<div v-if="e.company" class="text-muted-foreground">{{ e.company }}</div></td>
-                <td class="px-2 py-2">{{ e.source }}</td>
+                <td class="px-2 py-2">{{ e.source ? sourceName(e.source) : t('dayReports.cancellations.noSource') }}</td>
                 <td class="px-2 py-2">{{ e.rooms > 1 ? `${e.rooms} × ` : '' }}{{ e.room_type }}<div v-if="e.arrival" class="text-muted-foreground">{{ formatDateShort(e.arrival) }} – {{ formatDate(e.departure) }}</div></td>
                 <td class="px-2 py-2">{{ e.nights ?? '–' }}</td>
                 <td class="px-2 py-2">{{ e.lead_days ?? '–' }}</td>
@@ -103,7 +110,7 @@ const th = 'whitespace-nowrap px-2 py-2 text-left text-[11px] font-medium upperc
           <Card v-for="g in (['by_reason', 'by_source', 'by_company'] as const)" :key="g" class="p-4" :data-testid="`cx-${g}`">
             <h2 class="mb-2 mt-0 text-sm font-semibold">{{ t(`dayReports.cancellations.${g}` as 'dayReports.cancellations.by_reason') }}</h2>
             <ul class="m-0 flex list-none flex-col gap-1 p-0 text-sm">
-              <li v-for="x in report[g]" :key="x.key" class="flex justify-between gap-3"><span>{{ x.key || t('dayReports.cancellations.noReason') }}</span><span class="tabular-nums">{{ held(x) }}</span></li>
+              <li v-for="x in report[g]" :key="x.key" class="flex justify-between gap-3"><span>{{ groupKey(g, x.key) }}</span><span class="tabular-nums">{{ held(x) }}</span></li>
             </ul>
           </Card>
         </div>

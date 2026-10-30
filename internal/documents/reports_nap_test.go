@@ -52,7 +52,7 @@ func TestTheNightAuditReportsAsPDFInEnglishAndIndonesian(t *testing.T) {
 			}
 			return f.Docs.CorrectionsPDF(ctx, f.propID, reports.CorrectionParams{From: date, To: date, Kind: reports.CorrAll})
 		}},
-		{"z reports", "z-reports-2026-09-30.pdf", []string{"Z REPORT", "BY DRAWER", "TAKINGS BY METHOD"}, []string{"LAPORAN Z", "PER LACI KAS", "PENERIMAAN PER METODE"}, func(l bool) (documents.Document, error) {
+		{"z reports", "z-reports-2026-09-30.pdf", []string{"Z REPORT", "BY DRAWER", "TAKINGS BY METHOD", "Cash"}, []string{"LAPORAN Z", "PER LACI KAS", "PENERIMAAN PER METODE", "Tunai"}, func(l bool) (documents.Document, error) {
 			ctx := f.admin
 			if l {
 				ctx = id

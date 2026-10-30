@@ -1,12 +1,13 @@
 import type { FlashLine } from '@/api/types'
 import { t } from '@/i18n'
 import { formatMoney, formatPercent } from '@/utils/format'
+import { methodName } from './dayLabels'
 
 /** The rows of the daily flash whose name is not data: the server names them in English, the page by their key. */
 const FIXED = new Set([
   'rooms_total', 'rooms_ooo', 'rooms_oos', 'rooms_house_use', 'rooms_available', 'rooms_sold', 'rooms_complimentary', 'rooms_vacant', 'walk_ins', 'guests_in_house',
   'occupancy_pct', 'occupancy_paid_pct', 'double_occupancy_pct', 'guests_per_room', 'arr', 'arr_incl_comp', 'revpar', 'alos',
-  'reservations_made', 'reservations_cancelled', 'no_shows', 'early_checkouts', 'late_checkouts', 'arrivals', 'departures', 'departures_tomorrow',
+  'reservations_made', 'reservations_cancelled', 'no_shows', 'early_checkouts', 'late_checkouts', 'arrivals', 'departures', 'departures_tomorrow', 'arrivals_tomorrow',
   'total_net', 'service', 'tax', 'gtr', 'journal', 'source_hotel', 'source_pos', 'source_banquet', 'source_other', 'gtp', 'refunds_total', 'to_city_ledger', 'banquet_per_pax',
 ])
 
@@ -15,7 +16,8 @@ const key = (k: string) => `dayReports.flash.rows.${k}` as 'dayReports.flash.row
 /** The name of a row in the language of the page. A charge code, an outlet, a room type or a cashier is data and stays as it is. */
 export function rowLabel(line: FlashLine): string {
   if (FIXED.has(line.key)) return t(key(line.key))
-  const [kind] = line.key.split(':')
+  const [kind, rest] = line.key.split(':')
+  if ((kind === 'method' || kind === 'refund') && rest) return methodName(rest)
   if (kind === 'covers' || kind === 'covers_missing' || kind === 'per_cover') {
     return t(`dayReports.flash.outlet.${kind}` as 'dayReports.flash.outlet.covers', { outlet: line.label.split(': ')[0] ?? '' })
   }

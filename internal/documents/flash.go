@@ -16,20 +16,33 @@ import (
 // SetReports gives the documents the reports service, for the daily flash report as a PDF.
 func (s *Service) SetReports(r *reports.Service) { s.reports = r }
 
-// The columns of the flash: the row, then the seven figures of 7.1 (today, MTD, MTD last month, MTD last year, budget MTD, variance MTD, YTD).
-var flashW = [...]float64{50, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5}
+// The columns of the flash: the row, then the seven figures of 7.1 (today, MTD, MTD last month, MTD last year, budget MTD, variance MTD, YTD). A property without a budget for the month has no budget and
+// no variance column: the five that are left are wider.
+var (
+	flashW       = []float64{50, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5, 18.5}
+	flashWNoBudg = []float64{62, 23.5, 23.5, 23.5, 23.5, 23.5}
+)
+
+// flashCols are the columns of the table: the index of each in a row of eight cells and its width.
+func flashCols(budget bool) ([]int, []float64) {
+	if budget {
+		return []int{0, 1, 2, 3, 4, 5, 6, 7}, flashW
+	}
+	return []int{0, 1, 2, 3, 4, 7}, flashWNoBudg
+}
 
 // flashTable prints the rows of one part of the flash under a header of the columns. A row is its label and its figures; bold rows are totals.
-func (g *page) flashTable(head []string, rows []flashRow) {
+func (g *page) flashTable(budget bool, head []string, rows []flashRow) {
+	idx, widths := flashCols(budget)
 	hdr := func() {
 		g.p.SetFillColor(band[0], band[1], band[2])
 		g.font("B", 7)
-		for i, w := range flashW {
+		for i, w := range widths {
 			al := "R"
 			if i == 0 {
 				al = "L"
 			}
-			g.p.CellFormat(w, 6, g.tr(g.lang.T(head[i])), "", boolInt(i == len(flashW)-1), al, true, 0, "")
+			g.p.CellFormat(w, 6, g.tr(g.lang.T(head[idx[i]])), "", boolInt(i == len(widths)-1), al, true, 0, "")
 		}
 	}
 	hdr()
@@ -44,12 +57,12 @@ func (g *page) flashTable(head []string, rows []flashRow) {
 		}
 		g.font(style, 7)
 		y := g.p.GetY()
-		for i, w := range flashW {
+		for i, w := range widths {
 			al := "R"
 			if i == 0 {
 				al = "L"
 			}
-			s := r.cells[i]
+			s := r.cells[idx[i]]
 			if i == 0 {
 				s = g.lang.T(s)
 				if r.indent {
@@ -59,7 +72,7 @@ func (g *page) flashTable(head []string, rows []flashRow) {
 					s = strings.TrimSpace(s[:len(s)-2])
 				}
 			}
-			g.p.CellFormat(w, 4.6, g.tr(s), "", boolInt(i == len(flashW)-1), al, false, 0, "")
+			g.p.CellFormat(w, 4.6, g.tr(s), "", boolInt(i == len(widths)-1), al, false, 0, "")
 		}
 		g.p.SetDrawColor(225, 228, 232)
 		g.p.SetLineWidth(0.1)
@@ -86,7 +99,7 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 	l, dec := dc.lang, dc.decimals
 	cell := func(kind, v string) string {
 		if v == "" {
-			return ""
+			return "-" // no figure: not a zero
 		}
 		d, err := decimal.NewFromString(v)
 		if err != nil {
@@ -102,13 +115,19 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 	}
 	opt := func(kind string, v *string) string {
 		if v == nil {
-			return ""
+			return "-"
 		}
 		return cell(kind, *v)
 	}
 	row := func(ln reports.FlashLine, bold, indent bool) flashRow {
+		label := ln.Label
+		for _, prefix := range []string{"method:", "refund:"} { // a payment method is a code: its name is printed
+			if code, ok := strings.CutPrefix(ln.Key, prefix); ok {
+				label = napMethod(code)
+			}
+		}
 		return flashRow{bold: bold, indent: indent, cells: [8]string{
-			ln.Label, cell(ln.Kind, ln.Today), cell(ln.Kind, ln.MTD), cell(ln.Kind, ln.LastMonth), cell(ln.Kind, ln.LastYear), opt(ln.Kind, ln.Budget), opt(ln.Kind, ln.Variance), cell(ln.Kind, ln.YTD),
+			label, cell(ln.Kind, ln.Today), cell(ln.Kind, ln.MTD), cell(ln.Kind, ln.LastMonth), cell(ln.Kind, ln.LastYear), opt(ln.Kind, ln.Budget), opt(ln.Kind, ln.Variance), cell(ln.Kind, ln.YTD),
 		}}
 	}
 	rowsOf := func(ls []reports.FlashLine, bold, indent bool) []flashRow {
@@ -130,12 +149,12 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 		g.stamp("INTERIM")
 	}
 	g.section("Room statistics")
-	g.flashTable(head, append(rowsOf(rep.Rooms, false, false), rowsOf(rep.SoldByType, false, true)...))
+	g.flashTable(rep.HasBudget, head, append(rowsOf(rep.Rooms, false, false), rowsOf(rep.SoldByType, false, true)...))
 	g.section("Activity")
-	g.flashTable(head, rowsOf(rep.Activity, false, false))
+	g.flashTable(rep.HasBudget, head, rowsOf(rep.Activity, false, false))
 	if len(rep.Covers) > 0 {
 		g.section("Covers")
-		g.flashTable(head, rowsOf(rep.Covers, false, false))
+		g.flashTable(rep.HasBudget, head, rowsOf(rep.Covers, false, false))
 	}
 	g.section("Net revenue")
 	var rev []flashRow
@@ -153,9 +172,9 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 	if rep.Revenue.Journal != nil {
 		rev = append(rev, row(*rep.Revenue.Journal, false, false))
 	}
-	g.flashTable(head, rev)
+	g.flashTable(rep.HasBudget, head, rev)
 	g.section("Revenue by source")
-	g.flashTable(head, rowsOf(rep.Revenue.BySource, false, false))
+	g.flashTable(rep.HasBudget, head, rowsOf(rep.Revenue.BySource, false, false))
 	g.section("Payments received (GTP)")
 	pay := append([]flashRow{{bold: true, cells: [8]string{"By cashier"}}}, rowsOf(rep.Payments.ByCashier, false, true)...)
 	pay = append(pay, flashRow{bold: true, cells: [8]string{"By payment method"}})
@@ -163,7 +182,7 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 	pay = append(pay, row(rep.Payments.GTP, true, false))
 	pay = append(pay, rowsOf(rep.Payments.Refunds, false, true)...)
 	pay = append(pay, row(rep.Payments.RefundsTotal, true, false), row(rep.Payments.CityLedger, false, false))
-	g.flashTable(head, pay)
+	g.flashTable(rep.HasBudget, head, pay)
 
 	if c := rep.Control; c != nil {
 		g.section("Control balance")

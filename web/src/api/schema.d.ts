@@ -17984,7 +17984,15 @@ export interface components {
             reservation: string;
             bill: string;
             outlet: string;
+            /** @description The code of the charge */
             charge_code: string;
+            /** @description The name of the charge code */
+            charge_code_name: string;
+            /**
+             * @description The method of a payment void, a refund or a complimentary payment; empty for a ledger item. A row with a method is money, not revenue.
+             * @enum {string}
+             */
+            payment_method: "" | "CASH" | "CARD" | "BANK_TRANSFER" | "OTHER" | "QRIS" | "CITY_LEDGER" | "COMP";
             department: string;
             description: string;
             /** Format: int64 */
@@ -17994,6 +18002,7 @@ export interface components {
             net: string;
             service: string;
             tax: string;
+            /** @description Signed as the ledger moves it; a refund and a payment void are negative too (money that went back). A complimentary payment is positive. */
             gross: string;
             reason: string;
             done_by: string;
@@ -18005,6 +18014,18 @@ export interface components {
             net: string;
             gross: string;
         };
+        CorrectionSum: {
+            count: number;
+            net: string;
+            service: string;
+            tax: string;
+            gross: string;
+        };
+        CorrectionMoney: {
+            count: number;
+            /** @description The sum of the gross of the payment voids and the refunds; negative. */
+            amount: string;
+        };
         CorrectionReport: {
             from: components["schemas"]["Date"];
             to: components["schemas"]["Date"];
@@ -18013,7 +18034,10 @@ export interface components {
             by_kind: components["schemas"]["CorrectionTotal"][];
             by_reason: components["schemas"]["CorrectionTotal"][];
             by_user: components["schemas"]["CorrectionTotal"][];
+            /** @description An empty key is the folios of the hotel (no outlet). */
             by_outlet: components["schemas"]["CorrectionTotal"][];
+            reduced: components["schemas"]["CorrectionSum"];
+            money_back: components["schemas"]["CorrectionMoney"];
             revenue_taken_back: string;
             net_revenue: string;
             /** @description Null when the net revenue of the period is not positive. */

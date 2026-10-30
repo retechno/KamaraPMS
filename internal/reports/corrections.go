@@ -38,7 +38,7 @@ type CorrectionParams struct {
 }
 
 // CorrectionRow is one event. The amounts of a ledger item are signed as the ledger moves them (a reversal or a discount is negative: it reduces the revenue); a refund, a payment void and a
-// complimentary payment are money movements and carry only the gross amount.
+// complimentary payment are money movements (PaymentMethod is set) and carry only the gross amount, which is negative for a refund and for a payment void: money that went back.
 type CorrectionRow struct {
 	BusinessDate   civil.Date  `json:"business_date"`
 	At             time.Time   `json:"at"`
@@ -48,6 +48,8 @@ type CorrectionRow struct {
 	Bill           string      `json:"bill"`
 	Outlet         string      `json:"outlet"`
 	ChargeCode     string      `json:"charge_code"`
+	ChargeCodeName string      `json:"charge_code_name"`
+	PaymentMethod  string      `json:"payment_method"`
 	Department     string      `json:"department"`
 	Description    string      `json:"description"`
 	OriginalItemID *int64      `json:"original_item_id"`
@@ -69,6 +71,21 @@ type CorrectionTotal struct {
 	Gross string `json:"gross"`
 }
 
+// CorrectionSum is the revenue the events reduced or gave away: the ledger items, never a payment.
+type CorrectionSum struct {
+	Count   int    `json:"count"`
+	Net     string `json:"net"`
+	Service string `json:"service"`
+	Tax     string `json:"tax"`
+	Gross   string `json:"gross"`
+}
+
+// CorrectionMoney is the money that was cancelled or given back: the payment voids and the refunds. It is not revenue.
+type CorrectionMoney struct {
+	Count  int    `json:"count"`
+	Amount string `json:"amount"`
+}
+
 // CorrectionReport is the report.
 type CorrectionReport struct {
 	From             civil.Date        `json:"from"`
@@ -79,6 +96,8 @@ type CorrectionReport struct {
 	ByReason         []CorrectionTotal `json:"by_reason"`
 	ByUser           []CorrectionTotal `json:"by_user"`
 	ByOutlet         []CorrectionTotal `json:"by_outlet"`
+	Reduced          CorrectionSum     `json:"reduced"`
+	MoneyBack        CorrectionMoney   `json:"money_back"`
 	RevenueTakenBack string            `json:"revenue_taken_back"`
 	NetRevenue       string            `json:"net_revenue"`
 	SharePercent     *string           `json:"share_percent"`
@@ -86,10 +105,10 @@ type CorrectionReport struct {
 
 // CSV is the list of the events.
 func (r CorrectionReport) CSV() ([]string, [][]string) {
-	h := []string{"business_date", "at", "kind", "folio", "reservation", "bill", "outlet", "charge_code", "department", "description", "original_date", "net", "service", "tax", "gross", "reason", "done_by", "approved_by"}
+	h := []string{"business_date", "at", "kind", "folio", "reservation", "bill", "outlet", "charge_code", "charge_code_name", "payment_method", "department", "description", "original_date", "net", "service", "tax", "gross", "reason", "done_by", "approved_by"}
 	rows := make([][]string, 0, len(r.Rows))
 	for _, x := range r.Rows {
-		rows = append(rows, []string{x.BusinessDate.String(), x.At.UTC().Format(time.RFC3339), x.Kind, x.Folio, x.Reservation, x.Bill, x.Outlet, x.ChargeCode, x.Department, x.Description, optDate(x.OriginalDate),
+		rows = append(rows, []string{x.BusinessDate.String(), x.At.UTC().Format(time.RFC3339), x.Kind, x.Folio, x.Reservation, x.Bill, x.Outlet, x.ChargeCode, x.ChargeCodeName, x.PaymentMethod, x.Department, x.Description, optDate(x.OriginalDate),
 			x.Net, x.Service, x.Tax, x.Gross, x.Reason, x.DoneBy, x.ApprovedBy})
 	}
 	return h, rows
@@ -181,7 +200,7 @@ func (s *Service) Corrections(ctx context.Context, propertyID int64, in Correcti
 			continue
 		}
 		r := CorrectionRow{BusinessDate: i.BusinessDate, At: i.TransactionAt, Kind: kind, Folio: i.FolioNumber, Reservation: i.ConfirmationNumber, Bill: i.BillNumber, Outlet: i.OutletName,
-			ChargeCode: i.ChargeCode, Department: i.Department, Description: i.Description, OriginalItemID: idPtr(i.OriginalItemID), OriginalDate: i.OriginalDate,
+			ChargeCode: i.ChargeCode, ChargeCodeName: i.ChargeCodeName, Department: i.Department, Description: i.Description, OriginalItemID: idPtr(i.OriginalItemID), OriginalDate: i.OriginalDate,
 			Net: fx(i.NetAmount, decimals), Service: fx(i.ServiceChargeTotal, decimals), Tax: fx(i.TaxTotal, decimals), Gross: fx(i.Gross, decimals), Reason: i.Reason, DoneBy: i.DoneBy, ApprovedBy: i.ApprovedBy}
 		if kind == CorrDiscount {
 			net := i.DiscountAmount.Neg()
@@ -196,11 +215,11 @@ func (s *Service) Corrections(ctx context.Context, propertyID int64, in Correcti
 		rows = append(rows, r)
 	}
 	for _, y := range pays {
-		r := CorrectionRow{BusinessDate: y.BusinessDate, At: y.PaidAt, Folio: y.FolioNumber, Reservation: y.ConfirmationNumber, Outlet: y.OutletName, ChargeCode: y.PaymentMethod,
+		r := CorrectionRow{BusinessDate: y.BusinessDate, At: y.PaidAt, Folio: y.FolioNumber, Reservation: y.ConfirmationNumber, Outlet: y.OutletName, PaymentMethod: y.PaymentMethod,
 			Description: y.PaymentNumber, Net: zero, Service: zero, Tax: zero, Gross: fx(y.Amount, decimals), Reason: y.Remarks, DoneBy: y.DoneBy, ApprovedBy: y.ApprovedBy}
 		switch {
 		case y.Status == "VOIDED":
-			r.Kind, r.Reason = CorrVoid, y.VoidReason
+			r.Kind, r.Reason, r.Gross = CorrVoid, y.VoidReason, fx(y.Amount.Neg(), decimals)
 			if y.VoidedAt != nil {
 				r.At = *y.VoidedAt
 			}
@@ -208,14 +227,14 @@ func (s *Service) Corrections(ctx context.Context, propertyID int64, in Correcti
 				r.DoneBy = y.VoidedBy
 			}
 		case y.PaymentType == "REFUND":
-			r.Kind = CorrRefund
+			r.Kind, r.Gross = CorrRefund, fx(y.Amount.Neg(), decimals)
 		default:
 			r.Kind = CorrComp
 		}
 		rows = append(rows, r)
 	}
 	for _, v := range posv {
-		r := CorrectionRow{BusinessDate: v.BusinessDate, At: v.VoidedAt, Kind: CorrPosVoid, Folio: "", Bill: deref(v.BillNumber), Outlet: v.OutletName, ChargeCode: v.ChargeCode, Department: v.Department,
+		r := CorrectionRow{BusinessDate: v.BusinessDate, At: v.VoidedAt, Kind: CorrPosVoid, Folio: "", Bill: deref(v.BillNumber), Outlet: v.OutletName, ChargeCode: v.ChargeCode, ChargeCodeName: v.ChargeCodeName, Department: v.Department,
 			Description: v.ProductName, OriginalItemID: idPtr(v.OriginalItemID), OriginalDate: v.OriginalDate,
 			Net: fx(v.NetAmount, decimals), Service: fx(v.ServiceChargeTotal, decimals), Tax: fx(v.TaxTotal, decimals), Gross: fx(v.Gross, decimals), Reason: v.VoidReason, DoneBy: v.DoneBy, ApprovedBy: v.ApprovedBy}
 		rows = append(rows, r)
@@ -280,6 +299,21 @@ func (s *Service) Corrections(ctx context.Context, propertyID int64, in Correcti
 			taken = taken.Add(n.Neg())
 		}
 	}
+	red, back := CorrectionSum{}, CorrectionMoney{}
+	var rn, rs, rt, rg, ma decimal.Decimal
+	for _, r := range out.Rows {
+		switch {
+		case r.PaymentMethod == "": // a ledger item: it reduced or gave away revenue
+			red.Count++
+			rn, rs, rt, rg = rn.Add(dec(r.Net)), rs.Add(dec(r.Service)), rt.Add(dec(r.Tax)), rg.Add(dec(r.Gross))
+		case r.Kind == CorrVoid || r.Kind == CorrRefund: // money that went back; a complimentary payment is neither
+			back.Count++
+			ma = ma.Add(dec(r.Gross))
+		}
+	}
+	red.Net, red.Service, red.Tax, red.Gross = fx(rn, decimals), fx(rs, decimals), fx(rt, decimals), fx(rg, decimals)
+	back.Amount = fx(ma, decimals)
+	out.Reduced, out.MoneyBack = red, back
 	net, err := q.CorrectionNetRevenue(ctx, reportsdb.CorrectionNetRevenueParams{TenantID: p.TenantID, PropertyID: propertyID, FromDate: in.From, ToDate: in.To})
 	if err != nil {
 		return CorrectionReport{}, err

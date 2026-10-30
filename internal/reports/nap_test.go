@@ -254,8 +254,8 @@ func TestTheDailyFlashBudgetIsOnlyForTheFiguresThatHaveOne(t *testing.T) {
 //	c2 100,000 posted, then an adjustment of -50,000 "goodwill"    ADJUSTMENT  net  -50,000 service  -5,000 tax  -6,050 gross  -61,050
 //	c3 100,000 less a discount of 10,000                           DISCOUNT    net  -10,000
 //	a rebate of -40,000 on a charge code that posts to 4160        ALLOWANCE   net  -40,000
-//	a payment of 1,000 voided "typo"                               VOID        gross 1,000 (money, no net)
-//	a refund of 50,000 of a deposit of 100,000                     REFUND      gross 50,000
+//	a payment of 1,000 voided "typo"                               VOID        gross -1,000 (money that went back: no net)
+//	a refund of 50,000 of a deposit of 100,000                     REFUND      gross -50,000
 //
 // Taken back from the revenue: 100,000 + 50,000 + 10,000 + 40,000 = 200,000. The net revenue of the day: (100,000 - 100,000) + (100,000 - 50,000) + 90,000 - 40,000 = 100,000.
 func TestCorrectionsOfEveryKindOnTheFolios(t *testing.T) {
@@ -289,11 +289,11 @@ func TestCorrectionsOfEveryKindOnTheFolios(t *testing.T) {
 	must(t, err)
 	type want struct{ net, service, tax, gross, reason, by string }
 	wants := map[string][]want{
-		reports.CorrVoid:      {{"-100000", "-10000", "-12100", "-122100", "twice", "Admin"}, {"0", "0", "0", "1000", "typo", "Admin"}},
+		reports.CorrVoid:      {{"-100000", "-10000", "-12100", "-122100", "twice", "Admin"}, {"0", "0", "0", "-1000", "typo", "Admin"}},
 		reports.CorrAdjust:    {{"-50000", "-5000", "-6050", "-61050", "goodwill", "Admin"}},
 		reports.CorrDiscount:  {{"-10000", "0", "0", "-10000", "", "Admin"}},
 		reports.CorrAllowance: {{"40000", "0", "0", "40000", "", "Admin"}}, // the charge on an allowance account, as the ledger holds it
-		reports.CorrRefund:    {{"0", "0", "0", "50000", "goodwill", "Admin"}},
+		reports.CorrRefund:    {{"0", "0", "0", "-50000", "goodwill", "Admin"}},
 	}
 	got := map[string][]reports.CorrectionRow{}
 	for _, x := range r.Rows {
@@ -325,8 +325,28 @@ func TestCorrectionsOfEveryKindOnTheFolios(t *testing.T) {
 	for _, k := range r.ByKind {
 		kinds[k.Key] = k
 	}
-	if k := kinds[reports.CorrVoid]; k.Count != 2 || k.Net != "-100000" || k.Gross != "-121100" {
+	if k := kinds[reports.CorrVoid]; k.Count != 2 || k.Net != "-100000" || k.Gross != "-123100" {
 		t.Fatalf("by kind: %+v", r.ByKind)
+	}
+	// The totals are two. The revenue reduced is the ledger items only: -100,000 -50,000 -10,000 +40,000 net, service -10,000 -5,000, tax -12,100 -6,050, gross -122,100 -61,050 -10,000 +40,000.
+	// The money that went back is the payment void and the refund, -1,000 and -50,000, and none of it is revenue.
+	if red := r.Reduced; red.Count != 4 || red.Net != "-120000" || red.Service != "-15000" || red.Tax != "-18150" || red.Gross != "-153150" {
+		t.Fatalf("revenue reduced: %+v", red)
+	}
+	if r.MoneyBack.Count != 2 || r.MoneyBack.Amount != "-51000" {
+		t.Fatalf("money back: %+v", r.MoneyBack)
+	}
+	// A payment names its method and no charge code; a ledger item names its charge code and the name of it (never only the code).
+	for _, x := range r.Rows {
+		if x.PaymentMethod != "" && (x.ChargeCode != "" || x.ChargeCodeName != "") {
+			t.Fatalf("a payment has no charge code: %+v", x)
+		}
+		if x.PaymentMethod == "" && (x.ChargeCode == "" || x.ChargeCodeName == "" || x.ChargeCodeName == x.ChargeCode) {
+			t.Fatalf("a ledger item names its charge code: %+v", x)
+		}
+		if x.PaymentMethod != "" && x.PaymentMethod != "CASH" {
+			t.Fatalf("the method: %+v", x)
+		}
 	}
 	if len(r.ByUser) != 1 || r.ByUser[0].Key != "Admin" || r.ByUser[0].Count != 6 {
 		t.Fatalf("by user: %+v", r.ByUser)

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { DailyFlash, FlashBlock, FlashLine } from '@/api/types'
+import type { DailyFlash, FlashLine } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
 import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
 import DayReportActions from './DayReportActions.vue'
+import FlashRevenueTable from './FlashRevenueTable.vue'
 import FlashTable from './FlashTable.vue'
 import { useDayReport } from './useDayReport'
 
@@ -26,15 +27,6 @@ watch(allowed, (ok) => {
 
 const flash = computed(() => data.value)
 const hasBudget = computed(() => flash.value?.has_budget === true)
-const blockTitle = (b: FlashBlock): string => (b.kind === 'OUTLET' ? b.title : t(`dayReports.flash.block.${b.kind}` as 'dayReports.flash.block.ROOMS'))
-const groupTitle = (code: string): string => t(`dayReports.flash.group.${code}` as 'dayReports.flash.group.A')
-const totalOf = (title: string): string => t('dayReports.flash.totalOf', { title })
-/** The totals of the revenue, one under the other: net, service, tax and the gross. */
-const totals = computed<FlashLine[]>(() => {
-  const r = flash.value?.revenue
-  if (!r) return []
-  return [r.total_net, r.service, r.tax, r.gtr, ...(r.journal ? [r.journal] : [])]
-})
 const source = (key: string): FlashLine | undefined => flash.value?.revenue.by_source.find((l) => l.key === key)
 const diffOpen = computed(() => !!flash.value?.control && !flash.value.control.balanced)
 const warn = (w: { code: string; params?: Record<string, string> }): string => t(`dayReports.flash.warn.${w.code}` as 'dayReports.flash.warn.CONTROL_DIFFERENCE', Object.fromEntries(Object.entries(w.params ?? {}).map(([k, v]) => [k, /^-?\d+(\.\d+)?$/.test(v) ? formatMoney(v) : v])))
@@ -74,18 +66,9 @@ const h = 'mb-2 mt-0 text-sm font-semibold'
         <Card class="overflow-x-auto p-4"><h2 :class="h">{{ t('dayReports.flash.activity') }}</h2><FlashTable :lines="flash.activity" :has-budget="hasBudget" testid="flash-activity" /></Card>
         <Card v-if="flash.covers.length" class="overflow-x-auto p-4"><h2 :class="h">{{ t('dayReports.flash.covers') }}</h2><FlashTable :lines="flash.covers" :has-budget="hasBudget" testid="flash-covers" /></Card>
 
-        <Card class="flex flex-col gap-6 overflow-x-auto p-4" data-testid="flash-revenue">
+        <Card class="overflow-x-auto p-4" data-testid="flash-revenue">
           <h2 :class="h">{{ t('dayReports.flash.revenue') }}</h2>
-          <div v-for="g in flash.revenue.groups" :key="g.code" :data-testid="`flash-group-${g.code}`">
-            <h3 class="mb-1 mt-0 text-sm font-semibold">{{ g.code }} · {{ groupTitle(g.code) }}</h3>
-            <div v-for="(b, i) in g.blocks" :key="i" class="mb-3" :data-testid="`flash-block-${g.code}-${b.kind}`">
-              <FlashTable :lines="b.rows" :total="b.total" :total-label="totalOf(blockTitle(b))" :heading="blockTitle(b)" :has-budget="hasBudget" :testid="`flash-block-table-${g.code}-${i}`" />
-              <Badge v-if="b.kind === 'UNMAPPED'" variant="outline" class="mt-1">{{ t('dayReports.flash.unmapped') }}</Badge>
-            </div>
-            <FlashTable :lines="[]" :total="g.total" :total-label="totalOf(`${g.code} · ${groupTitle(g.code)}`)" :has-budget="hasBudget" :testid="`flash-group-total-${g.code}`" />
-          </div>
-          <FlashTable :lines="totals" :has-budget="hasBudget" testid="flash-totals" />
-          <FlashTable :lines="flash.revenue.by_source" :heading="t('dayReports.flash.bySource')" :has-budget="hasBudget" testid="flash-sources" />
+          <FlashRevenueTable :revenue="flash.revenue" :has-budget="hasBudget" />
         </Card>
 
         <Card class="overflow-x-auto p-4" data-testid="flash-payments">

@@ -48,10 +48,111 @@ func napKind(k string) string {
 	return k
 }
 
-func napGroups(gs []reports.CancellationGroup, m func(string) string) [][]string {
+// napMethod is the name of a payment method; the codes are never printed. The Indonesian page translates the English name.
+func napMethod(code string) string {
+	switch code {
+	case "CASH":
+		return "Cash"
+	case "CARD":
+		return "Card"
+	case "BANK_TRANSFER":
+		return "Bank transfer"
+	case "OTHER":
+		return "Other"
+	case "QRIS":
+		return "QRIS"
+	case "CITY_LEDGER":
+		return "City ledger"
+	case "COMP":
+		return "Complimentary"
+	}
+	return code
+}
+
+// napSource is the name of the source of a reservation.
+func napSource(code string) string {
+	switch code {
+	case "WALK_IN":
+		return "Walk-in"
+	case "PHONE":
+		return "Phone"
+	case "EMAIL":
+		return "E-mail"
+	case "WEBSITE":
+		return "Website"
+	case "OTA":
+		return "OTA"
+	case "AGENT":
+		return "Agent"
+	case "OTHER":
+		return "Other"
+	}
+	return code
+}
+
+// napReleaseMode is the name of the way the deposits are released to revenue.
+func napReleaseMode(code string) string {
+	switch code {
+	case "EVERY_DAY":
+		return "Every day"
+	case "ON_CLOSE":
+		return "On close"
+	}
+	return code
+}
+
+// napCorrKind is the name of a kind of the report of the corrections.
+func napCorrKind(k string) string {
+	switch k {
+	case reports.CorrVoid:
+		return "Void"
+	case reports.CorrAdjust:
+		return "Adjustment"
+	case reports.CorrAllowance:
+		return "Allowance"
+	case reports.CorrRefund:
+		return "Refund"
+	case reports.CorrDiscount:
+		return "Discount"
+	case reports.CorrComp:
+		return "Complimentary"
+	case reports.CorrPosVoid:
+		return "POS void"
+	}
+	return k
+}
+
+// napTender is the name of the kind of a tender of a shift.
+func napTender(k string) string {
+	switch k {
+	case "PAYMENT":
+		return "Payment"
+	case "REFUND":
+		return "Refund"
+	}
+	return k
+}
+
+// napOr is the name, or the words for "none" when there is no name.
+func napOr(name, none string) string {
+	if name == "" {
+		return none
+	}
+	return name
+}
+
+// napCell is the net of a row of the corrections; a payment is money, it has no net.
+func napCell(m func(string) string, x reports.CorrectionRow) string {
+	if x.PaymentMethod != "" {
+		return "-"
+	}
+	return m(x.Net)
+}
+
+func napGroups(gs []reports.CancellationGroup, m func(string) string, name func(string) string) [][]string {
 	rows := make([][]string, 0, len(gs))
 	for _, x := range gs {
-		rows = append(rows, []string{x.Key, strconv.Itoa(x.Events), strconv.Itoa(x.Rooms), strconv.Itoa(x.Nights), m(x.Value)})
+		rows = append(rows, []string{name(x.Key), strconv.Itoa(x.Events), strconv.Itoa(x.Rooms), strconv.Itoa(x.Nights), m(x.Value)})
 	}
 	return rows
 }
@@ -92,21 +193,18 @@ func (s *Service) CancellationsPDF(ctx context.Context, propertyID int64, in rep
 	for _, sec := range []struct {
 		title string
 		gs    []reports.CancellationGroup
-	}{{"By kind", rep.ByKind}, {"By reason", rep.ByReason}, {"By source", rep.BySource}, {"By company", rep.ByCompany}} {
+		name  func(string) string
+	}{
+		{"By kind", rep.ByKind, napKind},
+		{"By reason", rep.ByReason, func(k string) string { return napOr(k, "No reason") }},
+		{"By source", rep.BySource, func(k string) string { return napOr(napSource(k), "No source") }},
+		{"By company", rep.ByCompany, func(k string) string { return napOr(k, "No company") }},
+	} {
 		if len(sec.gs) == 0 {
 			continue
 		}
 		g.section(sec.title)
-		kinds := sec.gs
-		g.table([]col{{80, "", "L"}, {25, "Events", "R"}, {25, "Rooms", "R"}, {25, "Nights", "R"}, {25, "Value lost", "R"}}, func() [][]string {
-			out := napGroups(kinds, m)
-			if sec.title == "By kind" {
-				for i := range out {
-					out[i][0] = napKind(out[i][0])
-				}
-			}
-			return out
-		}())
+		g.table([]col{{80, "", "L"}, {25, "Events", "R"}, {25, "Rooms", "R"}, {25, "Nights", "R"}, {25, "Value lost", "R"}}, napGroups(sec.gs, m, sec.name))
 	}
 	pdf, err := g.bytes()
 	return Document{Filename: "cancellations-" + rep.From.String() + "-" + rep.To.String() + ".pdf", PDF: pdf}, err
@@ -148,7 +246,7 @@ func (s *Service) GuestLedgerPDF(ctx context.Context, propertyID int64, asOf *ci
 	m := napMoney(l, dc.decimals)
 	g := newPage(dc.hotel, l, "GUEST LEDGER", dc.printed)
 	g.title("GUEST LEDGER", l.Date(rep.AsOf))
-	g.pairs([][2]string{{"As of", l.Date(rep.AsOf)}, {"Currency", dc.prop.CurrencyCode}, {"Deposit release", rep.ReleaseMode}, {"Balance", m(rep.Balance)}})
+	g.pairs([][2]string{{"As of", l.Date(rep.AsOf)}, {"Currency", dc.prop.CurrencyCode}, {"Deposit release", napReleaseMode(rep.ReleaseMode)}, {"Balance", m(rep.Balance)}})
 	g.section("Folios")
 	rows := make([][]string, 0, len(rep.Rows)+1)
 	for _, x := range rep.Rows {
@@ -187,7 +285,7 @@ func (s *Service) DepositLedgerPDF(ctx context.Context, propertyID int64, asOf *
 	m := napMoney(l, dc.decimals)
 	g := newPage(dc.hotel, l, "DEPOSIT LEDGER", dc.printed)
 	g.title("DEPOSIT LEDGER", l.Date(rep.AsOf))
-	g.pairs([][2]string{{"As of", l.Date(rep.AsOf)}, {"Currency", dc.prop.CurrencyCode}, {"Deposit release", rep.ReleaseMode}, {"Closing", m(rep.Closing)}})
+	g.pairs([][2]string{{"As of", l.Date(rep.AsOf)}, {"Currency", dc.prop.CurrencyCode}, {"Deposit release", napReleaseMode(rep.ReleaseMode)}, {"Closing", m(rep.Closing)}})
 	g.section("Folios")
 	rows := make([][]string, 0, len(rep.Rows)+1)
 	for _, x := range rep.Rows {
@@ -202,10 +300,10 @@ func (s *Service) DepositLedgerPDF(ctx context.Context, propertyID int64, asOf *
 	return Document{Filename: "deposit-ledger-" + rep.AsOf.String() + ".pdf", PDF: pdf}, err
 }
 
-func napTotals(ts []reports.CorrectionTotal, m func(string) string) [][]string {
+func napTotals(ts []reports.CorrectionTotal, m func(string) string, name func(string) string) [][]string {
 	rows := make([][]string, 0, len(ts))
 	for _, x := range ts {
-		rows = append(rows, []string{x.Key, strconv.Itoa(x.Count), m(x.Net), m(x.Gross)})
+		rows = append(rows, []string{name(x.Key), strconv.Itoa(x.Count), m(x.Net), m(x.Gross)})
 	}
 	return rows
 }
@@ -243,18 +341,34 @@ func (s *Service) CorrectionsPDF(ctx context.Context, propertyID int64, in repor
 		if x.ApprovedBy != "" {
 			by += " / " + x.ApprovedBy
 		}
-		rows = append(rows, []string{l.Date(x.BusinessDate), x.Kind, ref, x.Description, m(x.Net), m(x.Gross), x.Reason, by})
+		item := x.ChargeCodeName
+		if x.PaymentMethod != "" {
+			item = napMethod(x.PaymentMethod)
+		}
+		rows = append(rows, []string{l.Date(x.BusinessDate), napCorrKind(x.Kind), ref, item, x.Description, napCell(m, x), m(x.Gross), x.Reason, by})
 	}
-	g.table([]col{{16, "Date", "L"}, {19, "Kind", "L"}, {22, "Reference", "L"}, {36, "Description", "L"}, {20, "Net", "R"}, {20, "Gross", "R"}, {23, "Reason", "L"}, {24, "By", "L"}}, rows)
+	g.table([]col{{15, "Date", "L"}, {17, "Kind", "L"}, {20, "Reference", "L"}, {24, "Item", "L"}, {26, "Description", "L"}, {17, "Net", "R"}, {18, "Gross", "R"}, {22, "Reason", "L"}, {21, "By", "L"}}, rows)
+	// The totals are two: the revenue the events reduced or gave away (the ledger items) and the money that was cancelled or given back (the payment voids and the refunds, which are not revenue).
+	g.section("Totals")
+	g.table([]col{{80, "", "L"}, {20, "Count", "R"}, {20, "Net", "R"}, {20, "Service", "R"}, {20, "Tax", "R"}, {20, "Gross", "R"}}, [][]string{
+		{"Revenue reduced", strconv.Itoa(rep.Reduced.Count), m(rep.Reduced.Net), m(rep.Reduced.Service), m(rep.Reduced.Tax), m(rep.Reduced.Gross)},
+		{"Money cancelled or returned", strconv.Itoa(rep.MoneyBack.Count), "-", "-", "-", m(rep.MoneyBack.Amount)},
+	})
 	for _, sec := range []struct {
 		title string
 		ts    []reports.CorrectionTotal
-	}{{"By kind", rep.ByKind}, {"By reason", rep.ByReason}, {"By user", rep.ByUser}, {"By outlet", rep.ByOutlet}} {
+		name  func(string) string
+	}{
+		{"By kind", rep.ByKind, napCorrKind},
+		{"By reason", rep.ByReason, func(k string) string { return napOr(k, "No reason") }},
+		{"By user", rep.ByUser, func(k string) string { return k }},
+		{"By outlet", rep.ByOutlet, func(k string) string { return napOr(k, "Hotel folios") }},
+	} {
 		if len(sec.ts) == 0 {
 			continue
 		}
 		g.section(sec.title)
-		g.table([]col{{90, "", "L"}, {30, "Count", "R"}, {30, "Net", "R"}, {30, "Gross", "R"}}, napTotals(sec.ts, m))
+		g.table([]col{{90, "", "L"}, {30, "Count", "R"}, {30, "Net", "R"}, {30, "Gross", "R"}}, napTotals(sec.ts, m, sec.name))
 	}
 	pdf, err := g.bytes()
 	return Document{Filename: "corrections-" + rep.From.String() + "-" + rep.To.String() + ".pdf", PDF: pdf}, err
@@ -298,7 +412,7 @@ func (s *Service) ZReportsPDF(ctx context.Context, propertyID int64, day civil.D
 		if len(b.Tenders) > 0 {
 			tr := make([][]string, 0, len(b.Tenders))
 			for _, t := range b.Tenders {
-				tr = append(tr, []string{t.Method, t.Kind, strconv.Itoa(t.Count), m(t.Amount)})
+				tr = append(tr, []string{napMethod(t.Method), napTender(t.Kind), strconv.Itoa(t.Count), m(t.Amount)})
 			}
 			g.table([]col{{70, "Method", "L"}, {40, "Kind", "L"}, {20, "Count", "R"}, {50, "Amount", "R"}}, tr)
 		}
@@ -324,7 +438,7 @@ func (s *Service) ZReportsPDF(ctx context.Context, propertyID int64, day civil.D
 	g.section("Takings by method")
 	tk := make([][]string, 0, len(rep.Takings))
 	for _, x := range rep.Takings {
-		tk = append(tk, []string{x.Method, m(x.OnShift), m(x.OffShift), m(x.Total), m(x.CashierReport), m(x.Difference)})
+		tk = append(tk, []string{napMethod(x.Method), m(x.OnShift), m(x.OffShift), m(x.Total), m(x.CashierReport), m(x.Difference)})
 	}
 	g.table([]col{{40, "Method", "L"}, {28, "On a shift", "R"}, {28, "Outside a shift", "R"}, {28, "Total", "R"}, {28, "Cashier report", "R"}, {28, "Difference", "R"}}, tk)
 	napReconciled(g, rep.Reconciled)

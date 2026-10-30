@@ -101,6 +101,10 @@ func TestDailyFlashOfTheOpenDayIsInterim(t *testing.T) {
 	if !r.Interim || r.Control != nil {
 		t.Fatalf("interim %v control %v", r.Interim, r.Control)
 	}
+	// Nobody has left: the average length of stay is not zero, there is nothing to average, so the cells are blank and the screens print a dash.
+	if a := flashRow(t, r.Rooms, "alos"); a.Today != "" || a.MTD != "" || a.LastMonth != "" || a.LastYear != "" || a.YTD != "" {
+		t.Fatalf("alos without a departure: %+v", a)
+	}
 	_, err = f.Reports.DailyFlash(f.admin, f.propID, d("2030-01-01"))
 	wantCode(t, err, "BUSINESS_DAY_NOT_FOUND")
 }

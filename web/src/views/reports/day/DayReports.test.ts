@@ -146,6 +146,47 @@ describe('the daily flash report', () => {
   })
 })
 
+describe('the daily flash in Indonesian and without a budget', () => {
+  beforeEach(() => {
+    GET = vi.fn()
+    openPdf = vi.fn()
+  })
+
+  it('shows the methods and the rows by name, the revenue as one table, a dash for the ALOS of a day nobody left and no budget columns', async () => {
+    GET = vi.fn(async () => ({
+      data: flash({
+        activity: [line('alos', 'ALOS', { kind: 'RATIO', today: null, mtd: null, last_month: null, last_year: null, ytd: null }), line('arrivals_tomorrow', 'Arrivals tomorrow', { kind: 'COUNT', today: '4' })],
+        payments: { by_cashier: [], by_method: [line('method:CASH', 'Cash', { today: '1000' }), line('method:CARD', 'Card', { today: '500' }), line('method:BANK_TRANSFER', 'Bank transfer', { today: '700' })], gtp: line('gtp', 'GTP', { today: '2200' }), refunds: [line('refund:QRIS', 'QRIS', { today: '-100' })], refunds_total: line('refunds_total', 'Refunds'), to_city_ledger: line('to_city_ledger', 'City ledger') },
+      }),
+    }))
+    const w = await setup(DailyFlashView, '/reports/daily-flash')
+    setLocale('id')
+    await flushPromises()
+    const text = w.text()
+    expect(text).toContain('Tunai')
+    expect(text).toContain('Kartu')
+    expect(text).toContain('Transfer bank')
+    expect(text).not.toMatch(/CASH|CARD|BANK_TRANSFER/)
+    expect(w.get('[data-testid=flash-row-arrivals_tomorrow]').text()).toContain('Datang besok')
+    expect(w.get('[data-testid=flash-row-alos]').text()).toContain('–')
+    expect(w.get('[data-testid=flash-row-alos]').text()).not.toMatch(/\d/)
+    // no budget: neither the budget nor the variance column, in any table, and the revenue is ONE table with one total row per group
+    expect(text).not.toContain('Anggaran')
+    expect(w.findAll('[data-testid=flash-revenue-table]')).toHaveLength(1)
+    expect(w.findAll('[data-testid=flash-revenue-table] thead')).toHaveLength(1)
+    for (const g of ['A', 'B', 'C']) expect(w.findAll(`[data-testid=flash-group-total-${g}]`)).toHaveLength(1)
+    expect(w.findAll('[data-testid=flash-revenue-table] thead th')).toHaveLength(6)
+    setLocale('en')
+  })
+
+  it('shows the budget and the variance columns in the revenue table when the property has a budget', async () => {
+    GET = vi.fn(async () => ({ data: flash({ has_budget: true }) }))
+    const w = await setup(DailyFlashView, '/reports/daily-flash')
+    expect(w.findAll('[data-testid=flash-revenue-table] thead th')).toHaveLength(8)
+    expect(w.get('[data-testid=flash-revenue-table] thead').text()).toContain('Budget')
+  })
+})
+
 describe('the other reports of the day', () => {
   beforeEach(() => {
     GET = vi.fn()
@@ -213,11 +254,12 @@ describe('the other reports of the day', () => {
   })
 
   it('lists the corrections by kind, folio and POS, with the share of the revenue', async () => {
-    const row = (kind: string, over: Record<string, unknown> = {}) => ({ business_date: '2026-10-28', at: '2026-10-28T09:14:00Z', kind, folio: '', reservation: '', bill: '', outlet: '', charge_code: 'MB', department: '', description: 'Minibar', original_item_id: null, original_date: null, net: '-250000', service: '-25000', tax: '-27500', gross: '-302500', reason: 'Wrong room', done_by: 'Dewi', approved_by: 'Rina', ...over })
+    const row = (kind: string, over: Record<string, unknown> = {}) => ({ business_date: '2026-10-28', at: '2026-10-28T09:14:00Z', kind, folio: '', reservation: '', bill: '', outlet: '', charge_code: 'MB', charge_code_name: 'Minibar sales', payment_method: '', department: '', description: 'Minibar', original_item_id: null, original_date: null, net: '-250000', service: '-25000', tax: '-27500', gross: '-302500', reason: 'Wrong room', done_by: 'Dewi', approved_by: 'Rina', ...over })
     const data = {
       from: '2026-10-23', to: '2026-10-29', kind: 'ALL', revenue_taken_back: '1161000', net_revenue: '139480000', share_percent: '0.83',
       rows: [row('VOID', { folio: 'F-10231' }), row('COMP', { bill: 'B-3402', outlet: 'Bar', net: '0', gross: '0' }), row('POS_VOID', { bill: 'B-3410', outlet: 'Restoran' })],
-      by_kind: [{ key: 'VOID', count: 1, net: '-250000', gross: '-302500' }], by_reason: [], by_user: [{ key: 'Dewi', count: 3, net: '-500000', gross: '-605000' }], by_outlet: [{ key: 'Bar', count: 1, net: '0', gross: '0' }],
+      by_kind: [{ key: 'VOID', count: 1, net: '-250000', gross: '-302500' }], by_reason: [], by_user: [{ key: 'Dewi', count: 3, net: '-500000', gross: '-605000' }], by_outlet: [{ key: 'Bar', count: 1, net: '0', gross: '0' }, { key: '', count: 2, net: '-500000', gross: '-605000' }],
+      reduced: { count: 3, net: '-500000', service: '-50000', tax: '-55000', gross: '-605000' }, money_back: { count: 0, amount: '0' },
     }
     GET = vi.fn(async () => ({ data }))
     const w = await setup(CorrectionsView, '/reports/corrections')
@@ -227,18 +269,68 @@ describe('the other reports of the day', () => {
     expect(w.get('[data-testid=co-row-1]').text()).toContain('B-3402')
     expect(w.get('[data-testid=co-portion]').text()).toBe('0.83%')
     expect(w.get('[data-testid=co-taken-back]').text()).toBe('1,161,000')
+    // the charge is named, its code is not on the screen; an empty outlet is the hotel folios
+    expect(w.get('[data-testid=co-row-0]').text()).toContain('Minibar sales')
+    expect(w.get('[data-testid=co-row-0]').text()).not.toContain('MB')
+    expect(w.get('[data-testid=co-by_outlet]').text()).toContain('Hotel folios')
+  })
+
+  it('shows a void and a refund of a payment as money that went back, negative, apart from the revenue that was reduced', async () => {
+    const row = (kind: string, over: Record<string, unknown> = {}) => ({ business_date: '2026-10-28', at: '2026-10-28T09:14:00Z', kind, folio: 'F-10231', reservation: '', bill: '', outlet: '', charge_code: '', charge_code_name: '', payment_method: '', department: '', description: 'Payment', original_item_id: null, original_date: null, net: '0', service: '0', tax: '0', gross: '0', reason: 'Wrong amount', done_by: 'Dewi', approved_by: '', ...over })
+    const data = {
+      from: '2026-10-23', to: '2026-10-29', kind: 'ALL', revenue_taken_back: '250000', net_revenue: '139480000', share_percent: '0.18',
+      rows: [row('VOID', { charge_code: 'MB', charge_code_name: 'Minibar sales', net: '-250000', gross: '-250000' }), row('VOID', { payment_method: 'CARD', gross: '-1000' }), row('REFUND', { payment_method: 'CASH', gross: '-50000' })],
+      by_kind: [], by_reason: [], by_user: [], by_outlet: [],
+      reduced: { count: 1, net: '-250000', service: '0', tax: '0', gross: '-250000' }, money_back: { count: 2, amount: '-51000' },
+    }
+    GET = vi.fn(async () => ({ data }))
+    const w = await setup(CorrectionsView, '/reports/corrections')
+    expect(w.get('[data-testid=co-kind-0]').text()).toBe('Void')
+    expect(w.get('[data-testid=co-kind-1]').text()).toBe('Payment void')
+    expect(w.get('[data-testid=co-kind-2]').text()).toBe('Refund')
+    // a payment shows its method by name (never CARD / CASH) and no net, service or tax
+    expect(w.get('[data-testid=co-row-1]').text()).toContain('Card')
+    expect(w.get('[data-testid=co-row-1]').text()).not.toContain('CARD')
+    expect(w.get('[data-testid=co-row-2]').text()).toContain('Cash')
+    expect(w.get('[data-testid=co-row-1]').text()).toContain('-1,000')
+    expect(w.get('[data-testid=co-row-2]').text()).toContain('-50,000')
+    // two totals, not one: the revenue that was reduced, and the money that was cancelled or returned
+    expect(w.get('[data-testid=co-reduced]').text()).toContain('Revenue reduced')
+    expect(w.get('[data-testid=co-reduced]').text()).toContain('-250,000')
+    expect(w.get('[data-testid=co-money-back]').text()).toContain('Money cancelled or returned')
+    expect(w.get('[data-testid=co-money-back]').text()).toContain('-51,000')
+  })
+
+  it('names the sources and the missing values in Indonesian, with no code of the server on the screen', async () => {
+    const data = {
+      from: '2026-10-23', to: '2026-10-29', kind: 'ALL', fees_posted: '0', fee_count: 0, deposits_held: '0',
+      events: [event({ confirmation_number: 'RSV-1', source: 'PHONE', reason: '' }), event({ confirmation_number: 'RSV-2', source: 'WALK_IN', company: 'PT Maju' })],
+      by_kind: [], by_reason: [{ key: '', events: 2, rooms: 2, nights: 4, value: '0' }], by_source: [{ key: 'PHONE', events: 1, rooms: 1, nights: 2, value: '0' }, { key: '', events: 1, rooms: 1, nights: 2, value: '0' }], by_company: [{ key: '', events: 1, rooms: 1, nights: 2, value: '0' }],
+    }
+    GET = vi.fn(async () => ({ data }))
+    const w = await setup(CancellationsView, '/reports/cancellations')
+    expect(w.get('[data-testid=cx-by_source]').text()).toContain('Phone')
+    expect(w.get('[data-testid=cx-by_source]').text()).toContain('No source')
+    expect(w.get('[data-testid=cx-by_company]').text()).toContain('No company')
+    expect(w.text()).not.toMatch(/PHONE|WALK_IN/)
+    setLocale('id')
+    await flushPromises()
+    expect(w.get('[data-testid=cx-by_source]').text()).toContain('Telepon')
+    expect(w.get('[data-testid=cx-by_company]').text()).toContain('Tanpa perusahaan')
+    expect(w.text()).not.toMatch(/PHONE|WALK_IN/)
+    setLocale('en')
   })
 
   it('shows the Z report with the X shift marked and the check against the cashier report', async () => {
     const block = (kind: string, number: string, over: Record<string, unknown> = {}) => ({
       kind, shift_id: 1, number, drawer: 'FO-1', cashier: 'Dewi', opened_at: '2026-10-28T07:00:00Z', closed_at: kind === 'Z' ? '2026-10-28T15:05:00Z' : null, business_date_opened: '2026-10-28', business_date_closed: null,
-      opening_float: '2000000', cash_payments: '6450000', cash_refunds: '0', cash_receipts: '0', voided_after_close: '0', pay_ins: '0', pay_outs: '-5150000', drops: '0', expected_cash: '3300000', counted_cash: kind === 'Z' ? '3300000' : null, over_short: kind === 'Z' ? '0' : null,
+      opening_float: '2000000', cash_payments: '6450000', cash_refunds: '125000', cash_receipts: '0', voided_after_close: '0', pay_ins: '0', pay_outs: '-5150000', drops: '0', expected_cash: '3300000', counted_cash: kind === 'Z' ? '3300000' : null, over_short: kind === 'Z' ? '0' : null,
       variance_reason: '', closed_by: '', approved_by: '', handed_over_to: '', tenders: [{ method: 'CARD', kind: 'PAYMENT', count: 3, amount: '38400000' }], total_takings: '0', ...over,
     })
     const drawer = { drawer: '', shifts: 2, opening_float: '4000000', cash_payments: '7550000', cash_refunds: '0', cash_receipts: '0', voided_after_close: '0', pay_ins: '0', pay_outs: '0', drops: '0', expected_cash: '6400000', counted_cash: null, over_short: null, total_takings: '0' }
     const data = {
       date: '2026-10-28', blocks: [block('Z', 'S-0412'), block('X', 'S-0415', { shift_id: 2 })], drawers: [], property: drawer, cash_off_shift: '0', voided_after_close: '0', reconciled: false,
-      takings: [{ method: 'CASH', on_shift: '16330000', off_shift: '0', total: '16330000', cashier_report: '16000000', difference: '330000' }],
+      takings: [{ method: 'CASH', on_shift: '16330000', off_shift: '0', total: '16330000', cashier_report: '16000000', difference: '330000' }, { method: 'QRIS', on_shift: '300000', off_shift: '20000', total: '320000', cashier_report: '320000', difference: '0' }],
     }
     GET = vi.fn(async () => ({ data }))
     const w = await setup(ZReportsView, '/reports/z-reports', ['report.view', 'cashier.shift_manage'])
@@ -248,6 +340,14 @@ describe('the other reports of the day', () => {
     expect(w.find('[data-testid=z-open-note]').exists()).toBe(true)
     expect(w.get('[data-testid=reconciled]').text()).toBe('Differs')
     expect(w.get('[data-testid=z-taking-CASH]').text()).toContain('330,000')
+    // the formula of the expected cash is on the page, with the column of the cash refunds in it
+    expect(w.get('[data-testid=z-refund-S-0412]').text()).toBe('125,000')
+    expect(w.get('[data-testid=z-formula]').text()).toContain('cash refunds')
+    // methods by name, never by their code
+    expect(w.get('[data-testid=z-taking-CASH]').text()).toContain('Cash')
+    expect(w.get('[data-testid=z-taking-QRIS]').text()).toContain('QRIS')
+    expect(w.get('[data-testid=z-row-S-0412]').text()).toContain('Card')
+    expect(w.get('[data-testid=z-row-S-0412]').text()).not.toContain('CARD')
   })
 
   it('needs the permission to manage the cashier shifts for the Z report, and says which', async () => {

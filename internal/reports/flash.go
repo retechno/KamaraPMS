@@ -270,6 +270,9 @@ func (f *flash) rooms(out *DailyFlash, bm budgetMonth) error {
 	arrAll := v(func(i int) decimal.Decimal { return ratio(days[i].roomNet, roomNights(i), f.decimals) })
 	revpar := v(func(i int) decimal.Decimal { return ratio(days[i].roomNet, dInt(days[i].available()), f.decimals) })
 	alos := v(func(i int) decimal.Decimal { return ratio(dInt(int(outs[i].Nights)), dInt(int(outs[i].Stays)), 2) })
+	for i := range alos.blank { // no departure in the range: the average is not zero, there is nothing to average
+		alos.blank[i] = outs[i].Stays == 0
+	}
 
 	budget := f.statBudget(bm)
 	out.Rooms = []FlashLine{

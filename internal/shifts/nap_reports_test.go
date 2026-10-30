@@ -15,6 +15,10 @@ import (
 //	FRONT, cashier A: float 100,000, cash 400,000, a card of 50,000, a drop of 300,000; counted 200,000 = expected 100,000 + 400,000 - 300,000; closed (Z)
 //	BACK, cashier B:  float  50,000, cash 100,000, a pay-out of 20,000; still open (X): expected 50,000 + 100,000 - 20,000 = 130,000, nothing counted
 //	cash of 30,000 taken by the front office with no shift (the rule is off for the moment)
+//	a card of 20,000 taken by the administrator, who has no shift open
+//
+// The card is not drawer cash and carries no shift: it is on a shift when its cashier had one open at the time (cashier A's 50,000, which is also the tender of the FRONT block), and outside a shift
+// when not (the administrator's 20,000). Both sides are shown, and the cashier report says 70,000.
 //
 // The property: 2 shifts, float 150,000, cash 500,000 on shifts, drops 300,000, pay-outs 20,000, expected 330,000, counted 200,000 (the closed shift only), over/short 0. Taken on the day: cash 400,000 +
 // 100,000 + 30,000 = 530,000 (30,000 of it not on a shift), card 50,000; the cashier report says the same, so the report is reconciled.
@@ -42,6 +46,8 @@ func TestTheZReportOfAllDrawers(t *testing.T) {
 	_, err = f.Pool.Exec(context.Background(), `UPDATE property_cashier_settings SET require_shift_for_cash = false WHERE property_id = $1`, f.propID)
 	must(t, err)
 	_, err = f.pay(f.admin, folio, "off", "CASH", "30000")
+	must(t, err)
+	_, err = f.pay(f.admin, folio, "offcard", "CARD", "20000")
 	must(t, err)
 
 	z, err := f.Reports.ZReports(f.admin, f.propID, day)
@@ -79,8 +85,12 @@ func TestTheZReportOfAllDrawers(t *testing.T) {
 	if c := by["CASH"]; c.OnShift != "500000" || c.OffShift != "30000" || c.Total != "530000" || c.CashierReport != "530000" || c.Difference != "0" {
 		t.Fatalf("cash: %+v", c)
 	}
-	if c := by["CARD"]; c.Total != "50000" || c.CashierReport != "50000" || c.Difference != "0" {
+	if c := by["CARD"]; c.OnShift != "50000" || c.OffShift != "20000" || c.Total != "70000" || c.CashierReport != "70000" || c.Difference != "0" {
 		t.Fatalf("card: %+v", c)
+	}
+	// the on-shift side is what the block prints as its tender: the same 50,000
+	if front.Tenders[0].Amount != by["CARD"].OnShift {
+		t.Fatalf("the card on a shift is the tender of the block: %+v vs %+v", front.Tenders, by["CARD"])
 	}
 
 	// the totals are the shift reports: the report of the drawer says the same as the Z report of the day

@@ -43,6 +43,17 @@ func TestTheDailyFlashAsPDFInEnglishAndIndonesian(t *testing.T) {
 			t.Errorf("closed flash lacks %q", want)
 		}
 	}
+	// The payment methods are printed by name, never as their codes; the property has no budget for the month, so the table has no budget and no variance column.
+	for _, want := range []string{"Cash"} {
+		if !strings.Contains(c, want) {
+			t.Errorf("closed flash lacks the method %q", want)
+		}
+	}
+	for _, not := range []string{"CASH", "CARD", "BANK_TRANSFER", "Budget MTD", "Variance MTD"} {
+		if strings.Contains(c, not) {
+			t.Errorf("closed flash has %q", not)
+		}
+	}
 
 	id, err := f.Docs.DailyFlashPDF(documents.WithLang(f.admin, documents.LangID), f.propID, date)
 	must(t, err)
@@ -50,6 +61,16 @@ func TestTheDailyFlashAsPDFInEnglishAndIndonesian(t *testing.T) {
 	for _, want := range []string{"LAPORAN FLASH HARIAN", "STATISTIK KAMAR", "PENDAPATAN NETO", "KONTROL SALDO", "Disetujui oleh"} {
 		if !strings.Contains(i, want) {
 			t.Errorf("Indonesian flash lacks %q", want)
+		}
+	}
+	for _, want := range []string{"Tunai"} {
+		if !strings.Contains(i, want) {
+			t.Errorf("Indonesian flash lacks the method %q", want)
+		}
+	}
+	for _, not := range []string{"Arrivals tomorrow", "Cash", "Card", "Anggaran MTD"} {
+		if strings.Contains(i, not) {
+			t.Errorf("Indonesian flash has %q", not)
 		}
 	}
 }
