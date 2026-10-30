@@ -27,7 +27,7 @@ watch(allowed, (ok) => {
 }, { immediate: true })
 
 const report = computed(() => data.value)
-const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-muted-foreground'
+const th = 'align-bottom px-2 py-2 text-[11px] font-medium uppercase text-muted-foreground'
 </script>
 
 <template>
@@ -66,7 +66,7 @@ const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-m
                 <td class="px-2 py-2 text-right">{{ b.counted_cash === null ? t('dayReports.z.notCounted') : money(b.counted_cash) }}</td>
                 <td :class="['px-2 py-2 text-right', b.over_short && Number(b.over_short) !== 0 && 'text-destructive']">{{ b.over_short === null ? '–' : money(b.over_short) }}</td>
                 <td class="px-2 py-2">{{ b.variance_reason }}<div v-if="b.approved_by" class="text-muted-foreground">{{ b.approved_by }}</div></td>
-                <td class="px-2 py-2"><div v-for="x in b.tenders" :key="`${x.method}-${x.kind}`">{{ methodName(x.method) }}{{ x.kind === 'REFUND' ? ` (${t('dayReports.z.refund')})` : '' }} {{ formatMoney(x.amount) }}</div></td>
+                <td class="whitespace-nowrap px-2 py-2"><div v-for="x in b.tenders" :key="`${x.method}-${x.kind}`">{{ methodName(x.method) }}{{ x.kind === 'REFUND' ? ` (${t('dayReports.z.refund')})` : '' }} {{ formatMoney(x.amount) }}</div></td>
               </tr>
             </tbody>
             <tfoot>
