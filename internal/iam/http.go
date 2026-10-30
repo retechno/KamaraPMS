@@ -92,11 +92,17 @@ func (h *Handler) setRefreshCookie(w http.ResponseWriter, s Session) {
 		Value:    s.RefreshToken,
 		Path:     refreshCookiePath,
 		Expires:  s.RefreshExpiresAt,
-		MaxAge:   int(time.Until(s.RefreshExpiresAt).Seconds()),
+		MaxAge:   refreshCookieMaxAge(s.RefreshExpiresAt, h.svc.clock.Now()),
 		HttpOnly: true,
 		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteStrictMode,
 	})
+}
+
+// refreshCookieMaxAge is the seconds left from now (the injected clock, never the wall clock) until the refresh token expires. Like Expires it is measured against the
+// service's own instants, so a test with a fake clock gets the same cookie on any day.
+func refreshCookieMaxAge(expires, now time.Time) int {
+	return int(expires.Sub(now).Seconds())
 }
 
 func (h *Handler) clearRefreshCookie(w http.ResponseWriter) {
