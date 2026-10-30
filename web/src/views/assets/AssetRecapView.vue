@@ -87,11 +87,11 @@ const th = 'px-1.5 py-2 text-right text-[11px] font-medium uppercase leading-tig
 <template>
   <section class="flex flex-col gap-4" data-testid="asset-recap">
     <PageHeader :title="t('assets.reports.kind.recap.name')" :description="t('assets.reports.recap.intro')">
-      <div class="flex flex-wrap items-center gap-2 print:hidden">
+      <template #actions>
         <Button as-child variant="outline" size="sm"><RouterLink to="/assets/reports">{{ t('assets.reports.back') }}</RouterLink></Button>
         <Button variant="outline" size="sm" data-testid="print" @click="print">{{ t('assets.reports.print') }}</Button>
         <Button variant="outline" size="sm" data-testid="export" :disabled="!report" @click="csv">{{ t('assets.reports.csv') }}</Button>
-      </div>
+      </template>
     </PageHeader>
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>
