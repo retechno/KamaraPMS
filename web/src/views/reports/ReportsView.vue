@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import EmptyState from '@/components/app/EmptyState.vue'
@@ -29,6 +30,15 @@ const busy = ref(false)
 const pid = computed(() => property.currentId)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const allowed = computed(() => auth.can('report.view', pid.value))
+// The reports of the day and of the night audit pack (doc 38) have a screen of their own; the Z report needs the cashier permission too.
+const dayReports = computed(() => [
+  { to: '/reports/daily-flash', key: 'flash' },
+  { to: '/reports/cancellations', key: 'cancellations' },
+  { to: '/reports/guest-ledger', key: 'guestLedger' },
+  { to: '/reports/deposit-ledger', key: 'depositLedger' },
+  { to: '/reports/corrections', key: 'corrections' },
+  ...(auth.can('cashier.shift_manage', pid.value) ? [{ to: '/reports/z-reports', key: 'z' }] : []),
+] as const)
 const def = computed<ReportDef>(() => reports.find((r) => r.key === key.value) ?? reports[0]!)
 const table = computed<Table | null>(() => (data.value ? def.value.table(data.value as never) : null))
 
@@ -106,6 +116,18 @@ watch([key, pid], () => {
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('reports.noAccess', { permission: 'report.view' }) }}</p>
 
   <template v-else>
+    <Card class="mb-4 p-4" data-testid="day-reports">
+      <h2 class="mb-2 mt-0 text-sm font-semibold">{{ t('dayReports.hub.title') }}</h2>
+      <ul class="m-0 grid list-none gap-2 p-0 sm:grid-cols-2 lg:grid-cols-3">
+        <li v-for="r in dayReports" :key="r.key">
+          <RouterLink :to="r.to" class="block rounded-md border border-border px-3 py-2 text-sm hover:bg-accent/50" :data-testid="`day-report-${r.key}`">
+            <span class="font-medium">{{ t(`dayReports.hub.${r.key}` as 'dayReports.hub.flash') }}</span>
+            <span class="block text-xs text-muted-foreground">{{ t(`dayReports.hub.${r.key}Hint` as 'dayReports.hub.flashHint') }}</span>
+          </RouterLink>
+        </li>
+      </ul>
+    </Card>
+
     <Card class="mb-4">
       <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="run">
         <FormField class="w-72" :label="t('reports.report')">

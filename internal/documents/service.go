@@ -19,6 +19,7 @@ import (
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
+	"kamarapms/internal/reports"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/shifts"
 	"kamarapms/internal/taxfiling"
@@ -49,6 +50,8 @@ type Service struct {
 	taxInv *taxinvoice.Service
 	budget *budget.Service
 	shifts *shifts.Service
+	// reports is set by the application (SetReports): the daily flash report is printed from its figures.
+	reports *reports.Service
 	// banquet is set by the application (SetBanquet): the banquet is built after the documents.
 	banquet *banquet.Service
 	// assets is set by the application (SetAssets): the register prints its labels.

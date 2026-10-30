@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/reports/reportsdb"
+	"kamarapms/internal/shifts"
 	"kamarapms/internal/tenancy"
 )
 
@@ -22,6 +23,8 @@ type Service struct {
 	authz auth.Authorizer
 	days  *tenancy.Service
 	audit *nightaudit.Service
+	// shifts gives the Z report of each drawer (SetShifts).
+	shifts *shifts.Service
 }
 
 // NewService wires the service. audit is used only to compute the live summary of the open business day.
