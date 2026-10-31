@@ -1,12 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { toastText } from '@/test/toasts'
 import { ApiError } from '@/api/problem'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { setDisplayTimeZone } from '@/utils/format'
 import NightAuditView from './NightAuditView.vue'
 
 let GET = vi.fn()
@@ -60,6 +61,11 @@ describe('NightAuditView', () => {
   beforeEach(() => {
     GET = vi.fn()
     POST = vi.fn()
+  })
+
+  afterEach(() => {
+    setDisplayTimeZone(null)
+    setLocale('en')
   })
 
   it('lists every blocker with a way to resolve it and will not run', async () => {
@@ -249,6 +255,44 @@ describe('NightAuditView', () => {
     expect(text).toContain('2 / 0 / 1')
     expect(text).toContain('Payments CASH')
     expect(w.find('[data-testid=readiness]').exists()).toBe(false)
+  })
+
+  it('writes the figures of the closing summary with the separators of the language', async () => {
+    const big = { ...result, summary: { ...result.summary, occupancy_percent: '4.00', room_revenue: { net: '1035000', service: '0', tax: '0' }, adr: '1035000', revpar: '41400', payments_by_method: [{ method: 'CASH', payments: '1500000', refunds: '0', net: '1500000' }] } }
+    for (const [lang, money, percent] of [['en', '1,035,000', '4.00%'], ['id', '1.035.000', '4,00%']] as const) {
+      setLocale(lang)
+      const w = mountView()
+      POST = vi.fn().mockResolvedValue({ data: big })
+      await flushPromises()
+      await w.get('input[name=confirm_run]').setValue(true)
+      await w.get('[data-testid=run-audit]').trigger('click')
+      await flushPromises()
+      const text = w.get('[data-testid=summary]').text()
+      expect(text).toContain(money)
+      expect(text).toContain(percent)
+      expect(text).toContain(lang === 'en' ? '(4.00%)' : '(4,00%)') // the hint under the occupancy
+      expect(text).toContain(lang === 'en' ? '1,500,000' : '1.500.000') // a payment line
+      expect(text).toContain(lang === 'en' ? '41,400' : '41.400') // RevPAR
+      expect(text).not.toContain('1035000')
+      expect(text).not.toContain('41400')
+      w.unmount()
+    }
+  })
+
+  it('shows the times of the time guard on the wall clock of the property, not as an ISO text', async () => {
+    // Jayapura is UTC+9: neither the zone of the test machine nor the +07:00 offset that the server sent for the property time.
+    setDisplayTimeZone('Asia/Jayapura')
+    const early = { ...clean(), time_guard_ok: false, can_run: false, night_audit_allowed_from: '2026-09-30T13:00:00Z', property_local_time: '2026-09-30T20:30:00+07:00' }
+    const en = mountView(early)
+    await flushPromises()
+    expect(en.get('[data-testid=too-early]').text()).toBe('The business date cannot be closed before 30 Sep 2026 22:00. Property time: 30 Sep 2026 22:30.')
+    en.unmount()
+    setLocale('id')
+    const id = mountView(early)
+    await flushPromises()
+    const text = id.get('[data-testid=too-early]').text()
+    expect(text).toBe('Tanggal bisnis belum bisa ditutup sebelum 30 Sep 2026 22:00. Waktu properti: 30 Sep 2026 22:30.')
+    expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}T/)
   })
 
   it('speaks Indonesian', async () => {

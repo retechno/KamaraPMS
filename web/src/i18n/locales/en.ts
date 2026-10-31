@@ -781,7 +781,7 @@ export const en = {
     newDateIs: 'The business date is now',
     chargesPosted: '{n} room charge(s) posted.',
     occupied: 'Occupied',
-    occupiedValue: '{occupied} of {available} ({pct}%)',
+    occupiedValue: '{occupied} of {available} ({pct})',
     movements: 'Arrivals / departures / no-shows',
     revenue: 'Room revenue (net)',
     adr: 'ADR',

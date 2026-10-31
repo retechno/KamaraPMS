@@ -202,14 +202,14 @@ watch(pid, () => {
         <div class="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3" data-testid="summary">
           <KpiCard
             :label="t('nightAudit.occupied')"
-            :value="`${result.summary.occupancy_percent}%`"
-            :hint="t('nightAudit.occupiedValue', { occupied: result.summary.rooms.occupied, available: result.summary.rooms.total - result.summary.rooms.out_of_order, pct: result.summary.occupancy_percent })"
+            :value="$percent(result.summary.occupancy_percent)"
+            :hint="t('nightAudit.occupiedValue', { occupied: result.summary.rooms.occupied, available: result.summary.rooms.total - result.summary.rooms.out_of_order, pct: $percent(result.summary.occupancy_percent) })"
           />
           <KpiCard :label="t('nightAudit.movements')" :value="`${result.summary.arrivals} / ${result.summary.departures} / ${result.summary.no_shows}`" />
-          <KpiCard :label="t('nightAudit.revenue')" :value="result.summary.room_revenue.net" />
-          <KpiCard :label="t('nightAudit.adr')" :value="result.summary.adr" />
-          <KpiCard :label="t('nightAudit.revpar')" :value="result.summary.revpar" />
-          <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: m.method })" :value="m.net" />
+          <KpiCard :label="t('nightAudit.revenue')" :value="$money(result.summary.room_revenue.net)" />
+          <KpiCard :label="t('nightAudit.adr')" :value="$money(result.summary.adr)" />
+          <KpiCard :label="t('nightAudit.revpar')" :value="$money(result.summary.revpar)" />
+          <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: m.method })" :value="$money(m.net)" />
         </div>
         <div v-if="pack" class="mt-4 flex flex-wrap items-center gap-3 border-t pt-3 text-sm" data-testid="pack">
           <strong>{{ t('nightAudit.packTitle') }}</strong>
@@ -227,7 +227,7 @@ watch(pid, () => {
       <StepCard :step="1" :title="t('nightAudit.stepTime')" :state="preview.time_guard_ok ? 'ok' : 'blocked'" data-testid="guard">
         <p v-if="preview.time_guard_ok" class="m-0 text-sm">{{ t('nightAudit.timeOk') }}</p>
         <p v-else class="alert warning m-0" data-testid="too-early">
-          {{ t('nightAudit.tooEarly', { from: preview.night_audit_allowed_from, now: preview.property_local_time }) }}
+          {{ t('nightAudit.tooEarly', { from: $dateTime(preview.night_audit_allowed_from), now: $dateTime(preview.property_local_time) }) }}
         </p>
       </StepCard>
 
