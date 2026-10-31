@@ -167,9 +167,16 @@ func (s *Service) CancellationsPDF(ctx context.Context, propertyID int64, in rep
 	if err != nil {
 		return Document{}, err
 	}
+	g := newPage(dc.hotel, dc.lang, "CANCELLATIONS AND NO-SHOWS", dc.printed)
+	renderCancellations(g, dc, rep)
+	pdf, err := g.bytes()
+	return Document{Filename: "cancellations-" + rep.From.String() + "-" + rep.To.String() + ".pdf", PDF: pdf}, err
+}
+
+// renderCancellations prints the report on the page: the same body for the document of one report and for the section of the night audit pack.
+func renderCancellations(g *page, dc docContext, rep reports.CancellationReport) {
 	l := dc.lang
 	m := napMoney(l, dc.decimals)
-	g := newPage(dc.hotel, l, "CANCELLATIONS AND NO-SHOWS", dc.printed)
 	g.title("CANCELLATIONS AND NO-SHOWS", l.Date(rep.From)+" - "+l.Date(rep.To))
 	g.pairs([][2]string{
 		{"Period", l.Date(rep.From) + " - " + l.Date(rep.To)}, {"Currency", dc.prop.CurrencyCode},
@@ -206,8 +213,6 @@ func (s *Service) CancellationsPDF(ctx context.Context, propertyID int64, in rep
 		g.section(sec.title)
 		g.table([]col{{80, "", "L"}, {25, "Events", "R"}, {25, "Rooms", "R"}, {25, "Nights", "R"}, {25, "Value lost", "R"}}, napGroups(sec.gs, m, sec.name))
 	}
-	pdf, err := g.bytes()
-	return Document{Filename: "cancellations-" + rep.From.String() + "-" + rep.To.String() + ".pdf", PDF: pdf}, err
 }
 
 func napChecks(g *page, l Lang, m func(string) string, cs []reports.LedgerCheck) {
@@ -242,9 +247,16 @@ func (s *Service) GuestLedgerPDF(ctx context.Context, propertyID int64, asOf *ci
 	if err != nil {
 		return Document{}, err
 	}
+	g := newPage(dc.hotel, dc.lang, "GUEST LEDGER", dc.printed)
+	renderGuestLedger(g, dc, rep)
+	pdf, err := g.bytes()
+	return Document{Filename: "guest-ledger-" + rep.AsOf.String() + ".pdf", PDF: pdf}, err
+}
+
+// renderGuestLedger prints the report on the page: the same body for the document of one report and for the section of the night audit pack.
+func renderGuestLedger(g *page, dc docContext, rep reports.GuestLedgerReport) {
 	l := dc.lang
 	m := napMoney(l, dc.decimals)
-	g := newPage(dc.hotel, l, "GUEST LEDGER", dc.printed)
 	g.title("GUEST LEDGER", l.Date(rep.AsOf))
 	g.pairs([][2]string{{"As of", l.Date(rep.AsOf)}, {"Currency", dc.prop.CurrencyCode}, {"Deposit release", napReleaseMode(rep.ReleaseMode)}, {"Balance", m(rep.Balance)}})
 	g.section("Folios")
@@ -267,8 +279,6 @@ func (s *Service) GuestLedgerPDF(ctx context.Context, propertyID int64, asOf *ci
 	g.table([]col{{90, "Age (days)", "L"}, {40, "Folios", "R"}, {50, "Balance", "R"}}, ar)
 	napChecks(g, l, m, rep.Checks)
 	napReconciled(g, rep.Reconciled)
-	pdf, err := g.bytes()
-	return Document{Filename: "guest-ledger-" + rep.AsOf.String() + ".pdf", PDF: pdf}, err
 }
 
 // DepositLedgerPDF is the deposit ledger of a closed business date (report.view).
@@ -281,9 +291,16 @@ func (s *Service) DepositLedgerPDF(ctx context.Context, propertyID int64, asOf *
 	if err != nil {
 		return Document{}, err
 	}
+	g := newPage(dc.hotel, dc.lang, "DEPOSIT LEDGER", dc.printed)
+	renderDepositLedger(g, dc, rep)
+	pdf, err := g.bytes()
+	return Document{Filename: "deposit-ledger-" + rep.AsOf.String() + ".pdf", PDF: pdf}, err
+}
+
+// renderDepositLedger prints the report on the page: the same body for the document of one report and for the section of the night audit pack.
+func renderDepositLedger(g *page, dc docContext, rep reports.DepositLedgerReport) {
 	l := dc.lang
 	m := napMoney(l, dc.decimals)
-	g := newPage(dc.hotel, l, "DEPOSIT LEDGER", dc.printed)
 	g.title("DEPOSIT LEDGER", l.Date(rep.AsOf))
 	g.pairs([][2]string{{"As of", l.Date(rep.AsOf)}, {"Currency", dc.prop.CurrencyCode}, {"Deposit release", napReleaseMode(rep.ReleaseMode)}, {"Closing", m(rep.Closing)}})
 	g.section("Folios")
@@ -296,8 +313,6 @@ func (s *Service) DepositLedgerPDF(ctx context.Context, propertyID int64, asOf *
 	g.tableB([]col{{24, "Folio", "L"}, {40, "Owner", "L"}, {23, "Opening", "R"}, {23, "Received", "R"}, {23, "Applied", "R"}, {23, "Refunded", "R"}, {24, "Closing", "R"}}, rows, func(i int) bool { return i == last })
 	napChecks(g, l, m, rep.Checks)
 	napReconciled(g, rep.Reconciled)
-	pdf, err := g.bytes()
-	return Document{Filename: "deposit-ledger-" + rep.AsOf.String() + ".pdf", PDF: pdf}, err
 }
 
 func napTotals(ts []reports.CorrectionTotal, m func(string) string, name func(string) string) [][]string {
@@ -318,9 +333,16 @@ func (s *Service) CorrectionsPDF(ctx context.Context, propertyID int64, in repor
 	if err != nil {
 		return Document{}, err
 	}
+	g := newPage(dc.hotel, dc.lang, "VOIDS, CORRECTIONS AND DISCOUNTS", dc.printed)
+	renderCorrections(g, dc, rep)
+	pdf, err := g.bytes()
+	return Document{Filename: "corrections-" + rep.From.String() + "-" + rep.To.String() + ".pdf", PDF: pdf}, err
+}
+
+// renderCorrections prints the report on the page: the same body for the document of one report and for the section of the night audit pack.
+func renderCorrections(g *page, dc docContext, rep reports.CorrectionReport) {
 	l := dc.lang
 	m := napMoney(l, dc.decimals)
-	g := newPage(dc.hotel, l, "VOIDS, CORRECTIONS AND DISCOUNTS", dc.printed)
 	g.title("VOIDS, CORRECTIONS AND DISCOUNTS", l.Date(rep.From)+" - "+l.Date(rep.To))
 	share := "-"
 	if rep.SharePercent != nil {
@@ -370,8 +392,6 @@ func (s *Service) CorrectionsPDF(ctx context.Context, propertyID int64, in repor
 		g.section(sec.title)
 		g.table([]col{{90, "", "L"}, {30, "Count", "R"}, {30, "Net", "R"}, {30, "Gross", "R"}}, napTotals(sec.ts, m, sec.name))
 	}
-	pdf, err := g.bytes()
-	return Document{Filename: "corrections-" + rep.From.String() + "-" + rep.To.String() + ".pdf", PDF: pdf}, err
 }
 
 // ZReportsPDF is the Z report of all the drawers of a business date (report.view and cashier.shift_manage); an open shift is printed as an X report.
@@ -384,9 +404,16 @@ func (s *Service) ZReportsPDF(ctx context.Context, propertyID int64, day civil.D
 	if err != nil {
 		return Document{}, err
 	}
+	g := newPage(dc.hotel, dc.lang, "Z REPORT", dc.printed)
+	renderZReports(g, dc, rep)
+	pdf, err := g.bytes()
+	return Document{Filename: "z-reports-" + rep.Date.String() + ".pdf", PDF: pdf}, err
+}
+
+// renderZReports prints the report on the page: the same body for the document of one report and for the section of the night audit pack.
+func renderZReports(g *page, dc docContext, rep reports.ZReport) {
 	l := dc.lang
 	m := napMoney(l, dc.decimals)
-	g := newPage(dc.hotel, l, "Z REPORT", dc.printed)
 	g.title("Z REPORT", l.Date(rep.Date))
 	g.pairs([][2]string{{"Business date", l.Date(rep.Date)}, {"Currency", dc.prop.CurrencyCode}, {"Cash outside a shift", m(rep.CashOffShift)}, {"Voided after close", m(rep.VoidedAfterClose)}})
 	two := []col{{120, "", "L"}, {60, "Amount", "R"}}
@@ -442,8 +469,6 @@ func (s *Service) ZReportsPDF(ctx context.Context, propertyID int64, day civil.D
 	}
 	g.table([]col{{40, "Method", "L"}, {28, "On a shift", "R"}, {28, "Outside a shift", "R"}, {28, "Total", "R"}, {28, "Cashier report", "R"}, {28, "Difference", "R"}}, tk)
 	napReconciled(g, rep.Reconciled)
-	pdf, err := g.bytes()
-	return Document{Filename: "z-reports-" + rep.Date.String() + ".pdf", PDF: pdf}, err
 }
 
 // registerNap mounts the PDFs of the five reports. Each handler asks for its permission before it reads the query, as the JSON route does; the routes are written out so that the route tests read them.
