@@ -253,8 +253,28 @@ describe('NightAuditView', () => {
     const text = w.get('[data-testid=summary]').text()
     expect(text).toContain('2 of 3 (66.67%)')
     expect(text).toContain('2 / 0 / 1')
-    expect(text).toContain('Payments CASH')
+    expect(text).toContain('Payments Cash')
     expect(w.find('[data-testid=readiness]').exists()).toBe(false)
+  })
+
+  it('names the payments by the label of the method, not by its code', async () => {
+    const methods = { ...result, summary: { ...result.summary, payments_by_method: ['CASH', 'CARD', 'BANK_TRANSFER', 'QRIS', 'NEW_METHOD'].map((method) => ({ method, payments: '1', refunds: '0', net: '1' })) } }
+    for (const [lang, expected, notExpected] of [
+      ['en', ['Payments Cash', 'Payments Card', 'Payments Bank transfer', 'Payments QRIS', 'Payments NEW_METHOD'], ['Payments CASH', 'Payments CARD', 'Payments BANK_TRANSFER']],
+      ['id', ['Pembayaran Tunai', 'Pembayaran Kartu', 'Pembayaran Transfer bank', 'Pembayaran QRIS', 'Pembayaran NEW_METHOD'], ['Pembayaran CASH', 'Pembayaran CARD', 'Pembayaran BANK_TRANSFER']],
+    ] as const) {
+      setLocale(lang)
+      const w = mountView()
+      POST = vi.fn().mockResolvedValue({ data: methods })
+      await flushPromises()
+      await w.get('input[name=confirm_run]').setValue(true)
+      await w.get('[data-testid=run-audit]').trigger('click')
+      await flushPromises()
+      const text = w.get('[data-testid=summary]').text()
+      for (const e of expected) expect(text).toContain(e)
+      for (const n of notExpected) expect(text).not.toContain(n)
+      w.unmount()
+    }
   })
 
   it('writes the figures of the closing summary with the separators of the language', async () => {

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
+import { methodName } from '@/views/reports/day/dayLabels'
 import { openPdf } from '@/utils/documents'
 import { findingText } from '@/utils/findings'
 import { useAuthStore } from '@/stores/auth'
@@ -209,7 +210,7 @@ watch(pid, () => {
           <KpiCard :label="t('nightAudit.revenue')" :value="$money(result.summary.room_revenue.net)" />
           <KpiCard :label="t('nightAudit.adr')" :value="$money(result.summary.adr)" />
           <KpiCard :label="t('nightAudit.revpar')" :value="$money(result.summary.revpar)" />
-          <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: m.method })" :value="$money(m.net)" />
+          <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: methodName(m.method) })" :value="$money(m.net)" />
         </div>
         <div v-if="pack" class="mt-4 flex flex-wrap items-center gap-3 border-t pt-3 text-sm" data-testid="pack">
           <strong>{{ t('nightAudit.packTitle') }}</strong>
