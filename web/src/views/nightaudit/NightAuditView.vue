@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
+import { methodName } from '@/views/reports/day/dayLabels'
 import { openPdf } from '@/utils/documents'
 import { findingText } from '@/utils/findings'
 import { useAuthStore } from '@/stores/auth'
@@ -209,12 +210,16 @@ watch(pid, () => {
           <KpiCard :label="t('nightAudit.revenue')" :value="$money(result.summary.room_revenue.net)" />
           <KpiCard :label="t('nightAudit.adr')" :value="$money(result.summary.adr)" />
           <KpiCard :label="t('nightAudit.revpar')" :value="$money(result.summary.revpar)" />
-          <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: m.method })" :value="$money(m.net)" />
+          <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: methodName(m.method) })" :value="$money(m.net)" />
         </div>
         <div v-if="pack" class="mt-4 flex flex-wrap items-center gap-3 border-t pt-3 text-sm" data-testid="pack">
           <strong>{{ t('nightAudit.packTitle') }}</strong>
           <Badge :variant="pack.status === 'COMPLETE' ? 'success' : 'warning'" data-testid="pack-status">{{ pack.status === 'COMPLETE' ? t('nightAudit.packComplete') : t('nightAudit.packPartial') }}</Badge>
           <span class="text-muted-foreground">{{ t('nightAudit.packSections', { ok: packOk, n: pack.sections.length }) }} · {{ t('nightAudit.packBuilt', { ms: pack.build_ms }) }}</span>
+          <span class="text-muted-foreground" data-testid="pack-mail">
+            {{ pack.email_enabled ? t('nightAudit.packMailQueued', { n: pack.mail_queued + pack.mail_sent + pack.mail_failed }) : t('nightAudit.packMailOff') }}
+            <RouterLink v-if="can('nightaudit.pack_view')" to="/night-audit/archive" data-testid="pack-mail-link">{{ t('nightAudit.packOpen') }}</RouterLink>
+          </span>
           <span class="ml-auto flex gap-2">
             <Button variant="outline" size="sm" data-testid="pack-pdf" @click="packPdf">{{ t('nightAudit.packPdf') }}</Button>
             <Button variant="outline" size="sm" as-child><RouterLink to="/night-audit/archive" data-testid="pack-archive">{{ t('nightAudit.packOpen') }}</RouterLink></Button>
@@ -317,7 +322,7 @@ watch(pid, () => {
         </div>
       </StepCard>
 
-      <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || (preview.warnings.open_group_masters ?? []).length || (preview.warnings.group_masters_closed ?? []).length || preview.warnings.blocks_ending.length || (preview.warnings.pack_incomplete ?? []).length || (preview.warnings.outlet_bills ?? []).length || (preview.warnings.stock ?? []).length" class="mb-4" data-testid="warnings">
+      <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || (preview.warnings.open_group_masters ?? []).length || (preview.warnings.group_masters_closed ?? []).length || preview.warnings.blocks_ending.length || (preview.warnings.pack_incomplete ?? []).length || (preview.warnings.pack_delivery_failed ?? []).length || (preview.warnings.outlet_bills ?? []).length || (preview.warnings.stock ?? []).length" class="mb-4" data-testid="warnings">
         <CardHeader><CardTitle>{{ t('nightAudit.warnings') }} <small class="font-normal text-muted-foreground">{{ t('nightAudit.warningsNote') }}</small></CardTitle></CardHeader>
         <CardContent>
           <ul class="m-0 pl-5 text-sm">
@@ -340,6 +345,9 @@ watch(pid, () => {
             </li>
             <li v-for="d in preview.warnings.pack_incomplete ?? []" :key="d" :data-testid="`pack-incomplete-${d}`">
               {{ t('nightAudit.packIncomplete', { date: $date(d) }) }} <RouterLink v-if="can('nightaudit.pack_view')" to="/night-audit/archive">{{ t('nightAudit.packOpen') }}</RouterLink>
+            </li>
+            <li v-for="f in preview.warnings.pack_delivery_failed ?? []" :key="f.business_date" :data-testid="`pack-delivery-failed-${f.business_date}`">
+              {{ t('nightAudit.packDeliveryFailed', { date: $date(f.business_date), addresses: f.addresses.join(', ') }) }} <RouterLink v-if="can('nightaudit.pack_view')" to="/night-audit/archive">{{ t('nightAudit.packOpen') }}</RouterLink>
             </li>
             <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ t('nightAudit.blockEnds', { type: b.block_type, room: b.room, date: $date(b.end_date) }) }}</li>
           </ul>

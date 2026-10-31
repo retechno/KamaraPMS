@@ -4969,6 +4969,136 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/packs/{date}/deliveries:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: date, in: path, required: true, schema: { $ref: "#/components/schemas/Date" } }
+    get:
+      operationId: listNightAuditPackDeliveries
+      summary: The e-mail history of a pack, newest first (nightaudit.pack_view)
+      description: |
+        One row for each message: the address and the sections as they were queued, the part of a pack that was split by size, the state, the attempts, the last error, when it was sent and who queued it (the user who closed the day, or who sent it again). A message that was sent holds the SHA-256 of the PDF as the sender received it and the version of the renderer that drew it; the PDF itself is not kept. The address stays in the history after the recipient is deleted.
+      tags: [nightaudit]
+      responses:
+        "200":
+          description: The history.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackDeliveryList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/packs/{date}/resend:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: date, in: path, required: true, schema: { $ref: "#/components/schemas/Date" } }
+    post:
+      operationId: resendNightAuditPack
+      summary: Send a pack again to the recipients (nightaudit.pack_resend)
+      description: |
+        Queues one message for each active recipient, or for the ones in `recipient_ids`; only the sections of the recipient that hold data are sent (the failed ones are named in `sections_failed`). There is no one-off address: an address that is not a recipient is added first, which is audited. 409 `EMAIL_OFF` when the server has no mail host, 404 `PACK_NOT_FOUND`, 404 `PACK_RECIPIENT_NOT_FOUND` for an id that is not an active recipient, and 409 `PACK_ALREADY_QUEUED` for an address that has a message of this pack waiting (a double click queues once). Audited as `nap_pack.resent`.
+      tags: [nightaudit]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipient_ids: { type: array, items: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: What was queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackResendResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/pack-recipients:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listNightAuditPackRecipients
+      summary: The recipients of the night audit pack (nightaudit.pack_manage or nightaudit.pack_view)
+      description: |
+        The addresses that receive the pack after each night audit and the sections each one gets. `email_enabled` is false when the server has no mail host: the list can be kept, nothing is sent.
+      tags: [nightaudit]
+      responses:
+        "200":
+          description: The recipients.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackRecipientList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createNightAuditPackRecipient
+      summary: Add a recipient (nightaudit.pack_manage)
+      description: |
+        Without `sections` the recipient gets `SUMMARY` and `FLASH`; the sections with guest names or cash are opt-in. 409 `PACK_RECIPIENT_EXISTS` for an address that is a recipient already (whatever its case), 422 for an address that is not one address, a name with a line break or a section that is not in the catalog (`PACK_SECTION_INVALID`). Audited as `nap_recipient.created` with the address.
+      tags: [nightaudit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+                name: { type: string }
+                sections: { type: array, items: { $ref: "#/components/schemas/NightAuditPackSectionCode" } }
+                is_active: { type: boolean }
+      responses:
+        "201":
+          description: The recipient.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackRecipient" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/pack-recipients/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    patch:
+      operationId: updateNightAuditPackRecipient
+      summary: Change a recipient (nightaudit.pack_manage)
+      description: A field that is absent stays as it is. A recipient who is deactivated gets nothing from the messages already queued (they are skipped). 404 `PACK_RECIPIENT_NOT_FOUND`. Audited as `nap_recipient.updated`.
+      tags: [nightaudit]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                name: { type: string }
+                sections: { type: array, items: { $ref: "#/components/schemas/NightAuditPackSectionCode" } }
+                is_active: { type: boolean }
+      responses:
+        "200":
+          description: The recipient.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackRecipient" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteNightAuditPackRecipient
+      summary: Remove a recipient (nightaudit.pack_manage)
+      description: The history keeps the address of what was sent to it. Audited as `nap_recipient.deleted` with the address.
+      tags: [nightaudit]
+      responses:
+        "204": { description: Removed. }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/night-audit/room-charges/preview:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -19648,10 +19778,14 @@ components:
         rebuildable: { type: boolean, description: The ledger can make the section again. }
     NightAuditPackManifest:
       type: object
-      required: [business_date, status, format_version, built_at, built_by, build_ms, built_late, sections]
+      required: [business_date, status, format_version, built_at, built_by, build_ms, built_late, sections, email_enabled, mail_queued, mail_sent, mail_failed]
       properties:
         business_date: { $ref: "#/components/schemas/Date" }
         status: { type: string, enum: [COMPLETE, PARTIAL], description: PARTIAL when a section failed. }
+        email_enabled: { type: boolean, description: False when the server has no mail host. }
+        mail_queued: { type: integer, description: Messages of the pack that wait to be sent (only the manifest of a day; zero in the answer of a rebuild). }
+        mail_sent: { type: integer }
+        mail_failed: { type: integer }
         format_version: { type: integer }
         built_at: { type: string, format: date-time }
         built_by: { type: string, description: The name of the user who closed the day, or who built the pack later. }
@@ -19661,12 +19795,79 @@ components:
           type: array
           description: In the order of the pack.
           items: { $ref: "#/components/schemas/NightAuditPackSection" }
+    NightAuditPackRecipient:
+      type: object
+      required: [id, email, name, sections, is_active, created_at, updated_at, last_status, last_pack_date]
+      properties:
+        last_status: { type: [string, "null"], enum: [QUEUED, SENT, FAILED, SKIPPED, null], description: The state of the last message of a pack to this address (the list only). }
+        last_pack_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: The business date of the pack of that message. }
+        id: { type: integer, format: int64 }
+        email: { type: string }
+        name: { type: string }
+        sections: { type: array, items: { $ref: "#/components/schemas/NightAuditPackSectionCode" } }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    NightAuditPackRecipientList:
+      type: object
+      required: [email_enabled, items]
+      properties:
+        email_enabled: { type: boolean }
+        items: { type: array, items: { $ref: "#/components/schemas/NightAuditPackRecipient" } }
+    NightAuditPackDelivery:
+      type: object
+      required: [id, email, sections, part, parts, status, attempts, sent_at, queued_at, queued_by]
+      properties:
+        id: { type: integer, format: int64 }
+        email: { type: string }
+        sections: { type: array, items: { $ref: "#/components/schemas/NightAuditPackSectionCode" } }
+        part: { type: integer, description: The number of this message when the pack was split by size (1 when it was not). }
+        parts: { type: integer }
+        status: { type: string, enum: [QUEUED, SENT, FAILED, SKIPPED] }
+        attempts: { type: integer }
+        last_error: { type: string, description: "`PACK_TOO_LARGE` when one section alone is larger than a message." }
+        sent_at: { type: [string, "null"], format: date-time }
+        queued_at: { type: string, format: date-time }
+        queued_by: { type: string, description: The name of the user who closed the day or sent the pack again. }
+        pdf_sha256: { type: string, description: The SHA-256 of the PDF as the sender received it; only a message that was sent has it. }
+        renderer: { type: string, description: The version of the layout that drew the PDF. }
+    NightAuditPackDeliveryList:
+      type: object
+      required: [email_enabled, items]
+      properties:
+        email_enabled: { type: boolean }
+        items: { type: array, items: { $ref: "#/components/schemas/NightAuditPackDelivery" } }
+    NightAuditPackResendResult:
+      type: object
+      required: [queued, skipped, sections_failed]
+      properties:
+        queued:
+          type: array
+          items:
+            type: object
+            required: [email, sections]
+            properties:
+              email: { type: string }
+              sections: { type: array, items: { $ref: "#/components/schemas/NightAuditPackSectionCode" } }
+        skipped:
+          type: array
+          description: Recipients who got nothing because none of their sections holds data.
+          items:
+            type: object
+            required: [email, reason]
+            properties:
+              email: { type: string }
+              reason: { type: string, enum: [NO_SECTIONS] }
+        sections_failed: { type: array, items: { $ref: "#/components/schemas/NightAuditPackSectionCode" } }
     NightAuditPackSummary:
       type: object
-      required: [business_date, status, format_version, built_at, build_ms, built_late, sections_ok, sections_failed]
+      required: [business_date, status, format_version, built_at, build_ms, built_late, sections_ok, sections_failed, mail_sent, mail_failed, mail_queued]
       properties:
         business_date: { $ref: "#/components/schemas/Date" }
         status: { type: string, enum: [COMPLETE, PARTIAL] }
+        mail_sent: { type: integer, description: Messages of the pack that were sent. }
+        mail_failed: { type: integer, description: Messages that were given up. }
+        mail_queued: { type: integer, description: Messages that wait to be sent. }
         format_version: { type: integer }
         built_at: { type: string, format: date-time }
         build_ms: { type: integer }
@@ -19675,8 +19876,9 @@ components:
         sections_failed: { type: integer }
     NightAuditPackList:
       type: object
-      required: [items, next_cursor]
+      required: [items, email_enabled, next_cursor]
       properties:
+        email_enabled: { type: boolean, description: False when the server has no mail host. }
         items:
           type: array
           items: { $ref: "#/components/schemas/NightAuditPackSummary" }
@@ -19685,7 +19887,7 @@ components:
           description: The business date to pass as `cursor` for the next page; null on the last page.
     NightAuditWarnings:
       type: object
-      required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending, pack_incomplete]
+      required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending, pack_incomplete, pack_delivery_failed]
       properties:
         outlet_bills:
           type: array
@@ -19743,6 +19945,15 @@ components:
           type: array
           description: "PACK_INCOMPLETE: the closed days whose night audit pack has a section that failed. A user with nightaudit.pack_manage can build the section again."
           items: { $ref: "#/components/schemas/Date" }
+        pack_delivery_failed:
+          type: array
+          description: "PACK_DELIVERY_FAILED: the days of the last two months whose pack could not be e-mailed to some addresses and was not sent since. A user with nightaudit.pack_resend can send it again. Never a blocker."
+          items:
+            type: object
+            required: [business_date, addresses]
+            properties:
+              business_date: { $ref: "#/components/schemas/Date" }
+              addresses: { type: array, items: { type: string } }
         blocks_ending:
           type: array
           items:

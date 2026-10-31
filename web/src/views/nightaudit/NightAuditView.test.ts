@@ -253,8 +253,39 @@ describe('NightAuditView', () => {
     const text = w.get('[data-testid=summary]').text()
     expect(text).toContain('2 of 3 (66.67%)')
     expect(text).toContain('2 / 0 / 1')
-    expect(text).toContain('Payments CASH')
+    expect(text).toContain('Payments Cash')
     expect(w.find('[data-testid=readiness]').exists()).toBe(false)
+  })
+
+  it('names the payments by the label of the method, not by its code', async () => {
+    const methods = { ...result, summary: { ...result.summary, payments_by_method: ['CASH', 'CARD', 'BANK_TRANSFER', 'QRIS', 'NEW_METHOD'].map((method) => ({ method, payments: '1', refunds: '0', net: '1' })) } }
+    for (const [lang, expected, notExpected] of [
+      ['en', ['Payments Cash', 'Payments Card', 'Payments Bank transfer', 'Payments QRIS', 'Payments NEW_METHOD'], ['Payments CASH', 'Payments CARD', 'Payments BANK_TRANSFER']],
+      ['id', ['Pembayaran Tunai', 'Pembayaran Kartu', 'Pembayaran Transfer bank', 'Pembayaran QRIS', 'Pembayaran NEW_METHOD'], ['Pembayaran CASH', 'Pembayaran CARD', 'Pembayaran BANK_TRANSFER']],
+    ] as const) {
+      setLocale(lang)
+      const w = mountView()
+      POST = vi.fn().mockResolvedValue({ data: methods })
+      await flushPromises()
+      await w.get('input[name=confirm_run]').setValue(true)
+      await w.get('[data-testid=run-audit]').trigger('click')
+      await flushPromises()
+      const text = w.get('[data-testid=summary]').text()
+      for (const e of expected) expect(text).toContain(e)
+      for (const n of notExpected) expect(text).not.toContain(n)
+      w.unmount()
+    }
+  })
+
+  it('warns, never blocks, about a pack that could not be e-mailed', async () => {
+    const warned = { ...clean(), warnings: { ...clean().warnings, pack_delivery_failed: [{ business_date: '2026-09-29', addresses: ['gm@example.test', 'fo@example.test'] }] } }
+    const w = mountView(warned, ['nightaudit.run', 'nightaudit.pack_view'])
+    await flushPromises()
+    const line = w.get('[data-testid=pack-delivery-failed-2026-09-29]')
+    expect(line.text()).toContain('could not be e-mailed to gm@example.test, fo@example.test')
+    expect(line.find('a').attributes('href')).toBe('/night-audit/archive')
+    await w.get('input[name=confirm_run]').setValue(true)
+    expect(w.get('[data-testid=run-audit]').attributes('disabled')).toBeUndefined()
   })
 
   it('writes the figures of the closing summary with the separators of the language', async () => {
@@ -306,7 +337,7 @@ describe('NightAuditView', () => {
   })
 
   it('shows the pack the run built, with the way to the archive, to who may read it; warns of an incomplete one', async () => {
-    const manifest = { business_date: '2026-09-30', status: 'PARTIAL', format_version: 1, built_at: '2026-09-30T17:00:00Z', built_by: 'Ani', build_ms: 250, built_late: false, sections: [{ section: 'SUMMARY', status: 'OK' }, { section: 'FLASH', status: 'FAILED' }] }
+    const manifest = { business_date: '2026-09-30', status: 'PARTIAL', format_version: 1, built_at: '2026-09-30T17:00:00Z', built_by: 'Ani', build_ms: 250, built_late: false, sections: [{ section: 'SUMMARY', status: 'OK' }, { section: 'FLASH', status: 'FAILED' }], email_enabled: true, mail_queued: 3, mail_sent: 1, mail_failed: 0 }
     const w = mountView({ ...clean(), warnings: { ...clean().warnings, pack_incomplete: ['2026-09-28'] } }, ['nightaudit.run', 'nightaudit.pack_view'])
     GET.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/packs/{date}') ? manifest : { ...clean(), warnings: { ...clean().warnings, pack_incomplete: ['2026-09-28'] } } }))
     await w.get('button[data-testid=refresh]').trigger('click')
@@ -318,6 +349,26 @@ describe('NightAuditView', () => {
     expect(w.get('[data-testid=pack-status]').text()).toBe('Partial')
     expect(w.get('[data-testid=pack]').text()).toContain('1 of 2 sections ready')
     expect(w.get('[data-testid=pack-archive]').attributes('href')).toBe('/night-audit/archive')
+    expect(w.get('[data-testid=pack-mail]').text()).toContain('E-mail: 4 queued.')
+    expect(w.get('[data-testid=pack-mail-link]').attributes('href')).toBe('/night-audit/archive')
+  })
+
+  it('says that e-mail is off on the result, and writes the line in Indonesian', async () => {
+    const manifest = { business_date: '2026-09-30', status: 'COMPLETE', format_version: 1, built_at: '2026-09-30T17:00:00Z', built_by: 'Ani', build_ms: 250, built_late: false, sections: [{ section: 'SUMMARY', status: 'OK' }], email_enabled: false, mail_queued: 0, mail_sent: 0, mail_failed: 0 }
+    for (const [lang, off, queued] of [['en', 'E-mail is off.', 'E-mail: 2 queued.'], ['id', 'E-mail mati.', 'E-mail: 2 diantre.']] as const) {
+      setLocale(lang)
+      for (const [m, expected] of [[manifest, off], [{ ...manifest, email_enabled: true, mail_queued: 2 }, queued]] as const) {
+        const w = mountView(clean(), ['nightaudit.run', 'nightaudit.pack_view'])
+        GET.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/packs/{date}') ? m : clean() }))
+        await w.get('button[data-testid=refresh]').trigger('click')
+        await flushPromises()
+        await w.get('input[name=confirm_run]').setValue(true)
+        await w.get('[data-testid=run-audit]').trigger('click')
+        await flushPromises()
+        expect(w.get('[data-testid=pack-mail]').text()).toContain(expected)
+        w.unmount()
+      }
+    }
   })
 
   it('shows no pack to who may not read the archive', async () => {

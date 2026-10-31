@@ -6,6 +6,8 @@ package notificationsdb
 
 import (
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type EmailOutbox struct {
@@ -25,4 +27,10 @@ type EmailOutbox struct {
 	BanquetEventID *int64
 	DocumentID     *int64
 	Language       *string
+	NapPackID      *int64
+	NapSections    []string
+	NapPart        pgtype.Int2
+	NapParts       pgtype.Int2
+	NapPdfSha256   *string
+	NapRenderer    *string
 }

@@ -30,8 +30,10 @@ type Attachment struct {
 
 // Message is an e-mail to one recipient: a text body, an HTML alternative and attachments.
 type Message struct {
-	To          string
-	Subject     string
+	To      string
+	Subject string
+	// FromName is the display name of the sender for this message; empty means the one of the configuration.
+	FromName    string
 	Text        string
 	HTML        string
 	Attachments []Attachment
@@ -169,6 +171,9 @@ func Build(m Message, from, fromName string, now time.Time) ([]byte, error) {
 	sender, err := mail.ParseAddress(from)
 	if err != nil {
 		return nil, fmt.Errorf("sender: %w", err)
+	}
+	if m.FromName != "" {
+		fromName = m.FromName
 	}
 	if fromName != "" {
 		sender.Name = fromName

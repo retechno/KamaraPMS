@@ -38,6 +38,7 @@ type Service struct {
 	outlets Outlets
 	modules Modules
 	pdf     PDFMaker
+	mailer  Mailer
 	// override replaces the builder of a section: the tests make a section fail with it. It is never set by the application.
 	override map[string]func(ctx context.Context) (any, error)
 }
@@ -101,8 +102,25 @@ func (s *Service) Build(ctx context.Context, p auth.Principal, propertyID int64,
 			return Pack{}, err
 		}
 	}
+	// The e-mail (6.1): one message for each active recipient, read once, for the sections of theirs that are OK. A pack made later (a rebuild) and a server with e-mail off queue nothing (Q9, Q12).
+	queued := 0
+	if !late && s.mailEnabled() {
+		recipients, err := q.ListActiveRecipients(ctx, auditpackdb.ListActiveRecipientsParams{TenantID: p.TenantID, PropertyID: propertyID})
+		if err != nil {
+			return Pack{}, err
+		}
+		statuses := make(map[string]string, len(pack.Sections))
+		for _, sec := range pack.Sections {
+			statuses[sec.Code] = sec.Status
+		}
+		mails, err := s.queueFor(ctx, p, propertyID, pack.ID, statuses, recipients)
+		if err != nil {
+			return Pack{}, err
+		}
+		queued = len(mails)
+	}
 	if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: "nap_pack.built", EntityType: "nap_pack",
-		EntityID: pack.ID, EntityLabel: bd.String(), New: map[string]any{"business_date": bd, "status": pack.Status, "sections_failed": failed, "built_late": late, "recipients_queued": 0,
+		EntityID: pack.ID, EntityLabel: bd.String(), New: map[string]any{"business_date": bd, "status": pack.Status, "sections_failed": failed, "built_late": late, "recipients_queued": queued,
 			"build_ms": pack.BuildMS}}); err != nil {
 		return Pack{}, err
 	}

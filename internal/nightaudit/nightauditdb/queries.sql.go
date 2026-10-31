@@ -251,6 +251,48 @@ func (q *Queries) ListOpenMastersOfGoneGroups(ctx context.Context, arg ListOpenM
 	return items, nil
 }
 
+const listPackDeliveryFailures = `-- name: ListPackDeliveryFailures :many
+SELECT pk.business_date, o.to_address
+FROM email_outbox o JOIN nap_packs pk ON pk.property_id = o.property_id AND pk.id = o.nap_pack_id
+WHERE o.tenant_id = $1 AND o.property_id = $2 AND o.kind = 'NIGHT_AUDIT_PACK' AND o.status = 'FAILED' AND pk.business_date >= $3::date
+  AND NOT EXISTS (SELECT 1 FROM email_outbox n WHERE n.property_id = o.property_id AND n.nap_pack_id = o.nap_pack_id AND lower(n.to_address) = lower(o.to_address)
+                    AND n.nap_part = o.nap_part AND n.id > o.id AND n.status IN ('SENT', 'QUEUED'))
+ORDER BY pk.business_date DESC, o.to_address, o.nap_part
+LIMIT 50
+`
+
+type ListPackDeliveryFailuresParams struct {
+	TenantID   int64
+	PropertyID int64
+	Since      civil.Date
+}
+
+type ListPackDeliveryFailuresRow struct {
+	BusinessDate civil.Date
+	ToAddress    string
+}
+
+// Warnings: the messages of a night audit pack that were given up and not sent since (no later message for the same pack, address and part that was sent or waits), in the last days (38 6.3).
+func (q *Queries) ListPackDeliveryFailures(ctx context.Context, arg ListPackDeliveryFailuresParams) ([]ListPackDeliveryFailuresRow, error) {
+	rows, err := q.db.Query(ctx, listPackDeliveryFailures, arg.TenantID, arg.PropertyID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPackDeliveryFailuresRow{}
+	for rows.Next() {
+		var i ListPackDeliveryFailuresRow
+		if err := rows.Scan(&i.BusinessDate, &i.ToAddress); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPartialPackDates = `-- name: ListPartialPackDates :many
 SELECT business_date FROM nap_packs WHERE tenant_id = $1 AND property_id = $2 AND status = 'PARTIAL' ORDER BY business_date
 `

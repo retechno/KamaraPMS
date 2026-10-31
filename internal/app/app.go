@@ -67,6 +67,8 @@ type Deps struct {
 	Tokens    iam.TokenConfig
 	// Mail delivers e-mail; nil turns e-mail off (nothing is queued).
 	Mail notifications.Sender
+	// MailMaxBytes is the largest message sent; a night audit pack larger than this is split (0 = the default of 7 MB).
+	MailMaxBytes int
 	// RateLimitPerMinute limits requests per client address (0 = off).
 	RateLimitPerMinute int
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For is believed when the client address is resolved; none means the peer of the connection is the client.
@@ -174,6 +176,7 @@ func New(d Deps) *App {
 	banquetSvc := banquet.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, foliosSvc, billingSvc, iamSvc)
 	documentsSvc.SetBanquet(banquetSvc) // the PDF of the banquet are drawn from it, and the e-mails send them
 	notifierSvc.SetBanquet(banquetSvc)
+	notifierSvc.SetMaxBytes(d.MailMaxBytes)
 	nightAuditSvc.SetOutletChecker(outletClose{pos: posSvc, folios: foliosSvc, banquet: banquetSvc})
 	inventorySvc := inventory.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, departmentsSvc)
 	assetsSvc := assets.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, accountingSvc, departmentsSvc)
@@ -202,6 +205,8 @@ func New(d Deps) *App {
 	packSvc := auditpack.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, reportsSvc)
 	packSvc.SetOutlets(posSvc, packPlan{subs: subscriptionSvc})
 	packSvc.SetPDF(documentsSvc)
+	packSvc.SetMailer(notifierSvc)
+	notifierSvc.SetPacks(packSvc)
 	documentsSvc.SetPacks(packSvc)
 	nightAuditSvc.SetPackBuilder(packSvc)    // the close of a day keeps its pack, in the same transaction (doc 38)
 	budgetSvc.SetDepartments(departmentsSvc) // and a row of the budget its department

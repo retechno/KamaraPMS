@@ -83,6 +83,7 @@ func run() error {
 		TrustedProxies:     cfg.TrustedProxies,
 		ReadyChecks:        []health.Check{migrate.SchemaCheck(pool)},
 		Mail:               mailer,
+		MailMaxBytes:       cfg.SMTPMaxBytes,
 		Logger:             logger,
 		DB:                 pool,
 		TxManager:          db.NewTxManager(pool, cfg.DBLockTimeout),

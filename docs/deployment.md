@@ -68,7 +68,8 @@ The API reads its settings from the environment (`internal/platform/config`); no
 | `PMS_SHUTDOWN_TIMEOUT` | `15s` | how long the API lets requests in flight finish after SIGTERM (the compose `stop_grace_period` is 30 s) |
 | `PMS_LOG_LEVEL`, `PMS_LOG_FORMAT` | `info`, `json` in production | `debug`, `info`, `warn`, `error`; `json` or `text` |
 | `PMS_MIGRATE_ON_START` | `false` | leave it false: migrations are a job (section 5) |
-| `PMS_SMTP_*` | empty (e-mail off) | the mail server for the reservation confirmation; credentials are refused over an unencrypted connection in production |
+| `PMS_SMTP_*` | empty (e-mail off) | the mail server for the reservation confirmation, the banquet documents and the night audit pack; credentials are refused over an unencrypted connection in production |
+| `PMS_SMTP_MAX_BYTES` | `7340032` (7 MB) | the largest message sent (at least 100000). A night audit pack whose PDF is larger goes in several numbered messages; one section that is larger alone fails with `PACK_TOO_LARGE`. Keep it under the limit of your mail server, base64 makes a file a third larger |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `pms`, `pms`, required | the PostgreSQL container of the stack |
 | `PMS_BIND`, `PMS_PUBLIC_PORT`, `PMS_PUBLIC_TLS_PORT`, `PMS_VERSION` | `127.0.0.1`, `8080`, `8443`, `local` | where the proxy listens at the host, and the tag of the images |
 

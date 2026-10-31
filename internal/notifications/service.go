@@ -2,11 +2,14 @@ package notifications
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html"
 	"log/slog"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,7 +49,10 @@ type Service struct {
 	docs   *documents.Service
 	res    *reservations.Service
 	banq   *banquet.Service
+	packs  PackSource
 	sender Sender
+
+	maxBytes int
 }
 
 // NewService wires the service. sender may be nil (e-mail off).
@@ -242,6 +248,13 @@ func (s *Service) deliver(ctx context.Context, row notificationsdb.EmailOutbox) 
 		err = s.sender.Send(sctx, msg)
 		cancel()
 	}
+	if err == nil && row.Kind == KindNightAuditPack {
+		sum := sha256.Sum256(msg.Attachments[0].Data) // the hash of the bytes the sender received (Q6)
+		s.record(ctx, func(q *notificationsdb.Queries) error {
+			return q.MarkPackSent(ctx, notificationsdb.MarkPackSentParams{ID: row.ID, Now: s.clock.Now(), Sha256: hex.EncodeToString(sum[:]), Renderer: strconv.Itoa(documents.PackRendererVersion)})
+		})
+		return true
+	}
 	if err == nil {
 		s.record(ctx, func(q *notificationsdb.Queries) error {
 			return q.MarkSent(ctx, notificationsdb.MarkSentParams{ID: row.ID, Now: s.clock.Now()})
@@ -282,6 +295,9 @@ func truncate(s string, n int) string {
 // compose builds the message of an outbox row. skip is a reason to drop it without an error (the reservation is no
 // longer confirmed).
 func (s *Service) compose(ctx context.Context, row notificationsdb.EmailOutbox) (msg Message, skip string, err error) {
+	if row.Kind == KindNightAuditPack {
+		return s.composePack(ctx, row)
+	}
 	if row.Kind != KindConfirmation {
 		return s.composeBanquet(ctx, row)
 	}

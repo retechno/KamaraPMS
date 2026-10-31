@@ -8,6 +8,7 @@
 //	pms-seed inventory-days -tenant DEMO -property BALI [-days 10] [-dry-run]
 //	pms-seed banquet -tenant DEMO -property BALI [-dry-run]
 //	pms-seed assets -tenant DEMO -property BALI [-dry-run]
+//	pms-seed nightaudit -tenant DEMO -property BALI [-dry-run]
 //
 // rooms: creates the room types Standard, Superior, Deluxe and Suite when the property lacks them and rooms numbered
 // floor*100+n (101..110, 201..210, ...), spread over the types, with a mix of housekeeping states and a bed type each
@@ -32,6 +33,8 @@
 //
 // assets: the demo of the fixed asset register (docs/architecture/37-fixed-assets.md, PR 1): free locations and the opening balances of thirteen old assets in Indonesian (land, a building,
 // furniture, a vehicle, IT, a batch of linen, construction in progress, two assets already depreciated to their residual value), brought in WITH journal.
+//
+// nightaudit: the demo recipients of the night audit pack (docs/architecture/38-reports-night-audit-pack.md, PR 3): five addresses on the reserved domain .example with the sections each one chose, one of them inactive.
 //
 // All are safe to run again (rooms that exist are left alone; rates are written again with the same prices). They
 // refuse to run against a production configuration. They read PMS_DATABASE_URL from the environment or ./.env.
@@ -75,6 +78,7 @@ const usage = `usage:
   pms-seed inventory -tenant CODE -property CODE [-dry-run]
   pms-seed banquet -tenant CODE -property CODE [-dry-run]
   pms-seed assets -tenant CODE -property CODE [-dry-run]
+  pms-seed nightaudit -tenant CODE -property CODE [-dry-run]
   pms-seed inventory-days -tenant CODE -property CODE [-days N] [-api URL] [-email ADDRESS] [-dry-run]   (password in PMS_SEED_PASSWORD)`
 
 // A room type the seed creates when the property has no type with that code, and the price of its nights.
@@ -116,7 +120,7 @@ func run(args []string) error {
 	if len(args) > 0 && args[0] == "inventory-days" { // it talks to the running API and needs no database of its own
 		return runInventoryDays(args[1:])
 	}
-	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates" && args[0] != "pos" && args[0] != "inventory" && args[0] != "banquet" && args[0] != "assets") {
+	if len(args) == 0 || (args[0] != "rooms" && args[0] != "rates" && args[0] != "pos" && args[0] != "inventory" && args[0] != "banquet" && args[0] != "assets" && args[0] != "nightaudit") {
 		return fmt.Errorf("%s", usage)
 	}
 	cmd := args[0]
@@ -157,6 +161,9 @@ func run(args []string) error {
 	}
 	if cmd == "assets" {
 		return seedAssets(e, *dryRun)
+	}
+	if cmd == "nightaudit" {
+		return seedNightAudit(e, *dryRun)
 	}
 	if cmd == "rooms" {
 		return seedRooms(e, strings.ToUpper(*propertyCode), *floors, *perFloor, *dryRun)

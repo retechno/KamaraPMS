@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"kamarapms/internal/platform/apperr"
@@ -28,6 +29,12 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/{date}", httpx.HandlerFunc(h.day)) // the manifest, or the PDF when the date ends in .pdf (a pattern cannot name a part of a segment)
 	mux.Handle("GET "+p+"/{date}/sections/{section}", httpx.HandlerFunc(h.section))
 	mux.Handle("POST "+p+"/{date}/rebuild", httpx.HandlerFunc(h.rebuild))
+	mux.Handle("GET "+p+"/{date}/deliveries", httpx.HandlerFunc(h.deliveries))
+	mux.Handle("POST "+p+"/{date}/resend", httpx.HandlerFunc(h.resend))
+	mux.Handle("GET /api/v1/properties/{propertyId}/night-audit/pack-recipients", httpx.HandlerFunc(h.listRecipients))
+	mux.Handle("POST /api/v1/properties/{propertyId}/night-audit/pack-recipients", httpx.HandlerFunc(h.createRecipient))
+	mux.Handle("PATCH /api/v1/properties/{propertyId}/night-audit/pack-recipients/{id}", httpx.HandlerFunc(h.updateRecipient))
+	mux.Handle("DELETE /api/v1/properties/{propertyId}/night-audit/pack-recipients/{id}", httpx.HandlerFunc(h.deleteRecipient))
 }
 
 func dateParam(field, v string) (civil.Date, error) {
@@ -229,4 +236,129 @@ func (h *Handler) rebuild(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) deliveries(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	if _, err := h.svc.access(r.Context(), pid, auth.PermNightAuditPackView); err != nil {
+		return err
+	}
+	date, err := dateParam("date", r.PathValue("date"))
+	if err != nil {
+		return err
+	}
+	res, err := h.svc.Deliveries(r.Context(), pid, date)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) resend(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	if _, err := h.svc.access(r.Context(), pid, auth.PermNightAuditPackResend); err != nil {
+		return err
+	}
+	date, err := dateParam("date", r.PathValue("date"))
+	if err != nil {
+		return err
+	}
+	var in ResendInput
+	if r.ContentLength != 0 {
+		if err := httpx.DecodeJSON(w, r, &in); err != nil {
+			return err
+		}
+	}
+	res, err := h.svc.Resend(r.Context(), pid, date, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func recipientID(r *http.Request) (int64, error) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, apperr.Invalid("the request is invalid", apperr.FieldError{Field: "id", Code: "INVALID_FORMAT", Message: "a positive number"})
+	}
+	return id, nil
+}
+
+func (h *Handler) listRecipients(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	res, err := h.svc.ListRecipients(r.Context(), pid)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) createRecipient(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	if _, err := h.svc.access(r.Context(), pid, auth.PermNightAuditPackManage); err != nil {
+		return err
+	}
+	var in RecipientInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.CreateRecipient(r.Context(), pid, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusCreated, res)
+}
+
+func (h *Handler) updateRecipient(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	if _, err := h.svc.access(r.Context(), pid, auth.PermNightAuditPackManage); err != nil {
+		return err
+	}
+	id, err := recipientID(r)
+	if err != nil {
+		return err
+	}
+	var in RecipientPatch
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.UpdateRecipient(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) deleteRecipient(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	if _, err := h.svc.access(r.Context(), pid, auth.PermNightAuditPackManage); err != nil {
+		return err
+	}
+	id, err := recipientID(r)
+	if err != nil {
+		return err
+	}
+	if err := h.svc.DeleteRecipient(r.Context(), pid, id); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }

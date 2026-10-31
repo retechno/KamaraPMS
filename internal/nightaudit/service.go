@@ -127,7 +127,7 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 	a := analysis{
 		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}, AccountingReadiness: []accounting.ReadinessBlocker{}, OutletBills: []OutletIssue{}, Stock: []OutletIssue{}},
 		missing:  MissingCharges{Items: []roomcharge.Result{}},
-		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, ClosedMasters: []ClosedMaster{}, BlocksEnding: []EndingBlock{}, OutletBills: []OutletIssue{}, Stock: []OutletIssue{}, PackIncomplete: []civil.Date{}},
+		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, ClosedMasters: []ClosedMaster{}, BlocksEnding: []EndingBlock{}, OutletBills: []OutletIssue{}, Stock: []OutletIssue{}, PackIncomplete: []civil.Date{}, PackDeliveryFailed: []PackDeliveryFailure{}},
 	}
 	arrivals, err := q.ListUnresolvedArrivals(ctx, nightauditdb.ListUnresolvedArrivalsParams{TenantID: p.TenantID, PropertyID: propertyID, Bd: bd})
 	if err != nil {
@@ -257,8 +257,22 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 		return a, err
 	}
 	a.warnings.PackIncomplete = append(a.warnings.PackIncomplete, partial...)
+	failed, err := q.ListPackDeliveryFailures(ctx, nightauditdb.ListPackDeliveryFailuresParams{TenantID: p.TenantID, PropertyID: propertyID, Since: bd.AddDays(-packDeliveryDays)})
+	if err != nil {
+		return a, err
+	}
+	for _, f := range failed {
+		if n := len(a.warnings.PackDeliveryFailed); n > 0 && a.warnings.PackDeliveryFailed[n-1].BusinessDate == f.BusinessDate {
+			a.warnings.PackDeliveryFailed[n-1].Addresses = append(a.warnings.PackDeliveryFailed[n-1].Addresses, f.ToAddress)
+		} else {
+			a.warnings.PackDeliveryFailed = append(a.warnings.PackDeliveryFailed, PackDeliveryFailure{BusinessDate: f.BusinessDate, Addresses: []string{f.ToAddress}})
+		}
+	}
 	return a, nil
 }
+
+// packDeliveryDays is how far back the warning PACK_DELIVERY_FAILED looks.
+const packDeliveryDays = 60
 
 // Preview runs every check and a dry run of the room charges (nightaudit.run). It writes nothing.
 func (s *Service) Preview(ctx context.Context, propertyID int64) (Preview, error) {

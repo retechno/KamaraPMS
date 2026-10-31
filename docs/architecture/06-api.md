@@ -585,7 +585,9 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Rules:** Step 12 §12.5. It never changes guest, reservation or stay status.
 - **TX:** a single `T[L0 advisory, L1 UPDATE, L4 stays → folios]`. Any blocker rolls back everything.
 
-**Night audit pack archive** (doc 38, section 14): `GET {P}/night-audit/packs?from&to&cursor` (`nightaudit.pack_view`), `GET {P}/night-audit/packs/{date}` (the manifest; `{date}.pdf` is the PDF, `?sections=A,B`), `GET {P}/night-audit/packs/{date}/sections/{section}?format=json|csv`, `POST {P}/night-audit/packs/{date}/rebuild` (`nightaudit.pack_manage`). Errors: 404 `PACK_NOT_FOUND`, 422 `PACK_SECTION_INVALID`, `OUT_OF_RANGE`, 409 `DATE_NOT_CLOSED`, `SECTION_NOT_REBUILDABLE`. The preview warnings carry `pack_incomplete`.
+**Night audit pack archive** (doc 38, section 14): `GET {P}/night-audit/packs?from&to&cursor` (`nightaudit.pack_view`), `GET {P}/night-audit/packs/{date}` (the manifest; `{date}.pdf` is the PDF, `?sections=A,B`), `GET {P}/night-audit/packs/{date}/sections/{section}?format=json|csv`, `POST {P}/night-audit/packs/{date}/rebuild` (`nightaudit.pack_manage`). Errors: 404 `PACK_NOT_FOUND`, 422 `PACK_SECTION_INVALID`, `OUT_OF_RANGE`, 409 `DATE_NOT_CLOSED`, `SECTION_NOT_REBUILDABLE`. The preview warnings carry `pack_incomplete` and `pack_delivery_failed`.
+
+**Night audit pack e-mail** (doc 38, section 15): `GET|POST {P}/night-audit/pack-recipients`, `PATCH|DELETE {P}/night-audit/pack-recipients/{id}` (`nightaudit.pack_manage`; the `GET` also `pack_view`), `GET {P}/night-audit/packs/{date}/deliveries` (`pack_view`), `POST {P}/night-audit/packs/{date}/resend` (`nightaudit.pack_resend`, body `{recipient_ids?}`). Errors: 409 `EMAIL_OFF`, `PACK_ALREADY_QUEUED`, `PACK_RECIPIENT_EXISTS`, 404 `PACK_RECIPIENT_NOT_FOUND`. The list of packs carries `mail_sent`, `mail_failed`, `mail_queued` and `email_enabled`.
 
 ## 16. Audit (implemented in M15: `internal/auditlog`; the tenant-level trail is `GET /api/v1/audit-logs`)
 
