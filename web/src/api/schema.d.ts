@@ -4298,6 +4298,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/night-audit/packs/{date}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The e-mail history of a pack, newest first (nightaudit.pack_view)
+         * @description One row for each message: the address and the sections as they were queued, the part of a pack that was split by size, the state, the attempts, the last error, when it was sent and who queued it (the user who closed the day, or who sent it again). A message that was sent holds the SHA-256 of the PDF as the sender received it and the version of the renderer that drew it; the PDF itself is not kept. The address stays in the history after the recipient is deleted.
+         */
+        get: operations["listNightAuditPackDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/packs/{date}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a pack again to the recipients (nightaudit.pack_resend)
+         * @description Queues one message for each active recipient, or for the ones in `recipient_ids`; only the sections of the recipient that hold data are sent (the failed ones are named in `sections_failed`). There is no one-off address: an address that is not a recipient is added first, which is audited. 409 `EMAIL_OFF` when the server has no mail host, 404 `PACK_NOT_FOUND`, 404 `PACK_RECIPIENT_NOT_FOUND` for an id that is not an active recipient, and 409 `PACK_ALREADY_QUEUED` for an address that has a message of this pack waiting (a double click queues once). Audited as `nap_pack.resent`.
+         */
+        post: operations["resendNightAuditPack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/pack-recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The recipients of the night audit pack (nightaudit.pack_manage or nightaudit.pack_view)
+         * @description The addresses that receive the pack after each night audit and the sections each one gets. `email_enabled` is false when the server has no mail host: the list can be kept, nothing is sent.
+         */
+        get: operations["listNightAuditPackRecipients"];
+        put?: never;
+        /**
+         * Add a recipient (nightaudit.pack_manage)
+         * @description Without `sections` the recipient gets `SUMMARY` and `FLASH`; the sections with guest names or cash are opt-in. 409 `DUPLICATE_REQUEST` for an address that is a recipient already (whatever its case), 422 for an address that is not one address, a name with a line break or a section that is not in the catalog (`PACK_SECTION_INVALID`). Audited as `nap_recipient.created` with the address.
+         */
+        post: operations["createNightAuditPackRecipient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/pack-recipients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a recipient (nightaudit.pack_manage)
+         * @description The history keeps the address of what was sent to it. Audited as `nap_recipient.deleted` with the address.
+         */
+        delete: operations["deleteNightAuditPackRecipient"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a recipient (nightaudit.pack_manage)
+         * @description A field that is absent stays as it is. A recipient who is deactivated gets nothing from the messages already queued (they are skipped). 404 `PACK_RECIPIENT_NOT_FOUND`. Audited as `nap_recipient.updated`.
+         */
+        patch: operations["updateNightAuditPackRecipient"];
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/night-audit/room-charges/preview": {
         parameters: {
             query?: never;
@@ -17666,10 +17765,73 @@ export interface components {
             /** @description In the order of the pack. */
             sections: components["schemas"]["NightAuditPackSection"][];
         };
+        NightAuditPackRecipient: {
+            /** Format: int64 */
+            id: number;
+            email: string;
+            name: string;
+            sections: components["schemas"]["NightAuditPackSectionCode"][];
+            is_active: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        NightAuditPackRecipientList: {
+            email_enabled: boolean;
+            items: components["schemas"]["NightAuditPackRecipient"][];
+        };
+        NightAuditPackDelivery: {
+            /** Format: int64 */
+            id: number;
+            email: string;
+            sections: components["schemas"]["NightAuditPackSectionCode"][];
+            /** @description The number of this message when the pack was split by size (1 when it was not). */
+            part: number;
+            parts: number;
+            /** @enum {string} */
+            status: "QUEUED" | "SENT" | "FAILED" | "SKIPPED";
+            attempts: number;
+            /** @description `PACK_TOO_LARGE` when one section alone is larger than a message. */
+            last_error?: string;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            queued_at: string;
+            /** @description The name of the user who closed the day or sent the pack again. */
+            queued_by: string;
+            /** @description The SHA-256 of the PDF as the sender received it; only a message that was sent has it. */
+            pdf_sha256?: string;
+            /** @description The version of the layout that drew the PDF. */
+            renderer?: string;
+        };
+        NightAuditPackDeliveryList: {
+            email_enabled: boolean;
+            items: components["schemas"]["NightAuditPackDelivery"][];
+        };
+        NightAuditPackResendResult: {
+            queued: {
+                email: string;
+                sections: components["schemas"]["NightAuditPackSectionCode"][];
+            }[];
+            /** @description Recipients who got nothing because none of their sections holds data. */
+            skipped: {
+                email: string;
+                /** @enum {string} */
+                reason: "NO_SECTIONS";
+            }[];
+            sections_failed: components["schemas"]["NightAuditPackSectionCode"][];
+        };
         NightAuditPackSummary: {
             business_date: components["schemas"]["Date"];
             /** @enum {string} */
             status: "COMPLETE" | "PARTIAL";
+            /** @description Messages of the pack that were sent. */
+            mail_sent: number;
+            /** @description Messages that were given up. */
+            mail_failed: number;
+            /** @description Messages that wait to be sent. */
+            mail_queued: number;
             format_version: number;
             /** Format: date-time */
             built_at: string;
@@ -17679,6 +17841,8 @@ export interface components {
             sections_failed: number;
         };
         NightAuditPackList: {
+            /** @description False when the server has no mail host. */
+            email_enabled: boolean;
             items: components["schemas"]["NightAuditPackSummary"][];
             /** @description The business date to pass as `cursor` for the next page; null on the last page. */
             next_cursor: components["schemas"]["Date"] | null;
@@ -17724,6 +17888,11 @@ export interface components {
             }[];
             /** @description PACK_INCOMPLETE: the closed days whose night audit pack has a section that failed. A user with nightaudit.pack_manage can build the section again. */
             pack_incomplete: components["schemas"]["Date"][];
+            /** @description PACK_DELIVERY_FAILED: the days of the last two months whose pack could not be e-mailed to some addresses and was not sent since. A user with nightaudit.pack_resend can send it again. Never a blocker. */
+            pack_delivery_failed: {
+                business_date: components["schemas"]["Date"];
+                addresses: string[];
+            }[];
             blocks_ending: {
                 /** Format: int64 */
                 block_id: number;
@@ -34429,6 +34598,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NightAuditPackManifest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listNightAuditPackDeliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackDeliveryList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    resendNightAuditPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    recipient_ids?: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description What was queued. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackResendResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listNightAuditPackRecipients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recipients. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackRecipientList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createNightAuditPackRecipient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email: string;
+                    name?: string;
+                    sections?: components["schemas"]["NightAuditPackSectionCode"][];
+                    is_active?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The recipient. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackRecipient"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    deleteNightAuditPackRecipient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateNightAuditPackRecipient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email?: string;
+                    name?: string;
+                    sections?: components["schemas"]["NightAuditPackSectionCode"][];
+                    is_active?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The recipient. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackRecipient"];
                 };
             };
             403: components["responses"]["Problem"];

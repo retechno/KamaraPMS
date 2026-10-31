@@ -277,6 +277,17 @@ describe('NightAuditView', () => {
     }
   })
 
+  it('warns, never blocks, about a pack that could not be e-mailed', async () => {
+    const warned = { ...clean(), warnings: { ...clean().warnings, pack_delivery_failed: [{ business_date: '2026-09-29', addresses: ['gm@example.test', 'fo@example.test'] }] } }
+    const w = mountView(warned, ['nightaudit.run', 'nightaudit.pack_view'])
+    await flushPromises()
+    const line = w.get('[data-testid=pack-delivery-failed-2026-09-29]')
+    expect(line.text()).toContain('could not be e-mailed to gm@example.test, fo@example.test')
+    expect(line.find('a').attributes('href')).toBe('/night-audit/archive')
+    await w.get('input[name=confirm_run]').setValue(true)
+    expect(w.get('[data-testid=run-audit]').attributes('disabled')).toBeUndefined()
+  })
+
   it('writes the figures of the closing summary with the separators of the language', async () => {
     const big = { ...result, summary: { ...result.summary, occupancy_percent: '4.00', room_revenue: { net: '1035000', service: '0', tax: '0' }, adr: '1035000', revpar: '41400', payments_by_method: [{ method: 'CASH', payments: '1500000', refunds: '0', net: '1500000' }] } }
     for (const [lang, money, percent] of [['en', '1,035,000', '4.00%'], ['id', '1.035.000', '4,00%']] as const) {

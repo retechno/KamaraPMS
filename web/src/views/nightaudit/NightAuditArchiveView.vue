@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { NightAuditPackManifest, NightAuditPackSummary } from '@/api/types'
+import type { NightAuditPackDelivery, NightAuditPackManifest, NightAuditPackRecipient, NightAuditPackSummary } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -10,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -20,6 +22,7 @@ const property = usePropertyStore()
 const pid = computed(() => property.currentId)
 const canManage = computed(() => auth.can('nightaudit.pack_manage', pid.value))
 const canView = computed(() => auth.can('nightaudit.pack_view', pid.value))
+const canResend = computed(() => auth.can('nightaudit.pack_resend', pid.value))
 
 /** The sections that have a table (CSV); the others are JSON only. */
 const CSV_SECTIONS = ['FLASH', 'REVENUE', 'TAX', 'PAYMENTS', 'Z_REPORTS', 'GUEST_LEDGER', 'DEPOSIT_LEDGER', 'CORRECTIONS', 'CANCELLATIONS', 'IN_HOUSE']
@@ -33,11 +36,17 @@ const detail = ref<NightAuditPackManifest | null>(null)
 const picked = ref<string[]>([])
 const lateDate = ref('')
 const notice = ref('')
+const emailEnabled = ref(true)
+const deliveries = ref<NightAuditPackDelivery[]>([])
+const recipients = ref<NightAuditPackRecipient[]>([])
+const resendIds = ref<number[]>([])
+const resending = ref(false)
 
 const columns = computed<Column<NightAuditPackSummary>[]>(() => [
   { key: 'business_date', label: t('nightAuditArchive.date'), format: 'date' },
   { key: 'status', label: t('nightAuditArchive.status') },
   { key: 'sections_ok', label: t('nightAuditArchive.sections') },
+  { key: 'mail', label: t('nightAuditArchive.mail') },
   { key: 'built_at', label: t('nightAuditArchive.built'), format: 'datetime' },
   { key: 'open', label: '', align: 'right' },
 ])
@@ -59,6 +68,7 @@ async function load(more = false): Promise<void> {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/night-audit/packs', { params: { path: { propertyId }, query } })
     rows.value = more ? [...rows.value, ...(data?.items ?? [])] : (data?.items ?? [])
     cursor.value = data?.next_cursor ?? null
+    emailEnabled.value = data?.email_enabled ?? true
   } catch (e) {
     fail(e)
   } finally {
@@ -74,10 +84,54 @@ async function open(date: string): Promise<void> {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/night-audit/packs/{date}', { params: { path: { propertyId, date } } })
     detail.value = (data as NightAuditPackManifest | undefined) ?? null
     picked.value = []
+    await loadMail(date)
   } catch (e) {
     fail(e)
   }
 }
+
+/** The e-mail history of the pack, and (to send it again) the active recipients, every one chosen. */
+async function loadMail(date: string): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  const history = await api.GET('/api/v1/properties/{propertyId}/night-audit/packs/{date}/deliveries', { params: { path: { propertyId, date } } })
+  deliveries.value = history.data?.items ?? []
+  emailEnabled.value = history.data?.email_enabled ?? emailEnabled.value
+  if (!canResend.value) {
+    recipients.value = []
+    return
+  }
+  const list = await api.GET('/api/v1/properties/{propertyId}/night-audit/pack-recipients', { params: { path: { propertyId } } })
+  recipients.value = (list.data?.items ?? []).filter((r) => r.is_active)
+  resendIds.value = recipients.value.map((r) => r.id)
+}
+
+async function resend(): Promise<void> {
+  const propertyId = pid.value
+  const d = detail.value
+  if (propertyId === null || !d || !resendIds.value.length) return
+  resending.value = true
+  error.value = null
+  try {
+    const { data } = await api.POST('/api/v1/properties/{propertyId}/night-audit/packs/{date}/resend', {
+      params: { path: { propertyId, date: d.business_date } }, body: { recipient_ids: resendIds.value },
+    })
+    toast.success(t('nightAuditArchive.resendDone', { n: data?.queued.length ?? 0, date: d.business_date }))
+    await loadMail(d.business_date)
+    await load()
+  } catch (e) {
+    fail(e)
+  } finally {
+    resending.value = false
+  }
+}
+
+/** The text under a message that did not go: a section too large is named in the language of the page; any other error is what the mail server said. */
+function failure(d: NightAuditPackDelivery): string {
+  return d.last_error?.startsWith('PACK_TOO_LARGE') ? t('nightAuditArchive.tooLarge') : (d.last_error ?? '')
+}
+
+const shortHash = (h: string) => `${h.slice(0, 4)}…${h.slice(-4)}`
 
 const base = (date: string) => `/api/v1/properties/${pid.value}/night-audit/packs/${date}`
 
@@ -163,6 +217,14 @@ watch(pid, () => {
         <small v-if="row.built_late" class="ml-2 text-muted-foreground">{{ t('nightAuditArchive.builtLate') }}</small>
       </template>
       <template #cell-sections_ok="{ row }">{{ t('nightAuditArchive.sectionsValue', { ok: row.sections_ok, failed: row.sections_failed }) }}</template>
+      <template #cell-mail="{ row }">
+        <span v-if="row.mail_sent + row.mail_failed + row.mail_queued === 0" class="text-muted-foreground">{{ emailEnabled ? t('nightAuditArchive.mailNone') : t('nightAuditArchive.mailOff') }}</span>
+        <template v-else>
+          <span v-if="row.mail_sent">{{ t('nightAuditArchive.mailSent', { n: row.mail_sent }) }}</span>
+          <span v-if="row.mail_queued"> · {{ t('nightAuditArchive.mailQueued', { n: row.mail_queued }) }}</span>
+          <Badge v-if="row.mail_failed" variant="destructive" class="ml-1">{{ t('nightAuditArchive.mailFailed', { n: row.mail_failed }) }}</Badge>
+        </template>
+      </template>
       <template #cell-open="{ row }">
         <Button variant="outline" size="sm" :data-testid="`open-${row.business_date}`" @click="open(row.business_date)">{{ t('nightAuditArchive.open') }}</Button>
       </template>
@@ -214,6 +276,52 @@ watch(pid, () => {
           <Button v-if="canManage && hasFailed" variant="outline" size="sm" data-testid="rebuild" @click="rebuild(detail.business_date)">{{ t('nightAuditArchive.rebuild') }}</Button>
         </div>
         <p v-if="canManage && hasFailed" class="mb-0 mt-2 text-xs text-muted-foreground">{{ t('nightAuditArchive.rebuildHint') }}</p>
+      </CardContent>
+    </Card>
+
+    <Card v-if="detail" class="mt-4" data-testid="history">
+      <CardHeader>
+        <CardTitle>{{ t('nightAuditArchive.historyTitle') }}</CardTitle>
+        <p v-if="!emailEnabled" class="m-0 text-sm text-warning" data-testid="mail-off">{{ t('nightAuditArchive.mailOffNote') }}</p>
+      </CardHeader>
+      <CardContent>
+        <p v-if="!deliveries.length" class="m-0 text-sm text-muted-foreground" data-testid="history-empty">{{ t('nightAuditArchive.historyNone') }}</p>
+        <ul v-else class="m-0 grid list-none gap-3 p-0">
+          <li v-for="d in deliveries" :key="d.id" class="flex flex-wrap items-start justify-between gap-2 border-b pb-3 text-sm" :data-testid="`delivery-${d.id}`">
+            <div>
+              <div class="font-medium">{{ d.email }}</div>
+              <small class="text-muted-foreground">
+                {{ t('nightAuditArchive.historySections', { n: d.sections.length }) }}
+                <template v-if="d.parts > 1"> · {{ t('nightAuditArchive.historyPart', { part: d.part, parts: d.parts }) }}</template>
+                · {{ t('nightAuditArchive.historyQueued', { user: d.queued_by }) }} {{ $dateTime(d.queued_at) }}
+                <template v-if="d.status !== 'QUEUED' && d.attempts > 1"> · {{ t('nightAuditArchive.historyAttempts', { n: d.attempts }) }}</template>
+              </small>
+              <div v-if="d.pdf_sha256" class="text-xs text-muted-foreground" data-testid="delivery-hash">
+                {{ t('nightAuditArchive.historyHash', { hash: shortHash(d.pdf_sha256) }) }} · {{ t('nightAuditArchive.historyRenderer', { version: d.renderer ?? '' }) }}
+              </div>
+              <div v-if="failure(d)" class="text-xs text-destructive">{{ failure(d) }}</div>
+            </div>
+            <div class="text-right">
+              <Badge :variant="d.status === 'SENT' ? 'success' : d.status === 'FAILED' ? 'destructive' : 'secondary'">{{ t(`nightAuditArchive.deliveryState.${d.status}` as never) }}</Badge>
+              <div v-if="d.sent_at" class="text-xs text-muted-foreground">{{ t('nightAuditArchive.historySent', { time: $dateTime(d.sent_at) }) }}</div>
+            </div>
+          </li>
+        </ul>
+
+        <div v-if="canResend" class="mt-4" data-testid="resend">
+          <h3 class="mb-2 mt-0 text-sm font-semibold">{{ t('nightAuditArchive.resendTitle') }}</h3>
+          <p v-if="!emailEnabled" class="m-0 text-sm text-muted-foreground">{{ t('nightAuditArchive.mailOffNote') }}</p>
+          <p v-else-if="!recipients.length" class="m-0 text-sm text-muted-foreground" data-testid="resend-none">{{ t('nightAuditArchive.resendNone') }}</p>
+          <template v-else>
+            <label v-for="r in recipients" :key="r.id" class="flex cursor-pointer items-center gap-2 text-sm">
+              <input v-model="resendIds" type="checkbox" :value="r.id" :name="`resend_${r.id}`" class="size-4 accent-primary" />
+              {{ r.email }} <small class="text-muted-foreground">· {{ t('nightAuditArchive.historySections', { n: r.sections.length }) }}</small>
+            </label>
+            <p class="mb-0 mt-2 text-xs text-muted-foreground">{{ t('nightAuditArchive.resendHint') }}</p>
+            <Button class="mt-3" size="sm" :disabled="resending || !resendIds.length" data-testid="resend-send" @click="resend">{{ t('nightAuditArchive.resendTo', { n: resendIds.length }) }}</Button>
+          </template>
+        </div>
+        <p v-if="canManage" class="mb-0 mt-3 text-xs"><RouterLink to="/night-audit/recipients">{{ t('nightAuditArchive.recipientsLink') }}</RouterLink></p>
       </CardContent>
     </Card>
 
