@@ -4361,7 +4361,7 @@ export interface paths {
         put?: never;
         /**
          * Add a recipient (nightaudit.pack_manage)
-         * @description Without `sections` the recipient gets `SUMMARY` and `FLASH`; the sections with guest names or cash are opt-in. 409 `DUPLICATE_REQUEST` for an address that is a recipient already (whatever its case), 422 for an address that is not one address, a name with a line break or a section that is not in the catalog (`PACK_SECTION_INVALID`). Audited as `nap_recipient.created` with the address.
+         * @description Without `sections` the recipient gets `SUMMARY` and `FLASH`; the sections with guest names or cash are opt-in. 409 `PACK_RECIPIENT_EXISTS` for an address that is a recipient already (whatever its case), 422 for an address that is not one address, a name with a line break or a section that is not in the catalog (`PACK_SECTION_INVALID`). Audited as `nap_recipient.created` with the address.
          */
         post: operations["createNightAuditPackRecipient"];
         delete?: never;
