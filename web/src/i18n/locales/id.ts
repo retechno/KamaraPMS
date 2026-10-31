@@ -780,7 +780,7 @@ export const id: Messages = {
     newDateIs: 'Tanggal bisnis sekarang',
     chargesPosted: '{n} biaya kamar diposting.',
     occupied: 'Terisi',
-    occupiedValue: '{occupied} dari {available} ({pct}%)',
+    occupiedValue: '{occupied} dari {available} ({pct})',
     movements: 'Kedatangan / keberangkatan / tidak datang',
     revenue: 'Pendapatan kamar (neto)',
     adr: 'ADR',
