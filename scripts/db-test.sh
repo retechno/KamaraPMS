@@ -269,9 +269,28 @@ grep -q "cannot roll back 00098" "${TMPDIR:-/tmp}/m98-down.err" || { echo "FAIL:
 echo "    down refused while a pack exists"
 # a pack is never deleted, so the test clears the table the way the schema tests do: with the trigger switched off for this one clean-up
 psql_run -c "ALTER TABLE nap_packs DISABLE TRIGGER nap_packs_no_delete" -c "DELETE FROM nap_packs" -c "ALTER TABLE nap_packs ENABLE TRIGGER nap_packs_no_delete"
+# 00099 (the recipients and the e-mail of the pack) has a foreign key to the packs of 00098: it goes first and comes back after it
+M99="$(ls "$ROOT"/migrations/00099_*.sql)"
+section down "$M99" | psql_run
 section down "$M98" | psql_run
 psql_run < "$ROOT/db/tests/migration_00098_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M98" | psql_run >/dev/null
+section up "$M99" | psql_run >/dev/null
+
+echo "==> migration 00099 (recipients and e-mail of the night audit pack): the Down is refused while a recipient or a pack e-mail exists"
+psql_run -c "INSERT INTO nap_recipients (tenant_id, property_id, email, sections) SELECT tenant_id, id, 'gm@example.test', ARRAY['SUMMARY'] FROM properties ORDER BY id LIMIT 1"
+if section down "$M99" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m99-down.err"; then echo "FAIL: the Down of 00099 ran while a recipient existed" >&2; exit 1; fi
+grep -q "cannot roll back 00099" "${TMPDIR:-/tmp}/m99-down.err" || { echo "FAIL: the Down of 00099 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m99-down.err" >&2; exit 1; }
+echo "    down refused while a recipient exists"
+psql_run -c "DELETE FROM nap_recipients"
+psql_run -c "INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms) SELECT tenant_id, property_id, business_date, 1, 'COMPLETE', now(), 5 FROM business_days WHERE status = 'CLOSED' ORDER BY id LIMIT 1"   -c "INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts) SELECT tenant_id, property_id, 'NIGHT_AUDIT_PACK', 'gm@example.test', 'en', id, ARRAY['SUMMARY'], 1, 1 FROM nap_packs"
+if section down "$M99" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m99-down.err"; then echo "FAIL: the Down of 00099 ran while a pack e-mail existed" >&2; exit 1; fi
+grep -q "cannot roll back 00099" "${TMPDIR:-/tmp}/m99-down.err" || { echo "FAIL: the Down of 00099 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m99-down.err" >&2; exit 1; }
+echo "    down refused while a pack e-mail exists"
+psql_run -c "DELETE FROM email_outbox WHERE kind = 'NIGHT_AUDIT_PACK'" -c "ALTER TABLE nap_packs DISABLE TRIGGER nap_packs_no_delete" -c "DELETE FROM nap_packs" -c "ALTER TABLE nap_packs ENABLE TRIGGER nap_packs_no_delete"
+section down "$M99" | psql_run
+psql_run < "$ROOT/db/tests/migration_00099_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M99" | psql_run >/dev/null
 
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do

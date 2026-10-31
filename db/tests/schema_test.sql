@@ -3192,6 +3192,70 @@ SELECT expect_error('a pack locks the currency', '23001',
     $q$UPDATE properties SET currency_code = 'USD' WHERE code = 'CUR'$q$);
 
 ------------------------------------------------------------------------------------------
+-- Night audit pack, PR 3: the recipients and the e-mail of the pack (docs/architecture/38, 6 and 8.1)
+------------------------------------------------------------------------------------------
+CREATE FUNCTION pms_test.nap_recipient(p_email text, p_sections text[] DEFAULT ARRAY['SUMMARY', 'FLASH']) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO nap_recipients (tenant_id, property_id, email, name, sections) VALUES (tn('ABC'), pr('BALI'), p_email, 'GM', p_sections::varchar[]) $$;
+CREATE FUNCTION pms_test.nap_mail(p_status text DEFAULT 'QUEUED', p_part int DEFAULT 1, p_to text DEFAULT 'gm@example.test') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, status, language, nap_pack_id, nap_sections, nap_part, nap_parts)
+    SELECT tenant_id, property_id, 'NIGHT_AUDIT_PACK', p_to, p_status, 'en', id, ARRAY['SUMMARY'], p_part, 3 FROM nap_packs WHERE property_id = pr('BALI') $$;
+
+SELECT expect_ok('a recipient has a name and sections of the catalog', $q$SELECT pms_test.nap_recipient('gm@example.test', ARRAY['SUMMARY', 'GUEST_LEDGER', 'OUT_OF_ORDER'])$q$);
+SELECT expect_error('an address is a recipient of a property once', '23505', $q$SELECT pms_test.nap_recipient('gm@example.test')$q$, $q$SELECT pms_test.nap_recipient('gm@example.test')$q$);
+SELECT expect_error('an address is a recipient once whatever its case', '23505', $q$SELECT pms_test.nap_recipient('gm@example.test')$q$, $q$SELECT pms_test.nap_recipient('GM@Example.TEST')$q$);
+SELECT expect_ok('the same address is a recipient of two properties', $q$SELECT pms_test.nap_recipient('gm@example.test')$q$,
+    $q$INSERT INTO nap_recipients (tenant_id, property_id, email, sections) VALUES (tn('XYZ'), pr('SG'), 'gm@example.test', ARRAY['SUMMARY'])$q$);
+SELECT expect_error('a recipient has an address with one @', '23514', $q$SELECT pms_test.nap_recipient('nobody')$q$);
+SELECT expect_error('an address has something before the @', '23514', $q$SELECT pms_test.nap_recipient('@example.test')$q$);
+SELECT expect_error('an address has something after the @', '23514', $q$SELECT pms_test.nap_recipient('gm@')$q$);
+SELECT expect_error('an address has one @ only', '23514', $q$SELECT pms_test.nap_recipient('a@b@c.test')$q$);
+SELECT expect_error('an address has no space', '23514', $q$SELECT pms_test.nap_recipient('a b@example.test')$q$);
+SELECT expect_error('an address has no line break (no header can be injected)', '23514', $q$SELECT pms_test.nap_recipient(E'a@example.test\r\nBcc: x@y.test')$q$);
+SELECT expect_error('a recipient receives at least one section', '23514', $q$SELECT pms_test.nap_recipient('gm@example.test', ARRAY[]::text[])$q$);
+SELECT expect_error('a section of a recipient is of the catalog', '23514', $q$SELECT pms_test.nap_recipient('gm@example.test', ARRAY['SUMMARY', 'FORECAST'])$q$);
+SELECT expect_error('a section appears once for a recipient', '23514', $q$SELECT pms_test.nap_recipient('gm@example.test', ARRAY['SUMMARY', 'SUMMARY'])$q$);
+SELECT expect_error('the sections of a recipient are not NULL', '23502', $q$INSERT INTO nap_recipients (tenant_id, property_id, email, sections) VALUES (tn('ABC'), pr('BALI'), 'gm@example.test', NULL)$q$);
+SELECT expect_error('the name of a recipient is not blank', '23514', $q$INSERT INTO nap_recipients (tenant_id, property_id, email, name, sections) VALUES (tn('ABC'), pr('BALI'), 'gm@example.test', '  ', ARRAY['SUMMARY'])$q$);
+SELECT expect_error('a recipient belongs to a property of its tenant', '23503', $q$INSERT INTO nap_recipients (tenant_id, property_id, email, sections) VALUES (tn('XYZ'), pr('BALI'), 'gm@example.test', ARRAY['SUMMARY'])$q$);
+SELECT expect_ok('a recipient can be deactivated and deleted (K2)', $q$SELECT pms_test.nap_recipient('gm@example.test')$q$, $q$UPDATE nap_recipients SET is_active = false$q$, $q$DELETE FROM nap_recipients$q$);
+
+SELECT expect_ok('an e-mail of a pack holds the pack, the sections as sent and the part', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$);
+SELECT expect_error('an e-mail of a pack needs its pack', '23514', $q$INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_sections, nap_part, nap_parts)
+    VALUES (tn('ABC'), pr('BALI'), 'NIGHT_AUDIT_PACK', 'a@b.test', 'en', ARRAY['SUMMARY'], 1, 1)$q$);
+SELECT expect_error('an e-mail of a pack needs its sections', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_part, nap_parts)
+    SELECT tenant_id, property_id, 'NIGHT_AUDIT_PACK', 'a@b.test', 'en', id, 1, 1 FROM nap_packs$q$);
+SELECT expect_error('the sections of an e-mail of a pack are not empty', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts)
+    SELECT tenant_id, property_id, 'NIGHT_AUDIT_PACK', 'a@b.test', 'en', id, ARRAY[]::varchar[], 1, 1 FROM nap_packs$q$);
+SELECT expect_error('an e-mail of a pack is in English', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts)
+    SELECT tenant_id, property_id, 'NIGHT_AUDIT_PACK', 'a@b.test', 'id', id, ARRAY['SUMMARY'], 1, 1 FROM nap_packs$q$);
+SELECT expect_error('an e-mail of a pack has no reservation', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts)
+    SELECT tenant_id, property_id, 'NIGHT_AUDIT_PACK', rs('R1'), 'a@b.test', 'en', id, ARRAY['SUMMARY'], 1, 1 FROM nap_packs$q$);
+SELECT expect_error('the part of an e-mail is not past the parts', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts)
+    SELECT tenant_id, property_id, 'NIGHT_AUDIT_PACK', 'a@b.test', 'en', id, ARRAY['SUMMARY'], 3, 2 FROM nap_packs$q$);
+SELECT expect_error('a confirmation has no pack', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address, nap_pack_id, nap_sections, nap_part, nap_parts)
+    SELECT tenant_id, property_id, 'RESERVATION_CONFIRMATION', rs('R1'), 'a@b.test', id, ARRAY['SUMMARY'], 1, 1 FROM nap_packs$q$);
+SELECT expect_error('an e-mail of a pack belongs to a pack of its property', '23503', $q$INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts)
+    VALUES (tn('ABC'), pr('BALI'), 'NIGHT_AUDIT_PACK', 'a@b.test', 'en', 999999, ARRAY['SUMMARY'], 1, 1)$q$);
+SELECT expect_error('a recipient has one waiting message for a part of a pack', '23505', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$, $q$SELECT pms_test.nap_mail('QUEUED', 1, 'GM@example.test')$q$);
+SELECT expect_ok('the next part of the pack waits beside the first', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail('QUEUED', 1)$q$, $q$SELECT pms_test.nap_mail('QUEUED', 2)$q$);
+SELECT expect_ok('a message that failed does not hold the place of a new one', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail('FAILED')$q$, $q$SELECT pms_test.nap_mail('QUEUED')$q$);
+SELECT expect_error('a pack e-mail that was sent has the hash of its PDF and the renderer', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$,
+    $q$UPDATE email_outbox SET status = 'SENT', sent_at = now() WHERE kind = 'NIGHT_AUDIT_PACK'$q$);
+SELECT expect_ok('a pack e-mail that was sent keeps the hash and the renderer', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$,
+    $q$UPDATE email_outbox SET status = 'SENT', sent_at = now(), nap_pdf_sha256 = repeat('ab', 32), nap_renderer = '1' WHERE kind = 'NIGHT_AUDIT_PACK'$q$);
+SELECT expect_error('the hash and the renderer come together (no renderer)', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$,
+    $q$UPDATE email_outbox SET nap_pdf_sha256 = repeat('ab', 32) WHERE kind = 'NIGHT_AUDIT_PACK'$q$);
+SELECT expect_error('the hash and the renderer come together (no hash)', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$,
+    $q$UPDATE email_outbox SET nap_renderer = '1' WHERE kind = 'NIGHT_AUDIT_PACK'$q$);
+SELECT expect_error('the hash is lower-case hex', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$,
+    $q$UPDATE email_outbox SET nap_pdf_sha256 = repeat('AB', 32), nap_renderer = '1' WHERE kind = 'NIGHT_AUDIT_PACK'$q$);
+SELECT expect_error('the hash is of 64 characters', '22001', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_mail()$q$,
+    $q$UPDATE email_outbox SET nap_pdf_sha256 = repeat('ab', 33), nap_renderer = '1' WHERE kind = 'NIGHT_AUDIT_PACK'$q$);
+SELECT expect_error('only a pack e-mail has a hash', '23514', $q$UPDATE email_outbox SET nap_pdf_sha256 = repeat('ab', 32), nap_renderer = '1'$q$);
+SELECT expect_ok('the history keeps the address after the recipient is deleted (no foreign key)', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_recipient('gm@example.test')$q$, $q$SELECT pms_test.nap_mail()$q$,
+    $q$DELETE FROM nap_recipients$q$, $q$SELECT 1 / (SELECT count(*)::int FROM email_outbox WHERE kind = 'NIGHT_AUDIT_PACK' AND to_address = 'gm@example.test')$q$);
+
+------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------
 DO $$
