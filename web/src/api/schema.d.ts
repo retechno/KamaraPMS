@@ -4205,6 +4205,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/night-audit/packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The archive of the night audit packs, newest day first (nightaudit.pack_view)
+         * @description One row for each business day that has a pack. Without `from` and `to` the last 90 days up to the open business date are listed; a range is at most 366 days (422 `OUT_OF_RANGE`). A page holds 31 days; `next_cursor` is the business date to pass as `cursor` for the next page.
+         */
+        get: operations["listNightAuditPacks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/packs/{date}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The business date, `YYYY-MM-DD`. With the suffix `.pdf` (`2026-10-28.pdf`) the answer is the PDF of the pack. */
+                date: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * The manifest of the pack of a business day, or its PDF (nightaudit.pack_view)
+         * @description The manifest lists the sections with their status, size and whether they can be built again. The date written `YYYY-MM-DD.pdf` answers the PDF drawn from the snapshot (inline, never cached, in English): a cover and the sections that hold data, or the ones named in `sections` (a comma separated list of codes; 422 `PACK_SECTION_INVALID` for a code that is not a section or when none of them holds data). The permission is asked before the path is read.
+         */
+        get: operations["getNightAuditPack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/packs/{date}/sections/{section}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+                section: components["schemas"]["NightAuditPackSectionCode"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The JSON a pack kept for a section, or its table as CSV (nightaudit.pack_view)
+         * @description The stored JSON, as it was built when the day was closed (its `format_version` is in the manifest). `format=csv` gives the table of the sections that have one (not `OUTLETS`, `OUT_OF_ORDER`, `NEXT_DAY`, `AUDIT_NOTES`, `SUMMARY`: 422). A section that holds no data (failed, off, not available) is 404 `PACK_NOT_FOUND`.
+         */
+        get: operations["getNightAuditPackSection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/night-audit/packs/{date}/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build a pack again from the ledger (nightaudit.pack_manage)
+         * @description Its own transaction, no e-mail. A closed day with no pack gets one built from the ledger: the sections that only the close of the night saw (`IN_HOUSE`, `NEXT_DAY`, `AUDIT_NOTES`, `OUT_OF_ORDER`) are `NOT_AVAILABLE`, the rows of the flash about tomorrow are blank, and every section says `built_late`. A pack that exists gets its `FAILED` sections built again (the ones that can be); nothing failed means nothing changes. 409 `SECTION_NOT_REBUILDABLE` when only sections that cannot be built again have failed, 409 `DATE_NOT_CLOSED` for the open day, 404 `BUSINESS_DAY_NOT_FOUND` for a date that was never a business day, 422 `OUT_OF_RANGE` for a day more than 400 days back.
+         */
+        post: operations["rebuildNightAuditPack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/night-audit/room-charges/preview": {
         parameters: {
             query?: never;
@@ -17536,6 +17629,60 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** @enum {string} */
+        NightAuditPackSectionCode: "SUMMARY" | "FLASH" | "REVENUE" | "TAX" | "PAYMENTS" | "Z_REPORTS" | "GUEST_LEDGER" | "DEPOSIT_LEDGER" | "CORRECTIONS" | "CANCELLATIONS" | "OUTLETS" | "OUT_OF_ORDER" | "IN_HOUSE" | "NEXT_DAY" | "AUDIT_NOTES";
+        NightAuditPackSection: {
+            section: components["schemas"]["NightAuditPackSectionCode"];
+            /**
+             * @description OFF: the section does not apply to the property (no point of sale, no cashier shift). NOT_AVAILABLE: a pack built later cannot know it.
+             * @enum {string}
+             */
+            status: "OK" | "FAILED" | "OFF" | "NOT_AVAILABLE";
+            format_version: number;
+            /** @description Why the section failed (FAILED only). */
+            error?: string;
+            /** @description The section was built after the close of the day (a late build or a rebuild). */
+            built_late: boolean;
+            /** @description The size of the stored JSON. */
+            size_bytes: number;
+            /** @description The ledger can make the section again. */
+            rebuildable: boolean;
+        };
+        NightAuditPackManifest: {
+            business_date: components["schemas"]["Date"];
+            /**
+             * @description PARTIAL when a section failed.
+             * @enum {string}
+             */
+            status: "COMPLETE" | "PARTIAL";
+            format_version: number;
+            /** Format: date-time */
+            built_at: string;
+            /** @description The name of the user who closed the day */
+            built_by: string;
+            /** @description The time the build took. */
+            build_ms: number;
+            built_late: boolean;
+            /** @description In the order of the pack. */
+            sections: components["schemas"]["NightAuditPackSection"][];
+        };
+        NightAuditPackSummary: {
+            business_date: components["schemas"]["Date"];
+            /** @enum {string} */
+            status: "COMPLETE" | "PARTIAL";
+            format_version: number;
+            /** Format: date-time */
+            built_at: string;
+            build_ms: number;
+            built_late: boolean;
+            sections_ok: number;
+            sections_failed: number;
+        };
+        NightAuditPackList: {
+            items: components["schemas"]["NightAuditPackSummary"][];
+            /** @description The business date to pass as `cursor` for the next page; null on the last page. */
+            next_cursor: components["schemas"]["Date"] | null;
+        };
         NightAuditWarnings: {
             /** @description Open bills of the outlets with items sold (the sale is revenue of the day, the money is not counted yet) or with lines that were never sent. */
             outlet_bills?: components["schemas"]["NightAuditOutletIssue"][];
@@ -17575,6 +17722,8 @@ export interface components {
                 group_name: string;
                 balance: components["schemas"]["Amount"];
             }[];
+            /** @description PACK_INCOMPLETE: the closed days whose night audit pack has a section that failed. A user with nightaudit.pack_manage can build the section again. */
+            pack_incomplete: components["schemas"]["Date"][];
             blocks_ending: {
                 /** Format: int64 */
                 block_id: number;
@@ -34161,6 +34310,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NightAuditResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    listNightAuditPacks: {
+        parameters: {
+            query?: {
+                from?: components["schemas"]["Date"];
+                to?: components["schemas"]["Date"];
+                cursor?: components["schemas"]["Date"];
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the archive. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getNightAuditPack: {
+        parameters: {
+            query?: {
+                /** @description PDF only: the sections to print. */
+                sections?: string;
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                /** @description The business date, `YYYY-MM-DD`. With the suffix `.pdf` (`2026-10-28.pdf`) the answer is the PDF of the pack. */
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The manifest, or the PDF. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackManifest"];
+                    "application/pdf": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getNightAuditPackSection: {
+        parameters: {
+            query?: {
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+                section: components["schemas"]["NightAuditPackSectionCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The section. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                    "text/csv": string;
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    rebuildNightAuditPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                date: components["schemas"]["Date"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The manifest after the build. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightAuditPackManifest"];
                 };
             };
             403: components["responses"]["Problem"];

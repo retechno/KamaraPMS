@@ -251,6 +251,36 @@ func (q *Queries) ListOpenMastersOfGoneGroups(ctx context.Context, arg ListOpenM
 	return items, nil
 }
 
+const listPartialPackDates = `-- name: ListPartialPackDates :many
+SELECT business_date FROM nap_packs WHERE tenant_id = $1 AND property_id = $2 AND status = 'PARTIAL' ORDER BY business_date
+`
+
+type ListPartialPackDatesParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+// Warnings: the closed days whose night audit pack has a section that failed (docs/architecture/38-reports-night-audit-pack.md 5.2).
+func (q *Queries) ListPartialPackDates(ctx context.Context, arg ListPartialPackDatesParams) ([]civil.Date, error) {
+	rows, err := q.db.Query(ctx, listPartialPackDates, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []civil.Date{}
+	for rows.Next() {
+		var business_date civil.Date
+		if err := rows.Scan(&business_date); err != nil {
+			return nil, err
+		}
+		items = append(items, business_date)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaleDrafts = `-- name: ListStaleDrafts :many
 SELECT l.id AS reservation_room_id, l.reservation_id, res.confirmation_number, l.arrival_date
 FROM reservation_rooms l

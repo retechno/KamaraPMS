@@ -96,6 +96,14 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 	if err != nil {
 		return Document{}, err
 	}
+	g := newPage(dc.hotel, dc.lang, "DAILY FLASH REPORT", dc.printed)
+	renderFlash(g, dc, rep, true)
+	pdf, err := g.bytes()
+	return Document{Filename: "daily-flash-" + rep.BusinessDate.String() + ".pdf", PDF: pdf}, err
+}
+
+// renderFlash prints the report on the page: the same body for the document and for the section of the night audit pack (which has no signature lines of its own).
+func renderFlash(g *page, dc docContext, rep reports.DailyFlash, signatures bool) {
 	l, dec := dc.lang, dc.decimals
 	cell := func(kind, v string) string {
 		if v == "" {
@@ -139,7 +147,6 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 	}
 	head := []string{"", "Today", "MTD", "MTD last month", "MTD last year", "Budget MTD", "Variance MTD", "YTD"}
 
-	g := newPage(dc.hotel, l, "DAILY FLASH REPORT", dc.printed)
 	g.title("DAILY FLASH REPORT", l.Date(rep.BusinessDate))
 	g.pairs([][2]string{
 		{"Business date", l.Date(rep.BusinessDate)}, {"Currency", dc.prop.CurrencyCode},
@@ -206,7 +213,7 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 	for _, w := range rep.Warnings {
 		g.note(flashWarning(w), "I", 8.5)
 	}
-	if !rep.Interim {
+	if signatures && !rep.Interim {
 		g.p.Ln(10)
 		y := g.p.GetY() + 14
 		g.p.SetXY(margin, y-8)
@@ -215,8 +222,6 @@ func (s *Service) DailyFlashPDF(ctx context.Context, propertyID int64, date civi
 		g.signature(margin, y, 80, "Prepared by (night audit)")
 		g.signature(margin+100, y, 80, "Approved by (accounting)")
 	}
-	pdf, err := g.bytes()
-	return Document{Filename: "daily-flash-" + rep.BusinessDate.String() + ".pdf", PDF: pdf}, err
 }
 
 // flashWarning is the English text of a finding of the report.

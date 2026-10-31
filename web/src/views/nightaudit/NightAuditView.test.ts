@@ -260,4 +260,28 @@ describe('NightAuditView', () => {
     expect(w.get('[data-testid=cannot-run]').text()).toBe('Selesaikan hal-hal di atas terlebih dahulu.')
     setLocale('en')
   })
+
+  it('shows the pack the run built, with the way to the archive, to who may read it; warns of an incomplete one', async () => {
+    const manifest = { business_date: '2026-09-30', status: 'PARTIAL', format_version: 1, built_at: '2026-09-30T17:00:00Z', built_by: 'Ani', build_ms: 250, built_late: false, sections: [{ section: 'SUMMARY', status: 'OK' }, { section: 'FLASH', status: 'FAILED' }] }
+    const w = mountView({ ...clean(), warnings: { ...clean().warnings, pack_incomplete: ['2026-09-28'] } }, ['nightaudit.run', 'nightaudit.pack_view'])
+    GET.mockImplementation((url: string) => Promise.resolve({ data: url.endsWith('/packs/{date}') ? manifest : { ...clean(), warnings: { ...clean().warnings, pack_incomplete: ['2026-09-28'] } } }))
+    await w.get('button[data-testid=refresh]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=pack-incomplete-2026-09-28]').text()).toContain('28 Sep 2026')
+    await w.get('input[name=confirm_run]').setValue(true)
+    await w.get('[data-testid=run-audit]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=pack-status]').text()).toBe('Partial')
+    expect(w.get('[data-testid=pack]').text()).toContain('1 of 2 sections ready')
+    expect(w.get('[data-testid=pack-archive]').attributes('href')).toBe('/night-audit/archive')
+  })
+
+  it('shows no pack to who may not read the archive', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[name=confirm_run]').setValue(true)
+    await w.get('[data-testid=run-audit]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=pack]').exists()).toBe(false)
+  })
 })

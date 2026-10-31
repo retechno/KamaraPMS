@@ -79,6 +79,7 @@ export const navigation: NavSection[] = [
     defaultOpen: true,
     items: [
       { id: 'nightAudit', to: '/night-audit', permission: 'nightaudit.run' },
+      { id: 'nightAuditArchive', to: '/night-audit/archive', permission: 'nightaudit.pack_view' },
       { id: 'reports', to: '/reports', permission: 'report.view' },
       { id: 'performance', to: '/performance', permission: 'report.view' },
     ],

@@ -90,6 +90,9 @@ const (
 
 	PermNightAuditRun    Permission = "nightaudit.run"
 	PermNightAuditNoShow Permission = "nightaudit.no_show"
+	// The night audit pack (docs/architecture/38-reports-night-audit-pack.md 6.6). Granted to no existing role: the tenant gives them to the roles it wants.
+	PermNightAuditPackManage Permission = "nightaudit.pack_manage"
+	PermNightAuditPackView   Permission = "nightaudit.pack_view"
 
 	PermReportView Permission = "report.view"
 
@@ -233,6 +236,8 @@ var Catalogue = []PermissionInfo{
 
 	{PermNightAuditRun, "End of day", "Run night audit and post room charges", "M13"},
 	{PermNightAuditNoShow, "End of day", "Mark arrivals as no-show", "M13"},
+	{PermNightAuditPackManage, "End of day", "Manage the recipients of the night audit pack and rebuild a pack", "NP1"},
+	{PermNightAuditPackView, "End of day", "See the archive of the night audit packs and download them again", "NP1"},
 
 	{PermReportView, "Reports", "View and export reports", "M14"},
 

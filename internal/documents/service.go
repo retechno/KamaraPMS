@@ -9,6 +9,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/assets"
+	"kamarapms/internal/auditpack"
 	"kamarapms/internal/banquet"
 	"kamarapms/internal/budget"
 	"kamarapms/internal/cityledger"
@@ -52,6 +53,7 @@ type Service struct {
 	shifts *shifts.Service
 	// reports is set by the application (SetReports): the daily flash report is printed from its figures.
 	reports *reports.Service
+	packs   *auditpack.Service
 	// banquet is set by the application (SetBanquet): the banquet is built after the documents.
 	banquet *banquet.Service
 	// assets is set by the application (SetAssets): the register prints its labels.

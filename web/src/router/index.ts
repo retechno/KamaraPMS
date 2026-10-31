@@ -257,6 +257,7 @@ export const router = createRouter({
       meta: { title: 'Folio' },
     },
     { path: '/night-audit', name: 'night-audit', component: () => import('@/views/nightaudit/NightAuditView.vue'), meta: { title: 'Night audit' } },
+    { path: '/night-audit/archive', name: 'night-audit-archive', component: () => import('@/views/nightaudit/NightAuditArchiveView.vue'), meta: { title: 'Night audit archive', permission: 'nightaudit.pack_view' } },
     { path: '/audit', name: 'audit', component: () => import('@/views/audit/AuditTrailView.vue'), meta: { title: 'Audit trail' } },
     { path: '/performance', name: 'performance', component: () => import('@/views/dashboard/PerformanceView.vue'), meta: { title: 'Performance' } },
     { path: '/reports', name: 'reports', component: () => import('@/views/reports/ReportsView.vue'), meta: { title: 'Reports' } },

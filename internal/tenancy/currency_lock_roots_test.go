@@ -14,10 +14,10 @@ import (
 // The behaviour tests insert one row of each table (with what the table cannot exist without) and require the refusal. The tables that are only possible with a journal
 // (a supplier bill, a tax opening credit ...) are also locked by the journal they reference; for those the definition test is what proves the table itself is on the list.
 
-// the tables the function reads, as migration 00058 defines them, inv_movements, which migration 00084 adds (the stock ledger holds money in the currency), and fa_assets and fa_ledger, which migration 00093 adds (the register holds costs).
+// the tables the function reads, as migration 00058 defines them, inv_movements, which migration 00084 adds (the stock ledger holds money in the currency), and fa_assets and fa_ledger, which migration 00093 adds (the register holds costs), and nap_packs, which migration 00098 adds (a pack of a closed day is a copy of the books; its sections are children of it and are not read by the function).
 var financialRoots = []string{
 	"bank_statements", "budgets", "cashier_shifts", "city_ledger_adjustments", "city_ledger_invoices", "city_ledger_receipts", "fa_assets", "fa_ledger", "folio_items", "gl_journals",
-	"inv_movements", "payments", "supplier_bills", "supplier_credit_notes", "supplier_payments", "tax_opening_credits", "tax_payments", "tax_returns",
+	"inv_movements", "nap_packs", "payments", "supplier_bills", "supplier_credit_notes", "supplier_payments", "tax_opening_credits", "tax_payments", "tax_returns",
 }
 
 func TestTheDefinitionOfFinancialDataNamesExactlyTheseTables(t *testing.T) {
@@ -175,6 +175,11 @@ func TestEveryRootTableOfFinancialDataLocksTheCurrency(t *testing.T) {
 		{"fa_ledger", func(t *testing.T, tx sqler, tn, p int64) {
 			a, c := asset(t, tx, tn, p)
 			mustExec(t, tx, `INSERT INTO fa_ledger (tenant_id, property_id, asset_id, category_id, kind, event_date, cost_delta, source_type, source_id, source_line) VALUES ($1, $2, $3, $4, 'ACQUIRE', '2026-09-30', 1000, 'TEST', 1, 1)`, tn, p, a, c)
+		}},
+		{"nap_packs", func(t *testing.T, tx sqler, tn, p int64) {
+			// a pack is the record of a closed day: the open day of the property is closed first
+			mustExec(t, tx, `UPDATE business_days SET status = 'CLOSED', closed_at = now() WHERE property_id = $1 AND status = 'OPEN'`, p)
+			mustExec(t, tx, `INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms) SELECT $1, $2, business_date, 1, 'COMPLETE', now(), 10 FROM business_days WHERE property_id = $2 AND status = 'CLOSED'`, tn, p)
 		}},
 		{"budgets", func(t *testing.T, tx sqler, tn, p int64) {
 			mustExec(t, tx, `INSERT INTO budgets (tenant_id, property_id, year_start, version, name) VALUES ($1, $2, '2026-01-01', 1, 'Budget 2026')`, tn, p)
