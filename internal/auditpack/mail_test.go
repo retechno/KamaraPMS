@@ -180,6 +180,25 @@ func TestTheWorkerSendsThePDFWithItsHashAndRenderer(t *testing.T) {
 	if strings.Contains(fo.Text, "Rooms sold") || strings.Contains(fo.HTML, "Rooms sold") {
 		t.Fatalf("a recipient of the ledger only gets no figures: %s", fo.Text)
 	}
+	// the figures are written the English way with the currency of the property: money IDR 1,000,000, a percentage 50.00%, a count without decimals
+	for _, want := range []string{"Rooms sold: 1\n", "Occupancy: 50.00%\n", "ARR: IDR 1,000,000\n", "Arrivals · departures · no-shows: "} {
+		if !strings.Contains(gm.Text, want) {
+			t.Fatalf("the figures lack %q: %s", want, gm.Text)
+		}
+	}
+	if !strings.Contains(gm.HTML, "<li>ARR: IDR 1,000,000</li>") || !strings.Contains(gm.HTML, "<li>Occupancy: 50.00%</li>") {
+		t.Fatalf("the HTML figures: %s", gm.HTML)
+	}
+	const footer = "You receive this because your address is a night audit recipient of this hotel. Ask the hotel to change or stop it."
+	for _, m := range msgs {
+		if !strings.Contains(m.Text, footer) || !strings.Contains(m.HTML, footer) {
+			t.Fatalf("a message closes with why it was sent: %s", m.Text)
+		}
+		// the sender is named like the subject: the property, not the tenant
+		if m.FromName != "Hotel BALI" || !strings.HasSuffix(m.Subject, " - "+m.FromName) || strings.Contains(m.FromName, "ABC") {
+			t.Fatalf("sender %q, subject %q", m.FromName, m.Subject)
+		}
+	}
 	for _, m := range msgs {
 		if strings.Contains(m.Text, "http") || strings.Contains(m.HTML, "http") || strings.Contains(m.HTML, "href") {
 			t.Fatalf("a message carries no link: %s", m.Text)

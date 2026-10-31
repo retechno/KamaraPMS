@@ -11,6 +11,7 @@ import (
 	"kamarapms/internal/documents"
 	"kamarapms/internal/notifications/notificationsdb"
 	"kamarapms/internal/platform/civil"
+	"kamarapms/internal/reports"
 )
 
 // KindNightAuditPack is the e-mail of a night audit pack (docs/architecture/38-reports-night-audit-pack.md 6): the PDF of the sections a recipient chose, in English.
@@ -124,7 +125,7 @@ func (s *Service) composePack(ctx context.Context, row notificationsdb.EmailOutb
 	if err != nil {
 		return Message{}, "", err
 	}
-	return packMessage(row.ToAddress, prop.Name, nonEmpty(prop.Address, prop.City), view, g, part, parts), "", nil
+	return packMessage(row.ToAddress, prop.Name, prop.CurrencyCode, view, g, part, parts), "", nil
 }
 
 // splitPack turns the row into part 1 of N and queues the other parts, in one transaction.
@@ -147,9 +148,62 @@ func (s *Service) splitPack(ctx context.Context, row notificationsdb.EmailOutbox
 	})
 }
 
+// packFooter closes every message of a pack: why the reader gets it and whom to ask.
+const packFooter = "You receive this because your address is a night audit recipient of this hotel. Ask the hotel to change or stop it."
+
+// packFigures are the lines of "The day in figures", written the English way with the currency of the property: money as IDR 780,000, a percentage as 3.00%, a count without decimals.
+func packFigures(f *reports.DailyFlash, currency string) []string {
+	money := func(v string) string { return currency + " " + groupThousands(v) }
+	count := func(key string, lines []reports.FlashLine) string {
+		for _, l := range lines {
+			if l.Key == key {
+				return groupThousands(l.Today)
+			}
+		}
+		return "0"
+	}
+	var out []string
+	for _, l := range f.Rooms {
+		switch l.Key {
+		case "rooms_sold":
+			out = append(out, l.Label+": "+groupThousands(l.Today))
+		case "occupancy_pct":
+			out = append(out, "Occupancy: "+groupThousands(l.Today)+"%")
+		case "arr":
+			out = append(out, l.Label+": "+money(l.Today))
+		}
+	}
+	out = append(out,
+		f.Revenue.TotalNet.Label+": "+money(f.Revenue.TotalNet.Today),
+		f.Revenue.GTR.Label+": "+money(f.Revenue.GTR.Today),
+		f.Payments.GTP.Label+": "+money(f.Payments.GTP.Today),
+		"Arrivals · departures · no-shows: "+count("arrivals", f.Activity)+" · "+count("departures", f.Activity)+" · "+count("no_shows", f.Activity))
+	return out
+}
+
+// groupThousands puts a comma between the thousands of a plain decimal text such as -1234567.50.
+func groupThousands(v string) string {
+	sign := ""
+	if strings.HasPrefix(v, "-") {
+		sign, v = "-", v[1:]
+	}
+	whole, frac, hasFrac := strings.Cut(v, ".")
+	var b strings.Builder
+	for i, c := range whole {
+		if i > 0 && (len(whole)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(c)
+	}
+	if hasFrac {
+		return sign + b.String() + "." + frac
+	}
+	return sign + b.String()
+}
+
 // packMessage is the e-mail: the title and the sections in English, the figures of the day when the recipient asked for the summary or the flash, and the PDF. It carries no link: the archive is for
 // people who sign in (Q13).
-func packMessage(to, property string, address []string, view auditpack.MailView, g packGroup, part, parts int) Message {
+func packMessage(to, property, currency string, view auditpack.MailView, g packGroup, part, parts int) Message {
 	date := view.Date.String()
 	subject := "Night audit pack " + date + " - " + property
 	name := strings.TrimSuffix(g.name, ".pdf")
@@ -169,16 +223,16 @@ func packMessage(to, property string, address []string, view auditpack.MailView,
 		t.WriteString(note + "\n")
 		h.WriteString("<p>" + html.EscapeString(note) + "</p>")
 	}
-	if len(view.Headlines) > 0 && part == 1 {
+	if view.Flash != nil && part == 1 {
 		t.WriteString("\nThe day in figures:\n")
 		h.WriteString("<p>The day in figures:</p><ul>")
-		for _, l := range view.Headlines {
+		for _, l := range packFigures(view.Flash, currency) {
 			t.WriteString("  - " + l + "\n")
 			h.WriteString("<li>" + html.EscapeString(l) + "</li>")
 		}
 		h.WriteString("</ul>")
 	}
-	t.WriteString("\nThe attached PDF holds: " + strings.Join(titles, ", ") + ".\n\nThis message was sent by the property management system.\n")
-	h.WriteString("<p>The attached PDF holds: " + html.EscapeString(strings.Join(titles, ", ")) + ".</p><p>This message was sent by the property management system.</p>")
-	return Message{To: to, Subject: subject, Text: t.String(), HTML: h.String(), Attachments: []Attachment{{Filename: name + ".pdf", ContentType: "application/pdf", Data: g.pdf}}}
+	t.WriteString("\nThe attached PDF holds: " + strings.Join(titles, ", ") + ".\n\nThis message was sent by the property management system.\n\n" + packFooter + "\n")
+	h.WriteString("<p>The attached PDF holds: " + html.EscapeString(strings.Join(titles, ", ")) + ".</p><p>This message was sent by the property management system.</p><p>" + html.EscapeString(packFooter) + "</p>")
+	return Message{To: to, FromName: property, Subject: subject, Text: t.String(), HTML: h.String(), Attachments: []Attachment{{Filename: name + ".pdf", ContentType: "application/pdf", Data: g.pdf}}}
 }

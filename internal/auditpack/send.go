@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 
@@ -24,8 +23,8 @@ type MailView struct {
 	RecipientActive bool
 	// OK are the sections of the pack that hold data, in the order of the catalog.
 	OK []string
-	// Headlines are the figures for the body of the message, empty when the message does not carry them.
-	Headlines []string
+	// Flash is the daily flash report of the day, for the figures in the body of the message; nil when the message does not carry them. The worker writes them, in the currency of the property.
+	Flash *reports.DailyFlash
 }
 
 // MailView reads the pack of a queued message and the present state of its recipient. wantFigures says whether the message carries the headline figures (the recipient has the summary or the flash).
@@ -68,25 +67,9 @@ func (s *Service) MailView(ctx context.Context, propertyID, packID int64, email 
 		if row, ok := byCode[SecFlash]; ok && row.Status == StatusOK {
 			var f reports.DailyFlash
 			if err := json.Unmarshal(row.Data, &f); err == nil {
-				out.Headlines = headlines(f)
+				out.Flash = &f
 			}
 		}
 	}
 	return out, nil
-}
-
-// headlines are the figures a manager reads first: the rooms sold, the occupancy, the average rate, the revenue and the money taken, for the day.
-func headlines(f reports.DailyFlash) []string {
-	var out []string
-	for _, l := range f.Rooms {
-		switch l.Key {
-		case "rooms_sold", "occupancy_pct", "arr":
-			out = append(out, fmt.Sprintf("%s: %s", l.Label, l.Today))
-		}
-	}
-	out = append(out,
-		fmt.Sprintf("%s: %s", f.Revenue.TotalNet.Label, f.Revenue.TotalNet.Today),
-		fmt.Sprintf("%s: %s", f.Revenue.GTR.Label, f.Revenue.GTR.Today),
-		fmt.Sprintf("%s: %s", f.Payments.GTP.Label, f.Payments.GTP.Today))
-	return out
 }
