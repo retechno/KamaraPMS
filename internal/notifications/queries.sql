@@ -55,3 +55,15 @@ LIMIT 50;
 
 -- name: EventEmailQueued :one
 SELECT EXISTS (SELECT 1 FROM email_outbox WHERE property_id = @property_id AND banquet_event_id = @event_id AND kind = @kind AND to_address = @to_address AND status = 'QUEUED');
+
+-- The e-mail of a night audit pack (38 6): a pack message knows its sections and its part. A message that is too large is split by the worker: its own row becomes part 1 of N and the other parts are new rows.
+-- name: SplitPackPart :exec
+UPDATE email_outbox SET nap_sections = @sections::varchar[], nap_parts = @parts::smallint WHERE id = @id AND kind = 'NIGHT_AUDIT_PACK' AND status = 'QUEUED';
+
+-- name: InsertPackPart :exec
+INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts, next_attempt_at, created_at, created_by)
+VALUES (@tenant_id, @property_id, 'NIGHT_AUDIT_PACK', @to_address, 'en', @pack_id, @sections::varchar[], @part::smallint, @parts::smallint, @now::timestamptz, @now::timestamptz, sqlc.narg(actor_id));
+
+-- The hash of the PDF as the sender received it and the version of the renderer that drew it (Q6).
+-- name: MarkPackSent :exec
+UPDATE email_outbox SET status = 'SENT', sent_at = @now::timestamptz, attempts = attempts + 1, last_error = NULL, nap_pdf_sha256 = @sha256::char(64), nap_renderer = @renderer::varchar WHERE id = @id;

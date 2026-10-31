@@ -231,6 +231,38 @@ func (q *Queries) InsertOutbox(ctx context.Context, arg InsertOutboxParams) (Ema
 	return i, err
 }
 
+const insertPackPart = `-- name: InsertPackPart :exec
+INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts, next_attempt_at, created_at, created_by)
+VALUES ($1, $2, 'NIGHT_AUDIT_PACK', $3, 'en', $4, $5::varchar[], $6::smallint, $7::smallint, $8::timestamptz, $8::timestamptz, $9)
+`
+
+type InsertPackPartParams struct {
+	TenantID   int64
+	PropertyID int64
+	ToAddress  string
+	PackID     *int64
+	Sections   []string
+	Part       int16
+	Parts      int16
+	Now        time.Time
+	ActorID    *int64
+}
+
+func (q *Queries) InsertPackPart(ctx context.Context, arg InsertPackPartParams) error {
+	_, err := q.db.Exec(ctx, insertPackPart,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ToAddress,
+		arg.PackID,
+		arg.Sections,
+		arg.Part,
+		arg.Parts,
+		arg.Now,
+		arg.ActorID,
+	)
+	return err
+}
+
 const listEventEmails = `-- name: ListEventEmails :many
 SELECT o.id, o.kind, o.document_id, d.number AS document_number, d.revision_no, o.language, o.to_address, o.status, o.attempts, o.last_error, o.sent_at, o.created_at
 FROM email_outbox o JOIN banquet_documents d ON d.property_id = o.property_id AND d.id = o.document_id
@@ -363,6 +395,28 @@ func (q *Queries) MarkFailed(ctx context.Context, arg MarkFailedParams) error {
 	return err
 }
 
+const markPackSent = `-- name: MarkPackSent :exec
+UPDATE email_outbox SET status = 'SENT', sent_at = $1::timestamptz, attempts = attempts + 1, last_error = NULL, nap_pdf_sha256 = $2::char(64), nap_renderer = $3::varchar WHERE id = $4
+`
+
+type MarkPackSentParams struct {
+	Now      time.Time
+	Sha256   string
+	Renderer string
+	ID       int64
+}
+
+// The hash of the PDF as the sender received it and the version of the renderer that drew it (Q6).
+func (q *Queries) MarkPackSent(ctx context.Context, arg MarkPackSentParams) error {
+	_, err := q.db.Exec(ctx, markPackSent,
+		arg.Now,
+		arg.Sha256,
+		arg.Renderer,
+		arg.ID,
+	)
+	return err
+}
+
 const markRetry = `-- name: MarkRetry :exec
 UPDATE email_outbox SET attempts = attempts + 1, next_attempt_at = $1::timestamptz, last_error = $2 WHERE id = $3
 `
@@ -403,5 +457,21 @@ type MarkSkippedParams struct {
 
 func (q *Queries) MarkSkipped(ctx context.Context, arg MarkSkippedParams) error {
 	_, err := q.db.Exec(ctx, markSkipped, arg.LastError, arg.ID)
+	return err
+}
+
+const splitPackPart = `-- name: SplitPackPart :exec
+UPDATE email_outbox SET nap_sections = $1::varchar[], nap_parts = $2::smallint WHERE id = $3 AND kind = 'NIGHT_AUDIT_PACK' AND status = 'QUEUED'
+`
+
+type SplitPackPartParams struct {
+	Sections []string
+	Parts    int16
+	ID       int64
+}
+
+// The e-mail of a night audit pack (38 6): a pack message knows its sections and its part. A message that is too large is split by the worker: its own row becomes part 1 of N and the other parts are new rows.
+func (q *Queries) SplitPackPart(ctx context.Context, arg SplitPackPartParams) error {
+	_, err := q.db.Exec(ctx, splitPackPart, arg.Sections, arg.Parts, arg.ID)
 	return err
 }

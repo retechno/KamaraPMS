@@ -52,11 +52,17 @@ type Summary struct {
 	BuiltLate      bool       `json:"built_late"`
 	SectionsOK     int        `json:"sections_ok"`
 	SectionsFailed int        `json:"sections_failed"`
+	// MailSent, MailFailed and MailQueued count the messages of the pack by their state (PR 3); the archive shows them beside the day.
+	MailSent   int `json:"mail_sent"`
+	MailFailed int `json:"mail_failed"`
+	MailQueued int `json:"mail_queued"`
 }
 
 // List is a page of the archive, the newest day first.
 type List struct {
 	Items []Summary `json:"items"`
+	// EmailEnabled says whether the server can send e-mail; without it the archive says "E-mail is off" and queues nothing.
+	EmailEnabled bool `json:"email_enabled"`
 	// NextCursor is the business date to ask the next page after; null on the last page.
 	NextCursor *civil.Date `json:"next_cursor"`
 }
@@ -95,7 +101,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, in ListInput) (Lis
 	if err != nil {
 		return List{}, err
 	}
-	out := List{Items: []Summary{}}
+	out := List{Items: []Summary{}, EmailEnabled: s.mailEnabled()}
 	for i, r := range rows {
 		if i == PageSize {
 			next := out.Items[PageSize-1].BusinessDate
@@ -103,7 +109,7 @@ func (s *Service) List(ctx context.Context, propertyID int64, in ListInput) (Lis
 			break
 		}
 		out.Items = append(out.Items, Summary{BusinessDate: r.BusinessDate, Status: r.Status, FormatVersion: r.FormatVersion, BuiltAt: r.BuiltAt, BuildMS: r.BuildMs, BuiltLate: r.BuiltLate,
-			SectionsOK: int(r.SectionsOk), SectionsFailed: int(r.SectionsFailed)})
+			SectionsOK: int(r.SectionsOk), SectionsFailed: int(r.SectionsFailed), MailSent: int(r.MailSent), MailFailed: int(r.MailFailed), MailQueued: int(r.MailQueued)})
 	}
 	return out, nil
 }

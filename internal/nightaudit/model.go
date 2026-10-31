@@ -131,6 +131,14 @@ type Warnings struct {
 	Stock []OutletIssue `json:"stock"`
 	// PackIncomplete are the closed days whose night audit pack has a section that failed (PACK_INCOMPLETE): a user with nightaudit.pack_manage can build the section again.
 	PackIncomplete []civil.Date `json:"pack_incomplete"`
+	// PackDeliveryFailed are the days of the last two months whose pack could not be e-mailed to an address and was not sent since (PACK_DELIVERY_FAILED): a user with nightaudit.pack_resend can send it again.
+	PackDeliveryFailed []PackDeliveryFailure `json:"pack_delivery_failed"`
+}
+
+// PackDeliveryFailure is a day whose pack was not delivered to some addresses.
+type PackDeliveryFailure struct {
+	BusinessDate civil.Date `json:"business_date"`
+	Addresses    []string   `json:"addresses"`
 }
 
 // Preview is the full pre-check (nothing is written).

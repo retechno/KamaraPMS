@@ -49,7 +49,10 @@ ORDER BY section;
 -- name: ListPacks :many
 SELECT p.id, p.business_date, p.format_version, p.status, p.built_at, p.build_ms, p.built_late,
        (SELECT count(*) FROM nap_pack_sections s WHERE s.pack_id = p.id AND s.status = 'OK')::int AS sections_ok,
-       (SELECT count(*) FROM nap_pack_sections s WHERE s.pack_id = p.id AND s.status = 'FAILED')::int AS sections_failed
+       (SELECT count(*) FROM nap_pack_sections s WHERE s.pack_id = p.id AND s.status = 'FAILED')::int AS sections_failed,
+       (SELECT count(*) FROM email_outbox o WHERE o.property_id = p.property_id AND o.nap_pack_id = p.id AND o.status = 'SENT')::int AS mail_sent,
+       (SELECT count(*) FROM email_outbox o WHERE o.property_id = p.property_id AND o.nap_pack_id = p.id AND o.status = 'FAILED')::int AS mail_failed,
+       (SELECT count(*) FROM email_outbox o WHERE o.property_id = p.property_id AND o.nap_pack_id = p.id AND o.status = 'QUEUED')::int AS mail_queued
 FROM nap_packs p
 WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.business_date BETWEEN @from_date::date AND @to_date::date
   AND (sqlc.narg('before')::date IS NULL OR p.business_date < sqlc.narg('before')::date)
@@ -63,3 +66,56 @@ WHERE tenant_id = @tenant_id AND property_id = @property_id AND pack_id = @pack_
 
 -- name: SetPackStatus :exec
 UPDATE nap_packs SET status = @status WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @pack_id;
+
+-- The recipients of the pack (docs/architecture/38-reports-night-audit-pack.md 6 and 8.1).
+-- name: ListRecipients :many
+SELECT id, email, name, sections, is_active, created_at, updated_at
+FROM nap_recipients WHERE tenant_id = @tenant_id AND property_id = @property_id
+ORDER BY lower(email), id;
+
+-- The active recipients, read once by the run (one consistent list whatever is edited meanwhile).
+-- name: ListActiveRecipients :many
+SELECT id, email, name, sections, is_active, created_at, updated_at
+FROM nap_recipients WHERE tenant_id = @tenant_id AND property_id = @property_id AND is_active
+ORDER BY id;
+
+-- name: GetRecipient :one
+SELECT id, email, name, sections, is_active, created_at, updated_at
+FROM nap_recipients WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- name: InsertRecipient :one
+INSERT INTO nap_recipients (tenant_id, property_id, email, name, sections, is_active, created_at, created_by, updated_at, updated_by)
+VALUES (@tenant_id, @property_id, @email, @name, @sections::varchar[], @is_active, @now::timestamptz, sqlc.narg(actor_id), @now::timestamptz, sqlc.narg(actor_id))
+RETURNING id, email, name, sections, is_active, created_at, updated_at;
+
+-- name: UpdateRecipient :one
+UPDATE nap_recipients SET email = @email, name = @name, sections = @sections::varchar[], is_active = @is_active, updated_at = @now::timestamptz, updated_by = sqlc.narg(actor_id)
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id
+RETURNING id, email, name, sections, is_active, created_at, updated_at;
+
+-- name: DeleteRecipient :execrows
+DELETE FROM nap_recipients WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- The e-mail of a pack: one row for each recipient (6.1). The sections are the ones sent (a copy: the recipient may change later).
+-- name: InsertPackEmail :one
+INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts, next_attempt_at, created_at, created_by)
+VALUES (@tenant_id, @property_id, 'NIGHT_AUDIT_PACK', @to_address, 'en', @pack_id, @sections::varchar[], 1, 1, @now::timestamptz, @now::timestamptz, sqlc.narg(actor_id))
+RETURNING id;
+
+-- Whether the address already has a message of the pack waiting (a resend is refused then).
+-- name: PackEmailQueued :one
+SELECT EXISTS (SELECT 1 FROM email_outbox WHERE property_id = @property_id AND nap_pack_id = @pack_id AND lower(to_address) = lower(@to_address::text) AND status = 'QUEUED');
+
+-- The history of a pack: one line for each message, newest first.
+-- name: ListPackDeliveries :many
+SELECT o.id, o.to_address, o.nap_sections, o.nap_part, o.nap_parts, o.status, o.attempts, o.last_error, o.sent_at, o.created_at, COALESCE(u.full_name, '')::text AS queued_by,
+       o.nap_pdf_sha256, o.nap_renderer
+FROM email_outbox o LEFT JOIN users u ON u.id = o.created_by
+WHERE o.tenant_id = @tenant_id AND o.property_id = @property_id AND o.nap_pack_id = @pack_id
+ORDER BY o.id DESC;
+
+-- name: GetPackDate :one
+SELECT business_date FROM nap_packs WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @pack_id;
+
+-- name: GetRecipientByEmail :one
+SELECT id, email, sections, is_active FROM nap_recipients WHERE tenant_id = @tenant_id AND property_id = @property_id AND lower(email) = lower(@email::text);

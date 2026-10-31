@@ -773,7 +773,7 @@ var constraintErrors = map[string]mapped{
 	"nap_pack_sections_status_ck": {apperr.KindInvalid, "INVALID_VALUE", "a section is OK, failed, off or not available"},
 	"nap_pack_sections_data_ck":   {apperr.KindInvalid, "INVALID_VALUE", "a section that is OK holds its data; the others hold none"},
 	"nap_pack_sections_error_ck":  {apperr.KindInvalid, "INVALID_VALUE", "a section that failed says why; the others do not"},
-	"nap_recipients_email_uk":     {apperr.KindConflict, "DUPLICATE_REQUEST", "this address is already a recipient of the property"},
+	"nap_recipients_email_uk":     {apperr.KindConflict, "PACK_RECIPIENT_EXISTS", "this address is already a recipient of the property"},
 	"nap_recipients_email_ck":     {apperr.KindInvalid, "INVALID_VALUE", "a recipient is one e-mail address, with no space and no line break"},
 	"nap_recipients_name_ck":      {apperr.KindInvalid, "INVALID_VALUE", "the name of a recipient is text on one line"},
 	"nap_recipients_sections_ck":  {apperr.KindInvalid, "INVALID_VALUE", "a recipient receives at least one section, each of the catalog, none twice"},

@@ -45,6 +45,7 @@ type Config struct {
 	SMTPFrom        string        // PMS_SMTP_FROM: the sender address, required with a host
 	SMTPFromName    string        // PMS_SMTP_FROM_NAME
 	SMTPTLS         string        // PMS_SMTP_TLS: starttls (default), tls or none
+	SMTPMaxBytes    int           // PMS_SMTP_MAX_BYTES: the largest message sent, default 7340032 (7 MB); a night audit pack larger than this goes in several messages
 	RateLimit       int           // PMS_RATE_LIMIT_PER_MINUTE: requests a minute per client address, default 600, 0 disables
 	// TrustedProxies is PMS_TRUSTED_PROXIES: the addresses (or CIDR ranges) of the reverse proxies whose X-Forwarded-For is believed. Empty, the default, trusts nobody:
 	// the client is the peer of the connection and the header is ignored.
@@ -144,6 +145,11 @@ func LoadFrom(lookup func(string) (string, bool)) (Config, error) {
 		errs = append(errs, errors.New("PMS_SMTP_PORT: must be between 1 and 65535"))
 	} else {
 		cfg.SMTPPort = n
+	}
+	if n, err := strconv.Atoi(get("PMS_SMTP_MAX_BYTES", "7340032")); err != nil || n < 100000 {
+		errs = append(errs, errors.New("PMS_SMTP_MAX_BYTES: must be a number of at least 100000"))
+	} else {
+		cfg.SMTPMaxBytes = n
 	}
 	if cfg.SMTPHost != "" {
 		if a, err := mail.ParseAddress(cfg.SMTPFrom); err != nil || a.Address != cfg.SMTPFrom {

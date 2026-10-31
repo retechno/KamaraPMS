@@ -9,8 +9,27 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"kamarapms/internal/platform/civil"
 )
+
+const deleteRecipient = `-- name: DeleteRecipient :execrows
+DELETE FROM nap_recipients WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type DeleteRecipientParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+func (q *Queries) DeleteRecipient(ctx context.Context, arg DeleteRecipientParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRecipient, arg.TenantID, arg.PropertyID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
 
 const getDay = `-- name: GetDay :one
 
@@ -87,6 +106,88 @@ func (q *Queries) GetPackByDate(ctx context.Context, arg GetPackByDateParams) (G
 	return i, err
 }
 
+const getPackDate = `-- name: GetPackDate :one
+SELECT business_date FROM nap_packs WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetPackDateParams struct {
+	TenantID   int64
+	PropertyID int64
+	PackID     int64
+}
+
+func (q *Queries) GetPackDate(ctx context.Context, arg GetPackDateParams) (civil.Date, error) {
+	row := q.db.QueryRow(ctx, getPackDate, arg.TenantID, arg.PropertyID, arg.PackID)
+	var business_date civil.Date
+	err := row.Scan(&business_date)
+	return business_date, err
+}
+
+const getRecipient = `-- name: GetRecipient :one
+SELECT id, email, name, sections, is_active, created_at, updated_at
+FROM nap_recipients WHERE tenant_id = $1 AND property_id = $2 AND id = $3
+`
+
+type GetRecipientParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetRecipientRow struct {
+	ID        int64
+	Email     string
+	Name      *string
+	Sections  []string
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (q *Queries) GetRecipient(ctx context.Context, arg GetRecipientParams) (GetRecipientRow, error) {
+	row := q.db.QueryRow(ctx, getRecipient, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetRecipientRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Sections,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getRecipientByEmail = `-- name: GetRecipientByEmail :one
+SELECT id, email, sections, is_active FROM nap_recipients WHERE tenant_id = $1 AND property_id = $2 AND lower(email) = lower($3::text)
+`
+
+type GetRecipientByEmailParams struct {
+	TenantID   int64
+	PropertyID int64
+	Email      string
+}
+
+type GetRecipientByEmailRow struct {
+	ID       int64
+	Email    string
+	Sections []string
+	IsActive bool
+}
+
+func (q *Queries) GetRecipientByEmail(ctx context.Context, arg GetRecipientByEmailParams) (GetRecipientByEmailRow, error) {
+	row := q.db.QueryRow(ctx, getRecipientByEmail, arg.TenantID, arg.PropertyID, arg.Email)
+	var i GetRecipientByEmailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Sections,
+		&i.IsActive,
+	)
+	return i, err
+}
+
 const insertPack = `-- name: InsertPack :one
 INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, built_by, build_ms, built_late)
 VALUES ($1, $2, $3::date, $4, $5, $6, $7, $8, $9)
@@ -122,6 +223,89 @@ func (q *Queries) InsertPack(ctx context.Context, arg InsertPackParams) (int64, 
 	return id, err
 }
 
+const insertPackEmail = `-- name: InsertPackEmail :one
+INSERT INTO email_outbox (tenant_id, property_id, kind, to_address, language, nap_pack_id, nap_sections, nap_part, nap_parts, next_attempt_at, created_at, created_by)
+VALUES ($1, $2, 'NIGHT_AUDIT_PACK', $3, 'en', $4, $5::varchar[], 1, 1, $6::timestamptz, $6::timestamptz, $7)
+RETURNING id
+`
+
+type InsertPackEmailParams struct {
+	TenantID   int64
+	PropertyID int64
+	ToAddress  string
+	PackID     *int64
+	Sections   []string
+	Now        time.Time
+	ActorID    *int64
+}
+
+// The e-mail of a pack: one row for each recipient (6.1). The sections are the ones sent (a copy: the recipient may change later).
+func (q *Queries) InsertPackEmail(ctx context.Context, arg InsertPackEmailParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertPackEmail,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ToAddress,
+		arg.PackID,
+		arg.Sections,
+		arg.Now,
+		arg.ActorID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertRecipient = `-- name: InsertRecipient :one
+INSERT INTO nap_recipients (tenant_id, property_id, email, name, sections, is_active, created_at, created_by, updated_at, updated_by)
+VALUES ($1, $2, $3, $4, $5::varchar[], $6, $7::timestamptz, $8, $7::timestamptz, $8)
+RETURNING id, email, name, sections, is_active, created_at, updated_at
+`
+
+type InsertRecipientParams struct {
+	TenantID   int64
+	PropertyID int64
+	Email      string
+	Name       *string
+	Sections   []string
+	IsActive   bool
+	Now        time.Time
+	ActorID    *int64
+}
+
+type InsertRecipientRow struct {
+	ID        int64
+	Email     string
+	Name      *string
+	Sections  []string
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (q *Queries) InsertRecipient(ctx context.Context, arg InsertRecipientParams) (InsertRecipientRow, error) {
+	row := q.db.QueryRow(ctx, insertRecipient,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.Email,
+		arg.Name,
+		arg.Sections,
+		arg.IsActive,
+		arg.Now,
+		arg.ActorID,
+	)
+	var i InsertRecipientRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Sections,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertSection = `-- name: InsertSection :exec
 INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version, data, error, built_late)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -152,6 +336,121 @@ func (q *Queries) InsertSection(ctx context.Context, arg InsertSectionParams) er
 		arg.BuiltLate,
 	)
 	return err
+}
+
+const listActiveRecipients = `-- name: ListActiveRecipients :many
+SELECT id, email, name, sections, is_active, created_at, updated_at
+FROM nap_recipients WHERE tenant_id = $1 AND property_id = $2 AND is_active
+ORDER BY id
+`
+
+type ListActiveRecipientsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListActiveRecipientsRow struct {
+	ID        int64
+	Email     string
+	Name      *string
+	Sections  []string
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// The active recipients, read once by the run (one consistent list whatever is edited meanwhile).
+func (q *Queries) ListActiveRecipients(ctx context.Context, arg ListActiveRecipientsParams) ([]ListActiveRecipientsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveRecipients, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveRecipientsRow{}
+	for rows.Next() {
+		var i ListActiveRecipientsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Sections,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPackDeliveries = `-- name: ListPackDeliveries :many
+SELECT o.id, o.to_address, o.nap_sections, o.nap_part, o.nap_parts, o.status, o.attempts, o.last_error, o.sent_at, o.created_at, COALESCE(u.full_name, '')::text AS queued_by,
+       o.nap_pdf_sha256, o.nap_renderer
+FROM email_outbox o LEFT JOIN users u ON u.id = o.created_by
+WHERE o.tenant_id = $1 AND o.property_id = $2 AND o.nap_pack_id = $3
+ORDER BY o.id DESC
+`
+
+type ListPackDeliveriesParams struct {
+	TenantID   int64
+	PropertyID int64
+	PackID     *int64
+}
+
+type ListPackDeliveriesRow struct {
+	ID           int64
+	ToAddress    string
+	NapSections  []string
+	NapPart      pgtype.Int2
+	NapParts     pgtype.Int2
+	Status       string
+	Attempts     int16
+	LastError    *string
+	SentAt       *time.Time
+	CreatedAt    time.Time
+	QueuedBy     string
+	NapPdfSha256 *string
+	NapRenderer  *string
+}
+
+// The history of a pack: one line for each message, newest first.
+func (q *Queries) ListPackDeliveries(ctx context.Context, arg ListPackDeliveriesParams) ([]ListPackDeliveriesRow, error) {
+	rows, err := q.db.Query(ctx, listPackDeliveries, arg.TenantID, arg.PropertyID, arg.PackID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPackDeliveriesRow{}
+	for rows.Next() {
+		var i ListPackDeliveriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ToAddress,
+			&i.NapSections,
+			&i.NapPart,
+			&i.NapParts,
+			&i.Status,
+			&i.Attempts,
+			&i.LastError,
+			&i.SentAt,
+			&i.CreatedAt,
+			&i.QueuedBy,
+			&i.NapPdfSha256,
+			&i.NapRenderer,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPackSections = `-- name: ListPackSections :many
@@ -207,7 +506,10 @@ func (q *Queries) ListPackSections(ctx context.Context, arg ListPackSectionsPara
 const listPacks = `-- name: ListPacks :many
 SELECT p.id, p.business_date, p.format_version, p.status, p.built_at, p.build_ms, p.built_late,
        (SELECT count(*) FROM nap_pack_sections s WHERE s.pack_id = p.id AND s.status = 'OK')::int AS sections_ok,
-       (SELECT count(*) FROM nap_pack_sections s WHERE s.pack_id = p.id AND s.status = 'FAILED')::int AS sections_failed
+       (SELECT count(*) FROM nap_pack_sections s WHERE s.pack_id = p.id AND s.status = 'FAILED')::int AS sections_failed,
+       (SELECT count(*) FROM email_outbox o WHERE o.property_id = p.property_id AND o.nap_pack_id = p.id AND o.status = 'SENT')::int AS mail_sent,
+       (SELECT count(*) FROM email_outbox o WHERE o.property_id = p.property_id AND o.nap_pack_id = p.id AND o.status = 'FAILED')::int AS mail_failed,
+       (SELECT count(*) FROM email_outbox o WHERE o.property_id = p.property_id AND o.nap_pack_id = p.id AND o.status = 'QUEUED')::int AS mail_queued
 FROM nap_packs p
 WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.business_date BETWEEN $3::date AND $4::date
   AND ($5::date IS NULL OR p.business_date < $5::date)
@@ -234,6 +536,9 @@ type ListPacksRow struct {
 	BuiltLate      bool
 	SectionsOk     int32
 	SectionsFailed int32
+	MailSent       int32
+	MailFailed     int32
+	MailQueued     int32
 }
 
 // The archive: newest day first, a page after the cursor (the business date of the last row of the page before).
@@ -263,6 +568,59 @@ func (q *Queries) ListPacks(ctx context.Context, arg ListPacksParams) ([]ListPac
 			&i.BuiltLate,
 			&i.SectionsOk,
 			&i.SectionsFailed,
+			&i.MailSent,
+			&i.MailFailed,
+			&i.MailQueued,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecipients = `-- name: ListRecipients :many
+SELECT id, email, name, sections, is_active, created_at, updated_at
+FROM nap_recipients WHERE tenant_id = $1 AND property_id = $2
+ORDER BY lower(email), id
+`
+
+type ListRecipientsParams struct {
+	TenantID   int64
+	PropertyID int64
+}
+
+type ListRecipientsRow struct {
+	ID        int64
+	Email     string
+	Name      *string
+	Sections  []string
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// The recipients of the pack (docs/architecture/38-reports-night-audit-pack.md 6 and 8.1).
+func (q *Queries) ListRecipients(ctx context.Context, arg ListRecipientsParams) ([]ListRecipientsRow, error) {
+	rows, err := q.db.Query(ctx, listRecipients, arg.TenantID, arg.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecipientsRow{}
+	for rows.Next() {
+		var i ListRecipientsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Sections,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -376,6 +734,24 @@ func (q *Queries) OutletCoversOn(ctx context.Context, arg OutletCoversOnParams) 
 	return items, nil
 }
 
+const packEmailQueued = `-- name: PackEmailQueued :one
+SELECT EXISTS (SELECT 1 FROM email_outbox WHERE property_id = $1 AND nap_pack_id = $2 AND lower(to_address) = lower($3::text) AND status = 'QUEUED')
+`
+
+type PackEmailQueuedParams struct {
+	PropertyID int64
+	PackID     *int64
+	ToAddress  string
+}
+
+// Whether the address already has a message of the pack waiting (a resend is refused then).
+func (q *Queries) PackEmailQueued(ctx context.Context, arg PackEmailQueuedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, packEmailQueued, arg.PropertyID, arg.PackID, arg.ToAddress)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const propertyHasShifts = `-- name: PropertyHasShifts :one
 SELECT EXISTS (SELECT 1 FROM cashier_shifts WHERE tenant_id = $1 AND property_id = $2) AS has_shifts
 `
@@ -444,4 +820,57 @@ func (q *Queries) SetPackStatus(ctx context.Context, arg SetPackStatusParams) er
 		arg.PackID,
 	)
 	return err
+}
+
+const updateRecipient = `-- name: UpdateRecipient :one
+UPDATE nap_recipients SET email = $1, name = $2, sections = $3::varchar[], is_active = $4, updated_at = $5::timestamptz, updated_by = $6
+WHERE tenant_id = $7 AND property_id = $8 AND id = $9
+RETURNING id, email, name, sections, is_active, created_at, updated_at
+`
+
+type UpdateRecipientParams struct {
+	Email      string
+	Name       *string
+	Sections   []string
+	IsActive   bool
+	Now        time.Time
+	ActorID    *int64
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type UpdateRecipientRow struct {
+	ID        int64
+	Email     string
+	Name      *string
+	Sections  []string
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (q *Queries) UpdateRecipient(ctx context.Context, arg UpdateRecipientParams) (UpdateRecipientRow, error) {
+	row := q.db.QueryRow(ctx, updateRecipient,
+		arg.Email,
+		arg.Name,
+		arg.Sections,
+		arg.IsActive,
+		arg.Now,
+		arg.ActorID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	var i UpdateRecipientRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Sections,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
