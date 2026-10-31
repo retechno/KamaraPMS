@@ -170,3 +170,7 @@ SELECT
    - COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = @property_id AND r.status = 'POSTED' AND r.business_date <= @bd::date), 0)
    - COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = @property_id AND a.status = 'POSTED' AND a.business_date <= @bd::date), 0))::numeric AS outstanding,
     COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = @property_id AND a.status = 'POSTED' AND a.business_date = @bd::date), 0)::numeric AS adjusted;
+
+-- Warnings: the closed days whose night audit pack has a section that failed (docs/architecture/38-reports-night-audit-pack.md 5.2).
+-- name: ListPartialPackDates :many
+SELECT business_date FROM nap_packs WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'PARTIAL' ORDER BY business_date;

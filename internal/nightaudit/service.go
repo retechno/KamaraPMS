@@ -127,7 +127,7 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 	a := analysis{
 		blockers: Blockers{UnresolvedArrivals: []Arrival{}, UnresolvedDepartures: []Departure{}, ChargeErrors: []roomcharge.Result{}, InvalidCharges: []expected.Invalid{}, OpenShifts: []shifts.OpenShift{}, AccountingReadiness: []accounting.ReadinessBlocker{}, OutletBills: []OutletIssue{}, Stock: []OutletIssue{}},
 		missing:  MissingCharges{Items: []roomcharge.Result{}},
-		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, ClosedMasters: []ClosedMaster{}, BlocksEnding: []EndingBlock{}, OutletBills: []OutletIssue{}, Stock: []OutletIssue{}},
+		warnings: Warnings{StaleDrafts: []StaleDraft{}, OpenFolios: []DeadFolio{}, OpenMasters: []OpenMaster{}, ClosedMasters: []ClosedMaster{}, BlocksEnding: []EndingBlock{}, OutletBills: []OutletIssue{}, Stock: []OutletIssue{}, PackIncomplete: []civil.Date{}},
 	}
 	arrivals, err := q.ListUnresolvedArrivals(ctx, nightauditdb.ListUnresolvedArrivalsParams{TenantID: p.TenantID, PropertyID: propertyID, Bd: bd})
 	if err != nil {
@@ -252,6 +252,11 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 	for _, b := range blocks {
 		a.warnings.BlocksEnding = append(a.warnings.BlocksEnding, EndingBlock{BlockID: b.BlockID, BlockType: b.BlockType, Room: b.RoomNumber, EndDate: b.EndDate})
 	}
+	partial, err := q.ListPartialPackDates(ctx, nightauditdb.ListPartialPackDatesParams{TenantID: p.TenantID, PropertyID: propertyID})
+	if err != nil {
+		return a, err
+	}
+	a.warnings.PackIncomplete = append(a.warnings.PackIncomplete, partial...)
 	return a, nil
 }
 

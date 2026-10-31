@@ -18,6 +18,7 @@ import (
 	"kamarapms/internal/folios"
 	"kamarapms/internal/frontdesk"
 	"kamarapms/internal/housekeeping"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/db"
@@ -83,7 +84,7 @@ func setup(t *testing.T) *fx {
 	must(t, err)
 	_, err = e.Billing.UpdateChargeCode(admin, p.ID, f.minibar, billingconfig.ChargeCodePatch{GLAccountCode: ptr("4-2000")})
 	must(t, err)
-	f.pack = auditpack.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), e.Tenancy, e.Reports)
+	f.pack = auditpack.NewService(e.TxM, e.Clock, audit.NewWriter(e.Clock), iam.NewAuthorizer(e.TxM), e.Tenancy, e.Reports)
 	e.Audit.SetPackBuilder(f.pack)
 	return f
 }

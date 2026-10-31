@@ -36,11 +36,12 @@ INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status,
 VALUES (@pack_id, @tenant_id, @property_id, @section, @status, @format_version, @data, @error, @built_late);
 
 -- name: GetPackByDate :one
-SELECT id, business_date, format_version, status, built_at, built_by, build_ms, built_late
-FROM nap_packs WHERE tenant_id = @tenant_id AND property_id = @property_id AND business_date = @bd::date;
+SELECT p.id, p.business_date, p.format_version, p.status, p.built_at, COALESCE(u.full_name, '')::text AS built_by_name, p.build_ms, p.built_late
+FROM nap_packs p LEFT JOIN users u ON u.id = p.built_by
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.business_date = @bd::date;
 
 -- name: ListPackSections :many
-SELECT section, status, format_version, data, error, built_late
+SELECT section, status, format_version, data, error, built_late, COALESCE(octet_length(data::text), 0)::int AS size_bytes
 FROM nap_pack_sections WHERE tenant_id = @tenant_id AND property_id = @property_id AND pack_id = @pack_id
 ORDER BY section;
 
@@ -55,18 +56,9 @@ WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.business_d
 ORDER BY p.business_date DESC
 LIMIT @page_size;
 
--- The business dates of the days whose pack has a section that failed: the preview of the next night audit says so.
--- name: ListPartialPackDates :many
-SELECT business_date FROM nap_packs WHERE tenant_id = @tenant_id AND property_id = @property_id AND status = 'PARTIAL' ORDER BY business_date;
-
--- A section that failed and is built again becomes OK, once (the trigger refuses any other change).
+-- A section that failed and is built again: its new status, JSON or reason (the trigger refuses the change of any section that did not fail).
 -- name: RebuildSection :execrows
-UPDATE nap_pack_sections SET status = 'OK', data = @data, error = NULL, built_late = true
-WHERE tenant_id = @tenant_id AND property_id = @property_id AND pack_id = @pack_id AND section = @section AND status = 'FAILED';
-
--- A section that failed again keeps its mark and says why this time.
--- name: RetrySectionFailed :execrows
-UPDATE nap_pack_sections SET error = @error
+UPDATE nap_pack_sections SET status = @status, data = @data, error = @error, built_late = true
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND pack_id = @pack_id AND section = @section AND status = 'FAILED';
 
 -- name: SetPackStatus :exec

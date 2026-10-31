@@ -199,8 +199,10 @@ func New(d Deps) *App {
 	documentsSvc.SetShifts(shiftsSvc)
 	documentsSvc.SetReports(reportsSvc)
 	reportsSvc.SetShifts(shiftsSvc)
-	packSvc := auditpack.NewService(d.TxManager, d.Clock, auditWriter, tenancySvc, reportsSvc)
+	packSvc := auditpack.NewService(d.TxManager, d.Clock, auditWriter, authz, tenancySvc, reportsSvc)
 	packSvc.SetOutlets(posSvc, packPlan{subs: subscriptionSvc})
+	packSvc.SetPDF(documentsSvc)
+	documentsSvc.SetPacks(packSvc)
 	nightAuditSvc.SetPackBuilder(packSvc)    // the close of a day keeps its pack, in the same transaction (doc 38)
 	budgetSvc.SetDepartments(departmentsSvc) // and a row of the budget its department
 
@@ -218,6 +220,7 @@ func New(d Deps) *App {
 	frontdesk.NewHandler(frontdeskSvc).Register(api)
 	roomcharge.NewHandler(roomChargeSvc).Register(api)
 	nightaudit.NewHandler(nightAuditSvc).Register(api)
+	auditpack.NewHandler(packSvc).Register(api)
 	shifts.NewHandler(shiftsSvc).Register(api)
 	budget.NewHandler(budgetSvc).Register(api)
 	departments.NewHandler(departmentsSvc).Register(api)

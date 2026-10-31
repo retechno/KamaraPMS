@@ -4880,6 +4880,95 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/packs:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+    get:
+      operationId: listNightAuditPacks
+      summary: The archive of the night audit packs, newest day first (nightaudit.pack_view)
+      description: |
+        One row for each business day that has a pack. Without `from` and `to` the last 90 days up to the open business date are listed; a range is at most 366 days (422 `OUT_OF_RANGE`). A page holds 31 days; `next_cursor` is the business date to pass as `cursor` for the next page.
+      tags: [nightaudit]
+      parameters:
+        - { name: from, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: to, in: query, schema: { $ref: "#/components/schemas/Date" } }
+        - { name: cursor, in: query, schema: { $ref: "#/components/schemas/Date" } }
+      responses:
+        "200":
+          description: A page of the archive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackList" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/packs/{date}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: date, in: path, required: true, description: "The business date, `YYYY-MM-DD`. With the suffix `.pdf` (`2026-10-28.pdf`) the answer is the PDF of the pack.", schema: { type: string } }
+    get:
+      operationId: getNightAuditPack
+      summary: The manifest of the pack of a business day, or its PDF (nightaudit.pack_view)
+      description: |
+        The manifest lists the sections with their status, size and whether they can be built again. The date written `YYYY-MM-DD.pdf` answers the PDF drawn from the snapshot (inline, never cached, in English): a cover and the sections that hold data, or the ones named in `sections` (a comma separated list of codes; 422 `PACK_SECTION_INVALID` for a code that is not a section or when none of them holds data). The permission is asked before the path is read.
+      tags: [nightaudit]
+      parameters:
+        - { name: sections, in: query, description: "PDF only: the sections to print.", schema: { type: string } }
+      responses:
+        "200":
+          description: The manifest, or the PDF.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackManifest" }
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/packs/{date}/sections/{section}:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: date, in: path, required: true, schema: { $ref: "#/components/schemas/Date" } }
+      - { name: section, in: path, required: true, schema: { $ref: "#/components/schemas/NightAuditPackSectionCode" } }
+    get:
+      operationId: getNightAuditPackSection
+      summary: The JSON a pack kept for a section, or its table as CSV (nightaudit.pack_view)
+      description: |
+        The stored JSON, as it was built when the day was closed (its `format_version` is in the manifest). `format=csv` gives the table of the sections that have one (not `OUTLETS`, `OUT_OF_ORDER`, `NEXT_DAY`, `AUDIT_NOTES`, `SUMMARY`: 422). A section that holds no data (failed, off, not available) is 404 `PACK_NOT_FOUND`.
+      tags: [nightaudit]
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [json, csv] } }
+      responses:
+        "200":
+          description: The section.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+            text/csv:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/night-audit/packs/{date}/rebuild:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - { name: date, in: path, required: true, schema: { $ref: "#/components/schemas/Date" } }
+    post:
+      operationId: rebuildNightAuditPack
+      summary: Build a pack again from the ledger (nightaudit.pack_manage)
+      description: |
+        Its own transaction, no e-mail. A closed day with no pack gets one built from the ledger: the sections that only the close of the night saw (`IN_HOUSE`, `NEXT_DAY`, `AUDIT_NOTES`, `OUT_OF_ORDER`) are `NOT_AVAILABLE`, the rows of the flash about tomorrow are blank, and every section says `built_late`. A pack that exists gets its `FAILED` sections built again (the ones that can be); nothing failed means nothing changes. 409 `SECTION_NOT_REBUILDABLE` when only sections that cannot be built again have failed, 409 `DATE_NOT_CLOSED` for the open day, 404 `BUSINESS_DAY_NOT_FOUND` for a date that was never a business day, 422 `OUT_OF_RANGE` for a day more than 400 days back.
+      tags: [nightaudit]
+      responses:
+        "200":
+          description: The manifest after the build.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NightAuditPackManifest" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/night-audit/room-charges/preview:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -19540,9 +19629,63 @@ components:
         message: { type: string, description: "The English sentence, for logs; the web translates the code with its params." }
         ref: { type: string, description: The code of the outlet, or what the finding is about. }
         params: { type: object, additionalProperties: { type: string }, description: The values the translation of the code needs. }
+    NightAuditPackSectionCode:
+      type: string
+      enum: [SUMMARY, FLASH, REVENUE, TAX, PAYMENTS, Z_REPORTS, GUEST_LEDGER, DEPOSIT_LEDGER, CORRECTIONS, CANCELLATIONS, OUTLETS, OUT_OF_ORDER, IN_HOUSE, NEXT_DAY, AUDIT_NOTES]
+    NightAuditPackSection:
+      type: object
+      required: [section, status, format_version, built_late, size_bytes, rebuildable]
+      properties:
+        section: { $ref: "#/components/schemas/NightAuditPackSectionCode" }
+        status:
+          type: string
+          enum: [OK, FAILED, OFF, NOT_AVAILABLE]
+          description: "OFF: the section does not apply to the property (no point of sale, no cashier shift). NOT_AVAILABLE: a pack built later cannot know it."
+        format_version: { type: integer }
+        error: { type: string, description: Why the section failed (FAILED only). }
+        built_late: { type: boolean, description: The section was built after the close of the day (a late build or a rebuild). }
+        size_bytes: { type: integer, description: The size of the stored JSON. }
+        rebuildable: { type: boolean, description: The ledger can make the section again. }
+    NightAuditPackManifest:
+      type: object
+      required: [business_date, status, format_version, built_at, built_by, build_ms, built_late, sections]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        status: { type: string, enum: [COMPLETE, PARTIAL], description: PARTIAL when a section failed. }
+        format_version: { type: integer }
+        built_at: { type: string, format: date-time }
+        built_by: { type: string, description: The name of the user who closed the day, or who built the pack later. }
+        build_ms: { type: integer, description: The time the build took. }
+        built_late: { type: boolean }
+        sections:
+          type: array
+          description: In the order of the pack.
+          items: { $ref: "#/components/schemas/NightAuditPackSection" }
+    NightAuditPackSummary:
+      type: object
+      required: [business_date, status, format_version, built_at, build_ms, built_late, sections_ok, sections_failed]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        status: { type: string, enum: [COMPLETE, PARTIAL] }
+        format_version: { type: integer }
+        built_at: { type: string, format: date-time }
+        build_ms: { type: integer }
+        built_late: { type: boolean }
+        sections_ok: { type: integer }
+        sections_failed: { type: integer }
+    NightAuditPackList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/NightAuditPackSummary" }
+        next_cursor:
+          oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }]
+          description: The business date to pass as `cursor` for the next page; null on the last page.
     NightAuditWarnings:
       type: object
-      required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending]
+      required: [stale_drafts, open_folios_of_cancelled_reservations, blocks_ending, pack_incomplete]
       properties:
         outlet_bills:
           type: array
@@ -19596,6 +19739,10 @@ components:
               group_code: { type: string }
               group_name: { type: string }
               balance: { $ref: "#/components/schemas/Amount" }
+        pack_incomplete:
+          type: array
+          description: "PACK_INCOMPLETE: the closed days whose night audit pack has a section that failed. A user with nightaudit.pack_manage can build the section again."
+          items: { $ref: "#/components/schemas/Date" }
         blocks_ending:
           type: array
           items:

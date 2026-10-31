@@ -32,17 +32,19 @@ type Service struct {
 	txm     *db.TxManager
 	clock   clock.Clock
 	audit   *audit.Writer
+	authz   auth.Authorizer
 	days    *tenancy.Service
 	reports *reports.Service
 	outlets Outlets
 	modules Modules
+	pdf     PDFMaker
 	// override replaces the builder of a section: the tests make a section fail with it. It is never set by the application.
 	override map[string]func(ctx context.Context) (any, error)
 }
 
 // NewService wires the service.
-func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, days *tenancy.Service, r *reports.Service) *Service {
-	return &Service{txm: txm, clock: c, audit: a, days: days, reports: r}
+func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, authz auth.Authorizer, days *tenancy.Service, r *reports.Service) *Service {
+	return &Service{txm: txm, clock: c, audit: a, authz: authz, days: days, reports: r}
 }
 
 // SetOutlets wires the point of sale and the plan that says whether the tenant has it.

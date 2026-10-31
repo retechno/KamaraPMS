@@ -11,6 +11,7 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditpack"
 	"kamarapms/internal/documents"
+	"kamarapms/internal/iam"
 	"kamarapms/internal/nightaudit"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/reports"
@@ -162,7 +163,7 @@ func TestAPackWithEmptySectionsStillPrints(t *testing.T) {
 // A real pack: the night audit builds it, the sections are read from the database as they are stored, and the PDF is made from them.
 func TestThePDFOfARealPack(t *testing.T) {
 	f := setup(t)
-	pack := auditpack.NewService(f.TxM, f.Clock, audit.NewWriter(f.Clock), f.Tenancy, f.Reports)
+	pack := auditpack.NewService(f.TxM, f.Clock, audit.NewWriter(f.Clock), iam.NewAuthorizer(f.TxM), f.Tenancy, f.Reports)
 	f.Audit.SetPackBuilder(pack)
 	date := civil.MustParseDate("2026-09-30")
 	f.Clock.Set(date.At(civil.MustParseTimeOfDay("21:00"), time.FixedZone("WIB", 7*3600)))

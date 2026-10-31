@@ -129,6 +129,8 @@ type Warnings struct {
 	OutletBills []OutletIssue `json:"outlet_bills"`
 	// Stock are the findings of the inventory that do not stop the close (stock sold below zero).
 	Stock []OutletIssue `json:"stock"`
+	// PackIncomplete are the closed days whose night audit pack has a section that failed (PACK_INCOMPLETE): a user with nightaudit.pack_manage can build the section again.
+	PackIncomplete []civil.Date `json:"pack_incomplete"`
 }
 
 // Preview is the full pre-check (nothing is written).

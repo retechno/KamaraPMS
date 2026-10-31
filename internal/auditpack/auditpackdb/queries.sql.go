@@ -49,8 +49,9 @@ func (q *Queries) GetDay(ctx context.Context, arg GetDayParams) (GetDayRow, erro
 }
 
 const getPackByDate = `-- name: GetPackByDate :one
-SELECT id, business_date, format_version, status, built_at, built_by, build_ms, built_late
-FROM nap_packs WHERE tenant_id = $1 AND property_id = $2 AND business_date = $3::date
+SELECT p.id, p.business_date, p.format_version, p.status, p.built_at, COALESCE(u.full_name, '')::text AS built_by_name, p.build_ms, p.built_late
+FROM nap_packs p LEFT JOIN users u ON u.id = p.built_by
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.business_date = $3::date
 `
 
 type GetPackByDateParams struct {
@@ -65,7 +66,7 @@ type GetPackByDateRow struct {
 	FormatVersion int16
 	Status        string
 	BuiltAt       time.Time
-	BuiltBy       *int64
+	BuiltByName   string
 	BuildMs       int32
 	BuiltLate     bool
 }
@@ -79,7 +80,7 @@ func (q *Queries) GetPackByDate(ctx context.Context, arg GetPackByDateParams) (G
 		&i.FormatVersion,
 		&i.Status,
 		&i.BuiltAt,
-		&i.BuiltBy,
+		&i.BuiltByName,
 		&i.BuildMs,
 		&i.BuiltLate,
 	)
@@ -154,7 +155,7 @@ func (q *Queries) InsertSection(ctx context.Context, arg InsertSectionParams) er
 }
 
 const listPackSections = `-- name: ListPackSections :many
-SELECT section, status, format_version, data, error, built_late
+SELECT section, status, format_version, data, error, built_late, COALESCE(octet_length(data::text), 0)::int AS size_bytes
 FROM nap_pack_sections WHERE tenant_id = $1 AND property_id = $2 AND pack_id = $3
 ORDER BY section
 `
@@ -172,6 +173,7 @@ type ListPackSectionsRow struct {
 	Data          []byte
 	Error         *string
 	BuiltLate     bool
+	SizeBytes     int32
 }
 
 func (q *Queries) ListPackSections(ctx context.Context, arg ListPackSectionsParams) ([]ListPackSectionsRow, error) {
@@ -190,6 +192,7 @@ func (q *Queries) ListPackSections(ctx context.Context, arg ListPackSectionsPara
 			&i.Data,
 			&i.Error,
 			&i.BuiltLate,
+			&i.SizeBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -264,36 +267,6 @@ func (q *Queries) ListPacks(ctx context.Context, arg ListPacksParams) ([]ListPac
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPartialPackDates = `-- name: ListPartialPackDates :many
-SELECT business_date FROM nap_packs WHERE tenant_id = $1 AND property_id = $2 AND status = 'PARTIAL' ORDER BY business_date
-`
-
-type ListPartialPackDatesParams struct {
-	TenantID   int64
-	PropertyID int64
-}
-
-// The business dates of the days whose pack has a section that failed: the preview of the next night audit says so.
-func (q *Queries) ListPartialPackDates(ctx context.Context, arg ListPartialPackDatesParams) ([]civil.Date, error) {
-	rows, err := q.db.Query(ctx, listPartialPackDates, arg.TenantID, arg.PropertyID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []civil.Date{}
-	for rows.Next() {
-		var business_date civil.Date
-		if err := rows.Scan(&business_date); err != nil {
-			return nil, err
-		}
-		items = append(items, business_date)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -421,39 +394,13 @@ func (q *Queries) PropertyHasShifts(ctx context.Context, arg PropertyHasShiftsPa
 }
 
 const rebuildSection = `-- name: RebuildSection :execrows
-UPDATE nap_pack_sections SET status = 'OK', data = $1, error = NULL, built_late = true
-WHERE tenant_id = $2 AND property_id = $3 AND pack_id = $4 AND section = $5 AND status = 'FAILED'
+UPDATE nap_pack_sections SET status = $1, data = $2, error = $3, built_late = true
+WHERE tenant_id = $4 AND property_id = $5 AND pack_id = $6 AND section = $7 AND status = 'FAILED'
 `
 
 type RebuildSectionParams struct {
+	Status     string
 	Data       []byte
-	TenantID   int64
-	PropertyID int64
-	PackID     int64
-	Section    string
-}
-
-// A section that failed and is built again becomes OK, once (the trigger refuses any other change).
-func (q *Queries) RebuildSection(ctx context.Context, arg RebuildSectionParams) (int64, error) {
-	result, err := q.db.Exec(ctx, rebuildSection,
-		arg.Data,
-		arg.TenantID,
-		arg.PropertyID,
-		arg.PackID,
-		arg.Section,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const retrySectionFailed = `-- name: RetrySectionFailed :execrows
-UPDATE nap_pack_sections SET error = $1
-WHERE tenant_id = $2 AND property_id = $3 AND pack_id = $4 AND section = $5 AND status = 'FAILED'
-`
-
-type RetrySectionFailedParams struct {
 	Error      *string
 	TenantID   int64
 	PropertyID int64
@@ -461,9 +408,11 @@ type RetrySectionFailedParams struct {
 	Section    string
 }
 
-// A section that failed again keeps its mark and says why this time.
-func (q *Queries) RetrySectionFailed(ctx context.Context, arg RetrySectionFailedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, retrySectionFailed,
+// A section that failed and is built again: its new status, JSON or reason (the trigger refuses the change of any section that did not fail).
+func (q *Queries) RebuildSection(ctx context.Context, arg RebuildSectionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildSection,
+		arg.Status,
+		arg.Data,
 		arg.Error,
 		arg.TenantID,
 		arg.PropertyID,

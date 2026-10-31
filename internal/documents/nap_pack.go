@@ -1,6 +1,7 @@
 package documents
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -470,6 +471,11 @@ func (pc packCtx) notes(g *page, v nightaudit.PackNotes) {
 	list("Open folios of cancelled reservations", folios, []col{{50, "Folio", "L"}, {70, "Reservation", "L"}, {60, "Balance", "R"}})
 	list("Open master folios of groups that have left", masters, []col{{50, "Folio", "L"}, {80, "Group", "L"}, {50, "Balance", "R"}})
 	list("Groups whose master folio is closed", closed, []col{{90, "Group", "L"}, {50, "Folio", "L"}, {40, "Stays", "R"}})
+	var partial [][]string
+	for _, d := range w.PackIncomplete {
+		partial = append(partial, []string{pc.dc.lang.Date(d)})
+	}
+	list("Earlier packs with a section that failed", partial, []col{{180, "Business date", "L"}})
 	list("Room blocks ending today", blocks, []col{{40, "Room", "L"}, {40, "Kind", "L"}, {100, "Ends", "L"}})
 	list("Open bills of the outlets", bills, []col{{40, "Reference", "L"}, {140, "Finding", "L"}})
 	list("Stock", stock, []col{{40, "Reference", "L"}, {140, "Finding", "L"}})
@@ -600,7 +606,7 @@ func (pc packCtx) headlineOK(s PackSection) (string, error) {
 			return "", err
 		}
 		w := v.Warnings
-		n := len(w.StaleDrafts) + len(w.OpenFolios) + len(w.OpenMasters) + len(w.ClosedMasters) + len(w.BlocksEnding) + len(w.OutletBills) + len(w.Stock)
+		n := len(w.StaleDrafts) + len(w.OpenFolios) + len(w.OpenMasters) + len(w.ClosedMasters) + len(w.BlocksEnding) + len(w.OutletBills) + len(w.Stock) + len(w.PackIncomplete)
 		return plural(v.RoomChargesPosted, "room charge", "room charges") + " posted · " + plural(n, "finding", "findings"), nil
 	}
 	return "", fmt.Errorf("unknown section %q", s.Code)
@@ -620,4 +626,26 @@ func plural(n int, one, many string) string {
 		return "1 " + one
 	}
 	return strconv.Itoa(n) + " " + many
+}
+
+// SetPacks gives the documents the archive of the night audit packs.
+func (s *Service) SetPacks(p *auditpack.Service) { s.packs = p }
+
+// NightAuditPackPDF draws the pack of a business date from the sections it kept (nightaudit.pack_view): every section that holds data, or the ones asked for. The language is English.
+func (s *Service) NightAuditPackPDF(ctx context.Context, propertyID int64, date civil.Date, sections []string) (string, []byte, error) {
+	got, err := s.packs.ForPDF(ctx, propertyID, date, sections)
+	if err != nil {
+		return "", nil, err
+	}
+	prop, err := s.days.GetProperty(ctx, propertyID)
+	if err != nil {
+		return "", nil, err
+	}
+	in := PackInput{BusinessDate: date, Status: got.Manifest.Status, BuiltAt: got.Manifest.BuiltAt, BuiltLate: got.Manifest.BuiltLate}
+	for _, sec := range got.Sections {
+		in.Sections = append(in.Sections, PackSection{Code: sec.Code, Status: sec.Status, Data: sec.Data, BuiltLate: sec.BuiltLate})
+	}
+	h := Hotel{Name: prop.Name, Address: prop.Address, City: prop.City, Country: prop.CountryCode, Phone: prop.Phone, Email: prop.Email, TaxID: prop.TaxID, Footer: prop.DocumentFooter}
+	pdf, err := RenderPack(h, prop, in)
+	return "night-audit-pack-" + date.String() + ".pdf", pdf, err
 }
