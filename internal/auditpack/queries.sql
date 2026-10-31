@@ -69,9 +69,15 @@ UPDATE nap_packs SET status = @status WHERE tenant_id = @tenant_id AND property_
 
 -- The recipients of the pack (docs/architecture/38-reports-night-audit-pack.md 6 and 8.1).
 -- name: ListRecipients :many
-SELECT id, email, name, sections, is_active, created_at, updated_at
-FROM nap_recipients WHERE tenant_id = @tenant_id AND property_id = @property_id
-ORDER BY lower(email), id;
+SELECT r.id, r.email, r.name, r.sections, r.is_active, r.created_at, r.updated_at, (l.status IS NOT NULL)::boolean AS has_last, COALESCE(l.status, '')::text AS last_status, COALESCE(l.business_date, DATE '0001-01-01') AS last_pack_date
+FROM nap_recipients r
+LEFT JOIN LATERAL (
+    SELECT o.status, k.business_date FROM email_outbox o JOIN nap_packs k ON k.property_id = o.property_id AND k.id = o.nap_pack_id
+    WHERE o.property_id = r.property_id AND o.kind = 'NIGHT_AUDIT_PACK' AND lower(o.to_address) = lower(r.email)
+    ORDER BY k.business_date DESC, o.id DESC LIMIT 1
+) l ON true
+WHERE r.tenant_id = @tenant_id AND r.property_id = @property_id
+ORDER BY lower(r.email), r.id;
 
 -- The active recipients, read once by the run (one consistent list whatever is edited meanwhile).
 -- name: ListActiveRecipients :many
@@ -113,6 +119,10 @@ SELECT o.id, o.to_address, o.nap_sections, o.nap_part, o.nap_parts, o.status, o.
 FROM email_outbox o LEFT JOIN users u ON u.id = o.created_by
 WHERE o.tenant_id = @tenant_id AND o.property_id = @property_id AND o.nap_pack_id = @pack_id
 ORDER BY o.id DESC;
+
+-- name: CountPackMail :one
+SELECT count(*) FILTER (WHERE status = 'QUEUED')::int AS queued, count(*) FILTER (WHERE status = 'SENT')::int AS sent, count(*) FILTER (WHERE status = 'FAILED')::int AS failed
+FROM email_outbox WHERE property_id = @property_id AND nap_pack_id = @pack_id;
 
 -- name: GetPackDate :one
 SELECT business_date FROM nap_packs WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @pack_id;

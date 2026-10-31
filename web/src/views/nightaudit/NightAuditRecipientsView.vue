@@ -43,6 +43,7 @@ const columns = computed<Column<NightAuditPackRecipient>[]>(() => [
   { key: 'email', label: t('nightAuditRecipients.address') },
   { key: 'sections', label: t('nightAuditRecipients.sections') },
   { key: 'is_active', label: t('nightAuditRecipients.status') },
+  { key: 'last', label: t('nightAuditRecipients.last') },
   { key: 'actions', label: '', align: 'right' },
 ])
 
@@ -161,6 +162,13 @@ watch(pid, () => { void load() }, { immediate: true })
       </template>
       <template #cell-is_active="{ row }">
         <Badge :variant="row.is_active ? 'success' : 'secondary'">{{ row.is_active ? t('nightAuditRecipients.active') : t('nightAuditRecipients.inactive') }}</Badge>
+      </template>
+      <template #cell-last="{ row }">
+        <span v-if="!row.last_status" class="text-muted-foreground" data-testid="last-none">{{ t('nightAuditRecipients.lastNone') }}</span>
+        <template v-else>
+          {{ $date(row.last_pack_date) }} ·
+          <Badge :variant="row.last_status === 'FAILED' ? 'destructive' : row.last_status === 'SENT' ? 'success' : 'secondary'" :data-testid="`last-${row.id}`">{{ t(`nightAuditRecipients.lastState.${row.last_status}` as never) }}</Badge>
+        </template>
       </template>
       <template #cell-actions="{ row }">
         <Button variant="outline" size="sm" :data-testid="`edit-${row.id}`" @click="startEdit(row)">{{ t('nightAuditRecipients.edit') }}</Button>

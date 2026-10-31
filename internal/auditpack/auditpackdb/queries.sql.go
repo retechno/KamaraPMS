@@ -13,6 +13,29 @@ import (
 	"kamarapms/internal/platform/civil"
 )
 
+const countPackMail = `-- name: CountPackMail :one
+SELECT count(*) FILTER (WHERE status = 'QUEUED')::int AS queued, count(*) FILTER (WHERE status = 'SENT')::int AS sent, count(*) FILTER (WHERE status = 'FAILED')::int AS failed
+FROM email_outbox WHERE property_id = $1 AND nap_pack_id = $2
+`
+
+type CountPackMailParams struct {
+	PropertyID int64
+	PackID     *int64
+}
+
+type CountPackMailRow struct {
+	Queued int32
+	Sent   int32
+	Failed int32
+}
+
+func (q *Queries) CountPackMail(ctx context.Context, arg CountPackMailParams) (CountPackMailRow, error) {
+	row := q.db.QueryRow(ctx, countPackMail, arg.PropertyID, arg.PackID)
+	var i CountPackMailRow
+	err := row.Scan(&i.Queued, &i.Sent, &i.Failed)
+	return i, err
+}
+
 const deleteRecipient = `-- name: DeleteRecipient :execrows
 DELETE FROM nap_recipients WHERE tenant_id = $1 AND property_id = $2 AND id = $3
 `
@@ -583,9 +606,15 @@ func (q *Queries) ListPacks(ctx context.Context, arg ListPacksParams) ([]ListPac
 }
 
 const listRecipients = `-- name: ListRecipients :many
-SELECT id, email, name, sections, is_active, created_at, updated_at
-FROM nap_recipients WHERE tenant_id = $1 AND property_id = $2
-ORDER BY lower(email), id
+SELECT r.id, r.email, r.name, r.sections, r.is_active, r.created_at, r.updated_at, (l.status IS NOT NULL)::boolean AS has_last, COALESCE(l.status, '')::text AS last_status, COALESCE(l.business_date, DATE '0001-01-01') AS last_pack_date
+FROM nap_recipients r
+LEFT JOIN LATERAL (
+    SELECT o.status, k.business_date FROM email_outbox o JOIN nap_packs k ON k.property_id = o.property_id AND k.id = o.nap_pack_id
+    WHERE o.property_id = r.property_id AND o.kind = 'NIGHT_AUDIT_PACK' AND lower(o.to_address) = lower(r.email)
+    ORDER BY k.business_date DESC, o.id DESC LIMIT 1
+) l ON true
+WHERE r.tenant_id = $1 AND r.property_id = $2
+ORDER BY lower(r.email), r.id
 `
 
 type ListRecipientsParams struct {
@@ -594,13 +623,16 @@ type ListRecipientsParams struct {
 }
 
 type ListRecipientsRow struct {
-	ID        int64
-	Email     string
-	Name      *string
-	Sections  []string
-	IsActive  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           int64
+	Email        string
+	Name         *string
+	Sections     []string
+	IsActive     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	HasLast      bool
+	LastStatus   string
+	LastPackDate civil.Date
 }
 
 // The recipients of the pack (docs/architecture/38-reports-night-audit-pack.md 6 and 8.1).
@@ -621,6 +653,9 @@ func (q *Queries) ListRecipients(ctx context.Context, arg ListRecipientsParams) 
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.HasLast,
+			&i.LastStatus,
+			&i.LastPackDate,
 		); err != nil {
 			return nil, err
 		}

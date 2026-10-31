@@ -13,6 +13,7 @@ import (
 	"kamarapms/internal/auditpack/auditpackdb"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/platform/civil"
 )
 
 // The recipients of the pack (docs/architecture/38-reports-night-audit-pack.md 6 and 8.1): an address of the hotel's choosing, which sections it receives, and whether it is active. An address that is
@@ -40,6 +41,9 @@ type Recipient struct {
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// LastStatus and LastPackDate are the last message of the pack to this address: its state and the business date of its pack. Null when nothing was ever queued for it.
+	LastStatus   *string     `json:"last_status"`
+	LastPackDate *civil.Date `json:"last_pack_date"`
 }
 
 // RecipientList is the list of a property. It is not paged: a property has tens of addresses at most.
@@ -148,6 +152,10 @@ func (s *Service) ListRecipients(ctx context.Context, propertyID int64) (Recipie
 	out := RecipientList{EmailEnabled: s.mailEnabled(), Items: make([]Recipient, len(rows))}
 	for i, r := range rows {
 		out.Items[i] = recipientOf(r.ID, r.Email, r.Name, r.Sections, r.IsActive, r.CreatedAt, r.UpdatedAt)
+		if r.HasLast {
+			status, date := r.LastStatus, r.LastPackDate
+			out.Items[i].LastStatus, out.Items[i].LastPackDate = &status, &date
+		}
 	}
 	return out, nil
 }

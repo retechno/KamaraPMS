@@ -216,6 +216,10 @@ watch(pid, () => {
           <strong>{{ t('nightAudit.packTitle') }}</strong>
           <Badge :variant="pack.status === 'COMPLETE' ? 'success' : 'warning'" data-testid="pack-status">{{ pack.status === 'COMPLETE' ? t('nightAudit.packComplete') : t('nightAudit.packPartial') }}</Badge>
           <span class="text-muted-foreground">{{ t('nightAudit.packSections', { ok: packOk, n: pack.sections.length }) }} · {{ t('nightAudit.packBuilt', { ms: pack.build_ms }) }}</span>
+          <span class="text-muted-foreground" data-testid="pack-mail">
+            {{ pack.email_enabled ? t('nightAudit.packMailQueued', { n: pack.mail_queued + pack.mail_sent + pack.mail_failed }) : t('nightAudit.packMailOff') }}
+            <RouterLink v-if="can('nightaudit.pack_view')" to="/night-audit/archive" data-testid="pack-mail-link">{{ t('nightAudit.packOpen') }}</RouterLink>
+          </span>
           <span class="ml-auto flex gap-2">
             <Button variant="outline" size="sm" data-testid="pack-pdf" @click="packPdf">{{ t('nightAudit.packPdf') }}</Button>
             <Button variant="outline" size="sm" as-child><RouterLink to="/night-audit/archive" data-testid="pack-archive">{{ t('nightAudit.packOpen') }}</RouterLink></Button>

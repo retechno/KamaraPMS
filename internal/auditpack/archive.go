@@ -135,6 +135,11 @@ type Manifest struct {
 	BuildMS       int32         `json:"build_ms"`
 	BuiltLate     bool          `json:"built_late"`
 	Sections      []SectionInfo `json:"sections"`
+	// EmailEnabled and the counts of the messages of the pack by state: the result screen of the run says how many wait.
+	EmailEnabled bool `json:"email_enabled"`
+	MailQueued   int  `json:"mail_queued"`
+	MailSent     int  `json:"mail_sent"`
+	MailFailed   int  `json:"mail_failed"`
 }
 
 func packNotFound(date civil.Date) error {
@@ -187,7 +192,15 @@ func (s *Service) Manifest(ctx context.Context, propertyID int64, date civil.Dat
 		return Manifest{}, err
 	}
 	st, err := s.load(ctx, p, propertyID, date)
-	return st.manifest, err
+	if err != nil {
+		return Manifest{}, err
+	}
+	c, err := s.q(ctx).CountPackMail(ctx, auditpackdb.CountPackMailParams{PropertyID: propertyID, PackID: &st.id})
+	if err != nil {
+		return Manifest{}, err
+	}
+	st.manifest.EmailEnabled, st.manifest.MailQueued, st.manifest.MailSent, st.manifest.MailFailed = s.mailEnabled(), int(c.Queued), int(c.Sent), int(c.Failed)
+	return st.manifest, nil
 }
 
 // SectionData is the stored JSON of a section (nightaudit.pack_view). A section that holds no data (failed, off, not available) is a 404: it has nothing to download.

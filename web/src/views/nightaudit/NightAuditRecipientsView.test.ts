@@ -14,7 +14,7 @@ let PATCH = vi.fn()
 let DELETE = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PATCH: (...a: unknown[]) => PATCH(...a), DELETE: (...a: unknown[]) => DELETE(...a) } }))
 
-const row = (id: number, email: string, sections: string[], is_active = true, name = '') => ({ id, email, name, sections, is_active, created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z' })
+const row = (id: number, email: string, sections: string[], is_active = true, name = '', last: [string, string] | null = null) => ({ id, email, name, sections, is_active, last_status: last?.[0] ?? null, last_pack_date: last?.[1] ?? null, created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z' })
 
 function mountView(permissions = ['nightaudit.pack_manage'], emailEnabled = true) {
   const pinia = createPinia()
@@ -22,8 +22,8 @@ function mountView(permissions = ['nightaudit.pack_manage'], emailEnabled = true
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
   GET = vi.fn().mockResolvedValue({ data: { email_enabled: emailEnabled, items: [
-    row(1, 'gm@example.test', ['SUMMARY', 'FLASH'], true, 'General manager'),
-    row(2, 'finance@example.test', ['SUMMARY', 'FLASH', 'GUEST_LEDGER', 'Z_REPORTS']),
+    row(1, 'gm@example.test', ['SUMMARY', 'FLASH'], true, 'General manager', ['SENT', '2026-09-28']),
+    row(2, 'finance@example.test', ['SUMMARY', 'FLASH', 'GUEST_LEDGER', 'Z_REPORTS'], true, '', ['FAILED', '2026-09-26']),
     row(3, 'eng@example.test', ['OUT_OF_ORDER'], false),
   ] } })
   POST = vi.fn().mockResolvedValue({ data: row(9, 'new@example.test', ['SUMMARY', 'FLASH']) })
@@ -51,6 +51,23 @@ describe('NightAuditRecipientsView', () => {
     expect(finance).toContain('cash')
     expect(w.get('[data-testid=recipient-3]').text()).toContain('Inactive')
     expect(w.get('[data-testid=recipient-3]').text()).not.toContain('OUT_OF_ORDER')
+  })
+
+  it('shows the last message to each address, a failure marked', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=recipient-1]').text()).toContain('28 Sep 2026')
+    expect(w.get('[data-testid=last-1]').text()).toBe('sent')
+    expect(w.get('[data-testid=last-2]').text()).toBe('failed')
+    expect(w.get('[data-testid=last-2]').classes().join(' ')).toContain('destructive')
+    expect(w.get('[data-testid=recipient-3]').find('[data-testid=last-none]').text()).toBe('Nothing sent yet')
+    w.unmount()
+    setLocale('id')
+    const id = mountView()
+    await flushPromises()
+    expect(id.get('[data-testid=last-1]').text()).toBe('terkirim')
+    expect(id.get('[data-testid=last-2]').text()).toBe('gagal')
+    expect(id.get('[data-testid=recipient-3]').text()).toContain('Belum ada pengiriman')
   })
 
   it('says when e-mail is off, and still keeps the list', async () => {

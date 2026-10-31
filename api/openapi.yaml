@@ -19778,10 +19778,14 @@ components:
         rebuildable: { type: boolean, description: The ledger can make the section again. }
     NightAuditPackManifest:
       type: object
-      required: [business_date, status, format_version, built_at, built_by, build_ms, built_late, sections]
+      required: [business_date, status, format_version, built_at, built_by, build_ms, built_late, sections, email_enabled, mail_queued, mail_sent, mail_failed]
       properties:
         business_date: { $ref: "#/components/schemas/Date" }
         status: { type: string, enum: [COMPLETE, PARTIAL], description: PARTIAL when a section failed. }
+        email_enabled: { type: boolean, description: False when the server has no mail host. }
+        mail_queued: { type: integer, description: Messages of the pack that wait to be sent (only the manifest of a day; zero in the answer of a rebuild). }
+        mail_sent: { type: integer }
+        mail_failed: { type: integer }
         format_version: { type: integer }
         built_at: { type: string, format: date-time }
         built_by: { type: string, description: The name of the user who closed the day, or who built the pack later. }
@@ -19793,8 +19797,10 @@ components:
           items: { $ref: "#/components/schemas/NightAuditPackSection" }
     NightAuditPackRecipient:
       type: object
-      required: [id, email, name, sections, is_active, created_at, updated_at]
+      required: [id, email, name, sections, is_active, created_at, updated_at, last_status, last_pack_date]
       properties:
+        last_status: { type: [string, "null"], enum: [QUEUED, SENT, FAILED, SKIPPED, null], description: The state of the last message of a pack to this address (the list only). }
+        last_pack_date: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }], description: The business date of the pack of that message. }
         id: { type: integer, format: int64 }
         email: { type: string }
         name: { type: string }

@@ -17754,6 +17754,12 @@ export interface components {
              * @enum {string}
              */
             status: "COMPLETE" | "PARTIAL";
+            /** @description False when the server has no mail host. */
+            email_enabled: boolean;
+            /** @description Messages of the pack that wait to be sent (only the manifest of a day; zero in the answer of a rebuild). */
+            mail_queued: number;
+            mail_sent: number;
+            mail_failed: number;
             format_version: number;
             /** Format: date-time */
             built_at: string;
@@ -17766,6 +17772,13 @@ export interface components {
             sections: components["schemas"]["NightAuditPackSection"][];
         };
         NightAuditPackRecipient: {
+            /**
+             * @description The state of the last message of a pack to this address (the list only).
+             * @enum {string|null}
+             */
+            last_status: "QUEUED" | "SENT" | "FAILED" | "SKIPPED" | null;
+            /** @description The business date of the pack of that message. */
+            last_pack_date: components["schemas"]["Date"] | null;
             /** Format: int64 */
             id: number;
             email: string;

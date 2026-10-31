@@ -453,6 +453,26 @@ func TestTheHistoryKeepsTheAddressOfADeletedRecipient(t *testing.T) {
 	if _, _, err := svc.ProcessDue(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	f.recipient(t, "new@example.test") // added after the close: nothing was queued for it
+	list0, err := f.pack.ListRecipients(f.admin, f.propID)
+	must(t, err)
+	for _, it := range list0.Items {
+		switch it.Email {
+		case "gm@example.test":
+			if it.LastStatus == nil || *it.LastStatus != "SENT" || it.LastPackDate == nil || *it.LastPackDate != bd {
+				t.Fatalf("last message of gm: %+v", it)
+			}
+		case "new@example.test":
+			if it.LastStatus != nil || it.LastPackDate != nil {
+				t.Fatalf("a recipient with no message: %+v", it)
+			}
+		}
+	}
+	mf, err := f.pack.Manifest(f.admin, f.propID, bd)
+	must(t, err)
+	if !mf.EmailEnabled || mf.MailSent != 1 || mf.MailQueued != 0 || mf.MailFailed != 0 {
+		t.Fatalf("manifest counts: %+v", mf)
+	}
 	must(t, f.pack.DeleteRecipient(f.admin, f.propID, r.ID))
 	h, err := f.pack.Deliveries(f.admin, f.propID, bd)
 	must(t, err)
