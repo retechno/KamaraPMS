@@ -1,6 +1,7 @@
 package documents_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strconv"
@@ -157,6 +158,39 @@ func TestAPackWithEmptySectionsStillPrints(t *testing.T) {
 	must(t, err)
 	if s := pdfText(t, documents.Document{Filename: "x.pdf", PDF: b}); !strings.Contains(s, "The stored data of this section could not be read.") {
 		t.Error("an unreadable section is not reported")
+	}
+}
+
+// A charge type is printed by its name, never as the code; a table with no rows says so instead of a bare heading row.
+func TestThePackPDFNamesChargeTypesAndSaysWhenATableIsEmpty(t *testing.T) {
+	day := d("2026-10-28")
+	sum := nightaudit.Summary{BusinessDate: day, OccupancyPercent: "50", ADR: "1", RevPAR: "1",
+		RevenueByChargeType: []nightaudit.TypeRevenue{{ChargeType: "FOOD_BEVERAGE", Money: nightaudit.Money{Net: "100", Service: "0", Tax: "0"}}, {ChargeType: "ROOM", Money: nightaudit.Money{Net: "200", Service: "0", Tax: "0"}}},
+		PaymentsByMethod:    []nightaudit.MethodTotal{}}
+	closedAt := time.Date(2026, 10, 28, 17, 42, 0, 0, time.UTC)
+	in := documents.PackInput{BusinessDate: day, Status: auditpack.PackComplete, BuiltAt: closedAt}
+	for code, v := range map[string]any{
+		auditpack.SecSummary:  auditpack.DaySummary{BusinessDate: day, ClosedAt: &closedAt, ClosedBy: "Budi", Summary: js(t, sum)},
+		auditpack.SecRevenue:  reports.Revenue{From: day, To: day, ByCode: []reports.RevenueLine{{ChargeType: "FOOD_BEVERAGE", ChargeCode: "FNB", Name: "Food", Items: 1, Net: "100", Service: "0", Tax: "0", Total: "100"}}, Totals: reports.RevenueTotals{Items: 1, Net: "100", Service: "0", Tax: "0", Total: "100"}},
+		auditpack.SecPayments: reports.Cashier{From: day, To: day, Lines: []reports.CashierLine{}, ByMethod: []reports.MethodSum{}},
+	} {
+		in.Sections = append(in.Sections, documents.PackSection{Code: code, Status: auditpack.StatusOK, Data: js(t, v)})
+	}
+	b, err := documents.RenderPack(documents.Hotel{Name: "Hotel Bali"}, packProp(0), in)
+	must(t, err)
+	s := pdfText(t, documents.Document{Filename: "x.pdf", PDF: b})
+	if strings.Contains(s, "FOOD_BEVERAGE") {
+		t.Error("a charge type is printed as its code")
+	}
+	for _, want := range []string{"Food and beverage", "Rooms", "No payments"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("the pack lacks %q", want)
+		}
+	}
+	again, err := documents.RenderPack(documents.Hotel{Name: "Hotel Bali"}, packProp(0), in)
+	must(t, err)
+	if !bytes.Equal(b, again) {
+		t.Error("two renders are not the same bytes")
 	}
 }
 

@@ -86,6 +86,8 @@ type page struct {
 	hotel   Hotel
 	printed string
 	lang    Lang
+	// empty is what a table with no rows says instead of a bare heading row; a document that leaves it blank prints the heading as it always did.
+	empty string
 }
 
 // newPage starts an A4 document with the hotel letterhead. printed is the "printed on" text of the footer.
@@ -267,6 +269,10 @@ func (g *page) table(cols []col, rows [][]string) { g.tableB(cols, rows, nil) }
 
 // tableB is table with some rows in bold (totals and subtotals of a statement).
 func (g *page) tableB(cols []col, rows [][]string, bold func(row int) bool) {
+	if len(rows) == 0 && g.empty != "" {
+		g.note(g.empty, "I", 9)
+		return
+	}
 	head := func() {
 		g.p.SetFillColor(band[0], band[1], band[2])
 		g.font("B", 8.5)

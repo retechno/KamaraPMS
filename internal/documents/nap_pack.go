@@ -46,6 +46,25 @@ var packTitles = map[string]string{
 	auditpack.SecInHouse: "In-house guests", auditpack.SecNextDay: "Tomorrow's arrivals and departures", auditpack.SecAuditNotes: "Audit notes",
 }
 
+// napChargeType is the English name of a charge type, so that no code is printed.
+func napChargeType(t string) string {
+	switch t {
+	case "ROOM":
+		return "Rooms"
+	case "FOOD_BEVERAGE":
+		return "Food and beverage"
+	case "SERVICE":
+		return "Services"
+	case "FEE":
+		return "Fees"
+	case "TRANSFER":
+		return "Transfers"
+	case "OTHER":
+		return "Other"
+	}
+	return t
+}
+
 // PackSectionTitle is the English name of a section.
 func PackSectionTitle(code string) string {
 	if t, ok := packTitles[code]; ok {
@@ -173,6 +192,10 @@ func decodeSection[T any](s PackSection) (T, error) {
 
 func (pc packCtx) body(g *page, s PackSection) error {
 	dc := pc.dc
+	g.empty = "None"
+	if s.Code == auditpack.SecPayments {
+		g.empty = "No payments"
+	}
 	switch s.Code {
 	case auditpack.SecSummary:
 		v, err := decodeSection[auditpack.DaySummary](s)
@@ -303,15 +326,17 @@ func (pc packCtx) summary(g *page, v auditpack.DaySummary, sum nightaudit.Summar
 	g.section("Revenue by charge type")
 	rows := make([][]string, 0, len(sum.RevenueByChargeType))
 	for _, r := range sum.RevenueByChargeType {
-		rows = append(rows, []string{r.ChargeType, m(r.Net), m(r.Service), m(r.Tax)})
+		rows = append(rows, []string{napChargeType(r.ChargeType), m(r.Net), m(r.Service), m(r.Tax)})
 	}
 	g.table([]col{{60, "Charge type", "L"}, {40, "Net", "R"}, {40, "Service", "R"}, {40, "Tax", "R"}}, rows)
 	g.section("Payments by method")
+	g.empty = "No payments"
 	pay := make([][]string, 0, len(sum.PaymentsByMethod))
 	for _, r := range sum.PaymentsByMethod {
 		pay = append(pay, []string{napMethod(r.Method), m(r.Payments), m(r.Refunds), m(r.Net)})
 	}
 	g.table([]col{{60, "Method", "L"}, {40, "Payments", "R"}, {40, "Refunds", "R"}, {40, "Net", "R"}}, pay)
+	g.empty = "None"
 	g.section("City ledger")
 	g.table([]col{{80, "", "L"}, {40, "Amount", "R"}}, [][]string{
 		{"Transferred from folios", m(sum.CityLedger.Transferred)}, {"Received", m(sum.CityLedger.Received)}, {"Outstanding", m(sum.CityLedger.Outstanding)},
@@ -323,7 +348,7 @@ func (pc packCtx) revenue(g *page, v reports.Revenue) {
 	g.title("REVENUE", pc.dc.lang.Date(v.From))
 	rows := make([][]string, 0, len(v.ByCode)+1)
 	for _, x := range v.ByCode {
-		rows = append(rows, []string{x.ChargeType, x.ChargeCode, x.Name, strconv.Itoa(x.Items), m(x.Net), m(x.Service), m(x.Tax), m(x.Total)})
+		rows = append(rows, []string{napChargeType(x.ChargeType), x.ChargeCode, x.Name, strconv.Itoa(x.Items), m(x.Net), m(x.Service), m(x.Tax), m(x.Total)})
 	}
 	rows = append(rows, []string{"Total", "", "", strconv.Itoa(v.Totals.Items), m(v.Totals.Net), m(v.Totals.Service), m(v.Totals.Tax), m(v.Totals.Total)})
 	last := len(rows) - 1

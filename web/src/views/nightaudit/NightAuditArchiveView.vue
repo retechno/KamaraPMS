@@ -187,7 +187,6 @@ watch(pid, () => {
               <th scope="col">{{ t('nightAuditArchive.pick') }}</th>
               <th scope="col">{{ t('nightAuditArchive.sectionCol') }}</th>
               <th scope="col">{{ t('nightAuditArchive.sectionStatus') }}</th>
-              <th scope="col">{{ t('nightAuditArchive.size') }}</th>
               <th scope="col" />
             </tr>
           </thead>
@@ -199,7 +198,6 @@ watch(pid, () => {
                 <Badge :variant="s.status === 'OK' ? 'success' : s.status === 'FAILED' ? 'destructive' : 'secondary'">{{ t(`nightAuditArchive.state.${s.status}` as never) }}</Badge>
                 <small v-if="s.status === 'FAILED' && !s.rebuildable" class="ml-2 text-muted-foreground">{{ t('nightAuditArchive.notRebuildable') }}</small>
               </td>
-              <td>{{ hasData(s) ? s.size_bytes : '' }}</td>
               <td class="text-right">
                 <template v-if="hasData(s)">
                   <Button variant="ghost" size="sm" :data-testid="`json-${s.section}`" @click="json(s.section)">{{ t('nightAuditArchive.json') }}</Button>

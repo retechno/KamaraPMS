@@ -47,6 +47,10 @@ describe('NightAuditArchiveView', () => {
     await w.get('[data-testid=open-2026-09-29]').trigger('click')
     await flushPromises()
     expect(w.get('[data-testid=section-FLASH]').text()).toContain('Failed')
+    expect(w.get('[data-testid=section-FLASH]').text()).toContain('Daily flash report')
+    expect(w.get('[data-testid=section-SUMMARY]').text()).toContain('Night audit summary')
+    expect(w.find('[data-testid=detail] th').exists()).toBe(true)
+    expect(w.get('[data-testid=detail]').text()).not.toContain('Size')
     expect(w.find('[data-testid=csv-FLASH]').exists()).toBe(false) // nothing to download from a failed section
     expect(w.find('[data-testid=csv-SUMMARY]').exists()).toBe(false) // the summary has no table
     expect(w.find('[data-testid=json-SUMMARY]').exists()).toBe(true)
