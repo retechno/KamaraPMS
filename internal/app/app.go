@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/assets"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/auditlog"
+	"kamarapms/internal/auditpack"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/bankrec"
 	"kamarapms/internal/banquet"
@@ -198,6 +199,9 @@ func New(d Deps) *App {
 	documentsSvc.SetShifts(shiftsSvc)
 	documentsSvc.SetReports(reportsSvc)
 	reportsSvc.SetShifts(shiftsSvc)
+	packSvc := auditpack.NewService(d.TxManager, d.Clock, auditWriter, tenancySvc, reportsSvc)
+	packSvc.SetOutlets(posSvc, packPlan{subs: subscriptionSvc})
+	nightAuditSvc.SetPackBuilder(packSvc)    // the close of a day keeps its pack, in the same transaction (doc 38)
 	budgetSvc.SetDepartments(departmentsSvc) // and a row of the budget its department
 
 	// Business API: every route requires an authenticated principal.

@@ -37,6 +37,7 @@ type Service struct {
 	shifts  ShiftChecker
 	outlets OutletChecker
 	stock   StockChecker
+	pack    PackBuilder
 }
 
 // StockChecker is the inventory at the close of the day: its findings, and its step of the close (internal/inventory through an adapter in internal/app).
@@ -73,6 +74,21 @@ type ShiftChecker interface {
 
 // SetShiftChecker wires the cashier shifts; without it nothing is checked.
 func (s *Service) SetShiftChecker(c ShiftChecker) { s.shifts = c }
+
+// PackBuilder makes the night audit pack of the day that was just closed (internal/auditpack, docs/architecture/38-reports-night-audit-pack.md). It runs inside the transaction of the close,
+// after the day is closed and before the audit entry; a section that fails does not fail the close (the builder keeps the failure in the pack), a database error does.
+type PackBuilder interface {
+	BuildPack(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, notes PackNotes) error
+}
+
+// PackNotes is what only the audit saw and the ledger cannot say later: the findings that did not stop it, and the room charges it posted (the section AUDIT_NOTES of the pack).
+type PackNotes struct {
+	RoomChargesPosted int      `json:"room_charges_posted"`
+	Warnings          Warnings `json:"warnings"`
+}
+
+// SetPackBuilder wires the night audit pack; without it no pack is made.
+func (s *Service) SetPackBuilder(b PackBuilder) { s.pack = b }
 
 // SetJournaler wires the general ledger.
 func (s *Service) SetJournaler(j Journaler) { s.journal = j }
@@ -330,7 +346,7 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 			return apperr.Conflict("NIGHT_AUDIT_TOO_EARLY", "the business date cannot be closed before its end of day").
 				WithContext("business_date", day.BusinessDate.String()).WithContext("allowed_from", c.NightAuditAllowedFrom)
 		}
-		a, err := s.analyze(ctx, p, propertyID, bd, prop.CurrencyDecimals, false)
+		a, err := s.analyze(ctx, p, propertyID, bd, prop.CurrencyDecimals, true) // the warnings go to the pack (AUDIT_NOTES)
 		if err != nil {
 			return err
 		}
@@ -402,6 +418,11 @@ func (s *Service) Run(ctx context.Context, propertyID int64, bd civil.Date) (Run
 			return err
 		}
 		out = RunResult{ClosedBusinessDate: closed.BusinessDate, NewBusinessDate: opened.BusinessDate, RoomChargesPosted: rep.Posted, Summary: summary}
+		if s.pack != nil { // the snapshot of the day that was closed (a failure of one section is kept in the pack and never stops the close)
+			if err := s.pack.BuildPack(ctx, p, propertyID, bd, PackNotes{RoomChargesPosted: rep.Posted, Warnings: a.warnings}); err != nil {
+				return err
+			}
+		}
 		return s.audit.Write(ctx, audit.Entry{
 			TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(),
 			Action: "night_audit.completed", EntityType: "business_day", EntityID: closed.ID, EntityLabel: closed.BusinessDate.String(),
