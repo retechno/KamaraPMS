@@ -760,6 +760,19 @@ var constraintErrors = map[string]mapped{
 	"fa_proposals_location_fk":             {apperr.KindNotFound, "LOCATION_NOT_FOUND", "the location does not exist in this property"},
 	"fa_proposals_kept":                    {apperr.KindConflict, "PROPOSAL_NOT_PENDING", "a proposal that was decided is kept as it is"},
 	"mr_asset_fk":                          {apperr.KindNotFound, "ASSET_NOT_FOUND", "the asset does not exist in this property"},
+
+	// Night audit packs (38, 8.1)
+	"nap_packs_date_uk":           {apperr.KindConflict, "DUPLICATE_REQUEST", "the night audit pack of this day exists already"},
+	"nap_packs_day_closed":        {apperr.KindConflict, "DATE_NOT_CLOSED", "a night audit pack is made for a closed business day"},
+	"nap_packs_kept":              {apperr.KindConflict, "SECTION_NOT_REBUILDABLE", "a night audit pack is kept as it is; only its status changes"},
+	"nap_pack_sections_kept":      {apperr.KindConflict, "SECTION_NOT_REBUILDABLE", "a section that was built is kept as it is; only a failed section is built again"},
+	"nap_packs_status_ck":         {apperr.KindInvalid, "INVALID_VALUE", "a pack is complete or partial"},
+	"nap_packs_version_ck":        {apperr.KindInvalid, "INVALID_VALUE", "the format version of a pack starts at one"},
+	"nap_packs_build_ms_ck":       {apperr.KindInvalid, "INVALID_VALUE", "the time to build a pack is not negative"},
+	"nap_pack_sections_code_ck":   {apperr.KindInvalid, "INVALID_VALUE", "an unknown section of the night audit pack"},
+	"nap_pack_sections_status_ck": {apperr.KindInvalid, "INVALID_VALUE", "a section is OK, failed, off or not available"},
+	"nap_pack_sections_data_ck":   {apperr.KindInvalid, "INVALID_VALUE", "a section that is OK holds its data; the others hold none"},
+	"nap_pack_sections_error_ck":  {apperr.KindInvalid, "INVALID_VALUE", "a section that failed says why; the others do not"},
 }
 
 // MappedConstraintNames lists every constraint name with a dedicated API error

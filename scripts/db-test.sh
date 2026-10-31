@@ -261,6 +261,18 @@ section down "$M96" | psql_run
 psql_run < "$ROOT/db/tests/migration_00096_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M96" | psql_run >/dev/null
 
+echo "==> migration 00098 (night audit packs): the Down is refused while a pack exists"
+M98="$(ls "$ROOT"/migrations/00098_*.sql)"
+psql_run -c "INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms) SELECT tenant_id, property_id, business_date, 1, 'COMPLETE', now(), 5 FROM business_days WHERE status = 'CLOSED' ORDER BY id LIMIT 1"
+if section down "$M98" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m98-down.err"; then echo "FAIL: the Down of 00098 ran while a pack existed" >&2; exit 1; fi
+grep -q "cannot roll back 00098" "${TMPDIR:-/tmp}/m98-down.err" || { echo "FAIL: the Down of 00098 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m98-down.err" >&2; exit 1; }
+echo "    down refused while a pack exists"
+# a pack is never deleted, so the test clears the table the way the schema tests do: with the trigger switched off for this one clean-up
+psql_run -c "ALTER TABLE nap_packs DISABLE TRIGGER nap_packs_no_delete" -c "DELETE FROM nap_packs" -c "ALTER TABLE nap_packs ENABLE TRIGGER nap_packs_no_delete"
+section down "$M98" | psql_run
+psql_run < "$ROOT/db/tests/migration_00098_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
+section up "$M98" | psql_run >/dev/null
+
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
   echo "    down $(basename "$f")"

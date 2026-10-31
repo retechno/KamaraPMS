@@ -1913,7 +1913,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('budgets',                 'ROOT',   'budgets'),
     ('inv_movements',           'ROOT',   'the stock ledger'),
     ('fa_assets',               'ROOT',   'the fixed asset register'),
-    ('fa_ledger',               'ROOT',   'the fixed asset register ledger');
+    ('fa_ledger',               'ROOT',   'the fixed asset register ledger'),
+    ('nap_packs',               'ROOT',   'the night audit pack: the JSON of a closed day holds its money');
 -- A child row cannot exist without a root row above: it never needs its own test.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('folio_item_components', 'CHILD', 'of folio_items'), ('stay_charge_postings', 'CHILD', 'of folio_items'),
@@ -1945,7 +1946,8 @@ INSERT INTO pms_test.currency_lock_classes VALUES
     ('fa_depr_runs', 'CHILD', 'of fa_ledger: the total of a month of depreciation, whose journal and ledger rows hold the money'),
     ('fa_depr_lines', 'CHILD', 'of fa_ledger: the amount of an asset in a run'),
     ('fa_disposals', 'CHILD', 'of fa_ledger: the amounts of a disposal, whose journal and ledger rows hold the money'),
-    ('fa_disposal_requests', 'CHILD', 'of fa_disposals: what was asked of a disposal that waits for an approver; the money is in the disposal once it is approved');
+    ('fa_disposal_requests', 'CHILD', 'of fa_disposals: what was asked of a disposal that waits for an approver; the money is in the disposal once it is approved'),
+    ('nap_pack_sections', 'CHILD', 'of nap_packs: the JSON of a section');
 -- Configuration or plans: amounts that are not records of money received, paid or owed. They never lock the currency and are never converted.
 INSERT INTO pms_test.currency_lock_classes VALUES
     ('rates', 'CONFIG', 'the rate grid'), ('rate_plan_bed_adjustments', 'CONFIG', 'bed supplements'), ('yield_rules', 'CONFIG', 'floors and caps'),
@@ -3126,6 +3128,68 @@ SELECT expect_error('a request of Maintenance names an asset of its own property
 
 -- 00097: the audit log is read by business date and action
 SELECT expect_ok('the index of the audit log by business date and action is there', $q$DO $$ BEGIN IF to_regclass('audit_logs_bd_action_idx') IS NULL THEN RAISE EXCEPTION 'the index is missing'; END IF; END $$$q$);
+
+-- 00098: the night audit packs (docs/architecture/38, 5 and 8.1)
+CREATE FUNCTION pms_test.nap_day() RETURNS date LANGUAGE sql STABLE AS $$ SELECT min(business_date) FROM business_days WHERE property_id = pr('BALI') AND status = 'CLOSED' $$;
+CREATE FUNCTION pms_test.nap_open_day() RETURNS date LANGUAGE sql STABLE AS $$ SELECT business_date FROM business_days WHERE property_id = pr('BALI') AND status = 'OPEN' $$;
+CREATE FUNCTION pms_test.nap_pack(p_status text DEFAULT 'COMPLETE', p_date date DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms)
+    VALUES (tn('ABC'), pr('BALI'), coalesce(p_date, pms_test.nap_day()), 1, p_status, now(), 120) $$;
+CREATE FUNCTION pms_test.nap_section(p_section text, p_status text DEFAULT 'OK') RETURNS void LANGUAGE sql AS $$
+    INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version, data, error)
+    SELECT id, tenant_id, property_id, p_section, p_status, 1, CASE WHEN p_status = 'OK' THEN '{"x": 1}'::jsonb END, CASE WHEN p_status = 'FAILED' THEN 'boom' END
+      FROM nap_packs WHERE property_id = pr('BALI') $$;
+
+SELECT expect_ok('a pack of a closed day holds the fifteen sections', $q$SELECT pms_test.nap_pack()$q$,
+    $q$SELECT pms_test.nap_section(s) FROM unnest(ARRAY['SUMMARY', 'FLASH', 'REVENUE', 'TAX', 'PAYMENTS', 'Z_REPORTS', 'GUEST_LEDGER', 'DEPOSIT_LEDGER', 'CORRECTIONS', 'CANCELLATIONS', 'OUTLETS', 'OUT_OF_ORDER', 'IN_HOUSE', 'NEXT_DAY', 'AUDIT_NOTES']) s$q$);
+SELECT expect_error('a sixteenth section code is refused', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_section('FORECAST')$q$);
+SELECT expect_error('a pack is made for a day that is closed', '23514', $q$SELECT pms_test.nap_pack('COMPLETE', pms_test.nap_open_day())$q$);
+SELECT expect_error('a pack is made for a day that was a business day', '23514', $q$SELECT pms_test.nap_pack('COMPLETE', '2020-01-01')$q$);
+SELECT expect_error('a day has one pack', '23505', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_pack('PARTIAL')$q$);
+SELECT expect_error('a pack is complete or partial', '23514', $q$SELECT pms_test.nap_pack('DONE')$q$);
+SELECT expect_error('the time to build is not negative', '23514', $q$INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms)
+    VALUES (tn('ABC'), pr('BALI'), pms_test.nap_day(), 1, 'COMPLETE', now(), -1)$q$);
+SELECT expect_error('the format version starts at one', '23514', $q$INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms)
+    VALUES (tn('ABC'), pr('BALI'), pms_test.nap_day(), 0, 'COMPLETE', now(), 10)$q$);
+SELECT expect_error('a pack belongs to a property of its tenant', '23503', $q$INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms)
+    VALUES (tn('XYZ'), pr('BALI'), pms_test.nap_day(), 1, 'COMPLETE', now(), 10)$q$);
+SELECT expect_error('a section is OK, failed, off or not available', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_section('FLASH', 'SKIPPED')$q$);
+SELECT expect_ok('a section that is off or not available holds nothing', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_section('OUTLETS', 'OFF')$q$, $q$SELECT pms_test.nap_section('IN_HOUSE', 'NOT_AVAILABLE')$q$);
+SELECT expect_error('a section that is OK holds its JSON', '23514', $q$SELECT pms_test.nap_pack()$q$,
+    $q$INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version) SELECT id, tenant_id, property_id, 'FLASH', 'OK', 1 FROM nap_packs$q$);
+SELECT expect_error('a section that is off holds no JSON', '23514', $q$SELECT pms_test.nap_pack()$q$,
+    $q$INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version, data) SELECT id, tenant_id, property_id, 'OUTLETS', 'OFF', 1, '{}' FROM nap_packs$q$);
+SELECT expect_error('a section that failed says why', '23514', $q$SELECT pms_test.nap_pack()$q$,
+    $q$INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version) SELECT id, tenant_id, property_id, 'FLASH', 'FAILED', 1 FROM nap_packs$q$);
+SELECT expect_error('a section that is OK has no error', '23514', $q$SELECT pms_test.nap_pack()$q$,
+    $q$INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version, data, error) SELECT id, tenant_id, property_id, 'FLASH', 'OK', 1, '{}', 'x' FROM nap_packs$q$);
+SELECT expect_error('a section appears once in a pack', '23505', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_section('FLASH')$q$, $q$SELECT pms_test.nap_section('FLASH')$q$);
+SELECT expect_error('a section belongs to a pack of its property', '23503', $q$SELECT pms_test.nap_pack()$q$,
+    $q$INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version, data) SELECT id, tn('XYZ'), pr('SG'), 'FLASH', 'OK', 1, '{}' FROM nap_packs$q$);
+SELECT expect_error('a section belongs to the tenant of its property', '23503', $q$SELECT pms_test.nap_pack()$q$,
+    $q$INSERT INTO nap_pack_sections (pack_id, tenant_id, property_id, section, status, format_version, data) SELECT id, tn('XYZ'), property_id, 'FLASH', 'OK', 1, '{}' FROM nap_packs$q$);
+SELECT expect_error('a pack is never deleted', '23001', $q$SELECT pms_test.nap_pack()$q$, $q$DELETE FROM nap_packs$q$);
+SELECT expect_error('a section is never deleted', '23001', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_section('FLASH')$q$, $q$DELETE FROM nap_pack_sections$q$);
+SELECT expect_error('the packs are never truncated', '23001', $q$SELECT pms_test.nap_pack()$q$, $q$TRUNCATE nap_pack_sections$q$);
+SELECT expect_ok('the status of a pack changes when a section is built again', $q$SELECT pms_test.nap_pack('PARTIAL')$q$, $q$UPDATE nap_packs SET status = 'COMPLETE'$q$);
+SELECT expect_error('the rest of a pack is kept as it is (the time to build)', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$UPDATE nap_packs SET build_ms = 5$q$);
+SELECT expect_error('the rest of a pack is kept as it is (the day)', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$UPDATE nap_packs SET business_date = pms_test.nap_open_day()$q$);
+SELECT expect_error('the rest of a pack is kept as it is (late or not)', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$UPDATE nap_packs SET built_late = true$q$);
+SELECT expect_ok('a failed section is built again once', $q$SELECT pms_test.nap_pack('PARTIAL')$q$, $q$SELECT pms_test.nap_section('FLASH', 'FAILED')$q$,
+    $q$UPDATE nap_pack_sections SET status = 'OK', data = '{"y": 2}', error = NULL, built_late = true$q$);
+SELECT expect_error('a section that is OK is kept as it is', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_section('FLASH')$q$, $q$UPDATE nap_pack_sections SET data = '{"y": 2}'$q$);
+SELECT expect_error('a section that was built again is kept as it is', '23514', $q$SELECT pms_test.nap_pack('PARTIAL')$q$, $q$SELECT pms_test.nap_section('FLASH', 'FAILED')$q$,
+    $q$UPDATE nap_pack_sections SET status = 'OK', data = '{"y": 2}', error = NULL, built_late = true$q$, $q$UPDATE nap_pack_sections SET data = '{"z": 3}'$q$);
+SELECT expect_error('a section that is off cannot become OK', '23514', $q$SELECT pms_test.nap_pack()$q$, $q$SELECT pms_test.nap_section('OUTLETS', 'OFF')$q$,
+    $q$UPDATE nap_pack_sections SET status = 'OK', data = '{}'$q$);
+SELECT expect_error('a section keeps its code', '23514', $q$SELECT pms_test.nap_pack('PARTIAL')$q$, $q$SELECT pms_test.nap_section('FLASH', 'FAILED')$q$,
+    $q$UPDATE nap_pack_sections SET section = 'TAX', status = 'OK', data = '{}', error = NULL$q$);
+SELECT expect_error('a pack locks the currency', '23001',
+    $q$INSERT INTO business_days (tenant_id, property_id, business_date) VALUES (tn('XYZ'), cu(), '2026-10-01')$q$,
+    $q$UPDATE business_days SET status = 'CLOSED', closed_at = now(), summary = '{}' WHERE property_id = cu()$q$,
+    $q$INSERT INTO business_days (tenant_id, property_id, business_date) VALUES (tn('XYZ'), cu(), '2026-10-02')$q$,
+    $q$INSERT INTO nap_packs (tenant_id, property_id, business_date, format_version, status, built_at, build_ms) VALUES (tn('XYZ'), cu(), '2026-10-01', 1, 'COMPLETE', now(), 5)$q$,
+    $q$UPDATE properties SET currency_code = 'USD' WHERE code = 'CUR'$q$);
 
 ------------------------------------------------------------------------------------------
 -- Summary
