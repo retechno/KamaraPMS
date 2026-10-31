@@ -4,7 +4,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { NightAuditPreview, NightAuditResult } from '@/api/types'
+import type { NightAuditPackManifest, NightAuditPreview, NightAuditResult } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
+import { openPdf } from '@/utils/documents'
 import { findingText } from '@/utils/findings'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -25,6 +26,8 @@ const property = usePropertyStore()
 
 const preview = ref<NightAuditPreview | null>(null)
 const result = ref<NightAuditResult | null>(null)
+/** The pack the run just built, read back from the archive for who may read it. */
+const pack = ref<NightAuditPackManifest | null>(null)
 const error = ref<ApiError | null>(null)
 /** The failure of the run itself stays on the page: closing the day is the one refusal that has to be read and acted on, where the steps below show what blocks it. The other failures are toasts. */
 const failedRun = ref(false)
@@ -35,6 +38,29 @@ const noShow = reactive({ selected: [] as number[], confirm: false, reason: '' }
 
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
+const packOk = computed(() => pack.value?.sections.filter((s) => s.status === 'OK').length ?? 0)
+
+async function loadPack(date: string): Promise<void> {
+  const propertyId = pid.value
+  pack.value = null
+  if (propertyId === null || !can('nightaudit.pack_view')) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/night-audit/packs/{date}', { params: { path: { propertyId, date } } })
+    pack.value = (data as NightAuditPackManifest | undefined) ?? null
+  } catch {
+    pack.value = null // the result of the close stands without it
+  }
+}
+
+async function packPdf(): Promise<void> {
+  if (pid.value === null || !pack.value) return
+  try {
+    await openPdf(`/api/v1/properties/${pid.value}/night-audit/packs/${pack.value.business_date}.pdf`)
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+    failedRun.value = false
+  }
+}
 const blockers = computed(() => preview.value?.blockers)
 const arrivals = computed(() => blockers.value?.unresolved_arrivals ?? [])
 const departures = computed(() => blockers.value?.unresolved_departures ?? [])
@@ -121,6 +147,7 @@ async function run(): Promise<void> {
     })
     result.value = data ?? null
     confirmRun.value = false
+    if (data) await loadPack(data.closed_business_date)
     await property.refreshClock()
     await load()
   } catch (e) {
@@ -135,6 +162,7 @@ async function run(): Promise<void> {
 watch(pid, () => {
   preview.value = null
   result.value = null
+  pack.value = null
   void load()
 }, { immediate: true })
 </script>
@@ -182,6 +210,15 @@ watch(pid, () => {
           <KpiCard :label="t('nightAudit.adr')" :value="result.summary.adr" />
           <KpiCard :label="t('nightAudit.revpar')" :value="result.summary.revpar" />
           <KpiCard v-for="m in result.summary.payments_by_method" :key="m.method" :label="t('nightAudit.payments', { method: m.method })" :value="m.net" />
+        </div>
+        <div v-if="pack" class="mt-4 flex flex-wrap items-center gap-3 border-t pt-3 text-sm" data-testid="pack">
+          <strong>{{ t('nightAudit.packTitle') }}</strong>
+          <Badge :variant="pack.status === 'COMPLETE' ? 'success' : 'warning'" data-testid="pack-status">{{ pack.status === 'COMPLETE' ? t('nightAudit.packComplete') : t('nightAudit.packPartial') }}</Badge>
+          <span class="text-muted-foreground">{{ t('nightAudit.packSections', { ok: packOk, n: pack.sections.length }) }} · {{ t('nightAudit.packBuilt', { ms: pack.build_ms }) }}</span>
+          <span class="ml-auto flex gap-2">
+            <Button variant="outline" size="sm" data-testid="pack-pdf" @click="packPdf">{{ t('nightAudit.packPdf') }}</Button>
+            <Button variant="outline" size="sm" as-child><RouterLink to="/night-audit/archive" data-testid="pack-archive">{{ t('nightAudit.packOpen') }}</RouterLink></Button>
+          </span>
         </div>
       </CardContent>
     </Card>
@@ -280,7 +317,7 @@ watch(pid, () => {
         </div>
       </StepCard>
 
-      <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || (preview.warnings.open_group_masters ?? []).length || (preview.warnings.group_masters_closed ?? []).length || preview.warnings.blocks_ending.length || (preview.warnings.outlet_bills ?? []).length || (preview.warnings.stock ?? []).length" class="mb-4" data-testid="warnings">
+      <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || (preview.warnings.open_group_masters ?? []).length || (preview.warnings.group_masters_closed ?? []).length || preview.warnings.blocks_ending.length || (preview.warnings.pack_incomplete ?? []).length || (preview.warnings.outlet_bills ?? []).length || (preview.warnings.stock ?? []).length" class="mb-4" data-testid="warnings">
         <CardHeader><CardTitle>{{ t('nightAudit.warnings') }} <small class="font-normal text-muted-foreground">{{ t('nightAudit.warningsNote') }}</small></CardTitle></CardHeader>
         <CardContent>
           <ul class="m-0 pl-5 text-sm">
@@ -300,6 +337,9 @@ watch(pid, () => {
             </li>
             <li v-for="o in preview.warnings.stock ?? []" :key="`${o.code}-${o.ref ?? ''}`" :data-testid="`stock-${o.code}`">
               {{ findingText(o, 'warning') }} <RouterLink :to="stockLink(o.code)">{{ t('nightAudit.stockOpen') }}</RouterLink>
+            </li>
+            <li v-for="d in preview.warnings.pack_incomplete ?? []" :key="d" :data-testid="`pack-incomplete-${d}`">
+              {{ t('nightAudit.packIncomplete', { date: $date(d) }) }} <RouterLink v-if="can('nightaudit.pack_view')" to="/night-audit/archive">{{ t('nightAudit.packOpen') }}</RouterLink>
             </li>
             <li v-for="b in preview.warnings.blocks_ending" :key="b.block_id">{{ t('nightAudit.blockEnds', { type: b.block_type, room: b.room, date: $date(b.end_date) }) }}</li>
           </ul>
