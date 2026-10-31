@@ -585,7 +585,7 @@ var constraintErrors = map[string]mapped{
 	"banquet_beo_recipients_section_ck":    {apperr.KindInvalid, "INVALID_VALUE", "an unknown section of the BEO"},
 	"banquet_documents_contract_uk":        {apperr.KindConflict, "DUPLICATE_REQUEST", "the contract of this revision was made already"},
 	"banquet_documents_number_uk":          {apperr.KindConflict, "DUPLICATE_REQUEST", "the number of the contract is in use"},
-	"email_outbox_shape_ck":                {apperr.KindInvalid, "INVALID_VALUE", "an e-mail belongs to a reservation or to an event and a document"},
+	"email_outbox_shape_ck":                {apperr.KindInvalid, "INVALID_VALUE", "an e-mail belongs to a reservation, to an event and a document, or to a pack"},
 
 	// Banquet, PR 4: stock and reports (36 3.5, 4.9)
 	"banquet_settings_warehouse_fk":         {apperr.KindInvalid, "WAREHOUSE_NOT_FOUND", "the warehouse does not exist in this property"},
@@ -773,6 +773,12 @@ var constraintErrors = map[string]mapped{
 	"nap_pack_sections_status_ck": {apperr.KindInvalid, "INVALID_VALUE", "a section is OK, failed, off or not available"},
 	"nap_pack_sections_data_ck":   {apperr.KindInvalid, "INVALID_VALUE", "a section that is OK holds its data; the others hold none"},
 	"nap_pack_sections_error_ck":  {apperr.KindInvalid, "INVALID_VALUE", "a section that failed says why; the others do not"},
+	"nap_recipients_email_uk":     {apperr.KindConflict, "DUPLICATE_REQUEST", "this address is already a recipient of the property"},
+	"nap_recipients_email_ck":     {apperr.KindInvalid, "INVALID_VALUE", "a recipient is one e-mail address, with no space and no line break"},
+	"nap_recipients_name_ck":      {apperr.KindInvalid, "INVALID_VALUE", "the name of a recipient is text on one line"},
+	"nap_recipients_sections_ck":  {apperr.KindInvalid, "INVALID_VALUE", "a recipient receives at least one section, each of the catalog, none twice"},
+	"email_outbox_pack_queued_uk": {apperr.KindConflict, "PACK_ALREADY_QUEUED", "this recipient already has this part of the pack waiting to be sent"},
+	"email_outbox_nap_sent_ck":    {apperr.KindInvalid, "INVALID_VALUE", "the hash and the renderer of a sent pack e-mail come together"},
 }
 
 // MappedConstraintNames lists every constraint name with a dedicated API error

@@ -41,7 +41,7 @@ WHERE id IN (
     SELECT id FROM email_outbox WHERE status = 'QUEUED' AND next_attempt_at <= $2::timestamptz
     ORDER BY next_attempt_at, id LIMIT $3 FOR UPDATE SKIP LOCKED
 )
-RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language
+RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language, nap_pack_id, nap_sections, nap_part, nap_parts, nap_pdf_sha256, nap_renderer
 `
 
 type ClaimDueParams struct {
@@ -78,6 +78,12 @@ func (q *Queries) ClaimDue(ctx context.Context, arg ClaimDueParams) ([]EmailOutb
 			&i.BanquetEventID,
 			&i.DocumentID,
 			&i.Language,
+			&i.NapPackID,
+			&i.NapSections,
+			&i.NapPart,
+			&i.NapParts,
+			&i.NapPdfSha256,
+			&i.NapRenderer,
 		); err != nil {
 			return nil, err
 		}
@@ -115,7 +121,7 @@ func (q *Queries) EventEmailQueued(ctx context.Context, arg EventEmailQueuedPara
 const insertEventEmail = `-- name: InsertEventEmail :one
 INSERT INTO email_outbox (tenant_id, property_id, kind, banquet_event_id, document_id, language, to_address, next_attempt_at, created_at, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $8::timestamptz, $9)
-RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language
+RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language, nap_pack_id, nap_sections, nap_part, nap_parts, nap_pdf_sha256, nap_renderer
 `
 
 type InsertEventEmailParams struct {
@@ -161,6 +167,12 @@ func (q *Queries) InsertEventEmail(ctx context.Context, arg InsertEventEmailPara
 		&i.BanquetEventID,
 		&i.DocumentID,
 		&i.Language,
+		&i.NapPackID,
+		&i.NapSections,
+		&i.NapPart,
+		&i.NapParts,
+		&i.NapPdfSha256,
+		&i.NapRenderer,
 	)
 	return i, err
 }
@@ -168,7 +180,7 @@ func (q *Queries) InsertEventEmail(ctx context.Context, arg InsertEventEmailPara
 const insertOutbox = `-- name: InsertOutbox :one
 INSERT INTO email_outbox (tenant_id, property_id, kind, reservation_id, to_address, next_attempt_at, created_at, created_by)
 VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $6::timestamptz, $7)
-RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language
+RETURNING id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language, nap_pack_id, nap_sections, nap_part, nap_parts, nap_pdf_sha256, nap_renderer
 `
 
 type InsertOutboxParams struct {
@@ -209,6 +221,12 @@ func (q *Queries) InsertOutbox(ctx context.Context, arg InsertOutboxParams) (Ema
 		&i.BanquetEventID,
 		&i.DocumentID,
 		&i.Language,
+		&i.NapPackID,
+		&i.NapSections,
+		&i.NapPart,
+		&i.NapParts,
+		&i.NapPdfSha256,
+		&i.NapRenderer,
 	)
 	return i, err
 }
@@ -276,7 +294,7 @@ func (q *Queries) ListEventEmails(ctx context.Context, arg ListEventEmailsParams
 }
 
 const listOutboxForReservation = `-- name: ListOutboxForReservation :many
-SELECT id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language FROM email_outbox
+SELECT id, tenant_id, property_id, kind, reservation_id, to_address, status, attempts, next_attempt_at, last_error, sent_at, created_at, created_by, banquet_event_id, document_id, language, nap_pack_id, nap_sections, nap_part, nap_parts, nap_pdf_sha256, nap_renderer FROM email_outbox
 WHERE tenant_id = $1 AND property_id = $2 AND reservation_id = $3
 ORDER BY id DESC
 LIMIT 20
@@ -314,6 +332,12 @@ func (q *Queries) ListOutboxForReservation(ctx context.Context, arg ListOutboxFo
 			&i.BanquetEventID,
 			&i.DocumentID,
 			&i.Language,
+			&i.NapPackID,
+			&i.NapSections,
+			&i.NapPart,
+			&i.NapParts,
+			&i.NapPdfSha256,
+			&i.NapRenderer,
 		); err != nil {
 			return nil, err
 		}
