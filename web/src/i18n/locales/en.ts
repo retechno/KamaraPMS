@@ -1235,6 +1235,8 @@ export const en = {
     legendToday: 'Business date',
     notAssigned: 'Not yet assigned',
     bookings: '{n} booking(s)',
+    soldAvailable: 'sold / available',
+    nightFigures: 'Sold {sold}, available {available}, blocked {blocked}',
     showUnassigned: 'Show the bookings of {type} that have no room',
     hideUnassigned: 'Hide the bookings of {type} that have no room',
     unassignedNight: '{n} without a room this night',

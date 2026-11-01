@@ -70,6 +70,28 @@ describe('TapeChartView', () => {
     expect(w.get('[data-testid=unassigned-lane-DLX-1]').find('[data-testid=bar-unassigned-5]').exists()).toBe(true)
   })
 
+  it('shows what is sold and what is left of each room type on each night', async () => {
+    const w = mountView()
+    await flushPromises()
+    const cells = w.findAll('[data-testid=type-head-DLX] [data-sold]')
+    expect(cells).toHaveLength(14)
+    // 2 rooms: 101 is booked on 2 and 3 Oct, a booking with no room holds 3 Oct, 102 is blocked from 5 to 6 Oct
+    const sold = cells.map((c) => `${c.attributes('data-sold')}/${c.attributes('data-available')}`)
+    expect(sold.slice(0, 7)).toEqual(['0/2', '1/1', '2/0', '0/2', '0/1', '0/1', '0/2'])
+    expect(cells[1]!.text()).toBe('1/1')
+    expect(cells[1]!.attributes('title')).toBe('Sold 1, available 1, blocked 0')
+    expect(w.get('[data-testid=type-head-DLX]').text()).toContain('sold / available')
+    expect(cells[2]!.classes()).toContain('font-semibold') // nothing left
+  })
+  it('marks a room type that is oversold', async () => {
+    const extra = { ...booking, reservation_id: 11, reservation_room_id: 6, arrival_date: '2026-10-03', departure_date: '2026-10-04' }
+    const w = mountView(['reservation.read'], { ...chart, unassigned: [{ room_type_id: 10, room_type_code: 'DLX', bookings: [{ ...extra, reservation_room_id: 5 }, extra] }] })
+    await flushPromises()
+    const cell = w.findAll('[data-testid=type-head-DLX] [data-sold]')[2]!
+    expect(cell.attributes('data-available')).toBe('-1')
+    expect(cell.classes()).toContain('text-destructive')
+  })
+
   it('packs the bookings with no room into as few lanes as the nights they share', async () => {
     const u = (id: number, from: string, to: string) => ({ ...booking, reservation_id: 100 + id, confirmation_number: `RES0001${id}`, reservation_room_id: 100 + id, arrival_date: from, departure_date: to })
     // 5 bookings: at most two share a night (3-5 and 4-6 on the 4th), the others follow on a lane that is free

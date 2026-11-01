@@ -1234,6 +1234,8 @@ export const id: Messages = {
     legendToday: 'Tanggal bisnis',
     notAssigned: 'Belum ditetapkan',
     bookings: '{n} pemesanan',
+    soldAvailable: 'terjual / tersedia',
+    nightFigures: 'Terjual {sold}, tersedia {available}, diblokir {blocked}',
     showUnassigned: 'Tampilkan pemesanan {type} yang belum punya kamar',
     hideUnassigned: 'Sembunyikan pemesanan {type} yang belum punya kamar',
     unassignedNight: '{n} belum berkamar malam ini',

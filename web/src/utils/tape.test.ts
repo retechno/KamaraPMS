@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TapeBooking, TapeRoom } from '@/api/types'
-import { canChangeArrival, canChangeDates, canMove, columnsOf, conflictIn, countPerNight, dateChange, datesVerdict, dropVerdict, moveNights, nightsOf, packLanes } from './tape'
+import { canChangeArrival, canChangeDates, canMove, columnsOf, conflictIn, countPerNight, dateChange, datesVerdict, dropVerdict, moveNights, nightsOf, packLanes, typeAvailability } from './tape'
 
 const rights = { update: true, upgrade: true, move: true }
 const booking = (over: Partial<TapeBooking> = {}) => ({ reservation_id: 9, confirmation_number: 'RES9', reservation_room_id: 4, room_type_id: 10, stay_id: null, open_segment: false, status: 'CONFIRMED', arrival_date: '2026-10-05', departure_date: '2026-10-08', ...over }) as TapeBooking
@@ -133,5 +133,36 @@ describe('packing the bookings that have no room into lanes', () => {
 describe('the bookings of each night', () => {
   it('counts a booking on its nights [arrival, departure) only', () => {
     expect(countPerNight([booking({ arrival_date: '2026-10-02', departure_date: '2026-10-04' }), booking({ arrival_date: '2026-10-03', departure_date: '2026-10-04' })], ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'])).toEqual([0, 1, 2, 0])
+  })
+})
+
+describe('what is sold and what is left of each room type', () => {
+  const chartOf = (rooms: TapeRoom[], unassigned: { room_type_id: number; room_type_code: string; bookings: TapeBooking[] }[] = []) => ({ from: '2026-10-01', to: '2026-10-08', rooms, unassigned })
+  const nights = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']
+
+  it('counts a room with a booking as sold, a room with a block as blocked, and the rest as available', () => {
+    const r = typeAvailability(chartOf([
+      room(1, 10, [booking({ arrival_date: '2026-10-02', departure_date: '2026-10-04' })]),
+      room(2, 10, [], [{ id: 1, block_type: 'OOO', start_date: '2026-10-03', end_date: '2026-10-05' }]),
+      room(3, 10),
+    ]), nights)
+    expect(r).toHaveLength(1)
+    expect(r[0]!.total).toBe(3)
+    expect(r[0]!.nights).toEqual([
+      { sold: 0, blocked: 0, available: 3 },
+      { sold: 1, blocked: 0, available: 2 },
+      { sold: 1, blocked: 1, available: 1 },
+      { sold: 0, blocked: 1, available: 2 }, // the booking leaves on the 4th: a night is [arrival, departure)
+    ])
+  })
+  it('counts a booking with no room against the type it was booked for, and goes below zero when the type is oversold', () => {
+    const r = typeAvailability(chartOf([room(1, 10), room(2, 20)], [{ room_type_id: 10, room_type_code: 'T', bookings: [booking({ reservation_room_id: 8, arrival_date: '2026-10-02', departure_date: '2026-10-03' }), booking({ reservation_room_id: 9, arrival_date: '2026-10-02', departure_date: '2026-10-03' })] }]), nights)
+    const t10 = r.find((x) => x.room_type_id === 10)!
+    expect(t10.nights[1]).toEqual({ sold: 2, blocked: 0, available: -1 })
+    expect(r.find((x) => x.room_type_id === 20)!.nights[1]).toEqual({ sold: 0, blocked: 0, available: 1 })
+  })
+  it('does not count a room twice when a booking sits in a blocked room', () => {
+    const r = typeAvailability(chartOf([room(1, 10, [booking({ arrival_date: '2026-10-01', departure_date: '2026-10-03' })], [{ id: 1, block_type: 'OOS', start_date: '2026-10-01', end_date: '2026-10-03' }])]), nights)
+    expect(r[0]!.nights[0]).toEqual({ sold: 0, blocked: 1, available: 0 })
   })
 })

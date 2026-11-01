@@ -22,7 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
 import { addDays } from '@/utils/dates'
-import { canChangeArrival, canChangeDates, canMove, columnsOf, countPerNight, datesVerdict, dropVerdict, isOpenStay, nightsOf, packLanes, roomOf, type TapeRights, type TapeVerdict } from '@/utils/tape'
+import { canChangeArrival, canChangeDates, canMove, columnsOf, countPerNight, datesVerdict, dropVerdict, isOpenStay, nightsOf, packLanes, roomOf, typeAvailability, type TapeRights, type TapeVerdict } from '@/utils/tape'
 
 /**
  * The tape chart: one element per booking, placed on a grid (a column per night). Clicking a block opens its menu (move the room, change the dates, open the reservation), which is the way for the
@@ -278,6 +278,9 @@ watch(businessDate, () => {
   if (!chart.value) void load()
 })
 
+// What is sold and what is left of each room type on each night, from the data the chart holds.
+const availability = computed(() => new Map((chart.value ? typeAvailability(chart.value, dates.value) : []).map((a) => [a.room_type_id, a])))
+
 // Bookings without a room: a count per night (what the folded section shows) and the lanes they are packed into (what the opened section shows).
 const unassignedRows = computed(() => (chart.value?.unassigned ?? []).map((u) => ({
   ...u,
@@ -340,7 +343,17 @@ const ghost = computed(() => {
         </div>
 
         <template v-for="(room, i) in chart.rooms" :key="room.room_id">
-          <div v-if="i === 0 || chart.rooms[i - 1]?.room_type_id !== room.room_type_id" class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold">{{ room.room_type_code }}</div>
+          <!-- the head of a room type: what is sold and what is left of the type on each night -->
+          <div v-if="i === 0 || chart.rooms[i - 1]?.room_type_id !== room.room_type_id" class="grid border-b border-t border-border bg-muted text-[13px]" :style="gridStyle" :data-testid="`type-head-${room.room_type_code}`" role="row">
+            <div class="sticky left-0 z-10 bg-muted px-2 py-1 text-left font-semibold" role="rowheader">{{ room.room_type_code }}<span class="block text-[12px] font-normal leading-tight text-muted-foreground">{{ t('tapeChart.soldAvailable') }}</span></div>
+            <div class="grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }">
+              <span
+                v-for="(n, k) in availability.get(room.room_type_id)?.nights ?? []" :key="dates[k]" :data-sold="n.sold" :data-available="n.available" :data-blocked="n.blocked"
+                :title="t('tapeChart.nightFigures', { sold: n.sold, available: n.available, blocked: n.blocked })"
+                :class="cn('flex items-center justify-center border-l border-border py-1 text-[13px] tabular-nums', dates[k] === businessDate && 'bg-primary/10', n.available < 0 ? 'font-semibold text-destructive' : n.available === 0 ? 'font-semibold' : 'text-muted-foreground')"
+              >{{ n.sold }}/{{ n.available }}</span>
+            </div>
+          </div>
           <div
             class="relative grid h-10 border-b border-border"
             :style="gridStyle" :data-room-id="room.room_id" :data-testid="`room-${room.room_number}`" :data-drop="rowState(room.room_id)" :title="rowState(room.room_id) === 'no' ? refusalText(room.room_id) : undefined" role="row"

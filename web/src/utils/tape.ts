@@ -121,6 +121,39 @@ export function packLanes<T extends { arrival_date: string; departure_date: stri
 export const countPerNight = (bookings: readonly { arrival_date: string; departure_date: string }[], dates: readonly string[]): number[] =>
   dates.map((d) => bookings.filter((b) => b.arrival_date <= d && d < b.departure_date).length)
 
+export interface TypeNight { sold: number; blocked: number; available: number }
+export interface TypeAvailability { room_type_id: number; code: string; total: number; nights: TypeNight[] }
+
+/**
+ * What is sold and what is left of each room type on each night of `dates`, from the data the chart already holds. A room is blocked when a block covers the night; it is sold when a booking sits in it
+ * (and it is not blocked); a booking that has no room yet counts against the type it was booked for. Available is the rooms of the type minus those two, and goes below zero when the type is oversold.
+ * The server's availability calendar stays the figure of record; this is the same count at a glance.
+ */
+export function typeAvailability(chart: TapeChart, dates: readonly string[]): TypeAvailability[] {
+  const out = new Map<number, TypeAvailability>()
+  for (const r of chart.rooms) {
+    let t = out.get(r.room_type_id)
+    if (!t) {
+      t = { room_type_id: r.room_type_id, code: r.room_type_code, total: 0, nights: dates.map(() => ({ sold: 0, blocked: 0, available: 0 })) }
+      out.set(r.room_type_id, t)
+    }
+    t.total++
+    dates.forEach((d, i) => {
+      const blocked = r.blocks.some((x) => x.start_date <= d && d < x.end_date)
+      const held = r.bookings.some((x) => x.arrival_date <= d && d < x.departure_date)
+      if (blocked) t!.nights[i]!.blocked++
+      else if (held) t!.nights[i]!.sold++
+    })
+  }
+  for (const u of chart.unassigned) {
+    const t = out.get(u.room_type_id)
+    if (!t) continue
+    countPerNight(u.bookings, dates).forEach((n, i) => { t.nights[i]!.sold += n })
+  }
+  for (const t of out.values()) t.nights.forEach((n) => { n.available = t.total - n.blocked - n.sold })
+  return [...out.values()]
+}
+
 /** The columns a bar covers on a window that starts on `windowStart` and has `days` days: 0-based first column, and how many; null when it is outside. Clipped at the edges. */
 export function columnsOf(arrival: string, departure: string, windowStart: string, days: number): { start: number; span: number; clippedLeft: boolean; clippedRight: boolean } | null {
   const first = nightsOf(windowStart, arrival)
