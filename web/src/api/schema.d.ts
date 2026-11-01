@@ -1805,7 +1805,7 @@ export interface paths {
         };
         /**
          * List folios with their balances (folio.read)
-         * @description The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, the largest balance first among them, then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance).
+         * @description The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, by room number among them (a folio without a room after the rooms), then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance).
          */
         get: operations["listFolios"];
         put?: never;
@@ -16140,6 +16140,10 @@ export interface components {
             folio_number: string;
             /** @description The confirmation number of the reservation of the folio (`RES000012`) */
             confirmation_number?: string;
+            /** @description The last room of the stay of the folio; empty when the folio has no stay (the bill of a group, an outlet, a reservation not yet checked in). */
+            room_number?: string;
+            /** @description The guest of the stay, or of the reservation; empty when there is none. */
+            guest_name?: string;
             /**
              * @description GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet. EVENT is the bill of a banquet event.
              * @enum {string}
@@ -31083,7 +31087,9 @@ export interface operations {
                 status?: "OPEN" | "CLOSED";
                 /** @description true: only the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee. */
                 cancelled_with_balance?: boolean;
-                /** @description The column to sort by; the id breaks a tie in the direction of the order. */
+                /** @description A search: the start of the folio number, of the confirmation number or of the room number, or a part of the name of the guest or of the group (case does not matter). */
+                q?: string;
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. Without it: the open folios first, by room number, then the closed ones. */
                 sort?: "folio_number" | "balance" | "status";
                 /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
                 order?: components["parameters"]["SortOrder"];

@@ -92,13 +92,54 @@ describe('FoliosView', () => {
     expect(GET).not.toHaveBeenCalled()
   })
 
-  it('shows the status as a badge', async () => {
+  it('shows the status as a badge once the list is not only the open folios, and not at all while it is', async () => {
     const w = mountView(['folio.read'], { data: [
       { id: 3, folio_number: 'FOL000003', status: 'OPEN', reservation_id: 9, version: 1, balance: '900' },
       { id: 4, folio_number: 'FOL000004', status: 'CLOSED', reservation_id: 10, version: 1, balance: '250000' },
     ] })
     await flushPromises()
+    expect(w.find('thead').text()).not.toContain('Status') // the filter says it: every row is open
+    expect(w.get('[data-testid=folio-FOL000003]').text()).not.toContain('Open')
+    await w.get('select[name=status]').setValue('')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(w.get('thead').text()).toContain('Status')
     expect(w.get('[data-testid=folio-FOL000004]').text()).toContain('Closed')
+    expect(w.get('[data-testid=folio-FOL000003]').text()).toContain('Open')
+  })
+
+  it('names the guest and the room of each folio, and the cashier finds a folio by what she is told: a room or a guest', async () => {
+    const w = mountView(['folio.read'], { data: [
+      { id: 3, folio_number: 'FOL000003', status: 'OPEN', reservation_id: 9, room_number: '307', guest_name: 'Agus Salim', version: 1, balance: '780000' },
+      { id: 5, folio_number: 'FOL000005', folio_type: 'MASTER', status: 'OPEN', reservation_id: null, booking_group_id: 4, booking_group_code: 'GRP1', booking_group_name: 'Conference', room_number: '', guest_name: '', version: 1, balance: '0' },
+    ] })
+    await flushPromises()
+    const head = w.get('thead').text()
+    expect(head).toContain('Guest')
+    expect(head).toContain('Room')
+    const row = w.get('[data-testid=folio-FOL000003]')
+    expect(row.get('[data-testid=folio-room]').text()).toBe('307')
+    expect(row.get('[data-testid=folio-guest]').text()).toBe('Agus Salim')
+    expect(w.get('[data-testid=folio-FOL000005]').find('[data-testid=folio-room]').exists()).toBe(false) // a group has no room
+    // the search field is asked of the server, trimmed, and an empty one is not sent
+    expect(GET.mock.calls[0]![1].params.query.q).toBeUndefined()
+    await w.get('input[name=q]').setValue('  307 ')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.at(-1)![1].params.query).toMatchObject({ q: '307', status: 'OPEN' })
+    expect(w.get('input[name=q]').attributes('placeholder')).toBe('Room, guest, folio or reservation number')
+  })
+
+  it('offers "Clear filters" when a search finds nothing, and clearing empties the search', async () => {
+    const w = mountView(['folio.read'], { data: [] })
+    await flushPromises()
+    await w.get('input[name=q]').setValue('zzz')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    await w.get('[data-testid=empty] [data-testid=empty-action]').trigger('click')
+    await flushPromises()
+    expect((w.get('input[name=q]').element as HTMLInputElement).value).toBe('')
+    expect(GET.mock.calls.at(-1)![1].params.query.q).toBeUndefined()
   })
 
   it('links to the cashier and speaks Indonesian', async () => {
@@ -108,6 +149,9 @@ describe('FoliosView', () => {
     expect(w.get('h1').text()).toBe('Folio')
     expect(w.get('a[href="/cashier"]').text()).toBe('Kasir')
     expect(w.get('select[name=status]').findAll('option').map((o) => o.text())).toEqual(['Semua', 'Terbuka', 'Tertutup'])
+    expect(w.get('label[for]').text()).toBe('Cari folio')
+    expect(w.get('thead').text()).toContain('Tamu')
+    expect(w.get('thead').text()).toContain('Kamar')
     setLocale('en')
   })
 
@@ -120,10 +164,10 @@ describe('FoliosView', () => {
     it('lets the server sort a list of many pages: number, balance and status can be clicked while there are more rows, the others cannot, and the rows are not sorted here', async () => {
       const w = mountView(['folio.read'], many)
       await flushPromises()
-      expect(w.findAll('[data-testid^=sort-]').map((b) => b.attributes('data-testid'))).toEqual(['sort-folio_number', 'sort-status', 'sort-balance'])
+      expect(w.findAll('[data-testid^=sort-]').map((b) => b.attributes('data-testid'))).toEqual(['sort-folio_number', 'sort-balance']) // a list of the open folios has no status column to sort
       expect(w.find('input[name=filter_folio_number]').exists()).toBe(false) // a filter of the loaded rows would be of part of the list
       expect(w.get('[data-testid=table-count]').text()).toBe('2 loaded')
-      expect(lastQuery().sort).toBeUndefined() // the server's own order: the open ones first, the largest balance first
+      expect(lastQuery().sort).toBeUndefined() // the server's own order: the open ones first, by room
       const before = GET.mock.calls.length
       await w.get('[data-testid=sort-balance]').trigger('click')
       await flushPromises()
@@ -170,6 +214,7 @@ describe('FoliosView', () => {
       await w.get('select[name=status]').setValue('')
       await w.get('form[role=search]').trigger('submit')
       await flushPromises()
+      expect(w.find('[data-testid=sort-status]').exists()).toBe(true) // all statuses: the column is back
       expect(lastQuery()).toMatchObject({ sort: 'status', order: 'asc' })
       expect(lastQuery().status).toBeUndefined()
     })

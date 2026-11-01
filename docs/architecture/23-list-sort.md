@@ -13,7 +13,7 @@ the browser holds one page, so a sort of it would look like a sort of everything
 | List | `sort` columns | Default order |
 |---|---|---|
 | `GET /properties/{id}/reservations` | `arrival_date`, `confirmation_number`, `guest_name`, `status` (the one staff see), `rate` | **nearest first** (below) |
-| `GET /properties/{id}/folios` | `folio_number`, `balance`, `status` | open folios first, the largest balance first among them, then the closed ones |
+| `GET /properties/{id}/folios` | `folio_number`, `balance`, `status` | open folios first, by room among them (a folio without a room after the rooms), then the closed ones |
 | `GET /properties/{id}/payments` | `payment_number`, `amount`, `payment_method`, `status`, `paid_at` | newest first (`paid_at` desc) |
 | `GET /guests` | `name`, `code`, `nationality` | `name` A-Z |
 | `GET /properties/{id}/audit-logs`, `GET /audit-logs` | `created_at` | newest first |
@@ -56,7 +56,7 @@ Measured on 75 000 folios with 375 000 items (300 of the folios open), PostgreSQ
 
 | Query | Time |
 |---|---|
-| default order (open first, largest balance first), whole list | 80 ms |
+| default order (open first, by room), whole list | 80 ms |
 | `sort=balance&order=desc`, whole list | 60 ms |
 | default, `status=OPEN` (what the screen asks first) | 5 ms |
 | (for comparison) the balance of **every** folio summed from the ledger, the index that exists | 620 ms |

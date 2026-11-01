@@ -14,6 +14,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -26,6 +27,10 @@ const route = useRoute()
 // The follow-up of a cancellation: the open folios of cancelled reservations that still hold a deposit or a fee. The night audit links here (?cancelled_with_balance=true).
 const followUp = ref(route.query.cancelled_with_balance === 'true')
 const status = ref(followUp.value ? '' : 'OPEN')
+// The search of the cashier: a room, a guest, a folio or a reservation number.
+const q = ref('')
+// The status the list was read with: a list of the open folios does not repeat "Open" on every row.
+const shownStatus = ref(status.value)
 // The folios of the stays, the companies and the groups, or the bills of the outlets (a list of its own, so each keeps its meaning).
 const kind = ref<'STAY' | 'OUTLET'>(route.query.type === 'outlet' ? 'OUTLET' : 'STAY')
 
@@ -34,20 +39,22 @@ const activeFilters = computed(() => (status.value === 'OPEN' ? 0 : 1) + (follow
 
 const canRead = computed(() => auth.can('folio.read', property.currentId))
 
-// The order is the server's (the list is read a page at a time) and lives in the address: ?sort=&order=. Without it: the open folios first, the largest balance first.
+// The order is the server's (the list is read a page at a time) and lives in the address: ?sort=&order=. Without it: the open folios first, by room, then the closed ones.
 const { sort, params: sortParams, setSort } = useServerSort(['folio_number', 'balance', 'status'])
 
 const columns = computed<Column<FolioSummary>[]>(() => [
   { key: 'folio_number', label: t('folios.folio'), sortable: true, card: 'primary' as const },
   { key: 'reservation_id', label: t('folios.reservation'), card: 'secondary' as const },
-  { key: 'status', label: t('folios.status'), sortable: true, card: 'badge' as const },
+  { key: 'room_number', label: t('folios.room'), card: 'secondary' as const },
+  { key: 'guest_name', label: t('folios.guest'), card: 'secondary' as const },
+  ...(shownStatus.value === 'OPEN' ? [] : [{ key: 'status', label: t('folios.status'), sortable: true, card: 'badge' as const }]),
   { key: 'balance', label: t('folios.balance'), align: 'right', sortable: true, class: 'tabular-nums', format: 'balance' as const, card: 'money' as const },
 ])
 
 // One page of 50 at a time; the filter of the status is asked of the server, and a new search starts from the first page.
 const list = usePagedList<FolioSummary>(async (cursor) => {
   const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', {
-    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, folio_type: kind.value === 'OUTLET' ? 'OUTLET' : undefined, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, cancelled_with_balance: followUp.value || undefined, ...sortParams.value } },
+    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, folio_type: kind.value === 'OUTLET' ? 'OUTLET' : undefined, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, cancelled_with_balance: followUp.value || undefined, q: q.value.trim() || undefined, ...sortParams.value } },
   })
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
@@ -56,11 +63,13 @@ const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list
 function clearFilters(): void {
   status.value = 'OPEN'
   followUp.value = false
+  q.value = ''
   void load()
 }
 
 async function load(): Promise<void> {
   if (property.currentId === null || !canRead.value) return
+  shownStatus.value = status.value
   await list.reload()
 }
 
@@ -100,7 +109,11 @@ watch(() => property.currentId, () => {
       <Button size="sm" role="tab" :aria-selected="kind === 'OUTLET'" :variant="kind === 'OUTLET' ? 'default' : 'outline'" data-testid="tab-OUTLET" @click="kind = 'OUTLET'">{{ t('folios.kindOutlet') }}</Button>
     </div>
     <FilterBar class="mb-4 flex flex-wrap items-end gap-3" role="search" :active="activeFilters" @submit="load">
-
+      <template #search>
+        <FormField class="min-w-52 flex-1" :label="t('folios.find')">
+          <template #default="{ id }"><Input :id="id" v-model="q" name="q" type="search" :placeholder="t('folios.findPlaceholder')" /></template>
+        </FormField>
+      </template>
       <FormField class="w-44" :label="t('folios.status')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="status" name="status">
@@ -141,8 +154,10 @@ watch(() => property.currentId, () => {
         <RouterLink v-else-if="row.reservation_id !== null" :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number || `#${row.reservation_id}` }}</RouterLink>
         <RouterLink v-else-if="row.booking_group_id !== null" :to="`/groups/${row.booking_group_id}`" data-testid="master-group-link">{{ row.booking_group_code }} · {{ row.booking_group_name }}</RouterLink>
       </template>
+      <template #cell-room_number="{ row }"><span v-if="row.room_number" class="tabular-nums" data-testid="folio-room">{{ row.room_number }}</span></template>
+      <template #cell-guest_name="{ row }"><span v-if="row.guest_name" data-testid="folio-guest">{{ row.guest_name }}</span></template>
       <template #cell-status="{ row }"><StatusBadge domain="record" :status="row.status" /></template>
-      <template #empty><EmptyState :description="t('emptyState.folios')" :action-label="activeFilters ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="clearFilters" :title="t('folios.empty')" data-testid="empty" /></template>
+      <template #empty><EmptyState :description="t('emptyState.folios')" :action-label="activeFilters || q.trim() ? t('dataTable.clearFilters') : ''" action-variant="outline" @action="clearFilters" :title="t('folios.empty')" data-testid="empty" /></template>
     </DataTable>
   </template>
 </template>

@@ -3,6 +3,7 @@ package folios
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
@@ -288,8 +289,8 @@ func (s *Service) GetFolio(ctx context.Context, propertyID, id int64) (Folio, er
 	return s.loadFolio(ctx, p.TenantID, propertyID, f)
 }
 
-// FolioSortSpec is what the folio list can be sorted by. The default order is the open folios first, the largest balance first among them, then the closed ones.
-var FolioSortSpec = listsort.Spec{Columns: map[string]listsort.Kind{"folio_number": listsort.Text, "balance": listsort.Num, "status": listsort.Text}, DefaultKind: listsort.Num}
+// FolioSortSpec is what the folio list can be sorted by. The default order is the open folios first, by room among them, then the closed ones.
+var FolioSortSpec = listsort.Spec{Columns: map[string]listsort.Kind{"folio_number": listsort.Text, "balance": listsort.Num, "status": listsort.Text}, DefaultKind: listsort.Text}
 
 // FolioList is a page of folios and where it ends, when there are more.
 type FolioList struct {
@@ -312,7 +313,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 		return FolioList{}, err
 	}
 	rows, err := s.q(ctx).ListFoliosOrdered(ctx, foliosdb.ListFoliosOrderedParams{
-		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), OutletID: f.OutletID, Status: nullable(f.Status), CancelledWithBalance: f.CancelledWithBalance,
+		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), OutletID: f.OutletID, Status: nullable(f.Status), Q: nullable(strings.TrimSpace(f.Search)), CancelledWithBalance: f.CancelledWithBalance,
 		AfterID: after.ID, AfterText: after.Text, AfterNum: after.Num, RowLimit: rowLimit(limit + 1),
 	})
 	if err != nil {
@@ -329,20 +330,15 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 			pos.Value = &last.Status
 		case "balance":
 			pos.Value = listsort.NumValue(&last.Balance)
-		default: // the default order: open first, then the larger balance first, as one number (see the query)
-			rank := decimal.Zero
-			if last.Status != "OPEN" {
-				rank = decimal.RequireFromString("1000000000000000")
-			}
-			v := rank.Sub(last.Balance)
-			pos.Value = listsort.NumValue(&v)
+		default: // the default order: open first, then by room, as one text (see the query)
+			pos.Value = &last.SortText
 		}
 		out.Next = &pos
 		rows = rows[:limit]
 	}
 	out.Data = make([]FolioSummary, len(rows))
 	for i, r := range rows {
-		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, BookingGroupID: r.BookingGroupID, BookingGroupCode: r.GroupCode, BookingGroupName: r.GroupName, OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName, BanquetEventID: r.BanquetEventID, ConfirmationNumber: r.ConfirmationNumber, StayID: r.StayID,
+		out.Data[i] = FolioSummary{ID: r.ID, FolioNumber: r.FolioNumber, FolioType: r.FolioType, BillToCompanyID: r.BillToCompanyID, Status: r.Status, ReservationID: r.ReservationID, BookingGroupID: r.BookingGroupID, BookingGroupCode: r.GroupCode, BookingGroupName: r.GroupName, OutletID: r.OutletID, OutletCode: r.OutletCode, OutletName: r.OutletName, BanquetEventID: r.BanquetEventID, ConfirmationNumber: r.ConfirmationNumber, RoomNumber: r.RoomNumber, GuestName: r.GuestName, StayID: r.StayID,
 			OpenedAt: r.OpenedAt, Version: r.Version, Balance: fixed(r.Balance, decimals)}
 	}
 	return out, nil
