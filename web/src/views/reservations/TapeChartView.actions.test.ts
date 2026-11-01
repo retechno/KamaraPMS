@@ -86,6 +86,12 @@ async function openMenu(bar: string): Promise<void> {
   await flush()
 }
 
+/** The bookings that have no room are folded until the section of their type is opened. */
+async function openUnassigned(type = 'DLX'): Promise<void> {
+  await find(`[data-testid=unassigned-toggle-${type}]`).trigger('click')
+  await flush()
+}
+
 // jsdom has no layout: a night is 50px wide, and the point under the pointer is the room row named in `rowEls`
 beforeEach(() => {
   setLocale('en')
@@ -165,6 +171,7 @@ describe('the menu of a block', () => {
   it('assigns a room to a booking that has none, from its menu', async () => {
     setup()
     await flush()
+    await openUnassigned()
     await openMenu('bar-unassigned-5')
     expect(find('[data-testid=menu-move]').text()).toBe('Assign a room…')
   })
@@ -370,6 +377,7 @@ describe('dragging a block to another room', () => {
   it('a booking with no room is dragged onto a room to assign it', async () => {
     setup()
     await flush()
+    await openUnassigned()
     await dragTo('bar-unassigned-5', 3)
     expect(find('[data-testid=tape-move-rooms]').text()).toBe('No room yet → 103')
   })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TapeBooking, TapeRoom } from '@/api/types'
-import { canChangeArrival, canChangeDates, canMove, columnsOf, conflictIn, dateChange, datesVerdict, dropVerdict, moveNights, nightsOf } from './tape'
+import { canChangeArrival, canChangeDates, canMove, columnsOf, conflictIn, countPerNight, dateChange, datesVerdict, dropVerdict, moveNights, nightsOf, packLanes } from './tape'
 
 const rights = { update: true, upgrade: true, move: true }
 const booking = (over: Partial<TapeBooking> = {}) => ({ reservation_id: 9, confirmation_number: 'RES9', reservation_room_id: 4, room_type_id: 10, stay_id: null, open_segment: false, status: 'CONFIRMED', arrival_date: '2026-10-05', departure_date: '2026-10-08', ...over }) as TapeBooking
@@ -99,5 +99,39 @@ describe('columns', () => {
   it('conflictIn ignores the line itself', () => {
     const own = booking()
     expect(conflictIn(room(1, 10, [own]), '2026-10-05', '2026-10-08', own.reservation_room_id)).toBeNull()
+  })
+})
+
+describe('packing the bookings that have no room into lanes', () => {
+  const b = (id: number, from: string, to: string) => booking({ reservation_room_id: id, arrival_date: from, departure_date: to })
+  const ids = (lanes: TapeBooking[][]) => lanes.map((l) => l.map((x) => x.reservation_room_id))
+
+  it('puts none of them on top of another and uses as many lanes as the most that share a night', () => {
+    const items = [b(1, '2026-10-03', '2026-10-05'), b(2, '2026-10-04', '2026-10-06'), b(3, '2026-10-05', '2026-10-07'), b(4, '2026-10-06', '2026-10-08'), b(5, '2026-10-08', '2026-10-09')]
+    const lanes = packLanes(items)
+    expect(ids(lanes)).toEqual([[1, 3, 5], [2, 4]])
+    for (const lane of lanes) lane.slice(1).forEach((x, i) => expect(x.arrival_date >= lane[i]!.departure_date).toBe(true))
+    expect(lanes.length).toBe(Math.max(...['2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-08'].map((d) => countPerNight(items, [d])[0]!)))
+  })
+  it('lets a booking start on the day another leaves', () => {
+    expect(ids(packLanes([b(1, '2026-10-01', '2026-10-03'), b(2, '2026-10-03', '2026-10-05')]))).toEqual([[1, 2]])
+  })
+  it('gives the same lanes whatever the order of the input', () => {
+    const items = [b(7, '2026-10-02', '2026-10-06'), b(3, '2026-10-02', '2026-10-04'), b(5, '2026-10-03', '2026-10-05'), b(1, '2026-10-02', '2026-10-04')]
+    const a = ids(packLanes(items))
+    expect(ids(packLanes([...items].reverse()))).toEqual(a)
+    expect(ids(packLanes([items[2]!, items[0]!, items[3]!, items[1]!]))).toEqual(a)
+  })
+  it('is empty for nothing and does not change its input', () => {
+    expect(packLanes([])).toEqual([])
+    const items = [b(2, '2026-10-05', '2026-10-06'), b(1, '2026-10-01', '2026-10-02')]
+    packLanes(items)
+    expect(items.map((x) => x.reservation_room_id)).toEqual([2, 1])
+  })
+})
+
+describe('the bookings of each night', () => {
+  it('counts a booking on its nights [arrival, departure) only', () => {
+    expect(countPerNight([booking({ arrival_date: '2026-10-02', departure_date: '2026-10-04' }), booking({ arrival_date: '2026-10-03', departure_date: '2026-10-04' })], ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'])).toEqual([0, 1, 2, 0])
   })
 })

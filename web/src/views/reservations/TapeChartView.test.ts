@@ -20,14 +20,14 @@ const chart = {
   unassigned: [{ room_type_id: 10, room_type_code: 'DLX', bookings: [{ ...booking, reservation_id: 10, reservation_room_id: 5, arrival_date: '2026-10-03', departure_date: '2026-10-04' }] }],
 }
 
-function mountView(permissions = ['reservation.read']) {
+function mountView(permissions = ['reservation.read'], data: unknown = chart) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-10-01' } as never
-  GET = vi.fn().mockResolvedValue({ data: chart })
+  GET = vi.fn().mockResolvedValue({ data })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(TapeChartView, { global: { plugins: [pinia, router] } })
 }
@@ -54,10 +54,36 @@ describe('TapeChartView', () => {
     expect(w.get('[data-testid=block-102-2026-10-05]').text()).toBe('OOS')
     expect(w.get('[data-testid=block-102-2026-10-05]').attributes('style')).toContain('grid-column: 6 / span 2')
     expect(w.find('[data-testid=block-102-2026-10-07]').exists()).toBe(false)
-    // a booking with no room is a bar of its own under its type
+    // the bookings with no room are folded under their type, with a count per night
     expect(w.get('[data-testid=unassigned-DLX]').text()).toContain('1 booking(s)')
+    expect(w.find('[data-testid=bar-unassigned-5]').exists()).toBe(false)
+    expect(w.get('[data-testid=unassigned-toggle-DLX]').attributes('aria-expanded')).toBe('false')
+    const counts = w.findAll('[data-testid=unassigned-counts-DLX] [data-count]').map((c) => c.attributes('data-count'))
+    expect(counts).toHaveLength(14)
+    expect(counts.map(Number)).toEqual([0, 0, 1, ...Array(11).fill(0)]) // the night of 3 Oct is the third
+    // opened, a booking is a bar of its own on a lane
+    await w.get('[data-testid=unassigned-toggle-DLX]').trigger('click')
+    expect(w.get('[data-testid=unassigned-toggle-DLX]').attributes('aria-expanded')).toBe('true')
+    expect(w.find('[data-testid=unassigned-counts-DLX]').exists()).toBe(false)
     expect(w.get('[data-testid=bar-unassigned-5]').attributes('style')).toContain('grid-column: 4 / span 1')
-    expect(w.get('[data-testid=unassigned-row-5]').text()).toContain('RES000009')
+    expect(w.get('[data-testid=bar-unassigned-5]').attributes('title')).toContain('RES000009')
+    expect(w.get('[data-testid=unassigned-lane-DLX-1]').find('[data-testid=bar-unassigned-5]').exists()).toBe(true)
+  })
+
+  it('packs the bookings with no room into as few lanes as the nights they share', async () => {
+    const u = (id: number, from: string, to: string) => ({ ...booking, reservation_id: 100 + id, confirmation_number: `RES0001${id}`, reservation_room_id: 100 + id, arrival_date: from, departure_date: to })
+    // 5 bookings: at most two share a night (3-5 and 4-6 on the 4th), the others follow on a lane that is free
+    const w = mountView(['reservation.read'], { ...chart, unassigned: [{ room_type_id: 10, room_type_code: 'DLX', bookings: [u(1, '2026-10-03', '2026-10-05'), u(2, '2026-10-04', '2026-10-06'), u(3, '2026-10-05', '2026-10-07'), u(4, '2026-10-06', '2026-10-08'), u(5, '2026-10-08', '2026-10-09')] }] })
+    await flushPromises()
+    await w.get('[data-testid=unassigned-toggle-DLX]').trigger('click')
+    expect(w.findAll('[data-testid^=unassigned-lane-DLX-]')).toHaveLength(2)
+    expect(w.findAll('[data-testid^=bar-unassigned-]')).toHaveLength(5)
+    // the same booking is never on two lanes and a lane never holds two bars on one night
+    const bars = w.findAll('[data-testid^=unassigned-lane-DLX-]').map((lane) => lane.findAll('[data-booking]').map((b) => /grid-column: (\d+) \/ span (\d+)/.exec(b.attributes('style') ?? '')!.slice(1).map(Number) as [number, number]))
+    for (const lane of bars) {
+      const sorted = [...lane].sort((a, b) => a[0] - b[0])
+      sorted.slice(1).forEach(([start], i) => expect(start).toBeGreaterThanOrEqual(sorted[i]![0] + sorted[i]![1]))
+    }
   })
 
   it('moves the window by a week', async () => {

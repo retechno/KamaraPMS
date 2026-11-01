@@ -95,6 +95,32 @@ export function roomOf(chart: TapeChart, b: TapeBooking): TapeRoom | null {
   return chart.rooms.find((r) => r.bookings.some((x) => x === b || (x.reservation_room_id === b.reservation_room_id && x.arrival_date === b.arrival_date))) ?? null
 }
 
+/**
+ * Packs bookings into as few lanes (rows) as possible, none of them overlapping: sorted by arrival, then departure, then line id (so the result never depends on the order of the input), each goes
+ * into the first lane that is free on its arrival. A night is [arrival, departure), so a booking may start on the day another leaves. Greedy by arrival is optimal for intervals: the number of lanes
+ * is the most bookings that share one night.
+ */
+export function packLanes<T extends { arrival_date: string; departure_date: string; reservation_room_id: number }>(items: readonly T[]): T[][] {
+  const sorted = [...items].sort((a, b) => a.arrival_date.localeCompare(b.arrival_date) || a.departure_date.localeCompare(b.departure_date) || a.reservation_room_id - b.reservation_room_id)
+  const lanes: T[][] = []
+  const ends: string[] = [] // the departure of the last booking of each lane
+  for (const item of sorted) {
+    const lane = ends.findIndex((end) => end <= item.arrival_date)
+    if (lane === -1) {
+      lanes.push([item])
+      ends.push(item.departure_date)
+    } else {
+      lanes[lane]!.push(item)
+      ends[lane] = item.departure_date
+    }
+  }
+  return lanes
+}
+
+/** How many of the bookings hold each night of `dates` (a night is [arrival, departure)). */
+export const countPerNight = (bookings: readonly { arrival_date: string; departure_date: string }[], dates: readonly string[]): number[] =>
+  dates.map((d) => bookings.filter((b) => b.arrival_date <= d && d < b.departure_date).length)
+
 /** The columns a bar covers on a window that starts on `windowStart` and has `days` days: 0-based first column, and how many; null when it is outside. Clipped at the edges. */
 export function columnsOf(arrival: string, departure: string, windowStart: string, days: number): { start: number; span: number; clippedLeft: boolean; clippedRight: boolean } | null {
   const first = nightsOf(windowStart, arrival)

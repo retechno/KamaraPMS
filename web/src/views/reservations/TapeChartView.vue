@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
@@ -22,7 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
 import { addDays } from '@/utils/dates'
-import { canChangeArrival, canChangeDates, canMove, columnsOf, datesVerdict, dropVerdict, isOpenStay, nightsOf, roomOf, type TapeRights, type TapeVerdict } from '@/utils/tape'
+import { canChangeArrival, canChangeDates, canMove, columnsOf, countPerNight, datesVerdict, dropVerdict, isOpenStay, nightsOf, packLanes, roomOf, type TapeRights, type TapeVerdict } from '@/utils/tape'
 
 /**
  * The tape chart: one element per booking, placed on a grid (a column per night). Clicking a block opens its menu (move the room, change the dates, open the reservation), which is the way for the
@@ -278,7 +278,20 @@ watch(businessDate, () => {
   if (!chart.value) void load()
 })
 
-const unassignedRows = computed(() => (chart.value?.unassigned ?? []).map((u) => ({ ...u, rows: placed(u.bookings) })))
+// Bookings without a room: a count per night (what the folded section shows) and the lanes they are packed into (what the opened section shows).
+const unassignedRows = computed(() => (chart.value?.unassigned ?? []).map((u) => ({
+  ...u,
+  perNight: countPerNight(u.bookings, dates.value),
+  lanes: packLanes(u.bookings).map(placed).filter((lane) => lane.length > 0),
+})))
+// The section of a room type is folded until it is opened; the choice is kept while the window moves.
+const opened = ref<Set<number>>(new Set())
+const isOpen = (roomTypeId: number): boolean => opened.value.has(roomTypeId)
+function toggleUnassigned(roomTypeId: number): void {
+  const next = new Set(opened.value)
+  if (!next.delete(roomTypeId)) next.add(roomTypeId)
+  opened.value = next
+}
 const ghost = computed(() => {
   const d = drag.value
   if (!d?.active || d.kind !== 'move') return null
@@ -392,34 +405,54 @@ const ghost = computed(() => {
           </div>
         </template>
 
-        <!-- bookings that have no room yet: one bar each, and a block dragged from here onto a room assigns it -->
+        <!-- bookings that have no room yet: folded by default into a count per night; opened, they sit in as few lanes as possible, and a block dragged from here onto a room assigns it -->
         <template v-for="u in unassignedRows" :key="u.room_type_id">
-          <div class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold" :data-testid="`unassigned-${u.room_type_code}`">{{ t('tapeChart.notAssigned') }} · {{ u.room_type_code }} <span class="font-normal text-muted-foreground">({{ t('tapeChart.bookings', { n: u.bookings.length }) }})</span></div>
-          <div v-for="p in u.rows" :key="p.key" class="relative grid h-10 border-b border-border" :style="gridStyle" :data-testid="`unassigned-row-${p.booking.reservation_room_id}`" role="row">
-            <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 text-[13px] text-muted-foreground" role="rowheader">{{ p.booking.confirmation_number }}</div>
-            <div class="pointer-events-none z-0 grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }" aria-hidden="true">
-              <span v-for="d in dates" :key="d" :class="cn('border-l border-border', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')" />
-            </div>
-            <Popover :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
-              <PopoverTrigger as-child>
-                <button
-                  type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40')"
-                  :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-unassigned-${p.booking.reservation_room_id}`" :data-booking="p.booking.reservation_room_id" aria-haspopup="menu"
-                  :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })"
-                  @pointerdown="startDrag($event, p.booking, null, 'move')" @click.capture="guardClick"
-                >
-                  <span class="min-w-0 flex-1 truncate font-medium">{{ p.booking.guest_name || p.booking.confirmation_number }}<span class="font-normal opacity-80"> · {{ t('tapeChart.nightsN', { n: nightsOf(p.arrival, p.departure) }, nightsOf(p.arrival, p.departure)) }}</span></span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent class="w-52 p-1">
-                <div role="menu" :aria-label="t('tapeChart.menuLabel')" data-testid="tape-menu">
-                  <Button v-if="menuItems(p.booking).move" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-move" @click="openMove(p.booking, null)">{{ t('tapeChart.menu.assign') }}</Button>
-                  <Button v-if="menuItems(p.booking).dates" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-dates" @click="openDates(p.booking, null)">{{ t('tapeChart.menu.dates') }}</Button>
-                  <Button as-child variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-open"><RouterLink :to="`/reservations/${p.booking.reservation_id}`" @click="menu = null">{{ t('tapeChart.menu.open') }}</RouterLink></Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+          <div class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold" :data-testid="`unassigned-${u.room_type_code}`">
+            <button
+              type="button" class="flex items-center gap-1 text-left font-semibold" :aria-expanded="isOpen(u.room_type_id)" :aria-label="t(isOpen(u.room_type_id) ? 'tapeChart.hideUnassigned' : 'tapeChart.showUnassigned', { type: u.room_type_code })"
+              :data-testid="`unassigned-toggle-${u.room_type_code}`" @click="toggleUnassigned(u.room_type_id)"
+            >
+              <component :is="isOpen(u.room_type_id) ? ChevronDown : ChevronRight" class="size-4" aria-hidden="true" />
+              <span>{{ t('tapeChart.notAssigned') }} · {{ u.room_type_code }} <span class="font-normal text-muted-foreground">({{ t('tapeChart.bookings', { n: u.bookings.length }) }})</span></span>
+            </button>
           </div>
+          <div v-if="!isOpen(u.room_type_id)" class="relative grid h-9 border-b border-border" :style="gridStyle" :data-testid="`unassigned-counts-${u.room_type_code}`" role="row">
+            <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 text-[13px] text-muted-foreground" role="rowheader">{{ u.room_type_code }}</div>
+            <div class="grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }">
+              <span
+                v-for="(n, i) in u.perNight" :key="dates[i]" :data-count="n" :title="n ? t('tapeChart.unassignedNight', { n }) : undefined"
+                :class="cn('flex items-center justify-center border-l border-border text-[13px] tabular-nums', isWeekend(dates[i]!) && 'bg-muted/40', dates[i] === businessDate && 'bg-primary/10', n ? 'font-semibold' : 'text-muted-foreground')"
+              >{{ n || '·' }}</span>
+            </div>
+          </div>
+          <template v-else>
+            <div v-for="(lane, li) in u.lanes" :key="li" class="relative grid h-10 border-b border-border" :style="gridStyle" :data-testid="`unassigned-lane-${u.room_type_code}-${li + 1}`" role="row">
+              <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 text-[13px] text-muted-foreground" role="rowheader">{{ u.room_type_code }}<span class="sr-only"> {{ t('tapeChart.lane', { n: li + 1 }) }}</span></div>
+              <div class="pointer-events-none z-0 grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }" aria-hidden="true">
+                <span v-for="d in dates" :key="d" :class="cn('border-l border-border', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')" />
+              </div>
+              <Popover v-for="p in lane" :key="p.key" :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
+                <PopoverTrigger as-child>
+                  <button
+                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40')"
+                    :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-unassigned-${p.booking.reservation_room_id}`" :data-booking="p.booking.reservation_room_id" aria-haspopup="menu"
+                    :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })"
+                    :title="`${p.booking.confirmation_number} ${p.booking.guest_name ?? ''} · ${p.arrival} → ${p.departure}`"
+                    @pointerdown="startDrag($event, p.booking, null, 'move')" @click.capture="guardClick"
+                  >
+                    <span class="min-w-0 flex-1 truncate font-medium">{{ p.booking.guest_name || p.booking.confirmation_number }}<span class="font-normal opacity-80"> · {{ t('tapeChart.nightsN', { n: nightsOf(p.arrival, p.departure) }, nightsOf(p.arrival, p.departure)) }}</span></span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent class="w-52 p-1">
+                  <div role="menu" :aria-label="t('tapeChart.menuLabel')" data-testid="tape-menu">
+                    <Button v-if="menuItems(p.booking).move" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-move" @click="openMove(p.booking, null)">{{ t('tapeChart.menu.assign') }}</Button>
+                    <Button v-if="menuItems(p.booking).dates" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-dates" @click="openDates(p.booking, null)">{{ t('tapeChart.menu.dates') }}</Button>
+                    <Button as-child variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-open"><RouterLink :to="`/reservations/${p.booking.reservation_id}`" @click="menu = null">{{ t('tapeChart.menu.open') }}</RouterLink></Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </template>
         </template>
       </div>
     </Card>
