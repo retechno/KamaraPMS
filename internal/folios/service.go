@@ -289,6 +289,11 @@ func (s *Service) GetFolio(ctx context.Context, propertyID, id int64) (Folio, er
 	return s.loadFolio(ctx, p.TenantID, propertyID, f)
 }
 
+// likeEscaper makes the words of a search literal in a LIKE pattern: the pattern characters % and _ and the escape character \ itself stand for themselves.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func likeEscape(s string) string { return likeEscaper.Replace(s) }
+
 // FolioSortSpec is what the folio list can be sorted by. The default order is the open folios first, by room among them, then the closed ones.
 var FolioSortSpec = listsort.Spec{Columns: map[string]listsort.Kind{"folio_number": listsort.Text, "balance": listsort.Num, "status": listsort.Text}, DefaultKind: listsort.Text}
 
@@ -313,7 +318,7 @@ func (s *Service) ListFolios(ctx context.Context, propertyID int64, f FolioFilte
 		return FolioList{}, err
 	}
 	rows, err := s.q(ctx).ListFoliosOrdered(ctx, foliosdb.ListFoliosOrderedParams{
-		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), OutletID: f.OutletID, Status: nullable(f.Status), Q: nullable(strings.TrimSpace(f.Search)), CancelledWithBalance: f.CancelledWithBalance,
+		SortKey: order.Key, SortDesc: order.Desc, TenantID: p.TenantID, PropertyID: propertyID, ReservationID: f.ReservationID, StayID: f.StayID, BookingGroupID: f.BookingGroupID, FolioType: nullable(f.FolioType), OutletID: f.OutletID, Status: nullable(f.Status), Q: nullable(likeEscape(strings.TrimSpace(f.Search))), CancelledWithBalance: f.CancelledWithBalance,
 		AfterID: after.ID, AfterText: after.Text, AfterNum: after.Num, RowLimit: rowLimit(limit + 1),
 	})
 	if err != nil {

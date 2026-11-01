@@ -389,3 +389,36 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 	_, err = f.Folios.ListFolios(roomstest.Admin(foreign.ID), f.propID, folios.FolioFilter{Search: "salim"}, listsort.Sort{}, nil, 10)
 	wantCode(t, err, "PROPERTY_NOT_FOUND")
 }
+
+// What the cashier types is searched as it is written: % and _ are not wildcards and a backslash is not an escape.
+func TestFolioSearchTakesPatternCharactersLiterally(t *testing.T) {
+	f := setup(t)
+	for _, n := range []string{"G_1", "GX1", "G%2", `H\4`, "HX4"} {
+		f.newFolio(t, n)
+	}
+	search := func(q string) []string {
+		res, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{Search: q}, listsort.Sort{}, nil, 50)
+		must(t, err)
+		var out []string
+		for _, s := range res.Data {
+			out = append(out, s.FolioNumber)
+		}
+		slices.Sort(out)
+		return out
+	}
+	for q, want := range map[string][]string{
+		"G_":  {"G_1"}, // not "G" and any character
+		"G%":  {"G%2"}, // not "G" and anything
+		"%":   {},      // a folio number starts with no "%": not every folio
+		"_":   {},      // no "_" either: not every folio of one character
+		`H\`:  {`H\4`}, // a backslash is a backslash, not the escape of the next character
+		`\`:   {},      // a lone backslash matches nothing: it is not the escape of the quote
+		"G_1": {"G_1"},
+		"gx1": {"GX1"}, // case aside, as before
+		"F":   {"F1"},  // the plain search is as it was
+	} {
+		if got := search(q); !slices.Equal(got, want) {
+			t.Errorf("search %q: %v, want %v", q, got, want)
+		}
+	}
+}
