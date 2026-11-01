@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MoreVertical } from 'lucide-vue-next'
+import { MoreVertical, Wallet } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import type { GuestView, InHouseRow } from '@/api/types'
@@ -18,7 +18,7 @@ import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { type InHouseAction, MORE_ACTIONS, PRIMARY_ACTIONS, actionTarget, actionsFor, fullName } from '@/utils/inHouse'
+import { type InHouseAction, MORE_ACTIONS, PRIMARY_ACTIONS, actionLabelKey, actionTarget, actionVariant, actionsFor, fullName, owesAtCheckOut } from '@/utils/inHouse'
 
 /**
  * The table of stays of the front desk that the In-house and Departures tabs share: columns, row actions, the detail drawer, the guest editor and the rate editor. The tab owns the loading,
@@ -140,7 +140,7 @@ function rateSaved(): void {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex flex-wrap items-center justify-end gap-1.5">
-          <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="a === 'checkOut' ? 'default' : 'outline'" :data-testid="`${a}-${row.stay_number}`" @click="act(a, row)">{{ t(`frontDesk.inHouse.action.${a}`) }}</Button>
+          <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="actionVariant(a, row)" :data-testid="`${a}-${row.stay_number}`" :data-owes="a === 'checkOut' ? owesAtCheckOut(row) : undefined" @click="act(a, row)"><Wallet v-if="a === 'checkOut' && owesAtCheckOut(row)" class="text-warning-text" aria-hidden="true" />{{ t(actionLabelKey(a, row)) }}</Button>
           <Popover v-if="more(row).length" :open="menuFor === row.stay_number" @update:open="(v: boolean) => (menuFor = v ? row.stay_number : null)">
             <PopoverTrigger as-child>
               <Button type="button" size="sm" variant="ghost" :aria-label="t('frontDesk.inHouse.moreActions')" :data-testid="`more-${row.stay_number}`"><MoreVertical /></Button>
@@ -170,7 +170,7 @@ function rateSaved(): void {
         <div v-if="row.company" class="text-sm text-muted-foreground">{{ row.company.name }}</div>
         <div v-if="mode === 'departures'" class="mt-1"><CheckoutStatus :checkout="row.checkout" :folios="row.balance.folios" /></div>
         <div class="mt-2 flex flex-wrap gap-1.5">
-          <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="a === 'checkOut' ? 'default' : 'outline'" @click="act(a, row)">{{ t(`frontDesk.inHouse.action.${a}`) }}</Button>
+          <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="actionVariant(a, row)" :data-owes="a === 'checkOut' ? owesAtCheckOut(row) : undefined" @click="act(a, row)"><Wallet v-if="a === 'checkOut' && owesAtCheckOut(row)" class="text-warning-text" aria-hidden="true" />{{ t(actionLabelKey(a, row)) }}</Button>
         </div>
         <details v-if="more(row).length" class="mt-2">
           <summary class="cursor-pointer text-sm text-muted-foreground">{{ t('frontDesk.inHouse.moreActions') }}</summary>

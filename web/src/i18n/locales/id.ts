@@ -532,6 +532,7 @@ export const id: Messages = {
         folio: 'Folio',
         payment: 'Pembayaran',
         checkOut: 'Check-out',
+        checkOutPay: 'Bayar & check-out',
       },
     },
     rateEdit: {

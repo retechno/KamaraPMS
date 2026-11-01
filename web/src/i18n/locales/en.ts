@@ -533,6 +533,7 @@ export const en = {
         folio: 'Folio',
         payment: 'Payment',
         checkOut: 'Check out',
+        checkOutPay: 'Pay & check out',
       },
     },
     rateEdit: {

@@ -433,6 +433,18 @@ describe('HomeView, Today', () => {
       expect(col.get('[data-testid=departure-balance-2]').text()).toContain('balance')
       expect(col.get('[data-testid=departure-balance-2]').text()).not.toContain('to pay')
       expect(col.find('[data-testid=check-out-1]').exists()).toBe(true)
+      // the guest who owes money pays on the way out: the button says so, and is an outline with an amber wallet, not the solid button of a settled guest
+      const owing = col.get('[data-testid=check-out-1]')
+      expect(owing.text()).toBe('Pay & check out')
+      expect(owing.attributes('data-owes')).toBe('true')
+      expect(owing.classes()).toContain('border') // outline
+      expect(owing.find('svg.text-warning-text').exists()).toBe(true)
+      const credit = col.get('[data-testid=check-out-2]')
+      expect(credit.text()).toBe('Check out')
+      expect(credit.attributes('data-owes')).toBe('false')
+      expect(credit.find('svg').exists()).toBe(false)
+      expect(credit.classes()).toContain('bg-primary') // solid
+      expect(col.get('[data-testid=check-out-3]').text()).toBe('Check out') // no folio: nothing owed
       expect(col.get('[data-testid=col-departures-all]').attributes('href')).toBe('/departures')
       mounted?.unmount()
       const reader = await mountToday(['reservation.read'])

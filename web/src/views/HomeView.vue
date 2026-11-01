@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, BedDouble, CalendarPlus, DoorClosed, DoorOpen, MoonStar, Percent, RefreshCw } from 'lucide-vue-next'
+import { AlertTriangle, BedDouble, CalendarPlus, DoorClosed, DoorOpen, MoonStar, Percent, RefreshCw, Wallet } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import { api } from '@/api/client'
@@ -285,7 +285,7 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
               {{ balanceText(d) }}
               <span v-if="d.balance.status !== 'NO_FOLIO'" :class="['block text-xs', owes(d) ? 'text-warning-text' : 'text-muted-foreground']">{{ owes(d) ? t('today.balanceDue') : t('today.balance') }}</span>
             </div>
-            <Button v-if="can('frontdesk.checkout')" size="sm" :disabled="checkOut?.loading" :data-testid="`check-out-${d.id}`" @click="openCheckOut(d)">{{ t('frontDesk.inHouse.action.checkOut') }}</Button>
+            <Button v-if="can('frontdesk.checkout')" size="sm" :variant="owes(d) ? 'outline' : 'default'" :disabled="checkOut?.loading" :data-testid="`check-out-${d.id}`" :data-owes="owes(d)" @click="openCheckOut(d)"><Wallet v-if="owes(d)" class="text-warning-text" aria-hidden="true" />{{ t(owes(d) ? 'frontDesk.inHouse.action.checkOutPay' : 'frontDesk.inHouse.action.checkOut') }}</Button>
             </div>
           </li>
         </ul>
