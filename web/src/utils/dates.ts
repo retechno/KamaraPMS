@@ -106,8 +106,10 @@ export function formatDisplayDate(iso: string | null | undefined): string {
  */
 export function maskDateInput(raw: string): string {
   const clean = raw.replace(/[^\d/.-]/g, '')
-  if (/^\d*$/.test(clean)) {
-    const d = clean.slice(0, 8)
+  // Slashes that sit where the mask itself puts them ("02/1" while typing digit by digit) do not make the text hand-written.
+  const maskSlashes = !/[.-]/.test(clean) && [...clean].every((c, i) => c !== '/' || i === 2 || i === 5)
+  if (/^\d*$/.test(clean) || maskSlashes) {
+    const d = clean.replace(/\//g, '').slice(0, 8)
     if (d.length <= 2) return d
     if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`
     return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`

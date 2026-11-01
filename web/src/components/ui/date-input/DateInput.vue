@@ -192,7 +192,7 @@ function openCalendar(): void {
         @change="onNativeChange"
       />
     </div>
-    <p v-if="message" :id="problemId" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-destructive" role="alert" data-slot="date-input-problem">{{ message }}</p>
+    <p v-if="message" :id="problemId" class="absolute left-0 top-full m-0 mt-0.5 w-full text-xs leading-tight text-destructive" role="alert" data-slot="date-input-problem">{{ message }}</p>
     <p v-else-if="weekday" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-muted-foreground" data-slot="date-input-weekday">{{ weekday }}</p>
   </div>
 </template>

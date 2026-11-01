@@ -103,6 +103,13 @@ describe('the date a person types (dd/mm/yyyy)', () => {
     expect(maskDateInput('2026-11-02')).toBe('2026-11-02')
     expect(maskDateInput('02a1b')).toBe('02/1')
     expect(maskDateInput('')).toBe('')
+    // digit by digit: the text of the last keystroke already holds the slashes of the mask
+    let typed = ''
+    for (const c of '02112026') typed = maskDateInput(typed + c)
+    expect(typed).toBe('02/11/2026')
+    expect(maskDateInput('02/112')).toBe('02/11/2')
+    expect(maskDateInput('02/')).toBe('02')
+    expect(maskDateInput('2/112')).toBe('2/112') // written by hand: left alone
   })
 })
 
