@@ -101,6 +101,8 @@ interface World {
   nights?: unknown[]
   freeRooms?: unknown[]
   failing?: string[]
+  /** What the preview of the night audit says (the default: nothing in the way). */
+  preview?: unknown
 }
 const defaultWorld = (): World => ({
   arrivals: [
@@ -114,6 +116,11 @@ const defaultWorld = (): World => ({
   accounts: [{ company_id: 1, code: 'ACME', name: 'Acme Corp', credit_limit: '1000000', available: '-250000' }, { company_id: 2, code: 'B', name: 'Beta', credit_limit: null, available: null }],
   nights: NIGHTS,
 })
+/** The preview of a night audit that can run: the clock allows it and no step needs anyone. */
+const CLEAR_PREVIEW = {
+  business_date: '2026-10-10', time_guard_ok: true, can_run: true,
+  blockers: { unresolved_arrivals: [], unresolved_departures: [], charge_errors: [], invalid_charges: [], accounting_readiness: [], outlet_bills: [], stock: [], open_shifts: [] },
+}
 let world = defaultWorld()
 
 function serve(): void {
@@ -137,6 +144,9 @@ function serve(): void {
       case `${PATH}/city-ledger/accounts`:
         fail('accounts')
         return { data: { data: world.accounts } }
+      case `${PATH}/night-audit/preview`:
+        fail('preview')
+        return { data: world.preview ?? CLEAR_PREVIEW }
       case `${PATH}/availability/rooms`:
         fail('free')
         return { data: { data: world.freeRooms ?? [{ room_id: 71, room_number: '701', housekeeping_status: 'CLEAN', bed_type_id: null }, { room_id: 72, room_number: '702', housekeeping_status: 'DIRTY', bed_type_id: null }] } }
@@ -423,6 +433,18 @@ describe('HomeView, Today', () => {
       expect(col.get('[data-testid=departure-balance-2]').text()).toContain('balance')
       expect(col.get('[data-testid=departure-balance-2]').text()).not.toContain('to pay')
       expect(col.find('[data-testid=check-out-1]').exists()).toBe(true)
+      // the guest who owes money pays on the way out: the button says so, and is an outline with an amber wallet, not the solid button of a settled guest
+      const owing = col.get('[data-testid=check-out-1]')
+      expect(owing.text()).toBe('Pay & check out')
+      expect(owing.attributes('data-owes')).toBe('true')
+      expect(owing.classes()).toContain('border') // outline
+      expect(owing.find('svg.text-warning-text').exists()).toBe(true)
+      const credit = col.get('[data-testid=check-out-2]')
+      expect(credit.text()).toBe('Check out')
+      expect(credit.attributes('data-owes')).toBe('false')
+      expect(credit.find('svg').exists()).toBe(false)
+      expect(credit.classes()).toContain('bg-primary') // solid
+      expect(col.get('[data-testid=check-out-3]').text()).toBe('Check out') // no folio: nothing owed
       expect(col.get('[data-testid=col-departures-all]').attributes('href')).toBe('/departures')
       mounted?.unmount()
       const reader = await mountToday(['reservation.read'])
@@ -536,6 +558,40 @@ describe('HomeView, Today', () => {
         expect(other.find('[data-testid=attention-audit]').exists()).toBe(false)
         mounted?.unmount()
       }
+    })
+
+    it('says the night audit "can run now" only when no step is left: otherwise it counts the steps and links to the first, as the chip of the top bar does', async () => {
+      const due = { business_date: '2026-10-10', property_local_time: '2026-10-10T23:30:00+08:00', timezone: 'Asia/Makassar', night_audit_allowed: true, night_audit_overdue: false }
+      world.preview = { ...CLEAR_PREVIEW, can_run: false, blockers: { ...CLEAR_PREVIEW.blockers, unresolved_arrivals: [{ reservation_room_id: 1 }, { reservation_room_id: 2 }], open_shifts: [{ id: 3 }] } }
+      const stuck = await mountToday(FRONT, due)
+      const row = stuck.get('[data-testid=attention-audit]')
+      expect(row.text()).toContain('Night audit: 2 steps to deal with') // the arrivals and the room charges (a shift is open)
+      expect(row.text()).not.toContain('can run now')
+      expect(row.get('a').attributes('href')).toBe('/night-audit#arrivals')
+      mounted?.unmount()
+      world.preview = undefined
+      const ok = await mountToday(FRONT, due)
+      expect(ok.get('[data-testid=attention-audit]').text()).toContain('Night audit can run now')
+      mounted?.unmount()
+      setLocale('id')
+      world.preview = { ...CLEAR_PREVIEW, can_run: false, blockers: { ...CLEAR_PREVIEW.blockers, unresolved_departures: [{ stay_id: 5 }] } }
+      const id = await mountToday(FRONT, due)
+      expect(id.get('[data-testid=attention-audit]').text()).toContain('Audit malam: 1 langkah tertunda')
+      expect(id.get('[data-testid=attention-audit] a').attributes('href')).toBe('/night-audit#departures')
+    })
+
+    it('reads the preview only for who runs the night audit, and only once its time has come', async () => {
+      await mountToday(FRONT) // before its time
+      expect(callsTo(`${PATH}/night-audit/preview`)).toBe(0)
+      mounted?.unmount()
+      const due = { business_date: '2026-10-10', property_local_time: '2026-10-10T23:30:00+08:00', timezone: 'Asia/Makassar', night_audit_allowed: true, night_audit_overdue: false }
+      GET.mockClear()
+      await mountToday(['reservation.read'], due)
+      expect(callsTo(`${PATH}/night-audit/preview`)).toBe(0)
+      mounted?.unmount()
+      GET.mockClear()
+      await mountToday(FRONT, due)
+      expect(callsTo(`${PATH}/night-audit/preview`)).toBe(1)
     })
 
     it('says so when nothing needs attention, once it has loaded', async () => {
