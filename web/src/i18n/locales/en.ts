@@ -38,9 +38,9 @@ export const en = {
   dateInput: {
     placeholder: 'dd/mm/yyyy',
     openCalendar: 'Open the calendar',
-    invalid: 'Write the date as dd/mm/yyyy, for example 02/11/2026.',
-    tooEarly: 'The earliest date is {date}.',
-    tooLate: 'The latest date is {date}.',
+    invalid: 'Write it as dd/mm/yyyy.',
+    tooEarly: 'Earliest date: {date}.',
+    tooLate: 'Latest date: {date}.',
   },
   nav: {
     pinned: 'Pinned',

@@ -74,7 +74,7 @@ describe('DateInput', () => {
     expect(text().attributes('aria-invalid')).toBeUndefined()
     await text().trigger('blur')
     expect(text().attributes('aria-invalid')).toBe('true')
-    expect(document.body.textContent).toContain('Write the date as dd/mm/yyyy, for example 02/11/2026.')
+    expect(document.body.textContent).toContain('Write it as dd/mm/yyyy.')
     expect((text().element as HTMLInputElement).value).toBe('02/11/20') // the text stays
     expect(model()).toBe('2026-10-01') // the model keeps the last valid date
     expect(changes).toEqual([])
@@ -99,10 +99,10 @@ describe('DateInput', () => {
   it('says that a date is before min or after max, and does not take it', async () => {
     const { text, model, changes } = mountField({ min: '2026-10-01', max: '2026-12-31' })
     await text().setValue('30/09/2026')
-    expect(document.body.textContent).toContain('The earliest date is 01/10/2026.')
+    expect(document.body.textContent).toContain('Earliest date: 01/10/2026.')
     expect(text().attributes('aria-invalid')).toBe('true')
     await text().setValue('01/01/2027')
-    expect(document.body.textContent).toContain('The latest date is 31/12/2026.')
+    expect(document.body.textContent).toContain('Latest date: 31/12/2026.')
     expect(model()).toBe('2026-10-01')
     expect(changes).toEqual([])
     await text().setValue('31/12/2026')
@@ -114,7 +114,7 @@ describe('DateInput', () => {
     await setLocale('id')
     const { text } = mountField({ min: '2026-10-01' })
     await text().setValue('30/09/2026')
-    expect(document.body.textContent).toContain('Tanggal paling awal 01/10/2026.')
+    expect(document.body.textContent).toContain('Paling awal: 01/10/2026.')
     expect(text().attributes('placeholder')).toBe('hh/bb/tttt')
   })
 

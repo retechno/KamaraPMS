@@ -254,7 +254,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
 
   <template v-else>
-    <FilterBar class="mb-4 flex flex-wrap items-end gap-3" role="search" data-testid="filters" :active="activeFilters" @submit="search">
+    <FilterBar class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-7" role="search" data-testid="filters" :active="activeFilters" @submit="search">
       <template #search>
         <FormField class="min-w-52 flex-1" :label="t('reservations.search')">
         <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('reservations.searchPlaceholder')" /></template>

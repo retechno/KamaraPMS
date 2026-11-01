@@ -164,7 +164,7 @@ describe('WalkInView, the departure written as dd/mm/yyyy', () => {
     expect(JSON.stringify(searches().at(-1)?.[1])).toContain('"departure":"2026-10-03"')
     await field.setValue('29/09/2026') // before the business date
     await flushPromises()
-    expect(w.text()).toContain('The earliest date is 30/09/2026.')
+    expect(w.text()).toContain('Earliest date: 30/09/2026.')
     expect(searches()).toHaveLength(before + 1)
     expect((w.get('input[name=departure]').element as HTMLInputElement).value).toBe('2026-10-03')
   })

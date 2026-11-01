@@ -37,9 +37,9 @@ export const id: Messages = {
   dateInput: {
     placeholder: 'hh/bb/tttt',
     openCalendar: 'Buka kalender',
-    invalid: 'Tulis tanggal sebagai hh/bb/tttt, misalnya 02/11/2026.',
-    tooEarly: 'Tanggal paling awal {date}.',
-    tooLate: 'Tanggal paling akhir {date}.',
+    invalid: 'Tulis sebagai hh/bb/tttt.',
+    tooEarly: 'Paling awal: {date}.',
+    tooLate: 'Paling akhir: {date}.',
   },
   nav: {
     pinned: 'Disematkan',

@@ -526,7 +526,7 @@ describe('NewReservationView, the dates written as dd/mm/yyyy', () => {
     await flushPromises()
     const arrival = w.get('[data-testid=search-form] input[data-slot=date-input-text]')
     await arrival.setValue('01/10/2026')
-    expect(w.text()).toContain('The earliest date is 02/10/2026.')
+    expect(w.text()).toContain('Earliest date: 02/10/2026.')
     expect(arrival.attributes('aria-invalid')).toBe('true')
     expect((w.get('input[name=arrival]').element as HTMLInputElement).value).toBe('2026-10-02')
   })

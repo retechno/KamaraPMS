@@ -325,7 +325,7 @@ async function addGuest(g: Guest): Promise<void> {
         <FormField class="max-w-xs" :label="t('stayActions.departure')" :error="fieldError('departure_date')">
           <template #default="{ id, invalid }"><DateInput :id="id" v-model="departure" name="departure" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>
         </FormField>
-        <p class="mb-0 mt-2 text-sm text-muted-foreground">{{ t('stayActions.departureHint') }}</p>
+        <p class="mb-0 mt-6 text-sm text-muted-foreground">{{ t('stayActions.departureHint') }}</p>
         <RateOverrideSection v-if="canChangeRate && extending && extraNights.length" v-model="rate" class="mt-3" :nights="extraNights" />
         <div class="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" @click="open = ''">{{ t('common.cancel') }}</Button>

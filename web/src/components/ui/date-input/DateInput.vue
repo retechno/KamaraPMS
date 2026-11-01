@@ -133,7 +133,7 @@ function openCalendar(): void {
         :aria-invalid="invalid || undefined"
         :aria-describedby="describedBy"
         data-slot="date-input-text"
-        class="h-9 w-full min-w-0 rounded-md border border-border bg-card px-3 pr-10 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive pointer-coarse:pr-12"
+        class="h-9 w-full min-w-0 rounded-md border border-border bg-card px-3 pr-10 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive pointer-coarse:pr-[52px]"
         @input="onTextInput"
         @blur="onTextBlur"
       />
@@ -141,7 +141,7 @@ function openCalendar(): void {
         type="button"
         :disabled="disabled"
         :aria-label="t('dateInput.openCalendar')"
-        class="absolute right-0 top-1/2 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:size-11"
+        class="absolute right-0 top-1/2 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:size-[44px]"
         data-slot="date-input-calendar"
         @click="openCalendar"
       >
@@ -163,7 +163,7 @@ function openCalendar(): void {
         @change="onNativeChange"
       />
     </div>
-    <p v-if="message" :id="problemId" class="m-0 mt-1.5 text-xs text-destructive" role="alert" data-slot="date-input-problem">{{ message }}</p>
+    <p v-if="message" :id="problemId" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-destructive" role="alert" data-slot="date-input-problem">{{ message }}</p>
     <p v-else-if="weekday" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-muted-foreground" data-slot="date-input-weekday">{{ weekday }}</p>
   </div>
 </template>

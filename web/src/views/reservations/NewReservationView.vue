@@ -304,7 +304,7 @@ async function book(approval?: Approval): Promise<void> {
 
   <template v-else>
     <Card class="mb-4">
-      <form v-autofocus class="flex flex-wrap items-end gap-3 p-4" role="search" novalidate data-testid="search-form" @submit.prevent="runSearch">
+      <form v-autofocus class="flex flex-wrap items-end gap-x-3 gap-y-7 px-4 pb-8 pt-4" role="search" novalidate data-testid="search-form" @submit.prevent="runSearch">
         <FormField class="w-44" :label="t('newReservation.arrival')">
           <template #default="{ id, invalid }"><DateInput :id="id" v-model="search.arrival" name="arrival" :min="businessDate" :aria-invalid="!!fieldError('arrival_date') || invalid" /></template>
         </FormField>

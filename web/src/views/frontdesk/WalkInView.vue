@@ -225,7 +225,7 @@ watch(businessDate, (bd) => {
     <form v-autofocus novalidate data-testid="walkin-form" @submit.prevent="onSubmit">
       <CardHeader><CardTitle>{{ t('walkIn.stay') }}</CardTitle></CardHeader>
       <CardContent>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
           <FormField :label="t('walkIn.departure')" :error="fieldError('departure_date')">
             <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.departure" name="departure" :min="businessDate" :aria-invalid="invalid" @change="loadRooms" /></template>
           </FormField>
