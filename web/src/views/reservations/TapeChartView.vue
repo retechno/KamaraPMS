@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
@@ -22,7 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
 import { addDays } from '@/utils/dates'
-import { canChangeArrival, canChangeDates, canMove, columnsOf, datesVerdict, dropVerdict, isOpenStay, nightsOf, roomOf, type TapeRights, type TapeVerdict } from '@/utils/tape'
+import { canChangeArrival, canChangeDates, canMove, columnsOf, countPerNight, datesVerdict, dropVerdict, isOpenStay, nightsOf, packLanes, roomOf, typeAvailability, type TapeRights, type TapeVerdict } from '@/utils/tape'
 
 /**
  * The tape chart: one element per booking, placed on a grid (a column per night). Clicking a block opens its menu (move the room, change the dates, open the reservation), which is the way for the
@@ -73,7 +73,7 @@ function shift(n: number): void {
 
 // A booking that is still to come is a light blue bar with a blue outline; a guest in the house is the same blue solid, so the two differ in weight and not only in hue. The legend is the same map.
 const legend = computed(() => [
-  ...statusLegend('reservation', ['CONFIRMED', 'CHECKED_IN']).map((e) => ({ ...e, label: t(e.status === 'CHECKED_IN' ? 'tapeChart.legendCheckedIn' : 'tapeChart.legendConfirmed') })),
+  ...statusLegend('reservation', ['CONFIRMED', 'CHECKED_IN']).map((e) => ({ ...e, swatch: e.status === 'CONFIRMED' ? 'border-status-inhouse bg-status-booked-line' : e.swatch, label: t(e.status === 'CHECKED_IN' ? 'tapeChart.legendCheckedIn' : 'tapeChart.legendConfirmed') })),
   { status: 'BLOCKED', variant: 'ooo', swatch: statusSwatch('block', 'OOO').swatch, label: t('tapeChart.legendBlocked') },
 ])
 
@@ -97,7 +97,14 @@ const placed = (bookings: TapeBooking[]): Placed[] => bookings.map(place).filter
 
 const blockPlaced = (room: TapeRoom) => room.blocks.map((b) => ({ block: b, c: columnsOf(b.start_date, b.end_date, start.value, days.value) })).filter((x) => x.c !== null)
 
-const barClass = (b: TapeBooking) => cn('flex h-8 min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap border-y px-1.5 text-left text-[13px] leading-none no-underline', statusSwatch('reservation', b.status).fill, b.status === 'CONFIRMED' && 'border-status-inhouse')
+// A booking to come is the action of the day (the arrivals), so its bar has more body than the pale tile of the status badge: a stronger blue, dark text, the outline of the stay in house.
+const CONFIRMED_FILL = 'border-status-inhouse bg-status-booked-line text-foreground'
+const barClass = (b: TapeBooking) => cn('flex h-8 min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap border-y px-1.5 text-left text-[13px] leading-none no-underline', b.status === 'CONFIRMED' ? CONFIRMED_FILL : statusSwatch('reservation', b.status).fill)
+
+// The ends of today: a thick dark edge on the left of a booking that arrives on the business date, and on the right of a stay that leaves on it (not the edge of a segment, which is a move of room).
+const arrivesToday = (p: Placed): boolean => p.booking.status === 'CONFIRMED' && p.arrival === businessDate.value && !p.clippedLeft
+const departsToday = (p: Placed): boolean => isOpenStay(p.booking) && p.departure === businessDate.value && !p.clippedRight
+const endClass = (p: Placed) => cn(arrivesToday(p) && 'border-l-4 border-l-foreground', departsToday(p) && 'border-r-4 border-r-foreground')
 
 // ---- the menu of a block, and the dialogs it and the drag lead to
 const menu = ref<string | null>(null)
@@ -278,7 +285,27 @@ watch(businessDate, () => {
   if (!chart.value) void load()
 })
 
-const unassignedRows = computed(() => (chart.value?.unassigned ?? []).map((u) => ({ ...u, rows: placed(u.bookings) })))
+// What is sold and what is left of each room type on each night, from the data the chart holds.
+const availability = computed(() => new Map((chart.value ? typeAvailability(chart.value, dates.value) : []).map((a) => [a.room_type_id, a])))
+
+// Bookings without a room: a count per night (what the folded section shows) and the lanes they are packed into (what the opened section shows).
+// in the order of the room types above, not the order the server met them in
+const typeOrder = computed(() => [...new Set((chart.value?.rooms ?? []).map((r) => r.room_type_id))])
+const unassignedRows = computed(() => (chart.value?.unassigned ?? [])
+  .map((u) => ({
+    ...u,
+    perNight: countPerNight(u.bookings, dates.value),
+    lanes: packLanes(u.bookings).map(placed).filter((lane) => lane.length > 0),
+  }))
+  .sort((a, b) => typeOrder.value.indexOf(a.room_type_id) - typeOrder.value.indexOf(b.room_type_id)))
+// The section of a room type is folded until it is opened; the choice is kept while the window moves.
+const opened = ref<Set<number>>(new Set())
+const isOpen = (roomTypeId: number): boolean => opened.value.has(roomTypeId)
+function toggleUnassigned(roomTypeId: number): void {
+  const next = new Set(opened.value)
+  if (!next.delete(roomTypeId)) next.add(roomTypeId)
+  opened.value = next
+}
 const ghost = computed(() => {
   const d = drag.value
   if (!d?.active || d.kind !== 'move') return null
@@ -308,6 +335,8 @@ const ghost = computed(() => {
     <ul class="m-0 mb-3 flex list-none flex-wrap gap-4 p-0 text-[13px] text-muted-foreground" data-testid="legend">
       <li v-for="l in legend" :key="l.status" class="flex items-center gap-1.5" :data-legend="l.status"><span :class="cn('h-3 w-5 rounded-sm border', l.swatch)" aria-hidden="true" />{{ l.label }}</li>
       <li class="flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm bg-primary/10 ring-1 ring-primary/40" aria-hidden="true" />{{ t('tapeChart.legendToday') }}</li>
+      <li class="flex items-center gap-1.5" data-legend="ARRIVES_TODAY"><span class="h-3 w-5 rounded-sm border-y border-l-4 border-status-inhouse border-l-foreground bg-status-booked-line" aria-hidden="true" />{{ t('tapeChart.legendArrives') }}</li>
+      <li class="flex items-center gap-1.5" data-legend="DEPARTS_TODAY"><span class="h-3 w-5 rounded-sm border-y border-r-4 border-status-inhouse border-r-foreground bg-status-inhouse" aria-hidden="true" />{{ t('tapeChart.legendDeparts') }}</li>
     </ul>
     <p v-if="rights.update || rights.move" class="m-0 mb-3 text-[13px] text-muted-foreground" data-testid="tape-hint">{{ fine ? t('tapeChart.hintDrag') : t('tapeChart.hintMenu') }}</p>
     <p v-if="pullRefusal" class="alert warning m-0 mb-3" role="status" data-testid="tape-pull-refusal">{{ pullRefusal }}</p>
@@ -327,7 +356,20 @@ const ghost = computed(() => {
         </div>
 
         <template v-for="(room, i) in chart.rooms" :key="room.room_id">
-          <div v-if="i === 0 || chart.rooms[i - 1]?.room_type_id !== room.room_type_id" class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold">{{ room.room_type_code }}</div>
+          <!-- the head of a room type: what is sold and what is left of the type on each night -->
+          <div v-if="i === 0 || chart.rooms[i - 1]?.room_type_id !== room.room_type_id" class="grid border-b border-t border-border bg-muted text-[13px]" :style="gridStyle" :data-testid="`type-head-${room.room_type_code}`" role="row">
+            <div class="sticky left-0 z-10 bg-muted px-2 py-1 text-left font-semibold" role="rowheader">{{ room.room_type_code }}</div>
+            <div class="grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }">
+              <span
+                v-for="(n, k) in availability.get(room.room_type_id)?.nights ?? []" :key="dates[k]" :data-sold="n.sold" :data-available="n.available" :data-blocked="n.blocked"
+                :title="t('tapeChart.nightFigures', { sold: n.sold, available: n.available, blocked: n.blocked })"
+                :class="cn('flex flex-col items-center justify-center whitespace-nowrap border-l border-border px-0.5 py-1 leading-tight', dates[k] === businessDate && 'bg-primary/10')"
+              >
+                <span :class="cn('text-[13px] tabular-nums', n.available < 0 ? 'font-semibold text-destructive' : n.available === 0 ? 'font-semibold' : 'font-medium')" data-part="left">{{ t('tapeChart.left', { n: n.available }) }}</span>
+                <span class="text-[12px] tabular-nums text-muted-foreground" data-part="sold">{{ t('tapeChart.soldN', { n: n.sold }) }}</span>
+              </span>
+            </div>
+          </div>
           <div
             class="relative grid h-10 border-b border-border"
             :style="gridStyle" :data-room-id="room.room_id" :data-testid="`room-${room.room_number}`" :data-drop="rowState(room.room_id)" :title="rowState(room.room_id) === 'no' ? refusalText(room.room_id) : undefined" role="row"
@@ -348,7 +390,8 @@ const ghost = computed(() => {
               <Popover :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
                 <PopoverTrigger as-child>
                   <button
-                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && (canMove(p.booking, rights)) && 'cursor-grab', drag?.active && drag.booking === p.booking && drag.kind === 'move' && 'opacity-40', pullRefusal && drag?.booking === p.booking && 'ring-2 ring-destructive')"
+                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && (canMove(p.booking, rights)) && 'cursor-grab', drag?.active && drag.booking === p.booking && drag.kind === 'move' && 'opacity-40', pullRefusal && drag?.booking === p.booking && 'ring-2 ring-destructive', endClass(p))"
+                    :data-arrives-today="arrivesToday(p) || undefined" :data-departs-today="departsToday(p) || undefined"
                     :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-${room.room_number}-${p.start >= 0 ? dates[p.start] : ''}`" :data-booking="p.booking.reservation_room_id"
                     :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })" aria-haspopup="menu"
                     :title="`${p.booking.confirmation_number} ${p.booking.guest_name ?? ''}`"
@@ -392,34 +435,55 @@ const ghost = computed(() => {
           </div>
         </template>
 
-        <!-- bookings that have no room yet: one bar each, and a block dragged from here onto a room assigns it -->
+        <!-- bookings that have no room yet: folded by default into a count per night; opened, they sit in as few lanes as possible, and a block dragged from here onto a room assigns it -->
         <template v-for="u in unassignedRows" :key="u.room_type_id">
-          <div class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold" :data-testid="`unassigned-${u.room_type_code}`">{{ t('tapeChart.notAssigned') }} · {{ u.room_type_code }} <span class="font-normal text-muted-foreground">({{ t('tapeChart.bookings', { n: u.bookings.length }) }})</span></div>
-          <div v-for="p in u.rows" :key="p.key" class="relative grid h-10 border-b border-border" :style="gridStyle" :data-testid="`unassigned-row-${p.booking.reservation_room_id}`" role="row">
-            <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 text-[13px] text-muted-foreground" role="rowheader">{{ p.booking.confirmation_number }}</div>
-            <div class="pointer-events-none z-0 grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }" aria-hidden="true">
-              <span v-for="d in dates" :key="d" :class="cn('border-l border-border', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')" />
-            </div>
-            <Popover :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
-              <PopoverTrigger as-child>
-                <button
-                  type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40')"
-                  :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-unassigned-${p.booking.reservation_room_id}`" :data-booking="p.booking.reservation_room_id" aria-haspopup="menu"
-                  :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })"
-                  @pointerdown="startDrag($event, p.booking, null, 'move')" @click.capture="guardClick"
-                >
-                  <span class="min-w-0 flex-1 truncate font-medium">{{ p.booking.guest_name || p.booking.confirmation_number }}<span class="font-normal opacity-80"> · {{ t('tapeChart.nightsN', { n: nightsOf(p.arrival, p.departure) }, nightsOf(p.arrival, p.departure)) }}</span></span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent class="w-52 p-1">
-                <div role="menu" :aria-label="t('tapeChart.menuLabel')" data-testid="tape-menu">
-                  <Button v-if="menuItems(p.booking).move" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-move" @click="openMove(p.booking, null)">{{ t('tapeChart.menu.assign') }}</Button>
-                  <Button v-if="menuItems(p.booking).dates" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-dates" @click="openDates(p.booking, null)">{{ t('tapeChart.menu.dates') }}</Button>
-                  <Button as-child variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-open"><RouterLink :to="`/reservations/${p.booking.reservation_id}`" @click="menu = null">{{ t('tapeChart.menu.open') }}</RouterLink></Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+          <div class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold" :data-testid="`unassigned-${u.room_type_code}`">
+            <button
+              type="button" class="flex items-center gap-1 text-left font-semibold" :aria-expanded="isOpen(u.room_type_id)" :aria-label="t(isOpen(u.room_type_id) ? 'tapeChart.hideUnassigned' : 'tapeChart.showUnassigned', { type: u.room_type_code })"
+              :data-testid="`unassigned-toggle-${u.room_type_code}`" @click="toggleUnassigned(u.room_type_id)"
+            >
+              <component :is="isOpen(u.room_type_id) ? ChevronDown : ChevronRight" class="size-4" aria-hidden="true" />
+              <span>{{ t('tapeChart.notAssigned') }} · {{ u.room_type_code }} <span class="font-normal text-muted-foreground">({{ t('tapeChart.bookings', { n: u.bookings.length }) }})</span></span>
+            </button>
           </div>
+          <div v-if="!isOpen(u.room_type_id)" class="relative grid h-9 border-b border-border" :style="gridStyle" :data-testid="`unassigned-counts-${u.room_type_code}`" role="row">
+            <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 text-[13px] text-muted-foreground" role="rowheader">{{ u.room_type_code }}</div>
+            <div class="grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }">
+              <span
+                v-for="(n, i) in u.perNight" :key="dates[i]" :data-count="n" :title="n ? t('tapeChart.unassignedNight', { n }) : undefined"
+                :class="cn('flex items-center justify-center border-l border-border text-[13px] tabular-nums', isWeekend(dates[i]!) && 'bg-muted/40', dates[i] === businessDate && 'bg-primary/10', n ? 'font-semibold' : 'text-muted-foreground')"
+              >{{ n || '·' }}</span>
+            </div>
+          </div>
+          <template v-else>
+            <div v-for="(lane, li) in u.lanes" :key="li" class="relative grid h-10 border-b border-border" :style="gridStyle" :data-testid="`unassigned-lane-${u.room_type_code}-${li + 1}`" role="row">
+              <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 text-[13px] text-muted-foreground" role="rowheader">{{ u.room_type_code }}<span class="sr-only"> {{ t('tapeChart.lane', { n: li + 1 }) }}</span></div>
+              <div class="pointer-events-none z-0 grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }" aria-hidden="true">
+                <span v-for="d in dates" :key="d" :class="cn('border-l border-border', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')" />
+              </div>
+              <Popover v-for="p in lane" :key="p.key" :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
+                <PopoverTrigger as-child>
+                  <button
+                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40', endClass(p))"
+                    :data-arrives-today="arrivesToday(p) || undefined"
+                    :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-unassigned-${p.booking.reservation_room_id}`" :data-booking="p.booking.reservation_room_id" aria-haspopup="menu"
+                    :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })"
+                    :title="`${p.booking.confirmation_number} ${p.booking.guest_name ?? ''} · ${p.arrival} → ${p.departure}`"
+                    @pointerdown="startDrag($event, p.booking, null, 'move')" @click.capture="guardClick"
+                  >
+                    <span class="min-w-0 flex-1 truncate font-medium">{{ p.booking.guest_name || p.booking.confirmation_number }}<span class="font-normal opacity-80"> · {{ t('tapeChart.nightsN', { n: nightsOf(p.arrival, p.departure) }, nightsOf(p.arrival, p.departure)) }}</span></span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent class="w-52 p-1">
+                  <div role="menu" :aria-label="t('tapeChart.menuLabel')" data-testid="tape-menu">
+                    <Button v-if="menuItems(p.booking).move" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-move" @click="openMove(p.booking, null)">{{ t('tapeChart.menu.assign') }}</Button>
+                    <Button v-if="menuItems(p.booking).dates" type="button" variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-dates" @click="openDates(p.booking, null)">{{ t('tapeChart.menu.dates') }}</Button>
+                    <Button as-child variant="ghost" size="sm" class="w-full justify-start" role="menuitem" data-testid="menu-open"><RouterLink :to="`/reservations/${p.booking.reservation_id}`" @click="menu = null">{{ t('tapeChart.menu.open') }}</RouterLink></Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </template>
         </template>
       </div>
     </Card>
