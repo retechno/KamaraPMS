@@ -34,6 +34,13 @@ export const id: Messages = {
     noResults: 'Tidak ada yang ditampilkan.',
     required: 'Wajib diisi',
   },
+  dateInput: {
+    placeholder: 'hh/bb/tttt',
+    openCalendar: 'Buka kalender',
+    invalid: 'Tulis tanggal sebagai hh/bb/tttt, misalnya 02/11/2026.',
+    tooEarly: 'Tanggal paling awal {date}.',
+    tooLate: 'Tanggal paling akhir {date}.',
+  },
   nav: {
     pinned: 'Disematkan',
     recent: 'Terakhir dibuka',
