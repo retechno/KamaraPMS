@@ -327,3 +327,21 @@ describe('Reservation workspace', () => {
     expect(GET.mock.calls.filter((c) => String(c[0]).endsWith('/audit-logs'))).toHaveLength(2)
   })
 })
+
+describe('ReservationWorkspace, what is seen is what is sent', () => {
+  it('does not save a room while one of its dates is not valid, and says why in the editor', async () => {
+    const w = await mountView()
+    await w.get('[data-testid=edit-reservation]').trigger('click')
+    await flushPromises()
+    const dialog = document.body.querySelector('[data-testid=reservation-edit-dialog]') as HTMLElement
+    const field = dialog.querySelector('input[data-slot=date-input-text]') as HTMLInputElement
+    field.value = '31/02/2026'
+    field.dispatchEvent(new Event('input'))
+    await flushPromises()
+    ;(dialog.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    expect(PATCH).not.toHaveBeenCalled()
+    expect(field.getAttribute('aria-invalid')).toBe('true')
+    expect(dialog.textContent).toContain('31/02/2026 is not on the calendar')
+  })
+})

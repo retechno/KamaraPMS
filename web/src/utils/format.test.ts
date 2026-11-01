@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale } from '@/i18n'
-import { formatBalance, formatDateTime, formatDateWeekday, formatMoney, formatMoneyCompact, formatPercent, localizeDates, setDisplayTimeZone } from './format'
+import { formatBalance, formatDateTime, formatDateWeekday, formatDateWeekdayLong, formatMoney, formatMoneyCompact, formatPercent, localizeDates, setDisplayTimeZone } from './format'
 
 describe('formatMoney', () => {
   afterEach(() => setLocale('en'))
@@ -122,5 +122,21 @@ describe('localizeDates', () => {
     expect(localizeDates('from 2026-09-01 to 2026-09-03')).toBe('from 1 Sep 2026 to 3 Sep 2026')
     expect(localizeDates('no date here 12345')).toBe('no date here 12345')
     expect(localizeDates(null)).toBe('')
+  })
+})
+
+describe('formatDateWeekdayLong', () => {
+  afterEach(() => setLocale('en'))
+
+  it('writes the weekday in full for the line under a date field, and leaves the short form of formatDateWeekday as it is', () => {
+    expect(formatDateWeekdayLong('2026-11-01')).toBe('Sunday, 1 Nov 2026')
+    expect(formatDateWeekday('2026-11-01')).toBe('Sun, 1 Nov 2026')
+    setLocale('id')
+    expect(formatDateWeekdayLong('2026-11-01')).toBe('Minggu, 1 Nov 2026')
+    expect(formatDateWeekdayLong('2026-11-04')).toBe('Rabu, 4 Nov 2026')
+    expect(formatDateWeekday('2026-11-01')).toBe('Min, 1 Nov 2026')
+    expect(formatDateWeekdayLong('')).toBe('')
+    expect(formatDateWeekdayLong('2026-13-45')).toBe('')
+    expect(formatDateWeekdayLong('soon')).toBe('')
   })
 })

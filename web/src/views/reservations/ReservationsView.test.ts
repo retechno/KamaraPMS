@@ -486,3 +486,47 @@ describe('ReservationsView', () => {
     expect(lastQuery().q ?? '').toBe('')
   })
 })
+
+describe('ReservationsView, the date filters written as dd/mm/yyyy', () => {
+  it('filters by the dates that were typed, and leaves a date that is not one out of the query', async () => {
+    const w = await mountView(['reservation.read'])
+    const fields = w.findAll('form[role=search] input[data-slot=date-input-text]')
+    expect(fields).toHaveLength(4)
+    await fields[0]!.setValue('01/10/2026')
+    await fields[3]!.setValue('09102026')
+    await fields[1]!.setValue('31/02/2026')
+    await fields[1]!.trigger('blur')
+    expect(fields[1]!.attributes('aria-invalid')).toBe('true')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(lastQuery()).toMatchObject({ arrival_from: '2026-10-01', arrival_to: undefined, departure_to: '2026-10-09' })
+    await w.get('[data-testid=clear-filters]').trigger('click')
+    await flushPromises()
+    // the date fields are drawn again: they write nothing, not the text that was refused
+    const after = w.findAll('form[role=search] input[data-slot=date-input-text]')
+    expect(after.map((f) => (f.element as HTMLInputElement).value)).toEqual(['', '', '', ''])
+    expect(after.every((f) => (f.element as HTMLInputElement).validity.valid)).toBe(true)
+    expect(lastQuery()).toMatchObject({ arrival_from: undefined, departure_to: undefined })
+  })
+})
+
+describe('ReservationsView, what is seen is what is sent', () => {
+  it('does not search while a date filter is not valid, and searches when it is corrected', async () => {
+    const w = await mountView(['reservation.read'])
+    const fields = w.findAll('form[role=search] input[data-slot=date-input-text]')
+    await fields[0]!.setValue('01/10/2026')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    const asked = listCalls().length
+    await fields[1]!.setValue('31/02/2026')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(listCalls()).toHaveLength(asked) // nothing was asked
+    expect(fields[1]!.attributes('aria-invalid')).toBe('true')
+    expect(w.get('form[role=search]').text()).toContain('31/02/2026 is not on the calendar')
+    await fields[1]!.setValue('30/11/2026')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(lastQuery()).toMatchObject({ arrival_from: '2026-10-01', arrival_to: '2026-11-30' })
+  })
+})

@@ -63,6 +63,60 @@ export function addDays(date: string, days: number): string {
   return t.toISOString().slice(0, 10)
 }
 
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28
+  return [4, 6, 9, 11].includes(month) ? 30 : 31
+}
+
+function isoOf(year: number, month: number, day: number): string | null {
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/**
+ * What a person types in a date field -> "YYYY-MM-DD", or null when it is not a real date. It accepts d/m/yyyy with "/", "-" or "." between the parts,
+ * eight digits without separators (ddmmyyyy) and a pasted ISO date. A year of two digits is refused (it could mean two centuries). The calendar is checked
+ * with arithmetic on the numbers (leap years, 31 April), never with `new Date`, which would move a date by the time zone.
+ */
+export function parseDisplayDate(text: string): string | null {
+  const s = text.trim()
+  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (m) return isoOf(Number(m[1]), Number(m[2]), Number(m[3]))
+  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s) ?? /^(\d{2})(\d{2})(\d{4})$/.exec(s)
+  if (m) return isoOf(Number(m[3]), Number(m[2]), Number(m[1]))
+  return null
+}
+
+/** Whether a text has the shape of a whole date (d/m/yyyy, eight digits, an ISO date) whether or not the date exists: "31/02/2026" does, "02/11" does not. */
+export function looksLikeWholeDate(text: string): boolean {
+  const s = text.trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{1,2}[/.-]\d{1,2}[/.-]\d{4}$/.test(s) || /^\d{8}$/.test(s)
+}
+
+/** "2026-11-02" -> "02/11/2026" in every language (a hotel in Indonesia reads one order, and so does its English screen); anything that is not an ISO date gives "". */
+export function formatDisplayDate(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '')
+  if (!m || !isoOf(Number(m[1]), Number(m[2]), Number(m[3]))) return ''
+  return `${m[3]}/${m[2]}/${m[1]}`
+}
+
+/**
+ * The mask of the date field while a person types: digits alone become dd/mm/yyyy ("02112026" -> "02/11/2026", at most eight digits); a text that already has
+ * separators (typed by hand or a pasted ISO date) is left as it is, cut at ten characters. Characters that cannot be part of a date are dropped.
+ */
+export function maskDateInput(raw: string): string {
+  const clean = raw.replace(/[^\d/.-]/g, '')
+  // Slashes that sit where the mask itself puts them ("02/1" while typing digit by digit) do not make the text hand-written.
+  const maskSlashes = !/[.-]/.test(clean) && [...clean].every((c, i) => c !== '/' || i === 2 || i === 5)
+  if (/^\d*$/.test(clean) || maskSlashes) {
+    const d = clean.replace(/\//g, '').slice(0, 8)
+    if (d.length <= 2) return d
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`
+  }
+  return clean.slice(0, 10)
+}
+
 /** IANA zones known to this browser (falls back to a short list on old engines). */
 export function timeZones(): string[] {
   const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] }

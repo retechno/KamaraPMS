@@ -35,6 +35,14 @@ export const en = {
     noResults: 'Nothing to show.',
     required: 'Required',
   },
+  dateInput: {
+    placeholder: 'dd/mm/yyyy',
+    openCalendar: 'Open the calendar',
+    invalid: 'Write as dd/mm/yyyy',
+    notOnCalendar: '{text} is not on the calendar',
+    tooEarly: 'Earliest date: {date}.',
+    tooLate: 'Latest date: {date}.',
+  },
   nav: {
     pinned: 'Pinned',
     recent: 'Recently opened',

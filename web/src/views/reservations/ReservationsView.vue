@@ -16,6 +16,7 @@ import AssignRoomsSheet from '@/components/AssignRoomsSheet.vue'
 import AutoAssignDialog from '@/components/AutoAssignDialog.vue'
 import RoomPicker from '@/components/RoomPicker.vue'
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { RowAction } from '@/components/app/rowActions'
@@ -216,7 +217,9 @@ function search(): void {
   void load()
 }
 
+const dateKey = ref(0)
 function clear(): void {
+  dateKey.value++ // the date fields write their dates again, also when the model did not change (it held the text of a date that was refused)
   for (const k of FIELDS) filter[k] = ''
   search()
 }
@@ -253,7 +256,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
 
   <template v-else>
-    <FilterBar class="mb-4 flex flex-wrap items-end gap-3" role="search" data-testid="filters" :active="activeFilters" @submit="search">
+    <FilterBar class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-7" role="search" data-testid="filters" :active="activeFilters" @submit="search">
       <template #search>
         <FormField class="min-w-52 flex-1" :label="t('reservations.search')">
         <template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('reservations.searchPlaceholder')" /></template>
@@ -270,16 +273,16 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         </template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.arrivalFrom')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.arrivalFrom" name="arrival_from" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.arrivalFrom" name="arrival_from" /></template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.arrivalTo')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.arrivalTo" name="arrival_to" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.arrivalTo" name="arrival_to" /></template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.departureFrom')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.departureFrom" name="departure_from" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.departureFrom" name="departure_from" /></template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.departureTo')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.departureTo" name="departure_to" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.departureTo" name="departure_to" /></template>
       </FormField>
       <FormField v-if="types.length" class="w-36" :label="t('reservations.roomType')">
         <template #default="{ id }">

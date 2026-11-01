@@ -14,6 +14,7 @@ import RateOverrideSection, { type OverrideNight, type RateChange } from '@/comp
 import RestrictionOverride from '@/components/RestrictionOverride.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -24,6 +25,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
 import { guestLabel, newIdempotencyKey } from '@/utils/reservations'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -221,12 +223,12 @@ watch(businessDate, (bd) => {
 
   <Card v-else>
     <RestrictionOverride v-if="refusal" :violations="refusal.violations" :overridable="refusal.overridable" :busy="busy" :error="error" @override="retryWithOverride" @cancel="refusal = null" />
-    <form v-autofocus novalidate data-testid="walkin-form" @submit.prevent="onSubmit">
+    <form v-autofocus novalidate data-testid="walkin-form" @submit.prevent="guardForm($event) && onSubmit()">
       <CardHeader><CardTitle>{{ t('walkIn.stay') }}</CardTitle></CardHeader>
       <CardContent>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
           <FormField :label="t('walkIn.departure')" :error="fieldError('departure_date')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.departure" name="departure" type="date" :min="businessDate" :aria-invalid="invalid" @change="loadRooms" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.departure" name="departure" :min="businessDate" :aria-invalid="invalid" @change="loadRooms" /></template>
           </FormField>
           <FormField :label="t('walkIn.roomType')">
             <template #default="{ id }">

@@ -15,6 +15,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import RateOverrideSection, { type OverrideNight, type RateChange } from '@/components/RateOverrideSection.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -25,6 +26,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
 import { guestLabel, newIdempotencyKey } from '@/utils/reservations'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -198,6 +200,7 @@ async function loadBeds(): Promise<void> {
   }
 }
 
+const searchForm = ref<HTMLFormElement | null>(null)
 const bookForm = ref<HTMLFormElement | null>(null)
 
 function pick(type: TypeOffer, plan: PlanOffer): void {
@@ -303,12 +306,12 @@ async function book(approval?: Approval): Promise<void> {
 
   <template v-else>
     <Card class="mb-4">
-      <form v-autofocus class="flex flex-wrap items-end gap-3 p-4" role="search" novalidate data-testid="search-form" @submit.prevent="runSearch">
+      <form ref="searchForm" v-autofocus class="flex flex-wrap items-end gap-x-3 gap-y-7 px-4 pb-8 pt-4" role="search" novalidate data-testid="search-form" @submit.prevent="guardForm($event) && runSearch()">
         <FormField class="w-44" :label="t('newReservation.arrival')">
-          <template #default="{ id, invalid }"><Input :id="id" v-model="search.arrival" name="arrival" type="date" :min="businessDate" :aria-invalid="!!fieldError('arrival_date') || invalid" /></template>
+          <template #default="{ id, invalid }"><DateInput :id="id" v-model="search.arrival" name="arrival" :min="businessDate" :aria-invalid="!!fieldError('arrival_date') || invalid" /></template>
         </FormField>
         <FormField class="w-44" :label="t('newReservation.departure')" :error="fieldError('departure_date')">
-          <template #default="{ id, invalid }"><Input :id="id" v-model="search.departure" name="departure" type="date" :min="search.arrival" :aria-invalid="invalid" /></template>
+          <template #default="{ id, invalid }"><DateInput :id="id" v-model="search.departure" name="departure" :min="search.arrival" :aria-invalid="invalid" /></template>
         </FormField>
         <FormField class="w-24" :label="t('newReservation.adults')">
           <template #default="{ id }"><Input :id="id" v-model.number="search.adults" name="adults" type="number" min="1" /></template>
@@ -347,7 +350,7 @@ async function book(approval?: Approval): Promise<void> {
     </Card>
 
     <Card v-if="picked" class="mb-4 border-primary/50">
-      <form ref="bookForm" novalidate data-testid="book-form" @submit.prevent="submit">
+      <form ref="bookForm" novalidate data-testid="book-form" @submit.prevent="guardForm($event, searchForm) && submit()">
         <CardHeader>
           <CardTitle>{{ t('newReservation.bookTitle', { type: picked.type.code, plan: picked.plan.code }) }}</CardTitle>
           <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: formatDate(search.arrival), departure: formatDate(search.departure), adults: search.adults, children: search.children }) }}</p>

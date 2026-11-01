@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { useLayoutMode } from '@/composables/useLayoutMode'
 import { t } from '@/i18n'
+import { guardForm } from '@/utils/forms'
 
 /**
  * The filters of a list. From a tablet up they are the row of fields the page always had, in a form: the search field, the other filters, and the buttons (`#search`, the
@@ -29,21 +30,23 @@ const phoneAttrs = computed(() => {
   return rest
 })
 
-function submit(): void {
+/** The filters go out only when the date fields hold dates (a form that holds one that is not valid stops and says which). */
+function submit(event?: Event): void {
+  if (event && !guardForm(event)) return
   open.value = false
   emit('submit')
 }
 </script>
 
 <template>
-  <component :is="plain ? 'div' : 'form'" v-if="!phone" v-bind="attrs" data-slot="filter-bar" @submit.prevent="emit('submit')">
+  <component :is="plain ? 'div' : 'form'" v-if="!phone" v-bind="attrs" data-slot="filter-bar" @submit.prevent="submit($event)">
     <slot name="search" />
     <slot />
     <slot name="actions" />
   </component>
 
   <template v-else>
-    <component :is="plain ? 'div' : 'form'" v-bind="phoneAttrs" class="mb-4 flex items-end gap-2" data-slot="filter-bar" @submit.prevent="emit('submit')">
+    <component :is="plain ? 'div' : 'form'" v-bind="phoneAttrs" class="mb-4 flex items-end gap-2" data-slot="filter-bar" @submit.prevent="submit($event)">
       <div v-if="$slots.search" class="min-w-0 flex-1"><slot name="search" /></div>
       <Button v-if="hasFilters" type="button" variant="outline" :class="$slots.search ? 'shrink-0' : 'w-full'" data-testid="open-filters" @click="open = true">
         <SlidersHorizontal />{{ t('filters.button') }}<span v-if="active" data-testid="filter-count">({{ active }})</span>
@@ -57,7 +60,7 @@ function submit(): void {
           class="mt-3 grid gap-4 [&_[data-slot=form-field]]:w-full [&_[data-slot=form-field]]:max-w-none"
           novalidate
           data-testid="filter-sheet-form"
-          @submit.prevent="submit"
+          @submit.prevent="submit($event)"
         >
           <slot />
           <div class="flex flex-wrap justify-end gap-2" data-slot="filter-actions">

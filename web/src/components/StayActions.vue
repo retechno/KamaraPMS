@@ -12,6 +12,7 @@ import RateOverrideSection, { type OverrideNight, type RateChange } from '@/comp
 import RestrictionOverride from '@/components/RestrictionOverride.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -22,6 +23,7 @@ import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
 import { guestLabel } from '@/utils/reservations'
 import { refusalOf, type RestrictionOverrideInput, type RestrictionRefusal } from '@/utils/restrictions'
+import { guardForm } from '@/utils/forms'
 
 /** `initial` opens a dialog as the panel appears: the in-house list links to a stay with the action the clerk chose. */
 const props = defineProps<{ detail: StayDetail; initial?: 'move' | 'extend' }>()
@@ -284,7 +286,7 @@ async function addGuest(g: Guest): Promise<void> {
 <template v-if="error.code === 'ROOM_NOT_AVAILABLE_FOR_EXTENSION'"> {{ t('stayActions.extensionHint') }}</template>
 </ErrorNotice>
 
-      <form v-if="open === 'move'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="move-form" @submit.prevent="submitMove">
+      <form v-if="open === 'move'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="move-form" @submit.prevent="guardForm($event) && submitMove()">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.moveTitle') }}</h2>
         <div class="grid gap-4 sm:grid-cols-3">
           <FormField :label="t('stayActions.roomType')">
@@ -319,12 +321,12 @@ async function addGuest(g: Guest): Promise<void> {
         </div>
       </form>
 
-      <form v-if="open === 'departure'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="onSubmitDeparture">
+      <form v-if="open === 'departure'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="guardForm($event) && onSubmitDeparture()">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.departureTitle') }}</h2>
         <FormField class="max-w-xs" :label="t('stayActions.departure')" :error="fieldError('departure_date')">
-          <template #default="{ id, invalid }"><Input :id="id" v-model="departure" name="departure" type="date" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>
+          <template #default="{ id, invalid }"><DateInput :id="id" v-model="departure" name="departure" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>
         </FormField>
-        <p class="mb-0 mt-2 text-sm text-muted-foreground">{{ t('stayActions.departureHint') }}</p>
+        <p class="mb-0 mt-6 text-sm text-muted-foreground">{{ t('stayActions.departureHint') }}</p>
         <RateOverrideSection v-if="canChangeRate && extending && extraNights.length" v-model="rate" class="mt-3" :nights="extraNights" />
         <div class="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" @click="open = ''">{{ t('common.cancel') }}</Button>

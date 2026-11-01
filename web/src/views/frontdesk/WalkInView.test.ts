@@ -146,3 +146,46 @@ describe('WalkInView', () => {
     expect((POST.mock.calls[0]?.[1] as { body: { new_guest?: unknown } }).body.new_guest).toBeUndefined()
   })
 })
+
+describe('WalkInView, the departure written as dd/mm/yyyy', () => {
+  it('looks for rooms again only when a whole date is typed, and refuses a date before the business date', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    const field = w.get('input[data-slot=date-input-text]')
+    const searches = () => GET.mock.calls.filter(([p]) => String(p).endsWith('/availability/rooms'))
+    expect((field.element as HTMLInputElement).value).toBe('01/10/2026')
+    const before = searches().length
+    await field.setValue('02/10')
+    await flushPromises()
+    expect(searches()).toHaveLength(before)
+    await field.setValue('03/10/2026')
+    await flushPromises()
+    expect(searches()).toHaveLength(before + 1)
+    expect(JSON.stringify(searches().at(-1)?.[1])).toContain('"departure":"2026-10-03"')
+    await field.setValue('29/09/2026') // before the business date
+    await flushPromises()
+    expect(w.text()).toContain('Earliest date: 30/09/2026.')
+    expect(searches()).toHaveLength(before + 1)
+    expect((w.get('input[name=departure]').element as HTMLInputElement).value).toBe('2026-10-03')
+  })
+})
+
+describe('WalkInView, what is seen is what is sent', () => {
+  it('does not walk a guest in while the departure is not a date', async () => {
+    const { w, push } = mountView()
+    await flushPromises()
+    await w.get('input[name=last_name]').setValue('Walker')
+    const departure = w.get('input[data-slot=date-input-text]')
+    await departure.setValue('31/02/2026')
+    await w.get('form[data-testid=walkin-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled()
+    expect(departure.attributes('aria-invalid')).toBe('true')
+    expect(w.text()).toContain('31/02/2026 is not on the calendar')
+    await departure.setValue('02/10/2026')
+    await w.get('form[data-testid=walkin-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).toHaveBeenCalledTimes(1)
+  })
+})
