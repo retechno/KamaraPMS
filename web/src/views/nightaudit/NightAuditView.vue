@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CheckCircle2, RefreshCw } from 'lucide-vue-next'
-import { computed, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { NightAuditPackManifest, NightAuditPreview, NightAuditResult } from '@/api/types'
@@ -20,10 +20,14 @@ import { methodName } from '@/views/reports/day/dayLabels'
 import { openPdf } from '@/utils/documents'
 import { findingText } from '@/utils/findings'
 import { useAuthStore } from '@/stores/auth'
+import { useNightAuditStore } from '@/stores/nightAudit'
 import { usePropertyStore } from '@/stores/property'
+import { chargeIssueCount, pendingSteps } from '@/utils/nightAuditReadiness'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
+const audit = useNightAuditStore()
+const route = useRoute()
 
 const preview = ref<NightAuditPreview | null>(null)
 const result = ref<NightAuditResult | null>(null)
@@ -71,11 +75,11 @@ const stockBlockers = computed(() => blockers.value?.stock ?? [])
 const openShifts = computed(() => blockers.value?.open_shifts ?? [])
 /** Where a stock finding is dealt with: a count in the counts, the rest in the amenities. */
 const stockLink = (code: string): string => (code === 'INVENTORY_COUNT_OPEN' ? '/inventory/counts' : code.startsWith('AMENITY') ? '/inventory/amenities' : '/inventory')
-const chargeIssues = computed(() => (blockers.value?.charge_errors.length ?? 0) + (blockers.value?.invalid_charges.length ?? 0) + accountingBlockers.value.length + outletBlockers.value.length + stockBlockers.value.length + openShifts.value.length)
+const chargeIssues = computed(() => chargeIssueCount(preview.value))
 const allSelected = computed(() => arrivals.value.length > 0 && noShow.selected.length === arrivals.value.length)
 
-// How many steps still need someone: the clock, the arrivals, the departures and the room charges.
-const attention = computed(() => (preview.value && !preview.value.time_guard_ok ? 1 : 0) + (arrivals.value.length ? 1 : 0) + (departures.value.length ? 1 : 0) + (chargeIssues.value ? 1 : 0))
+// How many steps still need someone: the clock, the arrivals, the departures and the room charges. The chip of the top bar and the Today card say the same, from the same rule.
+const attention = computed(() => pendingSteps(preview.value).count)
 
 const arrivalColumns = computed<Column<(typeof arrivals.value)[number]>[]>(() => [
   { key: 'select', label: '', class: 'w-8' },
@@ -98,6 +102,8 @@ async function load(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/night-audit/preview', { params: { path: { propertyId } } })
     preview.value = data ?? null
+    audit.set(propertyId, preview.value) // the chip and the Today card read what this page has just read
+    void scrollToStep()
     // The selection offered is what the staff sees now; a line that has gone is dropped.
     noShow.selected = noShow.selected.filter((id) => arrivals.value.some((a) => a.reservation_room_id === id))
   } catch (e) {
@@ -105,6 +111,16 @@ async function load(): Promise<void> {
   } finally {
     busy.value = false
   }
+}
+
+/** A link from the chip or from Today leads to the first step that needs someone (#arrivals, #departures, #charges, #guard). */
+let scrolled = false
+async function scrollToStep(): Promise<void> {
+  const id = route.hash.replace(/^#/, '')
+  if (!id || scrolled) return
+  scrolled = true // once: a refresh does not pull the page back
+  await nextTick()
+  document.getElementById(id)?.scrollIntoView?.({ block: 'start' })
 }
 
 function toggleAll(): void {
@@ -229,14 +245,14 @@ watch(pid, () => {
     </Card>
 
     <template v-if="preview">
-      <StepCard :step="1" :title="t('nightAudit.stepTime')" :state="preview.time_guard_ok ? 'ok' : 'blocked'" data-testid="guard">
+      <StepCard :step="1" :title="t('nightAudit.stepTime')" :state="preview.time_guard_ok ? 'ok' : 'blocked'" id="guard" data-testid="guard">
         <p v-if="preview.time_guard_ok" class="m-0 text-sm">{{ t('nightAudit.timeOk') }}</p>
         <p v-else class="alert warning m-0" data-testid="too-early">
           {{ t('nightAudit.tooEarly', { from: $dateTime(preview.night_audit_allowed_from), now: $dateTime(preview.property_local_time) }) }}
         </p>
       </StepCard>
 
-      <StepCard :step="2" :title="t('nightAudit.stepArrivals')" :state="arrivals.length ? 'blocked' : 'ok'" :summary="`(${arrivals.length})`" data-testid="arrivals">
+      <StepCard :step="2" :title="t('nightAudit.stepArrivals')" :state="arrivals.length ? 'blocked' : 'ok'" :summary="`(${arrivals.length})`" id="arrivals" data-testid="arrivals">
         <p v-if="!arrivals.length" class="m-0 text-sm text-muted-foreground" data-testid="no-arrivals">{{ t('nightAudit.allArrived') }}</p>
         <template v-else>
           <p class="mb-3 mt-0 text-sm text-muted-foreground">
@@ -264,7 +280,7 @@ watch(pid, () => {
         </template>
       </StepCard>
 
-      <StepCard :step="3" :title="t('nightAudit.stepDepartures')" :state="departures.length ? 'blocked' : 'ok'" :summary="`(${departures.length})`" data-testid="departures">
+      <StepCard :step="3" :title="t('nightAudit.stepDepartures')" :state="departures.length ? 'blocked' : 'ok'" :summary="`(${departures.length})`" id="departures" data-testid="departures">
         <p v-if="!departures.length" class="m-0 text-sm text-muted-foreground">{{ t('nightAudit.nobodyOverdue') }}</p>
         <template v-else>
           <p class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('nightAudit.departuresHelp') }}</p>
@@ -275,7 +291,7 @@ watch(pid, () => {
         </template>
       </StepCard>
 
-      <StepCard :step="4" :title="t('nightAudit.stepCharges')" :state="chargeIssues ? 'blocked' : 'ok'" data-testid="charges">
+      <StepCard :step="4" :title="t('nightAudit.stepCharges')" :state="chargeIssues ? 'blocked' : 'ok'" id="charges" data-testid="charges">
         <p class="m-0 text-sm" data-testid="charge-counts">
           {{ t('nightAudit.chargeCountsBefore', { missing: preview.missing_charges.count, tonight: preview.tonight_charges.count, total: $money(preview.tonight_charges.total) }) }}
           <RouterLink to="/room-charges">{{ t('nav.items.roomCharges') }}</RouterLink> {{ t('nightAudit.chargeCountsAfter') }}

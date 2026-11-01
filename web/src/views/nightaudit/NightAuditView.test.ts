@@ -6,6 +6,7 @@ import { toastText } from '@/test/toasts'
 import { ApiError } from '@/api/problem'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useNightAuditStore } from '@/stores/nightAudit'
 import { usePropertyStore } from '@/stores/property'
 import { setDisplayTimeZone } from '@/utils/format'
 import NightAuditView from './NightAuditView.vue'
@@ -216,6 +217,25 @@ describe('NightAuditView', () => {
     const early = mountView({ ...clean(), time_guard_ok: false, can_run: false })
     await flushPromises()
     expect(early.get('[data-testid=readiness]').text()).toBe('1 step(s) need attention')
+  })
+
+  it('tells the chip of the top bar and the Today card what it has read: the same preview, so the same number of steps and the same first step', async () => {
+    const w = mountView(blocked())
+    await flushPromises()
+    const shared = useNightAuditStore()
+    expect(shared.pending).toEqual({ count: 3, first: 'arrivals' })
+    expect(w.get('[data-testid=readiness]').text()).toBe('3 step(s) need attention') // the number the page shows is the one the others show
+    const ready = mountView()
+    await flushPromises()
+    expect(useNightAuditStore().pending).toEqual({ count: 0, first: null })
+    expect(ready.get('[data-testid=readiness]').text()).toBe('Ready to run')
+  })
+
+  it('has an anchor on each step so that a link goes to the first one that needs someone', async () => {
+    const w = mountView(blocked())
+    await flushPromises()
+    expect(['guard', 'arrivals', 'departures', 'charges'].map((id) => w.find(`#${id}`).exists())).toEqual([true, true, true, true])
+    expect(w.get('#arrivals').attributes('data-testid')).toBe('arrivals')
   })
 
   it('marks each step done or in need of attention', async () => {

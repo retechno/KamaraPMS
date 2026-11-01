@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { LayoutMode } from '@/composables/useLayoutMode'
 import { type ThemePreference, THEME_PREFERENCES, useTheme } from '@/composables/useTheme'
+import { useNightAuditStatus } from '@/composables/useNightAuditStatus'
 import { useVisibleNavigation } from '@/composables/useVisibleNavigation'
 import { i18n, LOCALES, setLocale, t, type Locale } from '@/i18n'
 import { cn } from '@/lib/utils'
@@ -63,12 +64,20 @@ const businessDay = computed(() => (property.clock ? formatBusinessDate(property
 const businessDayShort = computed(() => businessDay.value.replace(/ \d{4}$/, ''))
 
 /** Overdue is always in words, in the colour of a warning, at every width; ready and later are a dot on a narrow bar and words from a wide one. */
+const nightAudit = useNightAuditStatus()
 const audit = computed(() => {
-  const c = property.clock
-  if (!c || !auth.can('nightaudit.run', property.currentId)) return null // night audit is for who may run it
-  if (c.night_audit_overdue) return { state: 'overdue' as const, text: t('shell.nightAuditOverdue'), short: t('shell.nightAuditOverdueShort'), dot: 'bg-warning' }
-  if (c.night_audit_allowed) return { state: 'ready' as const, text: t('shell.nightAuditReady'), short: t('shell.nightAuditReady'), dot: 'bg-success' }
-  return { state: 'later' as const, text: t('shell.nightAuditNotYet'), short: t('shell.nightAuditNotYet'), dot: 'bg-muted-foreground' }
+  const state = nightAudit.state.value
+  if (!state) return null // night audit is for who may run it
+  const to = nightAudit.to.value
+  if (state === 'overdue') return { state, to, text: t('shell.nightAuditOverdue'), short: t('shell.nightAuditOverdueShort'), dot: 'bg-warning' }
+  // "ready" is only said when the audit can run now; with steps left it is amber and counts them, and the link goes to the first
+  if (state === 'pending') {
+    const text = t('shell.nightAuditPending', { n: nightAudit.pending.value })
+    return { state, to, text, short: text, dot: 'bg-warning' }
+  }
+  if (state === 'ready') return { state, to, text: t('shell.nightAuditReady'), short: t('shell.nightAuditReady'), dot: 'bg-success' }
+  if (state === 'checking') return { state, to, text: t('shell.nightAuditChecking'), short: t('shell.nightAuditChecking'), dot: 'bg-muted-foreground' }
+  return { state, to, text: t('shell.nightAuditNotYet'), short: t('shell.nightAuditNotYet'), dot: 'bg-muted-foreground' }
 })
 
 const initials = computed(() => {
@@ -128,12 +137,12 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
         <component
           :is="audit ? RouterLink : 'div'"
           v-if="property.clock"
-          v-bind="audit ? { to: '/night-audit' } : {}"
+          v-bind="audit ? { to: audit.to } : {}"
           :class="
             cn(
               'inline-flex h-9 items-center whitespace-nowrap rounded-md border no-underline',
               phone ? 'gap-1.5 px-2 text-xs' : 'gap-2 px-2.5 text-sm',
-              audit?.state === 'overdue' ? 'border-status-noshow-line bg-status-noshow-bg text-status-noshow' : 'border-border bg-background text-foreground',
+              audit?.state === 'overdue' ? 'border-status-noshow-line bg-status-noshow-bg text-status-noshow' : audit?.state === 'pending' ? 'border-warning/50 bg-warning/15 text-warning-text' : 'border-border bg-background text-foreground',
               audit && audit.state !== 'overdue' && 'hover:bg-accent',
             )
           "
@@ -146,7 +155,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
             <!-- the state of the audit under the date: the title of the page keeps the room it needs -->
             <span
               v-if="audit"
-              :class="cn(audit.state === 'overdue' ? 'text-[10px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
+              :class="cn(audit.state === 'overdue' || audit.state === 'pending' ? 'text-[10px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
               :data-state="audit.state"
               data-testid="night-audit-status"
             >{{ audit.short }}</span>
@@ -157,7 +166,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
           </template>
           <span
             v-if="audit && !phone"
-            :class="cn('text-xs', audit.state === 'overdue' ? 'font-semibold' : 'sr-only xl:not-sr-only xl:text-muted-foreground')"
+            :class="cn('text-xs', audit.state === 'overdue' || audit.state === 'pending' ? 'font-semibold' : 'sr-only xl:not-sr-only xl:text-muted-foreground')"
             :data-state="audit.state"
             data-testid="night-audit-status"
           >{{ audit.text }}</span>

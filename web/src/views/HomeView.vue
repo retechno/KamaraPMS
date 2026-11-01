@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { AlertTriangle, BedDouble, CalendarPlus, DoorClosed, DoorOpen, MoonStar, Percent, RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, CheckOutResult, InHouseRow, StayDetail } from '@/api/types'
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { useNightAuditStatus } from '@/composables/useNightAuditStatus'
 import { toast } from '@/composables/useToast'
 import { useToday } from '@/composables/useToday'
 import { t } from '@/i18n'
@@ -152,15 +153,20 @@ interface Attention {
   tone: 'warn' | 'info'
   title: string
   detail: string
-  to?: string
+  to?: RouteLocationRaw
 }
+// The same state as the chip of the top bar: "can run now" only when no step is left, otherwise how many are, and the link goes to the first.
+const nightAudit = useNightAuditStatus()
 const auditAttention = computed<Attention | null>(() => {
   const c = property.clock
-  if (!c || !property.current || !can('nightaudit.run')) return null // night audit is for who may run it
-  const to = '/night-audit'
+  const state = nightAudit.state.value
+  if (!c || !property.current || !state) return null // night audit is for who may run it
+  const to = nightAudit.to.value
   const date = t('today.auditDate', { date: formatBusinessDate(c.business_date) })
-  if (c.night_audit_overdue) return { id: 'audit', tone: 'warn', title: t('today.auditOverdue'), detail: date, to }
-  if (c.night_audit_allowed) return { id: 'audit', tone: 'info', title: t('today.auditReady'), detail: date, to }
+  if (state === 'overdue') return { id: 'audit', tone: 'warn', title: t('today.auditOverdue'), detail: date, to }
+  if (state === 'pending') return { id: 'audit', tone: 'warn', title: t('today.auditPending', { n: nightAudit.pending.value }, nightAudit.pending.value), detail: date, to }
+  if (state === 'checking') return { id: 'audit', tone: 'info', title: t('today.auditChecking'), detail: date, to }
+  if (state === 'ready') return { id: 'audit', tone: 'info', title: t('today.auditReady'), detail: date, to }
   return { id: 'audit', tone: 'info', title: t('today.auditOpens', { time: property.current.night_audit_earliest_time }), detail: date, to }
 })
 const attention = computed<Attention[]>(() => {

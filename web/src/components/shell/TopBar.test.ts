@@ -2,6 +2,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { api } from '@/api/client'
 import { currentLocale, setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { NAV_PERMISSIONS } from '@/test/navAccess'
@@ -15,10 +16,19 @@ const clock = (over: object = {}) => ({
   night_audit_allowed: false, night_audit_overdue: false, ...over,
 })
 
+/** What the preview of the night audit says: nothing in the way, or the arrivals and a shift that are. */
+const previewOf = (over: object = {}) => ({
+  business_date: '2026-09-30', time_guard_ok: true, can_run: true,
+  blockers: { unresolved_arrivals: [], unresolved_departures: [], charge_errors: [], invalid_charges: [], accounting_readiness: [], outlet_bills: [], stock: [], open_shifts: [] }, ...over,
+})
+
 const mounted: VueWrapper[] = []
 const body = <T extends Element = HTMLElement>(sel: string): T | null => document.body.querySelector<T>(sel)
 
-async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[]; permissions?: string[] } = {}) {
+async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[]; permissions?: string[]; preview?: object } = {}) {
+  const GET = api.GET as unknown as ReturnType<typeof vi.fn> // the typed client is too deep for vi.mocked
+  GET.mockReset()
+  GET.mockResolvedValue({ data: opts.preview })
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 1, email: 'rina@hotel.test', full_name: 'Rina Front', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: opts.permissions ?? NAV_PERMISSIONS }] } as never
@@ -119,11 +129,49 @@ describe('TopBar', () => {
       const later = (await mountBar()).w.get('[data-testid=night-audit-status]')
       expect(later.text()).toBe('Night audit later')
       expect(later.attributes('data-state')).toBe('later')
-      const ready = (await mountBar({ clock: clock({ night_audit_allowed: true }) })).w.get('[data-testid=night-audit-status]')
+      const ready = (await mountBar({ clock: clock({ night_audit_allowed: true }), preview: previewOf() })).w.get('[data-testid=night-audit-status]')
       expect(ready.text()).toBe('Night audit ready')
+      expect(ready.attributes('data-state')).toBe('ready')
       const overdue = await mountBar({ clock: clock({ night_audit_allowed: true, night_audit_overdue: true }) })
       expect(overdue.w.get('[data-testid=night-audit-status]').text()).toBe('Night audit overdue')
       expect(overdue.w.get('[data-testid=business-date]').classes()).toContain('text-status-noshow') // the colour of a warning
+    })
+
+    it('says "ready" only when the audit can run now: with steps left it is amber, counts them and links to the first', async () => {
+      const stuck = previewOf({
+        can_run: false,
+        blockers: { ...previewOf().blockers, unresolved_arrivals: [{ reservation_room_id: 1 }], unresolved_departures: [{ stay_id: 2 }, { stay_id: 3 }], open_shifts: [{ id: 9 }] },
+      })
+      const { w } = await mountBar({ clock: clock({ night_audit_allowed: true }), preview: stuck })
+      const status = w.get('[data-testid=night-audit-status]')
+      expect(status.text()).toBe('Night audit · 3 pending') // arrivals, departures, room charges (the shift): three steps
+      expect(status.attributes('data-state')).toBe('pending')
+      expect(status.classes()).not.toContain('sr-only') // in words, like overdue
+      const chip = w.get('[data-testid=business-date]')
+      expect(chip.attributes('href')).toBe('/night-audit#arrivals') // the first that needs someone
+      expect(chip.classes()).toContain('text-warning-text')
+      expect(w.text()).not.toContain('Night audit ready')
+    })
+
+    it('does not say "ready" before the preview is known, and does not ask for it before the audit is due', async () => {
+      const unknown = await mountBar({ clock: clock({ night_audit_allowed: true }) }) // the preview cannot be read
+      expect(unknown.w.get('[data-testid=night-audit-status]').attributes('data-state')).toBe('checking')
+      expect(unknown.w.get('[data-testid=night-audit-status]').text()).toBe('Night audit · checking')
+      await mountBar({ clock: clock({ night_audit_allowed: false }) }) // too early
+      expect(api.GET).not.toHaveBeenCalled()
+      await mountBar({ clock: clock({ night_audit_allowed: true, night_audit_overdue: true }) }) // overdue is told without the steps
+      expect(api.GET).not.toHaveBeenCalled()
+      await mountBar({ clock: clock({ night_audit_allowed: true }), permissions: ['housekeeping.read'] }) // who may not run it asks for nothing
+      expect(api.GET).not.toHaveBeenCalled()
+    })
+
+    it('speaks Indonesian: "Audit malam siap" and "Audit malam · 1 tertunda"', async () => {
+      setLocale('id')
+      const ok = await mountBar({ clock: clock({ night_audit_allowed: true }), preview: previewOf() })
+      expect(ok.w.get('[data-testid=night-audit-status]').text()).toBe('Audit malam siap')
+      const stuck = await mountBar({ clock: clock({ night_audit_allowed: true }), preview: previewOf({ can_run: false, time_guard_ok: true, blockers: { ...previewOf().blockers, unresolved_departures: [{ stay_id: 2 }] } }) })
+      expect(stuck.w.get('[data-testid=night-audit-status]').text()).toBe('Audit malam · 1 tertunda')
+      expect(stuck.w.get('[data-testid=business-date]').attributes('href')).toBe('/night-audit#departures')
     })
 
     it('keeps "overdue" in words at every width, and lets "ready" and "later" shrink to a dot on a narrow bar', async () => {
