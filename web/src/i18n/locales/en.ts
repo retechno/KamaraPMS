@@ -1233,6 +1233,8 @@ export const en = {
     legendCheckedIn: 'Checked in',
     legendBlocked: 'Blocked (OOO / OOS)',
     legendToday: 'Business date',
+    legendArrives: 'Arrives on the business date',
+    legendDeparts: 'Leaves on the business date',
     notAssigned: 'Not yet assigned',
     bookings: '{n} booking(s)',
     soldAvailable: 'sold / available',

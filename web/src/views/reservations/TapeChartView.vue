@@ -73,7 +73,7 @@ function shift(n: number): void {
 
 // A booking that is still to come is a light blue bar with a blue outline; a guest in the house is the same blue solid, so the two differ in weight and not only in hue. The legend is the same map.
 const legend = computed(() => [
-  ...statusLegend('reservation', ['CONFIRMED', 'CHECKED_IN']).map((e) => ({ ...e, label: t(e.status === 'CHECKED_IN' ? 'tapeChart.legendCheckedIn' : 'tapeChart.legendConfirmed') })),
+  ...statusLegend('reservation', ['CONFIRMED', 'CHECKED_IN']).map((e) => ({ ...e, swatch: e.status === 'CONFIRMED' ? 'border-status-inhouse bg-status-booked-line' : e.swatch, label: t(e.status === 'CHECKED_IN' ? 'tapeChart.legendCheckedIn' : 'tapeChart.legendConfirmed') })),
   { status: 'BLOCKED', variant: 'ooo', swatch: statusSwatch('block', 'OOO').swatch, label: t('tapeChart.legendBlocked') },
 ])
 
@@ -97,7 +97,14 @@ const placed = (bookings: TapeBooking[]): Placed[] => bookings.map(place).filter
 
 const blockPlaced = (room: TapeRoom) => room.blocks.map((b) => ({ block: b, c: columnsOf(b.start_date, b.end_date, start.value, days.value) })).filter((x) => x.c !== null)
 
-const barClass = (b: TapeBooking) => cn('flex h-8 min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap border-y px-1.5 text-left text-[13px] leading-none no-underline', statusSwatch('reservation', b.status).fill, b.status === 'CONFIRMED' && 'border-status-inhouse')
+// A booking to come is the action of the day (the arrivals), so its bar has more body than the pale tile of the status badge: a stronger blue, dark text, the outline of the stay in house.
+const CONFIRMED_FILL = 'border-status-inhouse bg-status-booked-line text-foreground'
+const barClass = (b: TapeBooking) => cn('flex h-8 min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap border-y px-1.5 text-left text-[13px] leading-none no-underline', b.status === 'CONFIRMED' ? CONFIRMED_FILL : statusSwatch('reservation', b.status).fill)
+
+// The ends of today: a thick dark edge on the left of a booking that arrives on the business date, and on the right of a stay that leaves on it (not the edge of a segment, which is a move of room).
+const arrivesToday = (p: Placed): boolean => p.booking.status === 'CONFIRMED' && p.arrival === businessDate.value && !p.clippedLeft
+const departsToday = (p: Placed): boolean => isOpenStay(p.booking) && p.departure === businessDate.value && !p.clippedRight
+const endClass = (p: Placed) => cn(arrivesToday(p) && 'border-l-4 border-l-foreground', departsToday(p) && 'border-r-4 border-r-foreground')
 
 // ---- the menu of a block, and the dialogs it and the drag lead to
 const menu = ref<string | null>(null)
@@ -324,6 +331,8 @@ const ghost = computed(() => {
     <ul class="m-0 mb-3 flex list-none flex-wrap gap-4 p-0 text-[13px] text-muted-foreground" data-testid="legend">
       <li v-for="l in legend" :key="l.status" class="flex items-center gap-1.5" :data-legend="l.status"><span :class="cn('h-3 w-5 rounded-sm border', l.swatch)" aria-hidden="true" />{{ l.label }}</li>
       <li class="flex items-center gap-1.5"><span class="h-3 w-5 rounded-sm bg-primary/10 ring-1 ring-primary/40" aria-hidden="true" />{{ t('tapeChart.legendToday') }}</li>
+      <li class="flex items-center gap-1.5" data-legend="ARRIVES_TODAY"><span class="h-3 w-5 rounded-sm border-y border-l-4 border-status-inhouse border-l-foreground bg-status-booked-line" aria-hidden="true" />{{ t('tapeChart.legendArrives') }}</li>
+      <li class="flex items-center gap-1.5" data-legend="DEPARTS_TODAY"><span class="h-3 w-5 rounded-sm border-y border-r-4 border-status-inhouse border-r-foreground bg-status-inhouse" aria-hidden="true" />{{ t('tapeChart.legendDeparts') }}</li>
     </ul>
     <p v-if="rights.update || rights.move" class="m-0 mb-3 text-[13px] text-muted-foreground" data-testid="tape-hint">{{ fine ? t('tapeChart.hintDrag') : t('tapeChart.hintMenu') }}</p>
     <p v-if="pullRefusal" class="alert warning m-0 mb-3" role="status" data-testid="tape-pull-refusal">{{ pullRefusal }}</p>
@@ -374,7 +383,8 @@ const ghost = computed(() => {
               <Popover :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
                 <PopoverTrigger as-child>
                   <button
-                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && (canMove(p.booking, rights)) && 'cursor-grab', drag?.active && drag.booking === p.booking && drag.kind === 'move' && 'opacity-40', pullRefusal && drag?.booking === p.booking && 'ring-2 ring-destructive')"
+                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && (canMove(p.booking, rights)) && 'cursor-grab', drag?.active && drag.booking === p.booking && drag.kind === 'move' && 'opacity-40', pullRefusal && drag?.booking === p.booking && 'ring-2 ring-destructive', endClass(p))"
+                    :data-arrives-today="arrivesToday(p) || undefined" :data-departs-today="departsToday(p) || undefined"
                     :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-${room.room_number}-${p.start >= 0 ? dates[p.start] : ''}`" :data-booking="p.booking.reservation_room_id"
                     :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })" aria-haspopup="menu"
                     :title="`${p.booking.confirmation_number} ${p.booking.guest_name ?? ''}`"
@@ -447,7 +457,8 @@ const ghost = computed(() => {
               <Popover v-for="p in lane" :key="p.key" :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
                 <PopoverTrigger as-child>
                   <button
-                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40')"
+                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40', endClass(p))"
+                    :data-arrives-today="arrivesToday(p) || undefined"
                     :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-unassigned-${p.booking.reservation_room_id}`" :data-booking="p.booking.reservation_room_id" aria-haspopup="menu"
                     :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })"
                     :title="`${p.booking.confirmation_number} ${p.booking.guest_name ?? ''} · ${p.arrival} → ${p.departure}`"

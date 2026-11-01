@@ -1232,6 +1232,8 @@ export const id: Messages = {
     legendCheckedIn: 'Sudah check-in',
     legendBlocked: 'Diblokir (OOO / OOS)',
     legendToday: 'Tanggal bisnis',
+    legendArrives: 'Tiba pada tanggal bisnis',
+    legendDeparts: 'Pulang pada tanggal bisnis',
     notAssigned: 'Belum ditetapkan',
     bookings: '{n} pemesanan',
     soldAvailable: 'terjual / tersedia',

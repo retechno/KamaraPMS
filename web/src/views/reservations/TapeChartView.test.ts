@@ -144,7 +144,8 @@ describe('TapeChartView', () => {
     const w = mountView()
     await flushPromises()
     const confirmed = w.get('[data-testid=bar-101-2026-10-02]').classes()
-    expect(confirmed).toEqual(expect.arrayContaining(['bg-status-booked-bg', 'text-status-booked', 'border-y']))
+    expect(confirmed).toEqual(expect.arrayContaining(['bg-status-booked-line', 'text-foreground', 'border-y'])) // more body than the pale tile of the badge
+    expect(confirmed).not.toContain('bg-status-booked-bg')
     expect(confirmed).not.toContain('bg-status-inhouse')
     expect(confirmed.some((c) => /(^|-)primary($|\/)|success/.test(c))).toBe(false) // no teal and no green: teal is for actions
     const block = w.get('[data-testid=block-102-2026-10-05]') // out of service here: the plain grey; out of order is the stripe (see the legend test)
@@ -155,9 +156,35 @@ describe('TapeChartView', () => {
     const w = mountView()
     await flushPromises()
     const legend = w.get('[data-testid=legend]')
-    expect(legend.get('[data-legend=CONFIRMED] span').classes()).toEqual(expect.arrayContaining(['bg-status-booked-bg']))
+    expect(legend.get('[data-legend=CONFIRMED] span').classes()).toEqual(expect.arrayContaining(['bg-status-booked-line']))
     expect(legend.get('[data-legend=CHECKED_IN] span').classes()).toEqual(expect.arrayContaining(['bg-status-inhouse']))
     expect(legend.get('[data-legend=BLOCKED] span').classes()).toContain('status-hatch')
+  })
+
+  it('marks the booking that arrives on the business date and the stay that leaves on it', async () => {
+    const arriving = { ...booking, reservation_id: 21, reservation_room_id: 21, confirmation_number: 'RES000021', arrival_date: '2026-10-01', departure_date: '2026-10-03' }
+    const leaving = { ...booking, reservation_id: 22, reservation_room_id: 22, confirmation_number: 'RES000022', status: 'CHECKED_IN', stay_id: 3, open_segment: true, arrival_date: '2026-09-28', departure_date: '2026-10-01' }
+    const moved = { ...leaving, reservation_id: 23, reservation_room_id: 23, open_segment: false } // the end of a segment is a move of room, not a departure
+    const data = { ...chart, rooms: [{ ...chart.rooms[0]!, bookings: [booking] }, { ...chart.rooms[1]!, bookings: [arriving] }, { room_id: 3, room_number: '103', room_type_id: 10, room_type_code: 'DLX', bookings: [leaving, moved], blocks: [] }], unassigned: [{ room_type_id: 10, room_type_code: 'DLX', bookings: [{ ...arriving, reservation_id: 24, reservation_room_id: 24 }] }] }
+    const w = mountView(['reservation.read'], data)
+    await flushPromises()
+    const arrive = w.get('[data-testid=bar-102-2026-10-01]')
+    expect(arrive.attributes('data-arrives-today')).toBe('true')
+    expect(arrive.classes()).toEqual(expect.arrayContaining(['border-l-4', 'border-l-foreground']))
+    expect(w.get('[data-testid=bar-101-2026-10-02]').attributes('data-arrives-today')).toBeUndefined() // tomorrow
+    await w.get('[data-testid=unassigned-toggle-DLX]').trigger('click')
+    expect(w.get('[data-testid=bar-unassigned-24]').attributes('data-arrives-today')).toBe('true')
+    // a stay that leaves today only shows on a window that starts before it
+    await w.findAll('button').find((x) => x.text() === 'Week')!.trigger('click')
+    await flushPromises()
+    const leave = w.get('[data-testid=bar-103-2026-09-28]')
+    expect(leave.attributes('data-departs-today')).toBe('true')
+    expect(leave.classes()).toEqual(expect.arrayContaining(['border-r-4', 'border-r-foreground']))
+    expect(leave.attributes('data-arrives-today')).toBeUndefined() // a stay is not an arrival
+    expect(w.find('[data-departs-today]').exists()).toBe(true)
+    expect(w.findAll('[data-departs-today]')).toHaveLength(1) // the closed segment ends on the same day but is not a departure
+    expect(w.get('[data-testid=legend]').text()).toContain('Arrives on the business date')
+    expect(w.get('[data-testid=legend]').text()).toContain('Leaves on the business date')
   })
 
   it('names the weekday over each date and shades the weekend', async () => {
