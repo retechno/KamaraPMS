@@ -505,3 +505,29 @@ describe('NewReservationView: company and group', () => {
     expect(w.find('[data-testid=restriction-notice]').exists()).toBe(false)
   })
 })
+
+describe('NewReservationView, the dates written as dd/mm/yyyy', () => {
+  it('shows the dates as dd/mm/yyyy with their weekday and searches with the dates that were typed', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    const fields = w.findAll('[data-testid=search-form] input[data-slot=date-input-text]')
+    expect(fields.map((f) => (f.element as HTMLInputElement).value)).toEqual(['02/10/2026', '03/10/2026'])
+    expect(w.findAll('[data-testid=search-form] [data-slot=date-input-weekday]').map((p) => p.text())).toEqual(['Fri, 2 Oct 2026', 'Sat, 3 Oct 2026'])
+    await fields[1]!.setValue('05/10/2026')
+    await w.get('form[data-testid=search-form]').trigger('submit')
+    await flushPromises()
+    expect(GET).toHaveBeenLastCalledWith('/api/v1/properties/{propertyId}/availability', {
+      params: { path: { propertyId: 7 }, query: { arrival: '2026-10-02', departure: '2026-10-05', adults: 2, children: 0 } },
+    })
+  })
+
+  it('does not search with an arrival before the business date: the field says so and keeps the last valid date', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    const arrival = w.get('[data-testid=search-form] input[data-slot=date-input-text]')
+    await arrival.setValue('01/10/2026')
+    expect(w.text()).toContain('The earliest date is 02/10/2026.')
+    expect(arrival.attributes('aria-invalid')).toBe('true')
+    expect((w.get('input[name=arrival]').element as HTMLInputElement).value).toBe('2026-10-02')
+  })
+})

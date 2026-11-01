@@ -14,6 +14,7 @@ import RateOverrideSection, { type OverrideNight, type RateChange } from '@/comp
 import RestrictionOverride from '@/components/RestrictionOverride.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -226,7 +227,7 @@ watch(businessDate, (bd) => {
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FormField :label="t('walkIn.departure')" :error="fieldError('departure_date')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.departure" name="departure" type="date" :min="businessDate" :aria-invalid="invalid" @change="loadRooms" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.departure" name="departure" :min="businessDate" :aria-invalid="invalid" @change="loadRooms" /></template>
           </FormField>
           <FormField :label="t('walkIn.roomType')">
             <template #default="{ id }">

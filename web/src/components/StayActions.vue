@@ -12,6 +12,7 @@ import RateOverrideSection, { type OverrideNight, type RateChange } from '@/comp
 import RestrictionOverride from '@/components/RestrictionOverride.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -322,7 +323,7 @@ async function addGuest(g: Guest): Promise<void> {
       <form v-if="open === 'departure'" v-autofocus="formTick" novalidate class="mt-4 border-t border-border pt-4" data-testid="departure-form" @submit.prevent="onSubmitDeparture">
         <h2 class="mb-3 mt-0 text-base font-semibold">{{ t('stayActions.departureTitle') }}</h2>
         <FormField class="max-w-xs" :label="t('stayActions.departure')" :error="fieldError('departure_date')">
-          <template #default="{ id, invalid }"><Input :id="id" v-model="departure" name="departure" type="date" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>
+          <template #default="{ id, invalid }"><DateInput :id="id" v-model="departure" name="departure" :min="addDays(businessDate, 1)" :aria-invalid="invalid" /></template>
         </FormField>
         <p class="mb-0 mt-2 text-sm text-muted-foreground">{{ t('stayActions.departureHint') }}</p>
         <RateOverrideSection v-if="canChangeRate && extending && extraNights.length" v-model="rate" class="mt-3" :nights="extraNights" />

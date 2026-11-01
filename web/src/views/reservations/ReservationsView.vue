@@ -16,6 +16,7 @@ import AssignRoomsSheet from '@/components/AssignRoomsSheet.vue'
 import AutoAssignDialog from '@/components/AutoAssignDialog.vue'
 import RoomPicker from '@/components/RoomPicker.vue'
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { RowAction } from '@/components/app/rowActions'
@@ -270,16 +271,16 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         </template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.arrivalFrom')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.arrivalFrom" name="arrival_from" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" v-model="filter.arrivalFrom" name="arrival_from" /></template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.arrivalTo')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.arrivalTo" name="arrival_to" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" v-model="filter.arrivalTo" name="arrival_to" /></template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.departureFrom')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.departureFrom" name="departure_from" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" v-model="filter.departureFrom" name="departure_from" /></template>
       </FormField>
       <FormField class="w-40" :label="t('reservations.departureTo')">
-        <template #default="{ id }"><Input :id="id" v-model="filter.departureTo" name="departure_to" type="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" v-model="filter.departureTo" name="departure_to" /></template>
       </FormField>
       <FormField v-if="types.length" class="w-36" :label="t('reservations.roomType')">
         <template #default="{ id }">

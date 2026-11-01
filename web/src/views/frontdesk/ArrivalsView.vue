@@ -18,6 +18,7 @@ import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import ReadinessBadge from '@/components/ReadinessBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -204,8 +205,8 @@ watch(checkedInCount, () => void load()) // a check-in made from the room panel
 
   <template v-else>
     <form class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="arrival-filters" @submit.prevent>
-      <FormField float-hint :hint="$weekday(shownDate)" class="w-44" :label="t('frontDesk.page.arrival')">
-        <template #default="{ id }"><Input :id="id" v-model="shownDate" name="date" type="date" /></template>
+      <FormField class="w-44" :label="t('frontDesk.page.arrival')">
+        <template #default="{ id }"><DateInput :id="id" v-model="shownDate" name="date" /></template>
       </FormField>
       <FormField class="w-44" :label="t('frontDesk.arrivals.status')">
         <template #default="{ id }">

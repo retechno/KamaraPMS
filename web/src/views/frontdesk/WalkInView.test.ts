@@ -146,3 +146,26 @@ describe('WalkInView', () => {
     expect((POST.mock.calls[0]?.[1] as { body: { new_guest?: unknown } }).body.new_guest).toBeUndefined()
   })
 })
+
+describe('WalkInView, the departure written as dd/mm/yyyy', () => {
+  it('looks for rooms again only when a whole date is typed, and refuses a date before the business date', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    const field = w.get('input[data-slot=date-input-text]')
+    const searches = () => GET.mock.calls.filter(([p]) => String(p).endsWith('/availability/rooms'))
+    expect((field.element as HTMLInputElement).value).toBe('01/10/2026')
+    const before = searches().length
+    await field.setValue('02/10')
+    await flushPromises()
+    expect(searches()).toHaveLength(before)
+    await field.setValue('03/10/2026')
+    await flushPromises()
+    expect(searches()).toHaveLength(before + 1)
+    expect(JSON.stringify(searches().at(-1)?.[1])).toContain('"departure":"2026-10-03"')
+    await field.setValue('29/09/2026') // before the business date
+    await flushPromises()
+    expect(w.text()).toContain('The earliest date is 30/09/2026.')
+    expect(searches()).toHaveLength(before + 1)
+    expect((w.get('input[name=departure]').element as HTMLInputElement).value).toBe('2026-10-03')
+  })
+})

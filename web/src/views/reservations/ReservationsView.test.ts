@@ -486,3 +486,23 @@ describe('ReservationsView', () => {
     expect(lastQuery().q ?? '').toBe('')
   })
 })
+
+describe('ReservationsView, the date filters written as dd/mm/yyyy', () => {
+  it('filters by the dates that were typed, and leaves a date that is not one out of the query', async () => {
+    const w = await mountView(['reservation.read'])
+    const fields = w.findAll('form[role=search] input[data-slot=date-input-text]')
+    expect(fields).toHaveLength(4)
+    await fields[0]!.setValue('01/10/2026')
+    await fields[3]!.setValue('09102026')
+    await fields[1]!.setValue('31/02/2026')
+    await fields[1]!.trigger('blur')
+    expect(fields[1]!.attributes('aria-invalid')).toBe('true')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(lastQuery()).toMatchObject({ arrival_from: '2026-10-01', arrival_to: undefined, departure_to: '2026-10-09' })
+    await w.get('[data-testid=clear-filters]').trigger('click')
+    await flushPromises()
+    expect((fields[0]!.element as HTMLInputElement).value).toBe('')
+    expect(lastQuery()).toMatchObject({ arrival_from: undefined, departure_to: undefined })
+  })
+})

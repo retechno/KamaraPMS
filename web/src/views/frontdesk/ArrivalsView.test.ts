@@ -386,3 +386,21 @@ describe('ArrivalsView and the check-in panel', () => {
     expect(panel('[data-testid=not-ready]').text()).toContain('101 is Dirty')
   })
 })
+
+describe('ArrivalsView, the date written as dd/mm/yyyy', () => {
+  it('asks the server for a date that was typed whole, not for one that is half typed, and writes its weekday', async () => {
+    const { w } = mountView(['reservation.read'], [arrival()])
+    await flushPromises()
+    const field = w.get('[data-testid=arrival-filters] input[data-slot=date-input-text]')
+    const asked = () => GET.mock.calls.filter((c) => String(c[0]).endsWith('/arrivals'))
+    const before = asked().length
+    await field.setValue('05/10/20')
+    await flushPromises()
+    expect(asked()).toHaveLength(before)
+    await field.setValue('05/10/2026')
+    await flushPromises()
+    expect(asked().at(-1)?.[1]).toMatchObject({ params: { query: { date: '2026-10-05' } } })
+    expect(w.get('[data-testid=arrival-filters] [data-slot=date-input-weekday]').text()).toBe('Mon, 5 Oct 2026')
+    expect((w.get('input[name=date]').element as HTMLInputElement).value).toBe('2026-10-05')
+  })
+})

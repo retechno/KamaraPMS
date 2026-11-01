@@ -5,6 +5,7 @@ import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import InHouseTable from '@/components/InHouseTable.vue'
 import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useRoomTypes } from '@/composables/useRoomTypes'
@@ -70,8 +71,8 @@ watch(() => props.refresh, () => list.restart())
 
   <template v-else-if="businessDate">
     <form class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="departure-filters" @submit.prevent>
-      <FormField float-hint :hint="$weekday(shownDate)" class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
-        <template #default="{ id }"><Input :id="id" v-model="shownDate" name="departure_date" type="date" /></template>
+      <FormField class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
+        <template #default="{ id }"><DateInput :id="id" v-model="shownDate" name="departure_date" /></template>
       </FormField>
       <label class="mb-2 flex items-center gap-2 text-sm"><input v-model="exact" type="checkbox" name="exact" class="size-4 accent-primary" />{{ t('frontDesk.departures.onlyThatDate') }}</label>
       <FormField class="w-64" :label="t('frontDesk.page.search')">
