@@ -83,6 +83,15 @@ export function formatDateWeekday(value: string | null | undefined): string {
   return `${weekday}, ${formatBusinessDate(value)}`
 }
 
+/** The weekday in full and the date, for the line under a date field ("Minggu, 1 Nov 2026"): the short "Min" reads as "minimum" in a form. Everything else that wants a weekday keeps `formatDateWeekday`. */
+export function formatDateWeekdayLong(value: string | null | undefined): string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return ''
+  const day = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(day.getTime())) return ''
+  const weekday = new Intl.DateTimeFormat(currentLocale() === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', timeZone: 'UTC' }).format(day)
+  return `${weekday}, ${formatBusinessDate(value)}`
+}
+
 /** A percentage from the API ("67.35") with the decimal separator of the language and a % sign ("67,35%"); anything that is not a number is returned unchanged. */
 export function formatPercent(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return ''

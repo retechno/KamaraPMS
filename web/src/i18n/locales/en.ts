@@ -38,7 +38,8 @@ export const en = {
   dateInput: {
     placeholder: 'dd/mm/yyyy',
     openCalendar: 'Open the calendar',
-    invalid: 'Write it as dd/mm/yyyy.',
+    invalid: 'Write as dd/mm/yyyy',
+    notOnCalendar: '{text} is not on the calendar',
     tooEarly: 'Earliest date: {date}.',
     tooLate: 'Latest date: {date}.',
   },

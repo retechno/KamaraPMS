@@ -34,6 +34,7 @@ import { lineOfArrival } from '@/utils/roomAssign'
 import { lineUiStatus } from '@/utils/reservationStatus'
 import CheckInSheet from '@/components/CheckInSheet.vue'
 import { checkedInCount } from '@/composables/useCheckInSheet'
+import { guardForm, hasInvalidDate } from '@/utils/forms'
 
 /**
  * The arrivals tab of the front desk: the rooms arriving on a date (the business date by default) with what the desk needs before a check-in (company, booked rate, deposit, readiness), a
@@ -118,6 +119,8 @@ const columns = computed<Column<Arrival>[]>(() => [
 
 // Only the latest request counts: a slow answer to an older search or filter must not replace the answer to a newer one.
 let latest = 0
+const filterForm = ref<HTMLFormElement | null>(null)
+const dateKey = ref(0)
 
 async function load(): Promise<void> {
   const propertyId = property.currentId
@@ -139,12 +142,14 @@ async function load(): Promise<void> {
 }
 
 function restart(): void {
+  if (hasInvalidDate(filterForm.value)) return // the screen shows a date that would not be used: nothing is asked until it is a date
   rows.value = []
   loaded.value = false
   void load()
 }
 
 function clearFilters(): void {
+  dateKey.value++ // the date field writes the date again, also when the model did not change (it held the text of a date that was refused)
   chosenDate.value = ''
   status.value = 'CONFIRMED'
   q.value = ''
@@ -204,9 +209,9 @@ watch(checkedInCount, () => void load()) // a check-in made from the room panel
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('frontDesk.page.noAccessArrivals') }}</p>
 
   <template v-else>
-    <form class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="arrival-filters" @submit.prevent>
+    <form ref="filterForm" class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="arrival-filters" @submit.prevent="guardForm($event)">
       <FormField class="w-44" :label="t('frontDesk.page.arrival')">
-        <template #default="{ id }"><DateInput :id="id" v-model="shownDate" name="date" /></template>
+        <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="shownDate" name="date" /></template>
       </FormField>
       <FormField class="w-44" :label="t('frontDesk.arrivals.status')">
         <template #default="{ id }">

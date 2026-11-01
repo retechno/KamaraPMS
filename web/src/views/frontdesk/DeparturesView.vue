@@ -12,6 +12,7 @@ import { useRoomTypes } from '@/composables/useRoomTypes'
 import { useStayList } from '@/composables/useStayList'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
+import { guardForm } from '@/utils/forms'
 
 /**
  * The departures tab of the front desk: the open stays that leave by a date (the business date by default, so the stays that were due and are still here are in it), with the balance of their
@@ -52,7 +53,9 @@ const list = useStayList(
 )
 const { rows, nextCursor, error, loading, loaded, canRead } = list
 
+const dateKey = ref(0)
 function clearFilters(): void {
+  dateKey.value++ // the date field writes the date again, also when the model did not change (it held the text of a date that was refused)
   chosen.value = ''
   exact.value = false
   q.value = ''
@@ -70,9 +73,9 @@ watch(() => props.refresh, () => list.restart())
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('frontDesk.page.noAccessStays') }}</p>
 
   <template v-else-if="businessDate">
-    <form class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="departure-filters" @submit.prevent>
+    <form class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" novalidate data-testid="departure-filters" @submit.prevent="guardForm($event)">
       <FormField class="w-44" :label="exact ? t('frontDesk.departures.on') : t('frontDesk.departures.by')">
-        <template #default="{ id }"><DateInput :id="id" v-model="shownDate" name="departure_date" /></template>
+        <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="shownDate" name="departure_date" /></template>
       </FormField>
       <label class="mb-2 flex items-center gap-2 text-sm"><input v-model="exact" type="checkbox" name="exact" class="size-4 accent-primary" />{{ t('frontDesk.departures.onlyThatDate') }}</label>
       <FormField class="w-64" :label="t('frontDesk.page.search')">

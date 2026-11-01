@@ -37,7 +37,8 @@ export const id: Messages = {
   dateInput: {
     placeholder: 'hh/bb/tttt',
     openCalendar: 'Buka kalender',
-    invalid: 'Tulis sebagai hh/bb/tttt.',
+    invalid: 'Tulis sebagai hh/bb/tttt',
+    notOnCalendar: '{text} tidak ada di kalender',
     tooEarly: 'Paling awal: {date}.',
     tooLate: 'Paling akhir: {date}.',
   },

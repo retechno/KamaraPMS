@@ -169,3 +169,23 @@ describe('WalkInView, the departure written as dd/mm/yyyy', () => {
     expect((w.get('input[name=departure]').element as HTMLInputElement).value).toBe('2026-10-03')
   })
 })
+
+describe('WalkInView, what is seen is what is sent', () => {
+  it('does not walk a guest in while the departure is not a date', async () => {
+    const { w, push } = mountView()
+    await flushPromises()
+    await w.get('input[name=last_name]').setValue('Walker')
+    const departure = w.get('input[data-slot=date-input-text]')
+    await departure.setValue('31/02/2026')
+    await w.get('form[data-testid=walkin-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled()
+    expect(departure.attributes('aria-invalid')).toBe('true')
+    expect(w.text()).toContain('31/02/2026 is not on the calendar')
+    await departure.setValue('02/10/2026')
+    await w.get('form[data-testid=walkin-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).toHaveBeenCalledTimes(1)
+  })
+})

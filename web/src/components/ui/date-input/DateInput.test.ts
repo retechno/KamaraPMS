@@ -74,7 +74,7 @@ describe('DateInput', () => {
     expect(text().attributes('aria-invalid')).toBeUndefined()
     await text().trigger('blur')
     expect(text().attributes('aria-invalid')).toBe('true')
-    expect(document.body.textContent).toContain('Write it as dd/mm/yyyy.')
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
     expect((text().element as HTMLInputElement).value).toBe('02/11/20') // the text stays
     expect(model()).toBe('2026-10-01') // the model keeps the last valid date
     expect(changes).toEqual([])
@@ -157,11 +157,11 @@ describe('DateInput', () => {
 
   it('shows the weekday of the understood date under the field, in the language of the page', async () => {
     const { text } = mountField({}, '2026-11-02')
-    expect(document.body.querySelector('[data-slot=date-input-weekday]')?.textContent).toBe('Mon, 2 Nov 2026')
+    expect(document.body.querySelector('[data-slot=date-input-weekday]')?.textContent).toBe('Monday, 2 Nov 2026')
     await setLocale('id')
     await text().setValue('03/11/2026')
     await flushPromises()
-    expect(document.body.querySelector('[data-slot=date-input-weekday]')?.textContent).toBe('Sel, 3 Nov 2026')
+    expect(document.body.querySelector('[data-slot=date-input-weekday]')?.textContent).toBe('Selasa, 3 Nov 2026')
     await text().setValue('03/11/20')
     expect(document.body.querySelector('[data-slot=date-input-weekday]')).toBeNull()
   })
@@ -204,5 +204,67 @@ describe('DateInput', () => {
     expect(text().attributes('disabled')).toBeDefined()
     expect(native().attributes('disabled')).toBeDefined()
     expect(wrapper.get('button[data-slot=date-input-calendar]').attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('DateInput, what is seen is what is sent', () => {
+  afterEach(async () => {
+    for (const w of mounted.splice(0)) w.unmount()
+    document.body.innerHTML = ''
+    await setLocale('en')
+  })
+
+  it('tells a date that is not on the calendar from a text that is not a date yet, and shows the first at once', async () => {
+    const { text } = mountField()
+    await text().setValue('31/02/2026')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')?.textContent).toBe('31/02/2026 is not on the calendar')
+    await text().setValue('31/02/20')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')).toBeNull() // half typed: nothing until the field is left
+    await text().trigger('blur')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')?.textContent).toBe('Write as dd/mm/yyyy')
+  })
+
+  it('says it in Indonesian, with the text that was typed', async () => {
+    await setLocale('id')
+    const { text } = mountField()
+    await text().setValue('31/04/2026')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')?.textContent).toBe('31/04/2026 tidak ada di kalender')
+    await text().setValue('31/04')
+    await text().trigger('blur')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')?.textContent).toBe('Tulis sebagai hh/bb/tttt')
+  })
+
+  it('keeps the reason in the validity of the text field: valid when the date is real or the field is empty, not valid otherwise', async () => {
+    const { text } = mountField({ min: '2026-10-01', max: '2026-12-31' })
+    const el = () => text().element as HTMLInputElement
+    expect(el().validity.valid).toBe(true)
+    await text().setValue('02/11/20')
+    expect(el().validity.valid).toBe(false)
+    expect(el().validationMessage).toBe('Write as dd/mm/yyyy')
+    await text().setValue('31/02/2026')
+    expect(el().validationMessage).toBe('31/02/2026 is not on the calendar')
+    await text().setValue('30/09/2026')
+    expect(el().validationMessage).toBe('Earliest date: 01/10/2026.')
+    await text().setValue('01/01/2027')
+    expect(el().validationMessage).toBe('Latest date: 31/12/2026.')
+    await text().setValue('02/11/2026')
+    expect(el().validity.valid).toBe(true)
+    await text().setValue('')
+    expect(el().validity.valid).toBe(true)
+  })
+
+  it('says why when a form asks (checkValidity fires "invalid"), also for a text that was half typed', async () => {
+    const { text } = mountField()
+    await text().setValue('02/11/20')
+    expect(text().attributes('aria-invalid')).toBeUndefined()
+    expect((text().element as HTMLInputElement).checkValidity()).toBe(false)
+    await flushPromises()
+    expect(text().attributes('aria-invalid')).toBe('true')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')?.textContent).toBe('Write as dd/mm/yyyy')
+  })
+
+  it('writes the weekday in full', () => {
+    mountField({}, '2026-11-01')
+    expect(document.body.querySelector('[data-slot=date-input-weekday]')?.textContent).toBe('Sunday, 1 Nov 2026')
   })
 })

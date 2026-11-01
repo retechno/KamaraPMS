@@ -87,6 +87,12 @@ export function parseDisplayDate(text: string): string | null {
   return null
 }
 
+/** Whether a text has the shape of a whole date (d/m/yyyy, eight digits, an ISO date) whether or not the date exists: "31/02/2026" does, "02/11" does not. */
+export function looksLikeWholeDate(text: string): boolean {
+  const s = text.trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{1,2}[/.-]\d{1,2}[/.-]\d{4}$/.test(s) || /^\d{8}$/.test(s)
+}
+
 /** "2026-11-02" -> "02/11/2026" in every language (a hotel in Indonesia reads one order, and so does its English screen); anything that is not an ISO date gives "". */
 export function formatDisplayDate(iso: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '')

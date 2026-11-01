@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { Choice } from '@/composables/useReservationLookups'
 import { t } from '@/i18n'
+import { guardForm } from '@/utils/forms'
 
 /**
  * Edit Reservation: the stay of each room that is not checked in (dates, room type, rate plan, adults and children) and the company, the special request and the remarks of the reservation.
@@ -78,7 +79,7 @@ watch(() => [open.value, props.reservation.version], () => { if (open.value) fil
 
       <section v-for="(l, index) in reservation.rooms.filter((x) => editable(x.status))" :key="l.id" class="mt-4 rounded-lg border border-border p-3" :data-testid="`edit-line-${l.id}`">
         <h3 class="m-0 mb-2 text-sm font-semibold">{{ l.room_type_code }} · {{ l.room_number || t('reservation.noRoom') }}</h3>
-        <form v-if="lines[l.id]" class="grid gap-x-3 gap-y-7 sm:grid-cols-3" novalidate @submit.prevent="emit('saveLine', l.id, changes(l.id))">
+        <form v-if="lines[l.id]" class="grid gap-x-3 gap-y-7 sm:grid-cols-3" novalidate @submit.prevent="guardForm($event) && emit('saveLine', l.id, changes(l.id))">
           <FormField :label="t('reservation.arrival')" :error="fieldError('arrival_date')">
             <template #default="{ id, invalid }"><DateInput :id="id" v-model="lines[l.id]!.arrival_date" :data-autofocus="index === 0 ? '' : undefined" :name="`arrival_${l.id}`" :aria-invalid="invalid" /></template>
           </FormField>

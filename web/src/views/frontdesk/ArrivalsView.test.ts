@@ -400,7 +400,36 @@ describe('ArrivalsView, the date written as dd/mm/yyyy', () => {
     await field.setValue('05/10/2026')
     await flushPromises()
     expect(asked().at(-1)?.[1]).toMatchObject({ params: { query: { date: '2026-10-05' } } })
-    expect(w.get('[data-testid=arrival-filters] [data-slot=date-input-weekday]').text()).toBe('Mon, 5 Oct 2026')
+    expect(w.get('[data-testid=arrival-filters] [data-slot=date-input-weekday]').text()).toBe('Monday, 5 Oct 2026')
     expect((w.get('input[name=date]').element as HTMLInputElement).value).toBe('2026-10-05')
+  })
+})
+
+describe('ArrivalsView, what is seen is what is sent', () => {
+  it('asks nothing while the date shown is not a date, and asks again with the status when it is corrected', async () => {
+    const { w } = mountView(['reservation.read'], [arrival()])
+    await flushPromises()
+    const field = w.get('[data-testid=arrival-filters] input[data-slot=date-input-text]')
+    const asked = () => GET.mock.calls.filter((c) => String(c[0]).endsWith('/arrivals'))
+    await field.setValue('05/10/2026')
+    await flushPromises()
+    const before = asked().length
+    await field.setValue('31/02/2026')
+    await w.get('select[name=status]').setValue('CHECKED_IN')
+    await flushPromises()
+    expect(asked()).toHaveLength(before) // the status changed, the date shown is not valid: nothing is asked
+    await field.setValue('06/10/2026')
+    await flushPromises()
+    expect(asked().at(-1)?.[1]).toMatchObject({ params: { query: { date: '2026-10-06', status: 'CHECKED_IN' } } })
+  })
+
+  it('does not search from the form (Enter) while the date is not valid, and says why', async () => {
+    const { w } = mountView(['reservation.read'], [arrival()])
+    await flushPromises()
+    const field = w.get('[data-testid=arrival-filters] input[data-slot=date-input-text]')
+    await field.setValue('31/02/2026')
+    await w.get('form[data-testid=arrival-filters]').trigger('submit')
+    expect(field.attributes('aria-invalid')).toBe('true')
+    expect(w.get('[data-testid=arrival-filters]').text()).toContain('31/02/2026 is not on the calendar')
   })
 })

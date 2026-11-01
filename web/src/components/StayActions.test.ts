@@ -142,3 +142,20 @@ describe('StayActions', () => {
     expect(gone.find('[data-testid=stay-actions]').exists()).toBe(false)
   })
 })
+
+describe('StayActions, what is seen is what is sent', () => {
+  it('does not change the departure while the date is half typed, and sends it when it is a date', async () => {
+    const w = mountActions()
+    await w.get('[data-testid=open-departure]').trigger('click')
+    const field = w.get('form[data-testid=departure-form] input[data-slot=date-input-text]')
+    await field.setValue('05/10')
+    await w.get('form[data-testid=departure-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect((field.element as HTMLInputElement).validity.valid).toBe(false)
+    await field.setValue('05/10/2026')
+    await w.get('form[data-testid=departure-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { departure_date: '2026-10-05' } })
+  })
+})

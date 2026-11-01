@@ -25,6 +25,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
 import { guestLabel, newIdempotencyKey } from '@/utils/reservations'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -222,7 +223,7 @@ watch(businessDate, (bd) => {
 
   <Card v-else>
     <RestrictionOverride v-if="refusal" :violations="refusal.violations" :overridable="refusal.overridable" :busy="busy" :error="error" @override="retryWithOverride" @cancel="refusal = null" />
-    <form v-autofocus novalidate data-testid="walkin-form" @submit.prevent="onSubmit">
+    <form v-autofocus novalidate data-testid="walkin-form" @submit.prevent="guardForm($event) && onSubmit()">
       <CardHeader><CardTitle>{{ t('walkIn.stay') }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
