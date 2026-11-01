@@ -1805,7 +1805,7 @@ export interface paths {
         };
         /**
          * List folios with their balances (folio.read)
-         * @description The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, by room number among them (a folio without a room after the rooms; the newest folio of a room first), then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance).
+         * @description The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, by room number among them (a folio without a room after the rooms; the newest stay of a room first, the folios of a stay in the order they were opened), then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance).
          */
         get: operations["listFolios"];
         put?: never;
@@ -31089,7 +31089,7 @@ export interface operations {
                 cancelled_with_balance?: boolean;
                 /** @description A search: the start of the folio number, of the confirmation number or of the room number, or a part of the name of the guest or of the group (case does not matter). */
                 q?: string;
-                /** @description The column to sort by; the id breaks a tie in the direction of the order. Without it: the open folios first, by room number (the newest folio of a room first), then the closed ones. */
+                /** @description The column to sort by; the id breaks a tie in the direction of the order. Without it: the open folios first, by room number (the newest stay of a room first, the folios of a stay in the order they were opened), then the closed ones. */
                 sort?: "folio_number" | "balance" | "status";
                 /** @description The direction of `sort`: `asc` (the default when `sort` is given) or `desc`. Without `sort` it is refused (422 `VALIDATION_FAILED`, field `order`). A cursor belongs to the sort and direction it was made for: another one is 400 `INVALID_CURSOR`. NULL sorts last in both directions. */
                 order?: components["parameters"]["SortOrder"];

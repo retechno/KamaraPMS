@@ -32,11 +32,11 @@ SELECT id FROM folios
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_id = @reservation_id AND stay_id IS NULL AND status = 'OPEN';
 
 -- The folios of a property in the order asked for: by number, balance or status, either way; the default (key '') is the open ones first, by room number among them (a folio without a room,
--- as the bill of a group, after the rooms) and the newest first within a room, then the closed ones in the same way. One query for every order, the key and the direction being parameters (so no index serves the order, the filters are what narrow the rows). The page goes on after (the sort value, id), the id
+-- as the bill of a group, after the rooms), the newest stay first within a room (a folio without a stay last) and the oldest folio first within a stay (the guest's before the company's), then the closed ones in the same way. One query for every order, the key and the direction being parameters (so no index serves the order, the filters are what narrow the rows). The page goes on after (the sort value, id), the id
 -- breaking a tie in the direction of the order. NULL does not occur: every folio has a number, a status and a balance.
 --
 -- The room is the last room of the stay of the folio and the guest is the one of the stay (or of the reservation). The room number of the default order is padded to 12 characters so that 99 comes before
--- 101 under a collation that does not read numbers, and the id counts down from 10^18 - 1 (padded to 18) so that the newest folio of a room comes first; the text sort key carries the whole order, so the cursor of the default order is a text.
+-- 101 under a collation that does not read numbers, and the stay id counts down from 10^18 - 1 (padded to 18) so that the newest stay of a room comes first, the folio id (padded to 18) then ordering the folios of one stay; the text sort key carries the whole order, so the cursor of the default order is a text.
 --
 -- The balance is SUM(debit) - SUM(credit) of the folio's items, and it is read for the OPEN folios only: a folio can be closed only with a zero balance (FOLIO_BALANCE_NOT_ZERO, and no
 -- posting reaches a closed folio: FOLIO_CLOSED), so a closed folio is 0 without a look at its items. A test holds that to be true after every way a folio is closed.
@@ -67,7 +67,8 @@ CROSS JOIN LATERAL (
                 WHEN 'status' THEN f.status::text COLLATE "und-x-icu"
                 WHEN '' THEN ((CASE WHEN f.status = 'OPEN' THEN '0' ELSE '1' END)
                               || (CASE WHEN COALESCE(cr.room_number, '') = '' THEN 'zzzzzzzzzzzz' ELSE lpad(cr.room_number, 12, '0') END)
-                              || lpad((999999999999999999 - f.id)::text, 18, '0'))::text COLLATE "und-x-icu"
+                              || lpad((999999999999999999 - COALESCE(f.stay_id, 0))::text, 18, '0')
+                              || lpad(f.id::text, 18, '0'))::text COLLATE "und-x-icu"
             END) AS sk_text,
            (CASE @sort_key::text
                 WHEN 'balance' THEN bal.balance

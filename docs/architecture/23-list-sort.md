@@ -13,7 +13,7 @@ the browser holds one page, so a sort of it would look like a sort of everything
 | List | `sort` columns | Default order |
 |---|---|---|
 | `GET /properties/{id}/reservations` | `arrival_date`, `confirmation_number`, `guest_name`, `status` (the one staff see), `rate` | **nearest first** (below) |
-| `GET /properties/{id}/folios` | `folio_number`, `balance`, `status` | open folios first, by room among them (a folio without a room after the rooms; the newest folio of a room first), then the closed ones |
+| `GET /properties/{id}/folios` | `folio_number`, `balance`, `status` | open folios first, by room among them (a folio without a room after the rooms; the newest stay of a room first, the folios of a stay in the order they were opened), then the closed ones |
 | `GET /properties/{id}/payments` | `payment_number`, `amount`, `payment_method`, `status`, `paid_at` | newest first (`paid_at` desc) |
 | `GET /guests` | `name`, `code`, `nationality` | `name` A-Z |
 | `GET /properties/{id}/audit-logs`, `GET /audit-logs` | `created_at` | newest first |

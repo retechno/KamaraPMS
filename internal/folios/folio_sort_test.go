@@ -80,7 +80,12 @@ func expectedFolios(all []folios.FolioSummary, key string, desc bool) []int64 {
 			if c := compareStrings(roomKey(a), roomKey(b)); c != 0 {
 				return c
 			}
-			return int(b.ID - a.ID) // the same room: the newest folio first
+			// the same room: the newest stay first (a folio without a stay last), the oldest folio first within a stay
+			sa, sb := stayKey(a), stayKey(b)
+			if sa != sb {
+				return int(sb - sa)
+			}
+			return int(a.ID - b.ID)
 		}
 	}
 	s := slices.Clone(all)
@@ -95,6 +100,14 @@ func expectedFolios(all []folios.FolioSummary, key string, desc bool) []int64 {
 		ids[i] = x.ID
 	}
 	return ids
+}
+
+// stayKey is the stay of the folio, 0 for a folio without one (which the order puts last, as the newest comes first).
+func stayKey(s folios.FolioSummary) int64 {
+	if s.StayID == nil {
+		return 0
+	}
+	return *s.StayID
 }
 
 // roomKey is the room number padded as the list pads it, a folio without a room after every room.
@@ -300,6 +313,18 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 			SELECT $1, $2, $3, rr.reservation_id, $4, 'CLOSED', now(), $5::date FROM stays s JOIN reservation_rooms rr ON rr.id = s.reservation_room_id WHERE s.id = $4`,
 			f.tenantID, f.propID, st.number, stay, "2026-09-30"))
 	}
+	// one closed stay with a guest folio and a company folio (opened later): inside the stay the guest's comes first
+	r606 := f.Room(t, f.admin, f.propID, typeID, "606")
+	stay606 := f.Stay(t, f.tenantID, f.propID, typeID, r606.ID, "2026-09-25", "2026-09-27")
+	must(t, f.Exec(t, `UPDATE stay_rooms SET check_out_at = now(), end_business_date = '2026-09-27'::date WHERE stay_id = $1`, stay606))
+	var acme int64
+	must(t, f.Pool.QueryRow(ctx, `INSERT INTO companies (tenant_id, property_id, code, name, credit_limit) VALUES ($1, $2, 'ACME', 'Acme Corp', 1000000) RETURNING id`, f.tenantID, f.propID).Scan(&acme))
+	for _, fo := range []struct{ number, typ string }{{"FR-606-G", "GUEST"}, {"FR-606-C", "COMPANY"}} {
+		must(t, f.Exec(t, `INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id, status, closed_at, closed_on)
+			SELECT $1, $2, $3, rr.reservation_id, $4, $5::text, CASE WHEN $5::text = 'COMPANY' THEN $6::bigint END, 'CLOSED', now(), '2026-09-30'::date
+			FROM stays s JOIN reservation_rooms rr ON rr.id = s.reservation_room_id WHERE s.id = $4`,
+			f.tenantID, f.propID, fo.number, stay606, fo.typ, acme))
+	}
 	// a closed folio (no room, no guest): after the open ones
 	closedID := f.newFolio(t, "F-CLOSED")
 	fo, err := f.Folios.GetFolio(f.admin, f.propID, closedID)
@@ -314,7 +339,7 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 		order = append(order, s.FolioNumber)
 	}
 	// the open folios by room (99, 307, 1001 as numbers of one length), then the open folio without a room (F1), then the closed ones: by room, the newest of a room first, the one without a room last
-	if want := []string{"FR-99", "FR-307", "FR-1001", "F1", "FR-505-NEW", "FR-505-OLD", "F-CLOSED"}; !slices.Equal(order, want) {
+	if want := []string{"FR-99", "FR-307", "FR-1001", "F1", "FR-505-NEW", "FR-505-OLD", "FR-606-G", "FR-606-C", "F-CLOSED"}; !slices.Equal(order, want) {
 		t.Fatalf("the default order: %v, want %v", order, want)
 	}
 	if first := all.Data[1]; first.RoomNumber != "307" || first.GuestName != "Agus Salim" {
@@ -353,11 +378,14 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 	if got := search("307"); !slices.Equal(got, []string{"FR-307"}) {
 		t.Errorf("by room: %v", got)
 	}
-	if got := search("  salim "); len(got) != 6 || got[0] != "FR-99" { // by a part of the guest name, case aside: the five stays and F1, whose reservation has the same guest
+	if got := search("  salim "); len(got) != 8 || got[0] != "FR-99" { // by a part of the guest name, case aside: the seven stays and F1, whose reservation has the same guest
 		t.Errorf("by guest: %v", got)
 	}
 	if got := search("505"); !slices.Equal(got, []string{"FR-505-NEW", "FR-505-OLD"}) {
 		t.Errorf("a room with two closed folios, the newest first: %v", got)
+	}
+	if got := search("606"); !slices.Equal(got, []string{"FR-606-G", "FR-606-C"}) {
+		t.Errorf("a closed stay with a guest folio and a company folio, the guest's first: %v", got)
 	}
 	if got := search("fr-1001"); !slices.Equal(got, []string{"FR-1001"}) {
 		t.Errorf("by folio number: %v", got)
@@ -371,7 +399,7 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 	// the search keeps the other filters, and the tenant: another tenant's folios are not found by the same words
 	open, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{Search: "salim", Status: "CLOSED"}, listsort.Sort{}, nil, 50)
 	must(t, err)
-	if len(open.Data) != 2 { // the two closed folios of room 505
+	if len(open.Data) != 4 { // the closed folios of rooms 505 and 606
 		t.Errorf("status and search together: %+v", open.Data)
 	}
 	// over HTTP: ?q= reaches the search and the row carries the room and the guest

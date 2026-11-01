@@ -2306,7 +2306,7 @@ paths:
     get:
       operationId: listFolios
       summary: List folios with their balances (folio.read)
-      description: "The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, by room number among them (a folio without a room after the rooms; the newest folio of a room first), then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance)."
+      description: "The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, by room number among them (a folio without a room after the rooms; the newest stay of a room first, the folios of a stay in the order they were opened), then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance)."
       tags: [folios]
       parameters:
         - $ref: "#/components/parameters/Limit"
@@ -2319,7 +2319,7 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
         - { name: cancelled_with_balance, in: query, schema: { type: boolean }, description: "true: only the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee." }
         - { name: q, in: query, schema: { type: string }, description: "A search: the start of the folio number, of the confirmation number or of the room number, or a part of the name of the guest or of the group (case does not matter)." }
-        - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order. Without it: the open folios first, by room number (the newest folio of a room first), then the closed ones." }
+        - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order. Without it: the open folios first, by room number (the newest stay of a room first, the folios of a stay in the order they were opened), then the closed ones." }
         - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
