@@ -77,7 +77,10 @@ func expectedFolios(all []folios.FolioSummary, key string, desc bool) []int64 {
 			if c := open(a) - open(b); c != 0 {
 				return c
 			}
-			return compareStrings(roomKey(a), roomKey(b))
+			if c := compareStrings(roomKey(a), roomKey(b)); c != 0 {
+				return c
+			}
+			return int(b.ID - a.ID) // the same room: the newest folio first
 		}
 	}
 	s := slices.Clone(all)
@@ -288,6 +291,15 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 			SELECT $1, $2, $3, rr.reservation_id, $4 FROM stays s JOIN reservation_rooms rr ON rr.id = s.reservation_room_id WHERE s.id = $4 RETURNING id`,
 			f.tenantID, f.propID, "FR-"+r.room, stay).Scan(new(int64)))
 	}
+	// two closed folios of the same room (two stays, the older first): the newest comes first when one looks for the room
+	r505 := f.Room(t, f.admin, f.propID, typeID, "505")
+	for _, st := range []struct{ number, from, to string }{{"FR-505-OLD", "2026-09-20", "2026-09-22"}, {"FR-505-NEW", "2026-09-30", "2026-10-02"}} {
+		stay := f.Stay(t, f.tenantID, f.propID, typeID, r505.ID, st.from, st.to)
+		must(t, f.Exec(t, `UPDATE stay_rooms SET check_out_at = now(), end_business_date = $2::date WHERE stay_id = $1`, stay, st.to)) // a stay that has left: its room is free for the next
+		must(t, f.Exec(t, `INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, status, closed_at, closed_on)
+			SELECT $1, $2, $3, rr.reservation_id, $4, 'CLOSED', now(), $5::date FROM stays s JOIN reservation_rooms rr ON rr.id = s.reservation_room_id WHERE s.id = $4`,
+			f.tenantID, f.propID, st.number, stay, "2026-09-30"))
+	}
 	// a closed folio (no room, no guest): after the open ones
 	closedID := f.newFolio(t, "F-CLOSED")
 	fo, err := f.Folios.GetFolio(f.admin, f.propID, closedID)
@@ -301,8 +313,8 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 	for _, s := range all.Data {
 		order = append(order, s.FolioNumber)
 	}
-	// the open folios by room (99, 307, 1001 as numbers of one length), then the open folio without a room (F1), then the closed one
-	if want := []string{"FR-99", "FR-307", "FR-1001", "F1", "F-CLOSED"}; !slices.Equal(order, want) {
+	// the open folios by room (99, 307, 1001 as numbers of one length), then the open folio without a room (F1), then the closed ones: by room, the newest of a room first, the one without a room last
+	if want := []string{"FR-99", "FR-307", "FR-1001", "F1", "FR-505-NEW", "FR-505-OLD", "F-CLOSED"}; !slices.Equal(order, want) {
 		t.Fatalf("the default order: %v, want %v", order, want)
 	}
 	if first := all.Data[1]; first.RoomNumber != "307" || first.GuestName != "Agus Salim" {
@@ -341,8 +353,11 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 	if got := search("307"); !slices.Equal(got, []string{"FR-307"}) {
 		t.Errorf("by room: %v", got)
 	}
-	if got := search("  salim "); len(got) != 4 || got[0] != "FR-99" { // by a part of the guest name, case aside: the three stays and F1, whose reservation has the same guest
+	if got := search("  salim "); len(got) != 6 || got[0] != "FR-99" { // by a part of the guest name, case aside: the five stays and F1, whose reservation has the same guest
 		t.Errorf("by guest: %v", got)
+	}
+	if got := search("505"); !slices.Equal(got, []string{"FR-505-NEW", "FR-505-OLD"}) {
+		t.Errorf("a room with two closed folios, the newest first: %v", got)
 	}
 	if got := search("fr-1001"); !slices.Equal(got, []string{"FR-1001"}) {
 		t.Errorf("by folio number: %v", got)
@@ -356,7 +371,7 @@ func TestFolioListNamesTheRoomAndTheGuestAndSearches(t *testing.T) {
 	// the search keeps the other filters, and the tenant: another tenant's folios are not found by the same words
 	open, err := f.Folios.ListFolios(f.admin, f.propID, folios.FolioFilter{Search: "salim", Status: "CLOSED"}, listsort.Sort{}, nil, 50)
 	must(t, err)
-	if len(open.Data) != 0 {
+	if len(open.Data) != 2 { // the two closed folios of room 505
 		t.Errorf("status and search together: %+v", open.Data)
 	}
 	// over HTTP: ?q= reaches the search and the row carries the room and the guest
