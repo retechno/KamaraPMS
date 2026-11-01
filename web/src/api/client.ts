@@ -1,4 +1,5 @@
 import createClient, { type Middleware } from 'openapi-fetch'
+import { emitApiMutation } from './mutationEvents'
 import { toApiError } from './problem'
 import type { paths } from './schema'
 import { authFetch } from './session'
@@ -21,5 +22,19 @@ const throwOnError: Middleware = {
   },
 }
 
+/** Tells the listeners (the night audit chip) that a write went through; a read and a failure say nothing. */
+export const announceWrites: Middleware = {
+  onResponse({ request, response }) {
+    if (!response.ok || request.method === 'GET' || request.method === 'HEAD') return undefined
+    try {
+      emitApiMutation(request.method, new URL(request.url, 'http://localhost').pathname)
+    } catch {
+      // a listener must never break the call it listens to
+    }
+    return undefined
+  },
+}
+
 export const api = createClient<paths>({ baseUrl: '', fetch: authFetch })
 api.use(throwOnError)
+api.use(announceWrites)

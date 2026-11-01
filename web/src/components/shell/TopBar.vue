@@ -64,7 +64,7 @@ const businessDay = computed(() => (property.clock ? formatBusinessDate(property
 const businessDayShort = computed(() => businessDay.value.replace(/ \d{4}$/, ''))
 
 /** Overdue is always in words, in the colour of a warning, at every width; ready and later are a dot on a narrow bar and words from a wide one. */
-const nightAudit = useNightAuditStatus()
+const nightAudit = useNightAuditStatus({ navigation: true })
 const audit = computed(() => {
   const state = nightAudit.state.value
   if (!state) return null // night audit is for who may run it

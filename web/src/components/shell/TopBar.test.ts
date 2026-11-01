@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { api } from '@/api/client'
+import { emitApiMutation } from '@/api/mutationEvents'
 import { currentLocale, setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { NAV_PERMISSIONS } from '@/test/navAccess'
@@ -47,7 +48,7 @@ async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'
   })
   mounted.push(w)
   await flushPromises()
-  return { w, select }
+  return { w, select, router, GET }
 }
 
 /** reka-ui opens a menu on a press of its button and on Enter; jsdom cannot make a pointer event with a button, so the tests press Enter. */
@@ -163,6 +164,60 @@ describe('TopBar', () => {
       expect(api.GET).not.toHaveBeenCalled()
       await mountBar({ clock: clock({ night_audit_allowed: true }), permissions: ['housekeeping.read'] }) // who may not run it asks for nothing
       expect(api.GET).not.toHaveBeenCalled()
+    })
+
+    it('turns green after the last guest is checked out, on any page, without opening Today', async () => {
+      const stuck = previewOf({ can_run: false, blockers: { ...previewOf().blockers, unresolved_departures: [{ stay_id: 2 }] } })
+      const { w, GET } = await mountBar({ path: '/stays/2', clock: clock({ night_audit_allowed: true }), preview: stuck })
+      expect(w.get('[data-testid=night-audit-status]').attributes('data-state')).toBe('pending')
+      expect(GET).toHaveBeenCalledTimes(1)
+      GET.mockResolvedValue({ data: previewOf() }) // the guest leaves: nothing is left
+      emitApiMutation('GET', '/api/v1/properties/7/stays/2') // a read says nothing
+      emitApiMutation('POST', '/api/v1/properties/7/stays/2/check-out')
+      await flushPromises()
+      expect(w.get('[data-testid=night-audit-status]').attributes('data-state')).toBe('ready')
+      expect(GET).toHaveBeenCalledTimes(2)
+    })
+
+    it('reads again after a check-in, a no-show or a shift, but not after a write that cannot change the steps', async () => {
+      const { GET } = await mountBar({ clock: clock({ night_audit_allowed: true }), preview: previewOf() })
+      const calls = async (method: string, path: string): Promise<number> => {
+        GET.mockClear()
+        emitApiMutation(method, path)
+        await flushPromises()
+        return GET.mock.calls.length
+      }
+      expect(await calls('POST', '/api/v1/properties/7/reservations/3/rooms/4/check-in')).toBe(1)
+      expect(await calls('POST', '/api/v1/properties/7/reservations/3/rooms/4/no-show')).toBe(1)
+      expect(await calls('POST', '/api/v1/properties/7/cashier/shifts/9/close')).toBe(1)
+      expect(await calls('PUT', '/api/v1/properties/7/room-types/3')).toBe(0)
+    })
+
+    it('does not read the preview on a write before the audit is due, or for who may not run it', async () => {
+      const early = await mountBar({ clock: clock({ night_audit_allowed: false }) })
+      emitApiMutation('POST', '/api/v1/properties/7/stays/2/check-out')
+      await flushPromises()
+      expect(early.GET).not.toHaveBeenCalled()
+      const other = await mountBar({ clock: clock({ night_audit_allowed: true }), permissions: ['housekeeping.read'] })
+      emitApiMutation('POST', '/api/v1/properties/7/stays/2/check-out')
+      await flushPromises()
+      expect(other.GET).not.toHaveBeenCalled()
+    })
+
+    it('shares one read between rapid navigations, keeps it for two minutes, and looks again on a page change when it is not known', async () => {
+      let release: (v: unknown) => void = () => {}
+      const { w, router, GET } = await mountBar({ clock: clock({ night_audit_allowed: true }) }) // the first read fails: unknown
+      expect(GET).toHaveBeenCalledTimes(1)
+      GET.mockReturnValue(new Promise((r) => { release = r })) // a slow read
+      await router.push('/arrivals')
+      await router.push('/departures')
+      await router.push('/housekeeping')
+      expect(GET).toHaveBeenCalledTimes(2) // one read for the three moves
+      release({ data: previewOf() })
+      await flushPromises()
+      expect(w.get('[data-testid=night-audit-status]').attributes('data-state')).toBe('ready')
+      await router.push('/stays/1')
+      expect(GET).toHaveBeenCalledTimes(2) // known and fresh: kept
     })
 
     it('speaks Indonesian: "Audit malam siap" and "Audit malam · 1 tertunda"', async () => {
