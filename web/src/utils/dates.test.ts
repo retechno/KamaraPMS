@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, formatBusinessDate, todayIn, wallClock } from './dates'
+import { addDays, formatBusinessDate, formatDisplayDate, maskDateInput, parseDisplayDate, todayIn, wallClock } from './dates'
 
 describe('dates', () => {
   it('formats business dates without time zones', () => {
@@ -40,5 +40,68 @@ describe('formatBusinessDate in Indonesian', () => {
       setLocale('en')
     }
     expect(formatBusinessDate('2026-08-17')).toBe('17 Aug 2026')
+  })
+})
+
+describe('the date a person types (dd/mm/yyyy)', () => {
+  it('reads d/m/yyyy with a slash, a dash or a dot', () => {
+    expect(parseDisplayDate('02/11/2026')).toBe('2026-11-02')
+    expect(parseDisplayDate('2/11/2026')).toBe('2026-11-02')
+    expect(parseDisplayDate('2-1-2026')).toBe('2026-01-02')
+    expect(parseDisplayDate('02.11.2026')).toBe('2026-11-02')
+    expect(parseDisplayDate('  02/11/2026 ')).toBe('2026-11-02')
+  })
+
+  it('reads eight digits without separators and a pasted ISO date', () => {
+    expect(parseDisplayDate('02112026')).toBe('2026-11-02')
+    expect(parseDisplayDate('2026-11-02')).toBe('2026-11-02')
+  })
+
+  it('refuses a year of two digits, half a date, and text', () => {
+    expect(parseDisplayDate('02/11/26')).toBeNull()
+    expect(parseDisplayDate('02/11/202')).toBeNull()
+    expect(parseDisplayDate('02/11')).toBeNull()
+    expect(parseDisplayDate('')).toBeNull()
+    expect(parseDisplayDate('besok')).toBeNull()
+    expect(parseDisplayDate('2026-1-5')).toBeNull()
+    expect(parseDisplayDate('0211260')).toBeNull()
+  })
+
+  it('checks the calendar with numbers: leap years, 31 April, month 13', () => {
+    expect(parseDisplayDate('29/02/2028')).toBe('2028-02-29')
+    expect(parseDisplayDate('29/02/2027')).toBeNull()
+    expect(parseDisplayDate('29/02/2100')).toBeNull() // 2100 is not a leap year
+    expect(parseDisplayDate('29/02/2000')).toBe('2000-02-29')
+    expect(parseDisplayDate('31/04/2026')).toBeNull()
+    expect(parseDisplayDate('31/02/2026')).toBeNull()
+    expect(parseDisplayDate('31/12/2026')).toBe('2026-12-31')
+    expect(parseDisplayDate('00/11/2026')).toBeNull()
+    expect(parseDisplayDate('15/13/2026')).toBeNull()
+    expect(parseDisplayDate('2026-02-30')).toBeNull()
+  })
+
+  it('writes an ISO date as dd/mm/yyyy, and nothing for what is not a date', () => {
+    expect(formatDisplayDate('2026-11-02')).toBe('02/11/2026')
+    expect(formatDisplayDate('2028-02-29')).toBe('29/02/2028')
+    expect(formatDisplayDate('')).toBe('')
+    expect(formatDisplayDate(null)).toBe('')
+    expect(formatDisplayDate(undefined)).toBe('')
+    expect(formatDisplayDate('2026-13-45')).toBe('')
+    expect(formatDisplayDate('soon')).toBe('')
+  })
+
+  it('writes the mask while typing: digits alone get their slashes, a text with separators stays', () => {
+    expect(maskDateInput('0')).toBe('0')
+    expect(maskDateInput('02')).toBe('02')
+    expect(maskDateInput('021')).toBe('02/1')
+    expect(maskDateInput('0211')).toBe('02/11')
+    expect(maskDateInput('02112')).toBe('02/11/2')
+    expect(maskDateInput('02112026')).toBe('02/11/2026')
+    expect(maskDateInput('021120261234')).toBe('02/11/2026')
+    expect(maskDateInput('02/11/2026')).toBe('02/11/2026')
+    expect(maskDateInput('2/11/2026')).toBe('2/11/2026')
+    expect(maskDateInput('2026-11-02')).toBe('2026-11-02')
+    expect(maskDateInput('02a1b')).toBe('02/1')
+    expect(maskDateInput('')).toBe('')
   })
 })
