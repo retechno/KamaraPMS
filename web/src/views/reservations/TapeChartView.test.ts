@@ -78,10 +78,13 @@ describe('TapeChartView', () => {
     // 2 rooms: 101 is booked on 2 and 3 Oct, a booking with no room holds 3 Oct, 102 is blocked from 5 to 6 Oct
     const sold = cells.map((c) => `${c.attributes('data-sold')}/${c.attributes('data-available')}`)
     expect(sold.slice(0, 7)).toEqual(['0/2', '1/1', '2/0', '0/2', '0/1', '0/1', '0/2'])
-    expect(cells[1]!.text()).toBe('1/1')
+    // the figure is a count with its word, so it cannot be read as a date: "1 left" and "1 sold" under it
+    expect(cells[1]!.get('[data-part=left]').text()).toBe('1 left')
+    expect(cells[1]!.get('[data-part=sold]').text()).toBe('1 sold')
+    expect(cells[1]!.text()).not.toContain('/')
     expect(cells[1]!.attributes('title')).toBe('Sold 1, available 1, blocked 0')
-    expect(w.get('[data-testid=type-head-DLX]').text()).toContain('sold / available')
-    expect(cells[2]!.classes()).toContain('font-semibold') // nothing left
+    expect(cells[1]!.get('[data-part=sold]').classes()).toContain('text-[12px]') // the smaller line
+    expect(cells[2]!.get('[data-part=left]').classes()).toContain('font-semibold') // nothing left
   })
   it('marks a room type that is oversold', async () => {
     const extra = { ...booking, reservation_id: 11, reservation_room_id: 6, arrival_date: '2026-10-03', departure_date: '2026-10-04' }
@@ -89,7 +92,8 @@ describe('TapeChartView', () => {
     await flushPromises()
     const cell = w.findAll('[data-testid=type-head-DLX] [data-sold]')[2]!
     expect(cell.attributes('data-available')).toBe('-1')
-    expect(cell.classes()).toContain('text-destructive')
+    expect(cell.get('[data-part=left]').text()).toBe('-1 left')
+    expect(cell.get('[data-part=left]').classes()).toContain('text-destructive')
   })
 
   it('lists the unassigned sections in the order of the room types above them', async () => {
