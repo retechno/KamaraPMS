@@ -92,6 +92,14 @@ describe('TapeChartView', () => {
     expect(cell.classes()).toContain('text-destructive')
   })
 
+  it('lists the unassigned sections in the order of the room types above them', async () => {
+    const other = { ...booking, room_type_id: 20, reservation_id: 31, reservation_room_id: 31 }
+    const data = { ...chart, rooms: [...chart.rooms, { room_id: 9, room_number: '201', room_type_id: 20, room_type_code: 'STD', bookings: [], blocks: [] }], unassigned: [{ room_type_id: 20, room_type_code: 'STD', bookings: [other] }, chart.unassigned[0]] }
+    const w = mountView(['reservation.read'], data)
+    await flushPromises()
+    // DLX has the rooms 101 and 102 above STD (201), whatever order the server sent
+    expect(w.findAll('[data-testid^=unassigned-toggle-]').map((b) => b.attributes('data-testid'))).toEqual(['unassigned-toggle-DLX', 'unassigned-toggle-STD'])
+  })
   it('packs the bookings with no room into as few lanes as the nights they share', async () => {
     const u = (id: number, from: string, to: string) => ({ ...booking, reservation_id: 100 + id, confirmation_number: `RES0001${id}`, reservation_room_id: 100 + id, arrival_date: from, departure_date: to })
     // 5 bookings: at most two share a night (3-5 and 4-6 on the 4th), the others follow on a lane that is free

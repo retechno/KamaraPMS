@@ -289,11 +289,15 @@ watch(businessDate, () => {
 const availability = computed(() => new Map((chart.value ? typeAvailability(chart.value, dates.value) : []).map((a) => [a.room_type_id, a])))
 
 // Bookings without a room: a count per night (what the folded section shows) and the lanes they are packed into (what the opened section shows).
-const unassignedRows = computed(() => (chart.value?.unassigned ?? []).map((u) => ({
-  ...u,
-  perNight: countPerNight(u.bookings, dates.value),
-  lanes: packLanes(u.bookings).map(placed).filter((lane) => lane.length > 0),
-})))
+// in the order of the room types above, not the order the server met them in
+const typeOrder = computed(() => [...new Set((chart.value?.rooms ?? []).map((r) => r.room_type_id))])
+const unassignedRows = computed(() => (chart.value?.unassigned ?? [])
+  .map((u) => ({
+    ...u,
+    perNight: countPerNight(u.bookings, dates.value),
+    lanes: packLanes(u.bookings).map(placed).filter((lane) => lane.length > 0),
+  }))
+  .sort((a, b) => typeOrder.value.indexOf(a.room_type_id) - typeOrder.value.indexOf(b.room_type_id)))
 // The section of a room type is folded until it is opened; the choice is kept while the window moves.
 const opened = ref<Set<number>>(new Set())
 const isOpen = (roomTypeId: number): boolean => opened.value.has(roomTypeId)
