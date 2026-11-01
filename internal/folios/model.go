@@ -130,6 +130,8 @@ type FolioFilter struct {
 	FolioType      string
 	OutletID       *int64 // the bills of one outlet (with FolioType OUTLET)
 	Status         string
+	// Search matches the number of the folio or of the reservation, the room, the name of the guest or of the group (empty: no search).
+	Search string
 	// CancelledWithBalance keeps the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee.
 	CancelledWithBalance bool
 }
@@ -313,11 +315,14 @@ type FolioSummary struct {
 	// BanquetEventID is the event a folio of type EVENT is the bill of.
 	BanquetEventID *int64 `json:"banquet_event_id"`
 	// ConfirmationNumber is the number of that reservation ("RES000012"), so a list can name it instead of showing its id.
-	ConfirmationNumber string    `json:"confirmation_number"`
-	StayID             *int64    `json:"stay_id"`
-	OpenedAt           time.Time `json:"opened_at"`
-	Version            int32     `json:"version"`
-	Balance            string    `json:"balance"`
+	ConfirmationNumber string `json:"confirmation_number"`
+	// RoomNumber is the last room of the stay of the folio and GuestName the guest of the stay (or of the reservation); both are empty when there is none (the bill of a group, an outlet).
+	RoomNumber string    `json:"room_number"`
+	GuestName  string    `json:"guest_name"`
+	StayID     *int64    `json:"stay_id"`
+	OpenedAt   time.Time `json:"opened_at"`
+	Version    int32     `json:"version"`
+	Balance    string    `json:"balance"`
 }
 
 // Payment is a payment or refund.

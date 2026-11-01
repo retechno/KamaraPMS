@@ -2306,7 +2306,7 @@ paths:
     get:
       operationId: listFolios
       summary: List folios with their balances (folio.read)
-      description: "The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, the largest balance first among them, then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance)."
+      description: "The order is asked of the server (the list is read a page at a time): `sort` and `order`; without them the open folios first, by room number among them (a folio without a room after the rooms; the newest stay of a room first, the folios of a stay in the order they were opened), then the closed ones. The balance is read from the ledger for the open folios; a closed folio is 0 (a folio is closed only with a zero balance)."
       tags: [folios]
       parameters:
         - $ref: "#/components/parameters/Limit"
@@ -2318,7 +2318,8 @@ paths:
         - { name: stay_id, in: query, schema: { type: integer, format: int64 } }
         - { name: status, in: query, schema: { type: string, enum: [OPEN, CLOSED] } }
         - { name: cancelled_with_balance, in: query, schema: { type: boolean }, description: "true: only the open folios of cancelled reservations (no live room, no stay) whose balance is not zero: the follow-up of a cancellation that left a deposit or a fee." }
-        - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order." }
+        - { name: q, in: query, schema: { type: string }, description: "A search: the start of the folio number, of the confirmation number or of the room number, or a part of the name of the guest or of the group (case does not matter)." }
+        - { name: sort, in: query, schema: { type: string, enum: [folio_number, balance, status] }, description: "The column to sort by; the id breaks a tie in the direction of the order. Without it: the open folios first, by room number (the newest stay of a room first, the folios of a stay in the order they were opened), then the closed ones." }
         - $ref: "#/components/parameters/SortOrder"
       responses:
         "200":
@@ -18212,6 +18213,8 @@ components:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
         confirmation_number: { type: string, description: The confirmation number of the reservation of the folio (`RES000012`), so a list can name it. }
+        room_number: { type: string, description: "The last room of the stay of the folio; empty when the folio has no stay (the bill of a group, an outlet, a reservation not yet checked in)." }
+        guest_name: { type: string, description: "The guest of the stay, or of the reservation; empty when there is none." }
         folio_type: { type: string, enum: [GUEST, COMPANY, MASTER, OUTLET, EVENT], description: "GUEST is the folio of the guest. COMPANY is a folio of the stay billed to a company (`bill_to_company_id`): a stay may have one folio for each payer. MASTER is the folio of a booking group. OUTLET is the folio of a bill of an outlet. EVENT is the bill of a banquet event." }
         banquet_event_id: { type: [integer, "null"], format: int64 }
         outlet_id: { type: [integer, "null"], format: int64 }

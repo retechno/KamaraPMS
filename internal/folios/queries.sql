@@ -31,9 +31,12 @@ RETURNING *;
 SELECT id FROM folios
 WHERE tenant_id = @tenant_id AND property_id = @property_id AND reservation_id = @reservation_id AND stay_id IS NULL AND status = 'OPEN';
 
--- The folios of a property in the order asked for: by number, balance or status, either way; the default (key '') is the open ones first, the largest balance first among them, then the closed
--- ones. One query for every order, the key and the direction being parameters (so no index serves the order, the filters are what narrow the rows). The page goes on after (the sort value, id), the id
+-- The folios of a property in the order asked for: by number, balance or status, either way; the default (key '') is the open ones first, by room number among them (a folio without a room,
+-- as the bill of a group, after the rooms), the newest stay first within a room (a folio without a stay last) and the oldest folio first within a stay (the guest's before the company's), then the closed ones in the same way. One query for every order, the key and the direction being parameters (so no index serves the order, the filters are what narrow the rows). The page goes on after (the sort value, id), the id
 -- breaking a tie in the direction of the order. NULL does not occur: every folio has a number, a status and a balance.
+--
+-- The room is the last room of the stay of the folio and the guest is the one of the stay (or of the reservation). The room number of the default order is padded to 12 characters so that 99 comes before
+-- 101 under a collation that does not read numbers, and the stay id counts down from 10^18 - 1 (padded to 18) so that the newest stay of a room comes first, the folio id (padded to 18) then ordering the folios of one stay; the text sort key carries the whole order, so the cursor of the default order is a text.
 --
 -- The balance is SUM(debit) - SUM(credit) of the folio's items, and it is read for the OPEN folios only: a folio can be closed only with a zero balance (FOLIO_BALANCE_NOT_ZERO, and no
 -- posting reaches a closed folio: FOLIO_CLOSED), so a closed folio is 0 without a look at its items. A test holds that to be true after every way a folio is closed.
@@ -43,8 +46,16 @@ SELECT f.*, bal.balance::numeric AS balance,
        COALESCE((SELECT g.code FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_code,
        COALESCE((SELECT g.name FROM booking_groups g WHERE g.property_id = f.property_id AND g.id = f.booking_group_id), '')::text AS group_name,
        COALESCE((SELECT o.code FROM pos_outlets o WHERE o.property_id = f.property_id AND o.id = f.outlet_id), '')::text AS outlet_code,
-       COALESCE((SELECT o.name FROM pos_outlets o WHERE o.property_id = f.property_id AND o.id = f.outlet_id), '')::text AS outlet_name
+       COALESCE((SELECT o.name FROM pos_outlets o WHERE o.property_id = f.property_id AND o.id = f.outlet_id), '')::text AS outlet_name,
+       COALESCE(cr.room_number, '')::text AS room_number,
+       COALESCE(NULLIF(trim(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')), ''), '')::text AS guest_name,
+       COALESCE(k.sk_text, '')::text AS sort_text
 FROM folios f
+LEFT JOIN reservations res ON res.property_id = f.property_id AND res.id = f.reservation_id
+LEFT JOIN stays st ON st.property_id = f.property_id AND st.id = f.stay_id
+LEFT JOIN LATERAL (SELECT rm.room_number FROM stay_rooms sr JOIN rooms rm ON rm.property_id = sr.property_id AND rm.id = sr.room_id
+                    WHERE sr.property_id = f.property_id AND sr.stay_id = f.stay_id ORDER BY sr.id DESC LIMIT 1) cr(room_number) ON true
+LEFT JOIN guests gu ON gu.tenant_id = f.tenant_id AND gu.id = COALESCE(st.guest_id, res.guest_id)
 CROSS JOIN LATERAL (
     SELECT CASE WHEN f.status = 'OPEN'
                 THEN (SELECT COALESCE(sum(i.debit), 0) - COALESCE(sum(i.credit), 0) FROM folio_items i WHERE i.property_id = f.property_id AND i.folio_id = f.id)
@@ -54,10 +65,13 @@ CROSS JOIN LATERAL (
     SELECT (CASE @sort_key::text
                 WHEN 'folio_number' THEN f.folio_number::text COLLATE "und-x-icu"
                 WHEN 'status' THEN f.status::text COLLATE "und-x-icu"
+                WHEN '' THEN ((CASE WHEN f.status = 'OPEN' THEN '0' ELSE '1' END)
+                              || (CASE WHEN COALESCE(cr.room_number, '') = '' THEN 'zzzzzzzzzzzz' ELSE lpad(cr.room_number, 12, '0') END)
+                              || lpad((999999999999999999 - COALESCE(f.stay_id, 0))::text, 18, '0')
+                              || lpad(f.id::text, 18, '0'))::text COLLATE "und-x-icu"
             END) AS sk_text,
            (CASE @sort_key::text
                 WHEN 'balance' THEN bal.balance
-                WHEN '' THEN (CASE WHEN f.status = 'OPEN' THEN 0 ELSE 1000000000000000 END) - bal.balance
             END) AS sk_num
 ) k
 WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
@@ -69,6 +83,14 @@ WHERE f.tenant_id = @tenant_id AND f.property_id = @property_id
   AND (sqlc.narg(folio_type)::text IS NOT NULL OR f.folio_type NOT IN ('OUTLET', 'EVENT'))
   AND (sqlc.narg(outlet_id)::bigint IS NULL OR f.outlet_id = sqlc.narg(outlet_id)::bigint)
   AND (sqlc.narg(status)::text IS NULL OR f.status = sqlc.narg(status)::text)
+  -- the search of the cashier: the number of the folio or of the reservation, the room, or a part of the name of the guest or of the group
+  AND (sqlc.narg(q)::text IS NULL
+       OR f.folio_number ILIKE sqlc.narg(q)::text || '%'
+       OR res.confirmation_number ILIKE sqlc.narg(q)::text || '%'
+       OR cr.room_number ILIKE sqlc.narg(q)::text || '%'
+       OR lower(COALESCE(gu.first_name, '') || ' ' || COALESCE(gu.last_name, '')) LIKE '%' || lower(sqlc.narg(q)::text) || '%'
+       OR EXISTS (SELECT 1 FROM booking_groups bg WHERE bg.property_id = f.property_id AND bg.id = f.booking_group_id
+                  AND lower(bg.code || ' ' || bg.name) LIKE '%' || lower(sqlc.narg(q)::text) || '%'))
   -- the follow-up of a cancellation: the open folio of a reservation that has no live room and no stay, that still holds something (a deposit that was kept, a fee that was not paid)
   AND (NOT @cancelled_with_balance::boolean OR (f.status = 'OPEN' AND f.stay_id IS NULL AND f.reservation_id IS NOT NULL AND bal.balance <> 0
        AND NOT EXISTS (SELECT 1 FROM reservation_rooms l WHERE l.property_id = f.property_id AND l.reservation_id = f.reservation_id AND l.status NOT IN ('CANCELLED', 'NO_SHOW'))))

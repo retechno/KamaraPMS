@@ -12,6 +12,21 @@ export interface RateEditTarget {
   rate: { rate_plan_code: string }
 }
 
+/** A guest who owes something pays before leaving: the cashier should expect the payment step, so the button says it. */
+export function owesAtCheckOut(row: { balance?: { status: string } | null }): boolean {
+  return row.balance?.status === 'OUTSTANDING'
+}
+
+/** The i18n key of the label of an action of a row: "Pay & check out" for a check-out of a stay that owes money. */
+export function actionLabelKey(a: InHouseAction, row: { balance?: { status: string } | null }): string {
+  return a === 'checkOut' && owesAtCheckOut(row) ? 'frontDesk.inHouse.action.checkOutPay' : `frontDesk.inHouse.action.${a}`
+}
+
+/** The check-out is the solid button of a row, except when money is owed: then it is an outline with an amber wallet, and the payment is the step it opens with. */
+export function actionVariant(a: InHouseAction, row: { balance?: { status: string } | null }): 'default' | 'outline' {
+  return a === 'checkOut' && !owesAtCheckOut(row) ? 'default' : 'outline'
+}
+
 export const PRIMARY_ACTIONS: InHouseAction[] = ['view', 'editGuest', 'folio', 'checkOut']
 export const MORE_ACTIONS: InHouseAction[] = ['editStay', 'editRate', 'moveRoom', 'extend', 'payment']
 

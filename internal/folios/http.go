@@ -92,7 +92,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	var errs []apperr.FieldError
-	f := FolioFilter{ReservationID: queryID(r, "reservation_id", &errs), StayID: queryID(r, "stay_id", &errs), BookingGroupID: queryID(r, "booking_group_id", &errs), FolioType: r.URL.Query().Get("folio_type"), Status: r.URL.Query().Get("status"), CancelledWithBalance: r.URL.Query().Get("cancelled_with_balance") == "true"}
+	f := FolioFilter{ReservationID: queryID(r, "reservation_id", &errs), StayID: queryID(r, "stay_id", &errs), BookingGroupID: queryID(r, "booking_group_id", &errs), FolioType: r.URL.Query().Get("folio_type"), Status: r.URL.Query().Get("status"), CancelledWithBalance: r.URL.Query().Get("cancelled_with_balance") == "true", Search: r.URL.Query().Get("q")}
 	if f.Status != "" && f.Status != "OPEN" && f.Status != "CLOSED" {
 		errs = append(errs, fieldErr("status", "INVALID_VALUE", "OPEN or CLOSED"))
 	}

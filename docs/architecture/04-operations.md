@@ -33,6 +33,7 @@ Property created ──▶ INSERT business_days(opening_date, OPEN)      (setup,
 | No write interleaves with closing | Writers take `FOR SHARE` and night audit takes `FOR UPDATE` |
 | BD never runs ahead of reality | **Night-audit time guard:** closing BD is allowed only if `local_date > BD`, **or** `local_date = BD AND local_time ≥ properties.night_audit_earliest_time` (default 20:00) |
 | Overdue audit is visible | `GET /business-date` → `night_audit_overdue = local_date > BD + 1` |
+| "Ready" means it can run now | The chip of the top bar, the card of Today and the page of the night audit read the same preview (`web/src/utils/nightAuditReadiness.ts`, `stores/nightAudit.ts`): "ready" only when the clock allows it and no step needs anyone; with steps left the chip is amber ("Night audit · N pending") and links to the first. The preview dry-runs the room charges, so a screen that only shows the state reads it once its time has come, at most every two minutes, and never when the audit is overdue or the person may not run it |
 | Corrections to closed days | Adjustments on the current BD, never back-posting |
 
 **Example:** the server time is 1 Oct 2026 02:30 local, and the BD is 30 Sep. Payments get `business_date = 30 Sep`. Night audit is allowed, because local date 1 Oct > BD 30 Sep. After it, the BD is 1 Oct. A second audit at 02:30 is **refused**, because local date = BD and 02:30 is earlier than 20:00. The next audit can run from 20:00 on 1 Oct. An audit at 23:00 on 30 Sep (before midnight) is also allowed.

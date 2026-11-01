@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { InHouseRow } from '@/api/types'
-import { actionTarget, actionsFor, fullName, guestFolio } from './inHouse'
+import { actionLabelKey, actionTarget, actionVariant, actionsFor, fullName, guestFolio, owesAtCheckOut } from './inHouse'
 
 const row = (folios: object[] = [{ id: 80, folio_type: 'GUEST', status: 'OPEN' }]) =>
   ({ id: 5, reservation_id: 9, balance: { amount: '0', status: 'SETTLED', folios } }) as unknown as InHouseRow
@@ -40,5 +40,23 @@ describe('in-house actions', () => {
   it('writes a name as the server does', () => {
     expect(fullName({ first_name: 'Sari', last_name: 'Wijaya' })).toBe('Sari Wijaya')
     expect(fullName({ first_name: null, last_name: 'Wijaya' })).toBe('Wijaya')
+  })
+})
+
+describe('the check-out of a stay that owes money', () => {
+  const owing = { balance: { status: 'OUTSTANDING' } }
+  const settled = { balance: { status: 'SETTLED' } }
+  it('is "Pay & check out", as an outline; the others keep the solid "Check out"', () => {
+    expect(owesAtCheckOut(owing)).toBe(true)
+    expect(owesAtCheckOut(settled)).toBe(false)
+    expect(owesAtCheckOut({ balance: { status: 'CREDIT' } })).toBe(false)
+    expect(owesAtCheckOut({ balance: { status: 'NO_FOLIO' } })).toBe(false)
+    expect(owesAtCheckOut({ balance: null })).toBe(false)
+    expect(actionLabelKey('checkOut', owing)).toBe('frontDesk.inHouse.action.checkOutPay')
+    expect(actionLabelKey('checkOut', settled)).toBe('frontDesk.inHouse.action.checkOut')
+    expect(actionLabelKey('folio', owing)).toBe('frontDesk.inHouse.action.folio') // only the check-out changes
+    expect(actionVariant('checkOut', owing)).toBe('outline')
+    expect(actionVariant('checkOut', settled)).toBe('default')
+    expect(actionVariant('folio', settled)).toBe('outline')
   })
 })

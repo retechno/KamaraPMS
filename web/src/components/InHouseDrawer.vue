@@ -6,7 +6,8 @@ import InHouseBalance from '@/components/InHouseBalance.vue'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { t } from '@/i18n'
-import { type InHouseAction, actionsFor } from '@/utils/inHouse'
+import { Wallet } from 'lucide-vue-next'
+import { type InHouseAction, actionLabelKey, actionVariant, actionsFor, owesAtCheckOut } from '@/utils/inHouse'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
@@ -73,8 +74,8 @@ const folioLabel = (type: string) => (type === 'COMPANY' ? t('frontDesk.inHouse.
       </dl>
 
       <div class="mt-6 flex flex-wrap gap-2" data-testid="drawer-actions">
-        <Button v-for="a in actions" :key="a" type="button" size="sm" :variant="a === 'checkOut' ? 'default' : 'outline'" :data-testid="`drawer-${a}`" @click="emit('act', a, row)">
-          {{ t(`frontDesk.inHouse.action.${a}`) }}
+        <Button v-for="a in actions" :key="a" type="button" size="sm" :variant="actionVariant(a, row)" :data-testid="`drawer-${a}`" :data-owes="a === 'checkOut' ? owesAtCheckOut(row) : undefined" @click="emit('act', a, row)">
+          <Wallet v-if="a === 'checkOut' && owesAtCheckOut(row)" class="text-warning-text" aria-hidden="true" />{{ t(actionLabelKey(a, row)) }}
         </Button>
       </div>
     </SheetContent>
