@@ -267,4 +267,42 @@ describe('DateInput, what is seen is what is sent', () => {
     mountField({}, '2026-11-01')
     expect(document.body.querySelector('[data-slot=date-input-weekday]')?.textContent).toBe('Sunday, 1 Nov 2026')
   })
+
+  it('says the last night under the end of a range that does not include it, instead of the weekday', async () => {
+    const { text } = mountField({ exclusiveEnd: true }, '2026-11-03')
+    const lastNight = () => document.body.querySelector('[data-slot=date-input-last-night]')?.textContent
+    expect(lastNight()).toBe('Last night: Monday, 2 Nov 2026')
+    expect(document.body.querySelector('[data-slot=date-input-weekday]')).toBeNull()
+    await setLocale('id')
+    await flushPromises()
+    expect(lastNight()).toBe('Malam terakhir: Senin, 2 Nov 2026')
+    await text().setValue('01/01/2027') // the day before is in the old year
+    await text().trigger('blur')
+    expect(lastNight()).toBe('Malam terakhir: Kamis, 31 Des 2026')
+    await text().setValue('01/03/2028') // and a leap day
+    expect(lastNight()).toBe('Malam terakhir: Selasa, 29 Feb 2028')
+  })
+
+  it('says no last night when the text is not a valid date or the field is disabled', async () => {
+    const field = mountField({ exclusiveEnd: true, min: '2026-11-01' }, '2026-11-03')
+    await field.text().setValue('3/2')
+    await field.text().trigger('blur')
+    expect(document.body.querySelector('[data-slot=date-input-last-night]')).toBeNull()
+    await field.text().setValue('01/10/2026') // before min
+    expect(document.body.querySelector('[data-slot=date-input-last-night]')).toBeNull()
+    expect(document.body.querySelector('[data-slot=date-input-problem]')?.textContent).toBe('Earliest date: 01/11/2026.')
+    document.body.innerHTML = ''
+    mountField({ exclusiveEnd: true, disabled: true }, '2026-11-03')
+    expect(document.body.querySelector('[data-slot=date-input-last-night]')).toBeNull()
+  })
+
+  it('draws no line under a compact field, but still says what is wrong', async () => {
+    const { text } = mountField({ compact: true }, '2026-11-03')
+    expect(document.body.querySelector('[data-slot=date-input-weekday]')).toBeNull()
+    await text().setValue('31/02/2026')
+    await text().trigger('blur')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')?.textContent).toBe('31/02/2026 is not on the calendar')
+    mountField({ compact: true, exclusiveEnd: true }, '2026-11-03')
+    expect(document.body.querySelector('[data-slot=date-input-last-night]')).toBeNull()
+  })
 })

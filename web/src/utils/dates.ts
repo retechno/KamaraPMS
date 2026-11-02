@@ -63,6 +63,15 @@ export function addDays(date: string, days: number): string {
   return t.toISOString().slice(0, 10)
 }
 
+/**
+ * The names of the seven weekdays, Monday first, in the language of the screen ("Sen" .. "Min", "Mon" .. "Sun"). They are taken from a known Monday (2024-01-01) and the six
+ * days after it, in UTC, so the time zone of the browser can move none of them.
+ */
+export function weekdayLabels(locale: string, style: 'short' | 'long' = 'short'): string[] {
+  const names = new Intl.DateTimeFormat(locale, { weekday: style, timeZone: 'UTC' })
+  return Array.from({ length: 7 }, (_, i) => names.format(new Date(Date.UTC(2024, 0, 1 + i))))
+}
+
 function daysInMonth(year: number, month: number): number {
   if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28
   return [4, 6, 9, 11].includes(month) ? 30 : 31
