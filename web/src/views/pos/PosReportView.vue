@@ -82,7 +82,7 @@ function csv(): void {
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <EmptyState v-else-if="loaded && outlets.length === 0" :title="t('posFloor.noOutlet')" :description="t('posFloor.noOutletHint')" />
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3" novalidate @submit.prevent="guardForm($event) && load()">
+    <form class="mb-8 flex flex-wrap items-end gap-3" novalidate @submit.prevent="guardForm($event) && load()">
       <FormField :label="t('posFloor.outlet')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="outletId" name="outlet" data-testid="report-outlet">

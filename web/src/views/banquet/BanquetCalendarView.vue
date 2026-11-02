@@ -189,7 +189,7 @@ const toneKey = (s: BanquetCalendarSession): string => t(`banquet.tone.${toneOf(
       <Button type="button" variant="outline" size="sm" data-testid="notices-seen" @click="seeNotices">{{ t('banquet.notice.seen') }}</Button>
     </div>
 
-    <div class="mb-3 flex flex-wrap items-center gap-2" data-testid="calendar-bar">
+    <div class="mb-8 flex flex-wrap items-center gap-2" data-testid="calendar-bar">
       <Button type="button" variant="outline" :aria-label="t('banquet.calendar.previous')" data-testid="cal-prev" @click="step(-1)">‹</Button>
       <DateInput v-model="date" name="date" class="w-auto" :aria-label="t('banquet.calendar.date')" data-testid="cal-date" />
       <Button type="button" variant="outline" :aria-label="t('banquet.calendar.next')" data-testid="cal-next" @click="step(1)">›</Button>

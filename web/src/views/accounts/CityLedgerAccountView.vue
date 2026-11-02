@@ -639,7 +639,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <Card data-testid="statement">
       <CardHeader><CardTitle>{{ t('clAccount.statement') }}</CardTitle></CardHeader>
       <CardContent>
-        <form class="mb-4 flex flex-wrap items-end gap-3" novalidate @submit.prevent="guardForm($event) && load()">
+        <form class="mb-8 flex flex-wrap items-end gap-3" novalidate @submit.prevent="guardForm($event) && load()">
           <FormField :label="t('clAccount.from')">
             <template #default="{ id, invalid }"><DateInput :id="id" v-model="period.from" name="from" :aria-invalid="invalid || !!fieldError('from')" /></template>
           </FormField>

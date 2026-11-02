@@ -41,7 +41,7 @@ const th = 'align-bottom px-2 py-2 text-[11px] font-medium uppercase text-muted-
     <ErrorNotice :error="error" inline data-testid="report-error" />
     <p v-if="denied" class="muted m-0" data-testid="no-access">{{ t('dayReports.deniedBoth', { first: 'report.view', second: 'cashier.shift_manage' }) }}</p>
     <template v-else>
-      <form class="flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="guardForm($event) && run()">
+      <form class="mb-5 flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="guardForm($event) && run()">
         <FormField :label="t('dayReports.businessDate')"><template #default="{ id }"><DateInput :id="id" v-model="date" name="date" data-testid="z-date" /></template></FormField>
         <Button type="submit" size="sm" :disabled="busy" data-testid="run">{{ t('dayReports.run') }}</Button>
       </form>

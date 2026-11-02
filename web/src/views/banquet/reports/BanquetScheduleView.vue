@@ -70,7 +70,7 @@ const guests = (s: BanquetScheduleRow): string => String(s.pax_actual ?? s.pax_g
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3 print:hidden" novalidate data-testid="report-period" @submit.prevent="guardForm($event) && load()">
+    <form class="mb-8 flex flex-wrap items-end gap-3 print:hidden" novalidate data-testid="report-period" @submit.prevent="guardForm($event) && load()">
       <FormField :label="t('banquet.reports.schedule.day')"><template #default="{ id }"><DateInput :id="id" v-model="day" name="day" class="w-40" /></template></FormField>
       <Button type="submit" variant="outline" :disabled="busy" data-testid="report-show">{{ t('inventory.reports.show') }}</Button>
       <div class="ml-auto flex flex-wrap gap-2">

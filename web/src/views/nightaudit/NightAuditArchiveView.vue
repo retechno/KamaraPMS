@@ -197,7 +197,7 @@ watch(pid, () => {
   <p v-else-if="!canView" class="muted" data-testid="no-access">{{ t('nightAuditArchive.noAccess') }}</p>
 
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3" data-testid="filters" @submit.prevent="guardForm($event) && load()">
+    <form class="mb-8 flex flex-wrap items-end gap-3" data-testid="filters" @submit.prevent="guardForm($event) && load()">
       <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.from') }}<DateInput v-model="filter.from" name="from" /></label>
       <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.to') }}<DateInput v-model="filter.to" name="to" /></label>
       <Button type="submit" variant="outline" size="sm" data-testid="show">{{ t('nightAuditArchive.show') }}</Button>
