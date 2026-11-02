@@ -31,7 +31,7 @@ describe('the breadcrumb of a report says what the heading says', () => {
     const found = [...routes.matchAll(/path: '([^']+)',[^\n]*import\('@\/(views\/[^']+\.vue)'\)[^\n]*titleKey: '([^']+)'/g)]
     expect(found.length).toBe(reports.length)
     for (const [, path, file, key] of found) {
-      const src = readFileSync(resolve(__dirname, '..', file), 'utf8')
+      const src = readFileSync(resolve(__dirname, '..', file as string), 'utf8')
       expect(src, `${path} should show ${key} as its title`).toContain(`:title="t('${key}')"`)
     }
   })
