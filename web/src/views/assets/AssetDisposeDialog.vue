@@ -9,6 +9,8 @@ import MoneyInput from '@/components/app/MoneyInput.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
@@ -137,7 +139,7 @@ async function submit(): Promise<void> {
 <template>
   <Dialog :open="!!asset" @update:open="(v) => { if (!v) emit('close') }">
     <DialogContent v-if="asset" class="max-h-[92dvh] max-w-3xl overflow-y-auto p-5" data-testid="dispose-dialog" @interact-outside.prevent>
-      <form novalidate class="flex flex-col gap-3" @submit.prevent="submit()">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="guardForm($event) && submit()">
         <DialogTitle>{{ t('assets.dispose.title') }}</DialogTitle>
         <DialogDescription data-testid="dispose-asset">{{ asset.number }} · {{ asset.name }} · {{ t('assets.dispose.values', { cost: formatMoney(asset.cost), accum: formatMoney(asset.accum_depr), carrying: formatMoney(asset.carrying_value) }) }}</DialogDescription>
         <ErrorNotice v-if="error" :error="error" inline />
@@ -149,7 +151,7 @@ async function submit(): Promise<void> {
           <FormField v-if="form.kind === 'WRITE_OFF'" :label="t('assets.dispose.reason')" :error="error?.fieldMessage('reason_code')">
             <template #default="{ id }"><NativeSelect :id="id" v-model="form.reason_code" name="reason_code" data-testid="dispose-reason"><option v-for="r in WRITE_OFF_REASONS" :key="r" :value="r">{{ t(`assets.dispose.reasonCode.${r}`) }}</option></NativeSelect></template>
           </FormField>
-          <FormField :label="t('assets.dispose.date')" :hint="t('assets.dispose.dateHint')" :error="error?.fieldMessage('disposal_date')"><template #default="{ id }"><Input :id="id" v-model="form.disposal_date" name="disposal_date" type="date" /></template></FormField>
+          <FormField :label="t('assets.dispose.date')" :hint="t('assets.dispose.dateHint')" :error="error?.fieldMessage('disposal_date')"><template #default="{ id }"><DateInput :id="id" v-model="form.disposal_date" name="disposal_date" /></template></FormField>
           <FormField v-if="isBatch" :label="t('assets.dispose.units', { n: asset.unit_count })" :error="error?.fieldMessage('units')"><template #default="{ id }"><Input :id="id" v-model.number="form.units" name="units" type="number" min="1" :max="asset.unit_count" inputmode="numeric" data-testid="dispose-units" /></template></FormField>
         </div>
         <div v-if="form.kind === 'SALE'" class="grid gap-3 sm:grid-cols-2" data-testid="dispose-proceeds">

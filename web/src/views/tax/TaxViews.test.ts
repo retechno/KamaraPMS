@@ -310,3 +310,69 @@ describe('tax views', () => {
     expect(POST.mock.calls[0]?.[1].body).toMatchObject({ reason: 'wrong amount' })
   })
 })
+
+describe('tax views, what is seen is what is sent', () => {
+  beforeEach(() => {
+    GET = vi.fn()
+    POST = vi.fn()
+    PATCH = vi.fn()
+    profileList = () => [profile()]
+  })
+
+  it('what is owed is not loaded while its date is half typed, and the screen says why', async () => {
+    const w = await mountView(TaxLiabilityView)
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the opening credit does not ask for the approval while its date is half typed', async () => {
+    profileList = () => [profile({ id: 2, tax_id: 10, tax_code: 'VAT', tax_kind: 'VAT', claims_input_vat: true })]
+    const w = await mountView(TaxProfilesView)
+    await flushPromises()
+    await w.get('[data-testid=credit-VAT]').trigger('click')
+    await w.get('input[name=amount]').setValue('7000')
+    await w.get('[data-testid=credit-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=credit-form]').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-testid=approval]').exists()).toBe(false)
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the return is not filed while the filing date is half typed', async () => {
+    const w = await mountView(TaxReturnsView, undefined, '/tax/returns?tax=9')
+    await flushPromises()
+    await w.get('[data-testid=period-2026-09-01]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=file-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=file-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the payment of a return is not recorded while its date is half typed', async () => {
+    const w = await mountView(TaxReturnsView, undefined, '/tax/returns?tax=9')
+    await flushPromises()
+    GET.mockImplementation(async (p: string) => {
+      if (p.endsWith('/tax/periods')) return { data: { data: periods } }
+      if (p.endsWith('/tax/profiles')) return { data: { data: [profile()] } }
+      if (p.endsWith('/tax/worksheet')) return { data: worksheet({ return: filedReturn() }) }
+      if (p.endsWith('/tax/returns/{id}')) return { data: filedReturn() }
+      return { data: { data: accounts } }
+    })
+    await w.get('[data-testid=period-2026-08-01]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid=pay-open]').trigger('click')
+    await w.get('[data-testid=pay-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=pay-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

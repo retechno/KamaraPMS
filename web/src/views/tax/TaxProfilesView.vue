@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { Combobox } from '@/components/ui/combobox'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
@@ -204,14 +206,14 @@ watch(() => pid.value, () => {
       </form>
     </Card>
     <Card v-if="credit && !credit.asking" class="mb-4">
-      <form novalidate data-testid="credit-form" @submit.prevent="credit.asking = true">
+      <form novalidate data-testid="credit-form" @submit.prevent="guardForm($event) && (credit.asking = true)">
         <CardHeader><CardTitle>{{ credit.mode === 'set' ? t('taxProfiles.creditSetTitle', { code: credit.profile.tax_code }) : t('taxProfiles.creditVoidTitle', { code: credit.profile.tax_code }) }}</CardTitle></CardHeader>
         <CardContent>
           <p class="mt-0 text-sm text-muted-foreground">{{ credit.mode === 'set' ? t('taxProfiles.creditSetHint') : t('taxProfiles.creditVoidHint') }}</p>
           <div class="grid gap-4 sm:grid-cols-2">
             <template v-if="credit.mode === 'set'">
               <FormField :label="t('taxProfiles.creditAsOf')" :error="fieldError('as_of')">
-                <template #default="{ id, invalid }"><Input :id="id" v-model="credit.as_of" name="as_of" type="date" :aria-invalid="invalid" /></template>
+                <template #default="{ id, invalid }"><DateInput :id="id" v-model="credit.as_of" name="as_of" :aria-invalid="invalid" /></template>
               </FormField>
               <FormField :label="t('taxProfiles.creditAmount')" :error="fieldError('amount')">
                 <template #default="{ id, invalid }"><Input :id="id" v-model="credit.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>

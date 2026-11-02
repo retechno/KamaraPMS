@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { t } from '@/i18n'
@@ -137,9 +139,9 @@ const th = 'p-2 text-xs font-medium uppercase text-muted-foreground'
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>
     <template v-else>
-      <form v-if="kind !== 'locations'" class="flex flex-wrap items-end gap-3 print:hidden" data-testid="report-filters" @submit.prevent="load">
+      <form v-if="kind !== 'locations'" class="flex flex-wrap items-end gap-3 print:hidden" data-testid="report-filters" novalidate @submit.prevent="guardForm($event) && load()">
         <template v-if="kind === 'register'">
-          <FormField :label="t('assets.reports.asOf')"><template #default="{ id }"><Input :id="id" v-model="f.as_of" type="date" name="as_of" data-testid="f-as-of" /></template></FormField>
+          <FormField :label="t('assets.reports.asOf')"><template #default="{ id }"><DateInput :id="id" v-model="f.as_of" name="as_of" data-testid="f-as-of" /></template></FormField>
           <FormField :label="t('assets.reports.category')"><template #default="{ id }"><NativeSelect :id="id" v-model.number="f.category_id" name="category_id" data-testid="f-category"><option :value="0">{{ t('assets.reports.all') }}</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></NativeSelect></template></FormField>
           <FormField :label="t('assets.reports.location')"><template #default="{ id }"><NativeSelect :id="id" v-model.number="f.location_id" name="location_id" data-testid="f-location"><option :value="0">{{ t('assets.reports.all') }}</option><option v-for="l in locations" :key="l.id" :value="l.id">{{ l.name }}</option></NativeSelect></template></FormField>
         </template>
@@ -152,8 +154,8 @@ const th = 'p-2 text-xs font-medium uppercase text-muted-foreground'
         </template>
         <template v-else>
           <FormField :label="t('assets.reports.result')"><template #default="{ id }"><NativeSelect :id="id" v-model="f.result" name="result" data-testid="f-result"><option value="">{{ t('assets.reports.all') }}</option><option v-for="r in ['MOVED', 'UNEXPECTED', 'DAMAGED', 'MISSING']" :key="r" :value="r">{{ t(`assets.audit.result.${r}`) }}</option></NativeSelect></template></FormField>
-          <FormField :label="t('assets.reports.from')"><template #default="{ id }"><Input :id="id" v-model="f.date_from" type="date" name="date_from" /></template></FormField>
-          <FormField :label="t('assets.reports.to')"><template #default="{ id }"><Input :id="id" v-model="f.date_to" type="date" name="date_to" /></template></FormField>
+          <FormField :label="t('assets.reports.from')"><template #default="{ id }"><DateInput :id="id" v-model="f.date_from" name="date_from" /></template></FormField>
+          <FormField :label="t('assets.reports.to')"><template #default="{ id }"><DateInput :id="id" v-model="f.date_to" name="date_to" /></template></FormField>
         </template>
         <Button type="submit" size="sm" :disabled="busy || !canRun" data-testid="report-run">{{ t('assets.reports.run') }}</Button>
       </form>

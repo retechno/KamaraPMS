@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -145,12 +147,12 @@ watch(() => pid.value, () => {
     </Card>
 
     <Card v-if="editing" class="mb-4">
-      <form novalidate data-testid="status-form" @submit.prevent="submit()">
+      <form novalidate data-testid="status-form" @submit.prevent="guardForm($event) && submit()">
         <CardHeader><CardTitle>{{ t('taxStatus.change') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FormField :label="t('taxStatus.effectiveFrom')" :error="fieldError('effective_from')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.effective_from" name="effective_from" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.effective_from" name="effective_from" :aria-invalid="invalid" /></template>
             </FormField>
             <label class="flex items-center gap-2 self-end pb-2 text-sm">
               <input v-model="form.is_pkp" name="is_pkp" type="checkbox" class="size-4 accent-primary" /><span>{{ t('taxStatus.isPkp') }}</span>
@@ -165,7 +167,7 @@ watch(() => pid.value, () => {
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.pkp_number" name="pkp_number" maxlength="40" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('taxStatus.confirmedOn')" :error="fieldError('pkp_confirmed_on')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.pkp_confirmed_on" name="pkp_confirmed_on" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.pkp_confirmed_on" name="pkp_confirmed_on" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('taxStatus.signerName')" :error="fieldError('signer_name')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.signer_name" name="signer_name" maxlength="150" :aria-invalid="invalid" /></template>

@@ -8,6 +8,8 @@ import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
@@ -92,7 +94,7 @@ async function submit(): Promise<void> {
 <template>
   <Dialog :open="!!asset" @update:open="(v) => { if (!v) emit('close') }">
     <DialogContent v-if="asset" class="max-h-[90dvh] max-w-lg overflow-y-auto p-5" data-testid="revise-dialog" @interact-outside.prevent>
-      <form novalidate class="flex flex-col gap-3" @submit.prevent="submit">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="guardForm($event) && submit()">
         <DialogTitle>{{ isCip ? t('assets.revise.titleCip') : t('assets.revise.title') }}</DialogTitle>
         <DialogDescription>{{ isCip ? t('assets.revise.hintCip') : t('assets.revise.hint') }}</DialogDescription>
         <ErrorNotice v-if="error" :error="error" inline />
@@ -127,7 +129,7 @@ async function submit(): Promise<void> {
             </template>
           </FormField>
           <div v-if="isCip" class="grid gap-3 sm:grid-cols-2" data-testid="revise-cip">
-            <FormField :label="t('assets.make.inServiceDate')" required :error="error?.fieldMessage('in_service_date')"><template #default="{ id }"><Input :id="id" v-model="form.in_service_date" name="in_service_date" type="date" /></template></FormField>
+            <FormField :label="t('assets.make.inServiceDate')" required :error="error?.fieldMessage('in_service_date')"><template #default="{ id }"><DateInput :id="id" v-model="form.in_service_date" name="in_service_date" /></template></FormField>
             <FormField :label="t('assets.make.startRule')" :error="error?.fieldMessage('start_rule')">
               <template #default="{ id }"><NativeSelect :id="id" v-model="form.start_rule" name="start_rule"><option v-for="r in ['IN_SERVICE_MONTH', 'NEXT_MONTH']" :key="r" :value="r">{{ t(`assets.startRule.${r}`) }}</option></NativeSelect></template>
             </FormField>

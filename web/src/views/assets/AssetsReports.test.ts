@@ -277,3 +277,33 @@ describe('the buttons in the header of the reports', () => {
     expect(w.get('[data-slot=page-actions]').find('a[href="/assets/audits"]').exists()).toBe(true)
   })
 })
+
+describe('the reports of the assets, what is seen is what is sent', () => {
+  beforeEach(() => {
+    GET = vi.fn()
+    setLocale('en')
+  })
+
+  it('the recap is not loaded while a date is half typed, and the screen says why', async () => {
+    const row = recapRow({})
+    GET = vi.fn(async () => ({ data: { date_from: '2026-10-01', date_to: '2026-10-31', rows: [row], total: row, account_1590: '0' } }))
+    const w = await setup(AssetRecapView, '/assets/reports/recap', '/assets/reports/recap')
+    const before = GET.mock.calls.length
+    await w.get('form input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the register report is not loaded while its date is half typed', async () => {
+    GET = vi.fn(async () => ({ data: { as_of: '2026-11-06', rows: [], count: 0, cost: '0', accum_depr: '0', carrying_value: '0' } }))
+    const w = await setup(AssetReportView, '/assets/reports/register', '/assets/reports/:kind')
+    const before = GET.mock.calls.length
+    await w.get('form[data-testid=report-filters] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form[data-testid=report-filters]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

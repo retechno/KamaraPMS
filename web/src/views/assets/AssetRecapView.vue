@@ -10,7 +10,8 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { t } from '@/i18n'
 import { formatDate, formatMoney } from '@/utils/format'
@@ -96,9 +97,9 @@ const th = 'px-1.5 py-2 text-right text-[11px] font-medium uppercase leading-tig
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>
     <template v-else>
-      <form class="flex flex-wrap items-end gap-3 print:hidden" @submit.prevent="load">
-        <FormField :label="t('assets.reports.from')"><template #default="{ id }"><Input :id="id" v-model="from" type="date" name="date_from" data-testid="recap-from" /></template></FormField>
-        <FormField :label="t('assets.reports.to')"><template #default="{ id }"><Input :id="id" v-model="to" type="date" name="date_to" data-testid="recap-to" /></template></FormField>
+      <form class="flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="guardForm($event) && load()">
+        <FormField :label="t('assets.reports.from')"><template #default="{ id }"><DateInput :id="id" v-model="from" name="date_from" data-testid="recap-from" /></template></FormField>
+        <FormField :label="t('assets.reports.to')"><template #default="{ id }"><DateInput :id="id" v-model="to" name="date_to" data-testid="recap-to" /></template></FormField>
         <Button type="submit" size="sm" :disabled="busy" data-testid="recap-run">{{ t('assets.reports.run') }}</Button>
       </form>
       <p v-if="report" class="m-0 text-sm text-muted-foreground" data-testid="recap-period">{{ t('assets.reports.recap.period', { from: formatDate(report.date_from), to: formatDate(report.date_to) }) }}</p>

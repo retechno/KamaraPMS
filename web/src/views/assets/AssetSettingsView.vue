@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { toast } from '@/composables/useToast'
@@ -285,7 +287,7 @@ watch([ensureKind, canSetup], loadEnsure, { immediate: true })
     <Card v-if="settings" class="flex flex-col gap-4 p-4" data-testid="settings-card">
       <h2 class="m-0 text-base font-semibold">{{ t('assets.settings.property') }}</h2>
       <ErrorNotice v-if="sError" :error="sError" inline />
-      <form novalidate class="grid gap-4 lg:grid-cols-3" @submit.prevent="saveSettings">
+      <form novalidate class="grid gap-4 lg:grid-cols-3" @submit.prevent="guardForm($event) && saveSettings()">
         <fieldset class="m-0 flex flex-col gap-1 border-0 p-0">
           <legend class="mb-1 text-sm font-semibold">{{ t('assets.settings.startRule') }}</legend>
           <label v-for="r in ['IN_SERVICE_MONTH', 'NEXT_MONTH']" :key="r" class="flex min-h-9 items-center gap-2 text-sm"><input v-model="sForm.start_rule" type="radio" name="start_rule" :value="r" :disabled="!canSetup" class="accent-primary" />{{ t(`assets.startRule.${r}`) }}</label>
@@ -300,7 +302,7 @@ watch([ensureKind, canSetup], loadEnsure, { immediate: true })
         <div class="flex flex-col gap-3">
           <FormField :label="t('assets.settings.threshold')" :hint="t('assets.settings.thresholdHint')" :error="sError?.fieldMessage('capitalization_threshold')"><template #default="{ id }"><Input :id="id" v-model="sForm.capitalization_threshold" name="capitalization_threshold" inputmode="decimal" :disabled="!canSetup" /></template></FormField>
           <FormField :label="t('assets.settings.registerFrom')" :hint="settings.started ? t('assets.settings.registerLocked') : t('assets.settings.registerFromHint')" :error="sError?.fieldMessage('register_from')">
-            <template #default="{ id }"><Input :id="id" v-model="sForm.register_from" name="register_from" type="date" :disabled="!canSetup || settings.started" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="sForm.register_from" name="register_from" :disabled="!canSetup || settings.started" /></template>
           </FormField>
           <FormField :label="t('assets.settings.taxYear')" :hint="t('assets.settings.taxYearHint')">
             <template #default="{ id }">

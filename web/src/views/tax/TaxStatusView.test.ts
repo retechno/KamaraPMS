@@ -96,3 +96,16 @@ describe('PKP status', () => {
     expect(w.get('[data-testid=status-form]').text()).toContain('the tax number (NPWP) of a PKP property')
   })
 })
+
+describe('PKP status, what is seen is what is sent', () => {
+  it('does not save the change while its date is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=change-status]').trigger('click')
+    await w.get('[data-testid=status-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=status-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

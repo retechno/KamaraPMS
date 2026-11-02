@@ -456,3 +456,32 @@ describe('the capitalisation threshold of the Make-asset dialog', () => {
     expect(has('[data-testid=make-above]')).toBe(true)
   })
 })
+
+describe('the dialogs of the asset page, what is seen is what is sent', () => {
+  it('the disposal is not sent while its date is half typed, and the dialog says why', async () => {
+    await setup(AssetView, DISPOSE, '/assets/2')
+    POST = vi.fn(async (path: string) => (String(path).endsWith('/dispose/preview') ? { data: preview } : { data: undefined }))
+    await click('[data-testid=act-dispose]')
+    await type('[data-testid=dispose-price]', '25000000')
+    await choose('[data-testid=dispose-account]', 31)
+    await pause()
+    expect(disabled('[data-testid=dispose-confirm]')).toBe(false)
+    await type('[data-testid=dispose-dialog] input[data-slot=date-input-text]', '3/2')
+    await pause()
+    await click('[data-testid=dispose-confirm]')
+    expect(callTo(POST, '/assets/{id}/dispose')).toBeUndefined()
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the finished building is not sent while the date in service is half typed', async () => {
+    const cip = { ...detail, category_kind: 'CIP', category_name: 'Construction in progress', method: null, life_months: null, in_service_date: '2026-08-01' }
+    await setup(AssetView, DISPOSE, '/assets/2', (path) => (path.endsWith('/assets/{id}') ? { data: cip } : ok(path)))
+    await click('[data-testid=act-category]')
+    await choose('[data-testid=revise-category]', 3)
+    await type('input[name=reason]', 'opened')
+    await type('[data-testid=revise-dialog] input[data-slot=date-input-text]', '3/2')
+    await click('[data-testid=revise-confirm]')
+    expect(callTo(POST, '/assets/{id}/revisions')).toBeUndefined()
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+})

@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { i18n, t } from '@/i18n'
@@ -336,10 +338,10 @@ watch([() => pid.value, taxId], () => {
                   <Button v-if="!payForm.open && Number(filed.outstanding) > 0" type="button" data-testid="pay-open" @click="startPay">{{ t('taxReturns.recordPayment') }}</Button>
                   <Button v-if="!Number(filed.paid)" type="button" variant="outline" data-testid="void-return" @click="voiding = { kind: 'return', id: filed.id, reason: '', asking: false }">{{ t('taxReturns.voidReturn') }}</Button>
                 </div>
-                <form v-if="payForm.open" class="mt-2 rounded-lg border border-border bg-card p-4" novalidate data-testid="pay-form" @submit.prevent="pay">
+                <form v-if="payForm.open" class="mt-2 rounded-lg border border-border bg-card p-4" novalidate data-testid="pay-form" @submit.prevent="guardForm($event) && pay()">
                   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <FormField :label="t('taxReturns.paymentDate')" :error="fieldError('payment_date')">
-                      <template #default="{ id, invalid }"><Input :id="id" v-model="payForm.payment_date" name="payment_date" type="date" :aria-invalid="invalid" /></template>
+                      <template #default="{ id, invalid }"><DateInput :id="id" v-model="payForm.payment_date" name="payment_date" :aria-invalid="invalid" /></template>
                     </FormField>
                     <FormField :label="t('taxReturns.amount')" :error="fieldError('amount')">
                       <template #default="{ id, invalid }"><Input :id="id" v-model="payForm.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
@@ -375,12 +377,12 @@ watch([() => pid.value, taxId], () => {
 
               <template v-else>
                 <ul v-if="worksheet.blockers.length" class="mb-2 mt-3 text-destructive" data-testid="blockers"><li v-for="b in worksheet.blockers" :key="b">{{ b }}</li></ul>
-                <form v-if="can('tax.file') && worksheet.ready" class="mt-3 rounded-lg border border-border bg-card p-4" novalidate data-testid="file-form" @submit.prevent="file">
+                <form v-if="can('tax.file') && worksheet.ready" class="mt-3 rounded-lg border border-border bg-card p-4" novalidate data-testid="file-form" @submit.prevent="guardForm($event) && file()">
                   <h3 class="m-0 text-sm font-semibold">{{ t('taxReturns.fileTitle', { month: monthLabel(worksheet.period_start) }) }}</h3>
                   <p class="mb-3 mt-1 text-sm text-muted-foreground">{{ t('taxReturns.fileHint', { date: $date(worksheet.due_date), authority: worksheet.profile.authority }) }}</p>
                   <div class="grid gap-4 sm:grid-cols-2">
                     <FormField :label="t('taxReturns.filedOn')" :hint="t('taxReturns.filedOnHint')" :error="fieldError('filed_on')">
-                      <template #default="{ id, invalid }"><Input :id="id" v-model="fileForm.filed_on" name="filed_on" type="date" :aria-invalid="invalid" /></template>
+                      <template #default="{ id, invalid }"><DateInput :id="id" v-model="fileForm.filed_on" name="filed_on" :aria-invalid="invalid" /></template>
                     </FormField>
                     <FormField :label="t('taxReturns.filingReference')">
                       <template #default="{ id }"><Input :id="id" v-model="fileForm.reference" name="reference" maxlength="100" /></template>
