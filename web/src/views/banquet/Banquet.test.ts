@@ -417,3 +417,37 @@ describe('the lists', () => {
     expect(w.find('[data-testid=pax-BQ-000003]').exists()).toBe(false)
   })
 })
+
+describe('the option date of a tentative booking, what is seen is what is sent', () => {
+  it('does not make an event tentative while the option date is half typed, and says why', async () => {
+    const inquiry = { ...tentative, status: 'INQUIRY' }
+    api([], (path) => (path.endsWith('/banquet/events/{id}') ? { data: inquiry } : undefined))
+    const { w } = await setup(BanquetEventView, ['banquet.manage'], '/banquet/events/20')
+    await w.get('[data-testid=event-tentative]').trigger('click')
+    await flushPromises()
+    const field = document.body.querySelector('[data-testid=tentative-dialog] input[data-slot=date-input-text]') as HTMLInputElement
+    field.value = '3/2'
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    document.body.querySelector('[data-testid=tentative-dialog] form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))
+    await flushPromises()
+    expect(POST.mock.calls.some((c) => String(c[0]).endsWith('/tentative'))).toBe(false)
+    expect(document.body.querySelector('[data-testid=tentative-dialog]')!.textContent).toContain('Write as dd/mm/yyyy')
+  })
+})
+
+describe('the date of the calendar, what is seen is what is sent', () => {
+  it('asks the server again for a whole date only, not for half of one', async () => {
+    api([])
+    const { w } = await setup(BanquetCalendarView, ['banquet.read'])
+    const calls = () => GET.mock.calls.filter((c) => String(c[0]).endsWith('/banquet/calendar')).length
+    const before = calls()
+    const field = w.get('[data-testid=cal-date]')
+    await field.setValue('3/2')
+    await flushPromises()
+    expect(calls()).toBe(before)
+    await field.setValue('07/11/2026')
+    await flushPromises()
+    expect(calls()).toBeGreaterThan(before)
+    expect(JSON.stringify(GET.mock.calls.filter((c) => String(c[0]).endsWith('/banquet/calendar')).at(-1)?.[1])).toContain('2026-11-0')
+  })
+})

@@ -18,7 +18,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -132,8 +132,8 @@ watch(businessDate, () => {
   <template v-else>
     <FilterBar class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-6 pb-5" role="search" :active="activeFilters" @submit="load">
 
-      <FormField float-hint :hint="$weekday(date)" class="w-44" :label="t('cashier.businessDate')">
-        <template #default="{ id }"><Input :id="id" v-model="date" name="business_date" type="date" /></template>
+      <FormField class="w-44" :label="t('cashier.businessDate')">
+        <template #default="{ id }"><DateInput :id="id" v-model="date" name="business_date" /></template>
       </FormField>
       <FormField class="w-44" :label="t('cashier.method')">
         <template #default="{ id }">

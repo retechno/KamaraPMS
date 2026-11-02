@@ -370,3 +370,23 @@ describe('the Reports page', () => {
     expect(w.get('[data-testid=day-report-z]').attributes('href')).toBe('/reports/z-reports')
   })
 })
+
+describe('the reports of the day, what is seen is what is sent', () => {
+  it.each([
+    ['cancellations', CancellationsView, '/reports/cancellations', ['report.view']],
+    ['corrections', CorrectionsView, '/reports/corrections', ['report.view']],
+    ['daily flash', DailyFlashView, '/reports/daily-flash', ['report.view']],
+    ['deposit ledger', DepositLedgerView, '/reports/deposit-ledger', ['report.view']],
+    ['guest ledger', GuestLedgerView, '/reports/guest-ledger', ['report.view']],
+    ['Z reports', ZReportsView, '/reports/z-reports', ['report.view', 'cashier.shift_manage']],
+  ])('does not ask the server for the %s while a date is half typed, and says why', async (_name, view, route, permissions) => {
+    GET = vi.fn(async () => { throw new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'DATE_NOT_CLOSED', detail: 'not closed' }) })
+    const w = await setup(view, route, permissions)
+    const before = GET.mock.calls.length
+    await w.get('form input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

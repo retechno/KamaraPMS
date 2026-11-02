@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
@@ -22,6 +23,7 @@ import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { listAccounts } from '@/views/accounting/accountApi'
 import { fromMilli, toMilli } from '@/views/accounting/accountMeta'
+import { guardForm } from '@/utils/forms'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -637,12 +639,12 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     <Card data-testid="statement">
       <CardHeader><CardTitle>{{ t('clAccount.statement') }}</CardTitle></CardHeader>
       <CardContent>
-        <form class="mb-4 flex flex-wrap items-end gap-3" novalidate @submit.prevent="load()">
+        <form class="mb-4 flex flex-wrap items-end gap-3" novalidate @submit.prevent="guardForm($event) && load()">
           <FormField :label="t('clAccount.from')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="period.from" name="from" type="date" :aria-invalid="invalid || !!fieldError('from')" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="period.from" name="from" :aria-invalid="invalid || !!fieldError('from')" /></template>
           </FormField>
           <FormField :label="t('clAccount.to')" :error="fieldError('to')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="period.to" name="to" type="date" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="period.to" name="to" :aria-invalid="invalid" /></template>
           </FormField>
           <Button type="submit" variant="outline">{{ t('clAccount.show') }}</Button>
           <Button type="button" variant="outline" data-testid="print-statement" @click="printStatement">{{ t('clAccount.printStatement') }}</Button>

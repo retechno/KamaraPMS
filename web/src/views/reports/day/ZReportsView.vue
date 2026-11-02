@@ -8,10 +8,11 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { t } from '@/i18n'
 import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
 import { money } from '@/views/accounting/reportApi'
+import { guardForm } from '@/utils/forms'
 import DayReportActions from './DayReportActions.vue'
 import { methodName } from './dayLabels'
 import { useDayReport } from './useDayReport'
@@ -40,8 +41,8 @@ const th = 'align-bottom px-2 py-2 text-[11px] font-medium uppercase text-muted-
     <ErrorNotice :error="error" inline data-testid="report-error" />
     <p v-if="denied" class="muted m-0" data-testid="no-access">{{ t('dayReports.deniedBoth', { first: 'report.view', second: 'cashier.shift_manage' }) }}</p>
     <template v-else>
-      <form class="flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="run">
-        <FormField :label="t('dayReports.businessDate')"><template #default="{ id }"><Input :id="id" v-model="date" type="date" name="date" data-testid="z-date" /></template></FormField>
+      <form class="flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="guardForm($event) && run()">
+        <FormField :label="t('dayReports.businessDate')"><template #default="{ id }"><DateInput :id="id" v-model="date" name="date" data-testid="z-date" /></template></FormField>
         <Button type="submit" size="sm" :disabled="busy" data-testid="run">{{ t('dayReports.run') }}</Button>
       </form>
 

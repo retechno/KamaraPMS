@@ -10,12 +10,13 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { downloadFile, openPdf } from '@/utils/documents'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -196,9 +197,9 @@ watch(pid, () => {
   <p v-else-if="!canView" class="muted" data-testid="no-access">{{ t('nightAuditArchive.noAccess') }}</p>
 
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3" data-testid="filters" @submit.prevent="load()">
-      <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.from') }}<Input v-model="filter.from" type="date" name="from" /></label>
-      <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.to') }}<Input v-model="filter.to" type="date" name="to" /></label>
+    <form class="mb-4 flex flex-wrap items-end gap-3" data-testid="filters" @submit.prevent="guardForm($event) && load()">
+      <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.from') }}<DateInput v-model="filter.from" name="from" /></label>
+      <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.to') }}<DateInput v-model="filter.to" name="to" /></label>
       <Button type="submit" variant="outline" size="sm" data-testid="show">{{ t('nightAuditArchive.show') }}</Button>
     </form>
 
@@ -329,8 +330,8 @@ watch(pid, () => {
       <CardHeader><CardTitle>{{ t('nightAuditArchive.buildLate') }}</CardTitle></CardHeader>
       <CardContent>
         <p class="mt-0 text-sm text-muted-foreground">{{ t('nightAuditArchive.buildLateHint') }}</p>
-        <form class="flex flex-wrap items-end gap-3" @submit.prevent="lateDate && rebuild(lateDate)">
-          <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.buildDate') }}<Input v-model="lateDate" type="date" name="late_date" /></label>
+        <form class="flex flex-wrap items-end gap-3" @submit.prevent="guardForm($event) && lateDate && rebuild(lateDate)">
+          <label class="grid gap-1 text-sm">{{ t('nightAuditArchive.buildDate') }}<DateInput v-model="lateDate" name="late_date" /></label>
           <Button type="submit" size="sm" :disabled="!lateDate" data-testid="build-late">{{ t('nightAuditArchive.build') }}</Button>
         </form>
       </CardContent>

@@ -10,7 +10,7 @@ import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -191,7 +191,7 @@ const toneKey = (s: BanquetCalendarSession): string => t(`banquet.tone.${toneOf(
 
     <div class="mb-3 flex flex-wrap items-center gap-2" data-testid="calendar-bar">
       <Button type="button" variant="outline" :aria-label="t('banquet.calendar.previous')" data-testid="cal-prev" @click="step(-1)">‹</Button>
-      <Input v-model="date" type="date" name="date" class="w-auto" :aria-label="t('banquet.calendar.date')" data-testid="cal-date" />
+      <DateInput v-model="date" name="date" class="w-auto" :aria-label="t('banquet.calendar.date')" data-testid="cal-date" />
       <Button type="button" variant="outline" :aria-label="t('banquet.calendar.next')" data-testid="cal-next" @click="step(1)">›</Button>
       <div class="ml-auto flex gap-1" role="group" :aria-label="t('banquet.calendar.view')">
         <Button type="button" :variant="view === 'day' ? 'default' : 'outline'" :aria-pressed="view === 'day'" data-testid="view-day" @click="view = 'day'">{{ t('banquet.calendar.day') }}</Button>

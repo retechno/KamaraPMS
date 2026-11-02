@@ -277,3 +277,16 @@ describe('CashierView', () => {
     expect(w.get('[data-testid=payment-PAY000007] a[href="/folios/31"]').text()).toBe('#31') // the old way when the API gives no number
   })
 })
+
+describe('CashierView, what is seen is what is sent', () => {
+  it('does not load while a date is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('form[role=search] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

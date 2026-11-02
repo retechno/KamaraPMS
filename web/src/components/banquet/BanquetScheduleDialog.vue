@@ -6,8 +6,10 @@ import type { BanquetDeposit } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
+import { guardForm } from '@/utils/forms'
 
 /** The deposit schedule of one event: each row is a percent of the contract total or a fixed amount, due on a date. Saving replaces the rows; a row is paid when the deposits received reach its cumulative due. */
 type Row = { label: string; due_date: string; percent: string; amount: string }
@@ -44,13 +46,13 @@ async function save(): Promise<void> {
 <template>
   <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
     <DialogContent class="max-h-[90dvh] max-w-3xl overflow-y-auto p-5" data-testid="schedule-dialog" @interact-outside.prevent>
-      <form novalidate class="flex flex-col gap-3" @submit.prevent="save">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="guardForm($event) && save()">
         <DialogTitle>{{ t('banquet.deposit.editTitle') }}</DialogTitle>
         <DialogDescription>{{ t('banquet.deposit.editHint') }}</DialogDescription>
         <ErrorNotice v-if="error" :error="error" inline />
         <div v-for="(r, i) in rows" :key="i" class="grid grid-cols-[1.4fr_1fr_0.7fr_1fr_auto] items-end gap-2" :data-testid="`schedule-row-${i}`">
           <label class="text-xs text-muted-foreground">{{ t('banquet.deposit.stage') }}<Input v-model="r.label" :name="`row_label_${i}`" maxlength="100" /></label>
-          <label class="text-xs text-muted-foreground">{{ t('banquet.deposit.due') }}<Input v-model="r.due_date" type="date" :name="`row_due_${i}`" /></label>
+          <label class="text-xs text-muted-foreground">{{ t('banquet.deposit.due') }}<DateInput v-model="r.due_date" :name="`row_due_${i}`" /></label>
           <label class="text-xs text-muted-foreground">{{ t('banquet.deposit.percent') }}<Input v-model="r.percent" inputmode="decimal" :name="`row_percent_${i}`" /></label>
           <label class="text-xs text-muted-foreground">{{ t('banquet.deposit.amount') }}<Input v-model="r.amount" inputmode="decimal" :name="`row_amount_${i}`" :disabled="r.percent.trim() !== ''" /></label>
           <Button type="button" variant="outline" size="sm" @click="remove(i)">{{ t('common.remove') }}</Button>

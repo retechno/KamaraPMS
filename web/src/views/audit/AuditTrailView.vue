@@ -11,6 +11,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import type { RowAction } from '@/components/app/rowActions'
 import { usePagedList } from '@/composables/usePagedList'
@@ -183,8 +184,8 @@ watch(pid, () => {
           <input v-model="filter.self_approved" type="checkbox" name="self_approved" class="mt-1 size-4 accent-primary" />
           <span>{{ t('audit.selfApproved') }}</span>
         </label>
-        <FormField float-hint :hint="$weekday(filter.from)" :label="t('audit.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
-        <FormField float-hint :hint="$weekday(filter.to)" :label="t('audit.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+        <FormField :label="t('audit.from')"><template #default="{ id }"><DateInput :id="id" v-model="filter.from" name="from" /></template></FormField>
+        <FormField :label="t('audit.to')"><template #default="{ id }"><DateInput :id="id" v-model="filter.to" name="to" /></template></FormField>
       <template #actions>
         <div class="flex items-end gap-2">
           <Button type="submit" :disabled="loading" data-testid="search">{{ t('audit.search') }}</Button>
