@@ -9,12 +9,14 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
 import { currentLocale, t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { addDays, formatBusinessDate, timeZones, todayIn } from '@/utils/dates'
+import { guardForm } from '@/utils/forms'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
@@ -193,7 +195,7 @@ function changedFields(): PatchPropertyRequest {
 
   <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
 
-  <form v-autofocus v-if="!loading" novalidate @submit.prevent="submit">
+  <form v-autofocus v-if="!loading" novalidate @submit.prevent="guardForm($event) && submit()">
     <Card class="mb-4">
       <CardHeader><CardTitle>{{ t('propertyForm.identity') }}</CardTitle></CardHeader>
       <CardContent>
@@ -317,7 +319,7 @@ function changedFields(): PatchPropertyRequest {
       <CardHeader><CardTitle>{{ t('propertyForm.businessDay') }}</CardTitle></CardHeader>
       <CardContent>
         <FormField class="max-w-sm" :label="t('propertyForm.openingDate')" :hint="openingHint" :error="fieldError('opening_business_date')">
-          <template #default="{ id, invalid }"><Input :id="id" v-model="form.opening_business_date" type="date" name="opening_business_date" :aria-invalid="invalid" /></template>
+          <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.opening_business_date" name="opening_business_date" :aria-invalid="invalid" /></template>
         </FormField>
       </CardContent>
     </Card>

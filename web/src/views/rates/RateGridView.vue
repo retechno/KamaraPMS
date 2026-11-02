@@ -10,6 +10,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { i18n, t } from '@/i18n'
@@ -19,6 +20,7 @@ import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
 import { addDays } from '@/utils/dates'
 import { formatMoney } from '@/utils/format'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -206,22 +208,22 @@ watch(planId, () => void loadGrid())
     </Card>
 
     <Card v-if="canManage" class="mb-4">
-      <form novalidate data-testid="fill-form" @submit.prevent="apply">
+      <form novalidate data-testid="fill-form" @submit.prevent="guardForm($event) && apply()">
         <CardHeader><CardTitle>{{ t('rateGrid.setRates') }}</CardTitle></CardHeader>
         <CardContent>
           <p v-if="notice" class="mb-3 text-sm text-muted-foreground" role="status" data-testid="notice">{{ notice }}</p>
           <div class="grid gap-4 sm:grid-cols-3">
             <FormField :label="t('rateGrid.from')" :error="fieldError('from')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.from" name="from" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.from" name="from" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('rateGrid.until')" :error="fieldError('to')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.to" name="to" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.to" name="to" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('rateGrid.amount')" :error="fieldError('amount')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
             </FormField>
           </div>
-          <fieldset class="mt-4 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2">
+          <fieldset class="mt-8 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2">
             <legend class="px-1 text-sm font-medium">{{ t('rateGrid.roomTypes') }}</legend>
             <label v-for="rt in activeTypes" :key="rt.id" class="flex items-center gap-1.5 text-sm">
               <input type="checkbox" class="size-4 accent-primary" :checked="form.typeIds.includes(rt.id)" :name="`type-${rt.code}`" @change="toggle(form.typeIds, rt.id)" />

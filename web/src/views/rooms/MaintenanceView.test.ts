@@ -237,3 +237,16 @@ describe('MaintenanceView', () => {
     expect(noPermission.find('[data-testid=request-asset]').exists()).toBe(false)
   })
 })
+
+describe('MaintenanceView, what is seen is what is sent', () => {
+  it('does not send while a date is half typed, and says why', async () => {
+    const w = await mountView()
+    await flushPromises()
+    await w.get('[data-testid=select-MNT000001]').trigger('click')
+    await w.get('[data-testid=block-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=block-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

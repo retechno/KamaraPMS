@@ -9,6 +9,7 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t, te } from '@/i18n'
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { formatMoney } from '@/utils/format'
+import { guardForm } from '@/utils/forms'
 import { newIdempotencyKey } from '@/utils/reservations'
 
 /**
@@ -199,8 +201,11 @@ const blocker = computed(() => {
 
 const canSave = computed(() => complete.value && !stale.value && !checking.value && !busy.value && !!preview.value?.ok && (!anyOverride.value || reason.value.trim() !== ''))
 
-function onSave(): void {
-  if (!canSave.value) return
+// The rows are not a form: a date field that shows what the preview did not use (a half-typed date) must stop the save.
+const rowsEl = ref<HTMLElement | null>(null)
+
+function onSave(event: Event): void {
+  if (!canSave.value || !guardForm(event, rowsEl.value)) return
   if (anyOverride.value && !canApprove.value) {
     dialogError.value = null
     approving.value = true
@@ -262,7 +267,7 @@ const failedAt = computed(() => {
         {{ result.replayed ? t('groupRooms.replayed') : t('groupRooms.done', { n: result.rooms, reservations: result.reservations.length }) }}
       </p>
 
-      <div class="grid gap-3" data-testid="bulk-rows">
+      <div ref="rowsEl" class="grid gap-3" data-testid="bulk-rows">
         <fieldset
           v-for="(r, i) in rows" :key="r.key" :data-testid="`bulk-row-${i}`"
           :class="cn('m-0 min-w-0 rounded-lg border border-border p-3', previewRow(i)?.short && 'border-destructive')"
@@ -287,10 +292,10 @@ const failedAt = computed(() => {
               </template>
             </FormField>
             <FormField :label="t('groupRooms.arrival')">
-              <template #default="{ id }"><Input :id="id" v-model="r.arrival" :name="`arrival_${i}`" type="date" :min="group.arrival_date" :max="group.departure_date" /></template>
+              <template #default="{ id }"><DateInput :id="id" v-model="r.arrival" :name="`arrival_${i}`" :min="group.arrival_date" :max="group.departure_date" /></template>
             </FormField>
             <FormField :label="t('groupRooms.departure')">
-              <template #default="{ id }"><Input :id="id" v-model="r.departure" :name="`departure_${i}`" type="date" :min="group.arrival_date" :max="group.departure_date" /></template>
+              <template #default="{ id }"><DateInput :id="id" v-model="r.departure" :name="`departure_${i}`" :min="group.arrival_date" :max="group.departure_date" /></template>
             </FormField>
             <FormField :label="t('groupRooms.rate')" class="col-span-2 md:col-span-2 xl:col-span-2">
               <template #default="{ id }">
@@ -376,7 +381,7 @@ const failedAt = computed(() => {
 
       <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
         <p v-if="blocker" class="m-0 text-sm text-destructive" data-testid="bulk-blocker">{{ blocker }}</p>
-        <Button type="button" :disabled="!canSave" data-testid="bulk-save" @click="onSave">{{ busy ? t('groupRooms.saving') : t('groupRooms.save', { n: totalRooms }) }}</Button>
+        <Button type="button" :disabled="!canSave" data-testid="bulk-save" @click="onSave($event)">{{ busy ? t('groupRooms.saving') : t('groupRooms.save', { n: totalRooms }) }}</Button>
       </div>
     </CardContent>
   </Card>

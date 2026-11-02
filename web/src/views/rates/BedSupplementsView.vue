@@ -12,12 +12,14 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -140,7 +142,7 @@ watch(planId, () => void loadRows())
     </FormField>
 
     <Card v-if="adding" class="mb-4">
-      <form v-autofocus novalidate data-testid="supplement-form" @submit.prevent="save">
+      <form v-autofocus novalidate data-testid="supplement-form" @submit.prevent="guardForm($event) && save()">
         <CardHeader><CardTitle>{{ t('bedSupplements.new') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -170,7 +172,7 @@ watch(planId, () => void loadRows())
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('bedSupplements.from')" :error="fieldError('effective_from')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.effective_from" name="effective_from" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.effective_from" name="effective_from" :aria-invalid="invalid" /></template>
             </FormField>
           </div>
           <div class="mt-4 flex gap-2">

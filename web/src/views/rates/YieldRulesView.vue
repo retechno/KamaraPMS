@@ -13,12 +13,14 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -212,7 +214,7 @@ watch(pid, load, { immediate: true })
   <p v-else-if="!canManage" class="muted" data-testid="read-only">{{ t('yieldRules.readOnly', { permission: 'rate.manage' }) }}</p>
 
   <Card v-if="editing" class="mb-4">
-    <form v-autofocus="editing" novalidate data-testid="rule-form" @submit.prevent="save">
+    <form v-autofocus="editing" novalidate data-testid="rule-form" @submit.prevent="guardForm($event) && save()">
       <CardHeader><CardTitle>{{ editing === 'new' ? t('yieldRules.formNew') : t('yieldRules.formEdit', { code: form.code }) }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-3">
@@ -228,7 +230,7 @@ watch(pid, load, { immediate: true })
         </div>
 
         <h3 class="mb-2 mt-5 text-sm font-semibold">{{ t('yieldRules.when') }}</h3>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
           <FormField :label="t('yieldRules.ratePlan')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="form.rate_plan_id" name="rate_plan_id">
@@ -246,10 +248,10 @@ watch(pid, load, { immediate: true })
             </template>
           </FormField>
           <FormField :label="t('yieldRules.stayFrom')">
-            <template #default="{ id }"><Input :id="id" v-model="form.stay_from" name="stay_from" type="date" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="form.stay_from" name="stay_from" /></template>
           </FormField>
           <FormField :label="t('yieldRules.stayTo')" :error="fieldError('stay_to')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.stay_to" name="stay_to" type="date" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.stay_to" name="stay_to" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('yieldRules.occFrom')" :hint="t('yieldRules.occFromHint')" :error="fieldError('occupancy_from')">
             <template #default="{ id, invalid }"><Input :id="id" v-model="form.occupancy_from" name="occupancy_from" inputmode="decimal" :aria-invalid="invalid" /></template>
@@ -338,13 +340,13 @@ watch(pid, load, { immediate: true })
   </Card>
 
   <Card>
-    <form novalidate data-testid="quote-form" @submit.prevent="runQuote">
+    <form novalidate data-testid="quote-form" @submit.prevent="guardForm($event) && runQuote()">
       <CardHeader>
         <CardTitle>{{ t('yieldRules.checkTitle') }}</CardTitle>
         <p class="m-0 text-sm text-muted-foreground">{{ t('yieldRules.checkHint') }}</p>
       </CardHeader>
       <CardContent>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
           <FormField :label="t('yieldRules.ratePlan')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="check.plan" name="quote_plan"><option v-for="p in plans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option></NativeSelect>
@@ -356,10 +358,10 @@ watch(pid, load, { immediate: true })
             </template>
           </FormField>
           <FormField :label="t('yieldRules.arrival')">
-            <template #default="{ id }"><Input :id="id" v-model="check.arrival" name="quote_arrival" type="date" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="check.arrival" name="quote_arrival" /></template>
           </FormField>
           <FormField :label="t('yieldRules.departure')">
-            <template #default="{ id }"><Input :id="id" v-model="check.departure" name="quote_departure" type="date" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="check.departure" name="quote_departure" /></template>
           </FormField>
         </div>
         <div class="mt-4 flex justify-end">

@@ -12,12 +12,14 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -131,7 +133,7 @@ watch(activeOnly, () => void load())
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('groups.noAccess') }}</p>
 
   <Card v-if="creating" class="mb-4">
-    <form v-autofocus novalidate data-testid="group-form" @submit.prevent="save">
+    <form v-autofocus novalidate data-testid="group-form" @submit.prevent="guardForm($event) && save()">
       <CardHeader><CardTitle>{{ t('groups.new') }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -147,10 +149,10 @@ watch(activeOnly, () => void load())
             </template>
           </FormField>
           <FormField :label="t('groups.arrival')" :error="fieldError('arrival_date')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.arrival_date" name="arrival_date" type="date" :min="businessDate" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.arrival_date" name="arrival_date" :min="businessDate" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('groups.departure')" :error="fieldError('departure_date')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.departure_date" name="departure_date" type="date" :min="form.arrival_date" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.departure_date" name="departure_date" :min="form.arrival_date" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('groups.contactName')">
             <template #default="{ id }"><Input :id="id" v-model="form.contact_name" name="contact_name" /></template>

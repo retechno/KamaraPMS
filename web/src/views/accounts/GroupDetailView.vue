@@ -17,11 +17,13 @@ import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { guardForm } from '@/utils/forms'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -158,7 +160,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   <GroupBulkRooms v-if="group && bulkOpen && canBook" :group="group" @saved="bulkSaved" @close="bulkOpen = false" />
 
   <Card v-if="group && editing" class="mb-4">
-    <form v-autofocus novalidate data-testid="group-form" @submit.prevent="save">
+    <form v-autofocus novalidate data-testid="group-form" @submit.prevent="guardForm($event) && save()">
       <CardHeader><CardTitle>{{ t('groupDetail.edit', { code: group.code }) }}</CardTitle></CardHeader>
       <CardContent>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -166,10 +168,10 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <template #default="{ id, invalid }"><Input :id="id" v-model="form.name" name="name" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('groupDetail.arrival')" :error="fieldError('arrival_date')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.arrival_date" name="arrival_date" type="date" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.arrival_date" name="arrival_date" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('groupDetail.departure')" :error="fieldError('departure_date')">
-            <template #default="{ id, invalid }"><Input :id="id" v-model="form.departure_date" name="departure_date" type="date" :aria-invalid="invalid" /></template>
+            <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.departure_date" name="departure_date" :aria-invalid="invalid" /></template>
           </FormField>
           <FormField :label="t('groupDetail.contactName')">
             <template #default="{ id }"><Input :id="id" v-model="form.contact_name" name="contact_name" /></template>

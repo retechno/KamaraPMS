@@ -10,6 +10,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { i18n, t } from '@/i18n'
@@ -18,6 +19,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
 import { addDays } from '@/utils/dates'
+import { guardForm } from '@/utils/forms'
 
 // The sales restriction grid: what each night is under for a room type and a rate plan (the effective view, resolved by the server), and a fill that sets or clears
 // stop sell, closed to arrival, closed to departure, and the minimum and maximum stay. The precedence between rows is the server's; this screen never resolves it.
@@ -261,19 +263,19 @@ watch(planId, () => void loadGrid())
     <p class="mb-4 text-xs text-muted-foreground" data-testid="legend">{{ t('restrictions.legend') }}</p>
 
     <Card v-if="canManage" class="mb-4">
-      <form novalidate data-testid="fill-form" @submit.prevent="apply">
+      <form novalidate data-testid="fill-form" @submit.prevent="guardForm($event) && apply()">
         <CardHeader><CardTitle>{{ t('restrictions.setTitle') }}</CardTitle></CardHeader>
         <CardContent>
           <p v-if="notice" class="mb-3 text-sm text-muted-foreground" role="status" data-testid="notice">{{ notice }}</p>
           <div class="grid gap-4 sm:grid-cols-2">
             <FormField :label="t('restrictions.from')" :error="fieldError('from')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.from" name="from" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.from" name="from" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('restrictions.until')" :error="fieldError('to')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.to" name="to" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.to" name="to" :aria-invalid="invalid" /></template>
             </FormField>
           </div>
-          <fieldset class="mt-4 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2">
+          <fieldset class="mt-8 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2">
             <legend class="px-1 text-sm font-medium">{{ t('restrictions.roomTypes') }}</legend>
             <label v-for="rt in activeTypes" :key="rt.id" class="flex items-center gap-1.5 text-sm">
               <input type="checkbox" class="size-4 accent-primary" :checked="form.typeIds.includes(rt.id)" :name="`type-${rt.code}`" @change="toggle(form.typeIds, rt.id)" />
