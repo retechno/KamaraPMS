@@ -2,9 +2,8 @@
 import FilterBar from '@/components/app/FilterBar.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { BellOff, ChevronsUp, RefreshCw, Sparkles, Wrench } from 'lucide-vue-next'
+import { BellOff, ChevronsUp, Lock, RefreshCw, Sparkles, StickyNote } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { HousekeepingBoardRoom, HousekeepingStatus } from '@/api/types'
@@ -75,24 +74,30 @@ const columns = computed<Column<HousekeepingBoardRoom>[]>(() => [
   { key: 'room_type_code', label: t('housekeeping.type'), sortable: true, card: 'secondary' as const },
   { key: 'status', label: t('housekeeping.housekeepingCol'), sortable: true, card: 'badge' as const },
   { key: 'occupancy', label: t('housekeeping.occupancyCol'), sortable: true },
-  { key: 'block', label: t('housekeeping.block') },
-  { key: 'flags', label: t('housekeeping.flags') },
+  { key: 'notes', label: t('housekeeping.notes') },
   ...(canUpdate.value || canReport.value ? [{ key: 'actions', label: t('housekeeping.actions'), align: 'right' as const }] : []),
 ])
 
-/** The actions of a room as a card of a phone shows them: the next cleaning step is the main button, the others are in the "..." menu. */
-function cardActions(r: HousekeepingBoardRoom): RowAction[] {
+/** The one step that is offered as a button for a room in this status; every other step is in the "..." menu. */
+const MAIN_STEP: Partial<Record<HousekeepingStatus, HousekeepingStatus>> = { DIRTY: 'CLEANING', CLEANING: 'CLEAN', CLEAN: 'INSPECTED' }
+
+function actionsFor(room: HousekeepingBoardRoom): HousekeepingStatus[] {
+  return room.allowed_next.filter((s) => s !== 'INSPECTED' || canInspect.value)
+}
+
+/**
+ * The actions of a room, for the row of the table and the card of a phone alike: the next cleaning step is the one button (none for a blocked room or an
+ * inspected one), the other steps, the note and the maintenance report are in the "..." menu. A room with nothing allowed has no actions at all.
+ */
+function roomActions(r: HousekeepingBoardRoom): RowAction[] {
   const acts: RowAction[] = []
   if (canUpdate.value) {
-    actionsFor(r).forEach((s, i) => acts.push({ key: `status-${s}`, label: verb(s), primary: i === 0, disabled: busyRoom.value === r.room_id, testId: `act-${s}`, onSelect: () => void change(r, s) }))
+    const main = r.block ? undefined : MAIN_STEP[r.status]
+    actionsFor(r).forEach((s) => acts.push({ key: `status-${s}`, label: verb(s), primary: s === main, disabled: busyRoom.value === r.room_id, testId: `act-${s}`, onSelect: () => void change(r, s) }))
     acts.push({ key: 'flags', label: t('housekeeping.flagsButton'), testId: `flags-${r.room_number}`, onSelect: () => startFlags(r) })
   }
   if (canReport.value) acts.push({ key: 'report', label: t('housekeeping.report'), to: `/maintenance?room=${r.room_id}`, testId: `report-${r.room_number}` })
   return acts
-}
-
-function actionsFor(room: HousekeepingBoardRoom): HousekeepingStatus[] {
-  return room.allowed_next.filter((s) => s !== 'INSPECTED' || canInspect.value)
 }
 
 async function load(keepError = false): Promise<void> {
@@ -239,7 +244,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
       </form>
     </Card>
 
-    <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" cards :row-actions="cardActions" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
+    <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" cards :row-actions="roomActions" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
       <template #cell-room_number="{ row: r }">
         <b>{{ r.room_number }}</b>
         <Badge v-if="r.bed_type_code" variant="outline" class="ml-1.5" data-testid="bed">{{ r.bed_type_code }}</Badge>
@@ -247,34 +252,15 @@ watch(() => property.currentId, () => load(), { immediate: true })
       </template>
       <template #cell-status="{ row: r }"><StatusBadge domain="housekeeping" :status="r.status" :label="label(r.status)" data-testid="status" /></template>
       <template #cell-occupancy="{ row: r }"><StatusBadge domain="occupancy" :status="r.occupancy" /></template>
-      <template #cell-block="{ row: r }">
-        <Badge v-if="r.block" variant="warning" data-testid="block">{{ t('housekeeping.blockUntil', { type: r.block.type, date: $date(r.block.end_date) }) }}</Badge>
-      </template>
-      <template #cell-flags="{ row: r }">
-        <span data-testid="flags" class="inline-flex flex-wrap items-center gap-1">
-          <Badge v-if="r.priority === 'HIGH'" variant="destructive"><ChevronsUp />{{ t('housekeeping.highShort') }}</Badge>
-          <Badge v-if="r.dnd" variant="warning"><BellOff />{{ t('housekeeping.dndShort') }}</Badge>
-          <Badge v-if="r.make_up_requested" variant="secondary"><Sparkles />{{ t('housekeeping.makeUpShort') }}</Badge>
-          <small v-if="r.flag_note" class="text-muted-foreground">{{ r.flag_note }}</small>
-        </span>
-      </template>
-      <template #cell-actions="{ row: r }">
-        <span class="inline-flex flex-wrap justify-end gap-1.5">
-          <Button v-if="canReport" as-child variant="ghost" size="sm" :data-testid="`report-${r.room_number}`">
-            <RouterLink :to="{ path: '/maintenance', query: { room: r.room_id } }"><Wrench />{{ t('housekeeping.report') }}</RouterLink>
-          </Button>
-          <Button v-if="canUpdate" variant="outline" size="sm" :data-testid="`flags-${r.room_number}`" @click="startFlags(r)">{{ t('housekeeping.flagsButton') }}</Button>
-          <Button
-            v-for="s in (canUpdate ? actionsFor(r) : [])"
-            :key="s"
-            variant="outline"
-            size="sm"
-            :disabled="busyRoom === r.room_id"
-            :data-testid="`act-${s}`"
-            @click="change(r, s)"
-          >
-            {{ verb(s) }}
-          </Button>
+      <template #cell-notes="{ row: r }">
+        <span class="inline-flex flex-wrap items-center gap-1"><!-- always drawn, so that a room with nothing to note shows an empty cell, not a dash -->
+          <Badge v-if="r.block" variant="warning" data-testid="block"><Lock />{{ t('housekeeping.blockUntil', { type: r.block.type, date: $date(r.block.end_date) }) }}</Badge>
+          <span v-if="hasFlag(r)" data-testid="flags" class="inline-flex flex-wrap items-center gap-1">
+            <Badge v-if="r.priority === 'HIGH'" variant="destructive"><ChevronsUp />{{ t('housekeeping.highShort') }}</Badge>
+            <Badge v-if="r.dnd" variant="warning"><BellOff />{{ t('housekeeping.dndShort') }}</Badge>
+            <Badge v-if="r.make_up_requested" variant="secondary"><Sparkles />{{ t('housekeeping.makeUpShort') }}</Badge>
+            <small v-if="r.flag_note" class="inline-flex items-center gap-1 text-muted-foreground"><StickyNote class="size-3.5" />{{ r.flag_note }}</small>
+          </span>
         </span>
       </template>
       <template #empty>
