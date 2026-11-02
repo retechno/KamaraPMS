@@ -178,7 +178,7 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
   <p v-else-if="!canSetup" class="muted" data-testid="no-setup">{{ t('assets.opening.needSetup') }}</p>
   <template v-else>
     <Card class="flex flex-col gap-4 p-4" data-testid="opening-form">
-      <div ref="datesRow" class="grid gap-3 sm:grid-cols-3">
+      <div ref="datesRow" class="grid gap-x-3 gap-y-7 sm:grid-cols-3">
         <FormField :label="t('assets.opening.asOf')" :hint="t('assets.opening.asOfHint')" required><template #default="{ id }"><DateInput :id="id" v-model="as_of" name="as_of" /></template></FormField>
         <FormField :label="t('assets.opening.journalDate')" :hint="t('assets.opening.journalDateHint')"><template #default="{ id }"><DateInput :id="id" v-model="journal_date" name="journal_date" :disabled="mode === 'REGISTER_ONLY'" /></template></FormField>
       </div>
@@ -196,7 +196,7 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
         <FormField :label="t('assets.opening.paste')"><template #default="{ id }"><textarea :id="id" v-model="csv" name="csv" rows="5" class="w-full rounded-md border border-input bg-background p-2 font-mono text-xs" data-testid="csv-text" /></template></FormField>
       </template>
       <form v-else ref="singleForm" novalidate class="flex flex-col gap-3" data-testid="single-form" @submit.prevent="guardForm($event, datesRow) && run(true)">
-        <div class="grid gap-3 sm:grid-cols-3">
+        <div class="grid gap-x-3 gap-y-7 sm:grid-cols-3">
           <FormField :label="t('assets.asset.name')" required><template #default="{ id }"><Input :id="id" v-model="row.name" name="name" maxlength="150" /></template></FormField>
           <FormField :label="t('assets.col.category')" required>
             <template #default="{ id }"><NativeSelect :id="id" v-model="row.category" name="category"><option value="">–</option><option v-for="c in categories" :key="c.id" :value="c.code">{{ c.code }} · {{ c.name }}</option></NativeSelect></template>
@@ -215,7 +215,7 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
         </div>
         <details class="text-sm">
           <summary class="cursor-pointer font-medium">{{ t('assets.opening.moreFields') }}</summary>
-          <div class="mt-3 grid gap-3 sm:grid-cols-3">
+          <div class="mt-3 grid gap-x-3 gap-y-7 sm:grid-cols-3">
             <FormField :label="t('assets.asset.residual')"><template #default="{ id }"><Input :id="id" v-model="row.residual_value" name="residual_value" inputmode="decimal" /></template></FormField>
             <FormField :label="t('assets.opening.lifeMonths')"><template #default="{ id }"><Input :id="id" v-model="row.life_months" name="life_months" inputmode="numeric" /></template></FormField>
             <FormField :label="t('assets.settings.method')"><template #default="{ id }"><NativeSelect :id="id" v-model="row.method" name="method"><option value="">–</option><option value="SL">{{ t('assets.method.SL') }}</option><option value="DB">{{ t('assets.method.DB') }}</option></NativeSelect></template></FormField>

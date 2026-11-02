@@ -97,7 +97,7 @@ const th = 'px-1.5 py-2 text-right text-[11px] font-medium uppercase leading-tig
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>
     <template v-else>
-      <form class="flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="guardForm($event) && load()">
+      <form class="mb-6 flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="guardForm($event) && load()">
         <FormField :label="t('assets.reports.from')"><template #default="{ id }"><DateInput :id="id" v-model="from" name="date_from" data-testid="recap-from" /></template></FormField>
         <FormField :label="t('assets.reports.to')"><template #default="{ id }"><DateInput :id="id" v-model="to" name="date_to" data-testid="recap-to" /></template></FormField>
         <Button type="submit" size="sm" :disabled="busy" data-testid="recap-run">{{ t('assets.reports.run') }}</Button>

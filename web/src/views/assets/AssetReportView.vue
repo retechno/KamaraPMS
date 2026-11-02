@@ -139,7 +139,7 @@ const th = 'p-2 text-xs font-medium uppercase text-muted-foreground'
     <ErrorNotice :error="error" />
     <p v-if="loaded && !canRead" class="muted m-0">{{ t('assets.reports.denied') }}</p>
     <template v-else>
-      <form v-if="kind !== 'locations'" class="flex flex-wrap items-end gap-3 print:hidden" data-testid="report-filters" novalidate @submit.prevent="guardForm($event) && load()">
+      <form v-if="kind !== 'locations'" class="mb-6 flex flex-wrap items-end gap-3 print:hidden" data-testid="report-filters" novalidate @submit.prevent="guardForm($event) && load()">
         <template v-if="kind === 'register'">
           <FormField :label="t('assets.reports.asOf')"><template #default="{ id }"><DateInput :id="id" v-model="f.as_of" name="as_of" data-testid="f-as-of" /></template></FormField>
           <FormField :label="t('assets.reports.category')"><template #default="{ id }"><NativeSelect :id="id" v-model.number="f.category_id" name="category_id" data-testid="f-category"><option :value="0">{{ t('assets.reports.all') }}</option><option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option></NativeSelect></template></FormField>
