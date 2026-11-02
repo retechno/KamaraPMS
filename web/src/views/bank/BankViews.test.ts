@@ -424,3 +424,20 @@ describe('bank views', () => {
     }
   })
 })
+
+describe('bank statements, what is seen is what is sent', () => {
+  it('does not import while a date of the period is half typed, and says why', async () => {
+    const w = await mountView(BankStatementsView, undefined, {}, '/bank/statements?bank=1')
+    await flushPromises()
+    await w.get('[data-testid=new-statement]').trigger('click')
+    await w.get('input[name=period_to]').setValue('2026-10-31')
+    await w.get('input[name=closing_balance]').setValue('735100')
+    await w.get('textarea[name=csv]').setValue('date,amount\n2026-10-02,100\n')
+    await w.get('[data-testid=import-form] input[data-slot=date-input-text]').setValue('3/2')
+    const before = POST.mock.calls.length
+    await w.get('[data-testid=import-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

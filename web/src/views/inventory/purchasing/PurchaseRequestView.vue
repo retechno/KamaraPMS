@@ -13,6 +13,8 @@ import ApprovalChain from '@/components/inventory/ApprovalChain.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { departmentLabel, loadDepartments } from '@/composables/useDepartments'
 import { t } from '@/i18n'
@@ -337,7 +339,7 @@ async function makeOrders(): Promise<void> {
   <div v-else-if="loaded" class="grid gap-4" :class="request ? 'xl:grid-cols-[minmax(0,1fr)_24rem]' : ''">
     <section class="flex min-w-0 flex-col gap-4">
       <!-- the document: a form for the requester of a draft, read only for everyone else -->
-      <form v-if="editable" novalidate class="flex flex-col gap-4" data-testid="request-form" @submit.prevent="save(false)">
+      <form v-if="editable" novalidate class="flex flex-col gap-4" data-testid="request-form" @submit.prevent="guardForm($event) && save(false)">
         <ErrorNotice v-if="formError" :error="formError" inline data-testid="request-error" />
         <p v-if="request?.status === 'RETURNED' && request.returned_note" class="alert warning" data-testid="returned-note">{{ t('inventory.request.returnedNote', { note: request.returned_note }) }}</p>
         <div class="grid gap-3 sm:grid-cols-3">
@@ -358,7 +360,7 @@ async function makeOrders(): Promise<void> {
             </template>
           </FormField>
           <FormField :label="t('inventory.request.neededOn')" :error="fieldError('needed_on')">
-            <template #default="{ id }"><Input :id="id" v-model="form.needed_on" type="date" name="needed_on" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="form.needed_on" name="needed_on" /></template>
           </FormField>
         </div>
         <FormField :label="t('inventory.request.note')" :error="fieldError('note')">
@@ -420,7 +422,7 @@ async function makeOrders(): Promise<void> {
           <div class="flex flex-wrap gap-2">
             <Button v-if="request" type="button" variant="ghost" data-testid="request-cancel" :disabled="busy" @click="act('cancel', t('inventory.request.cancelled'))">{{ t('inventory.request.cancel') }}</Button>
             <Button type="submit" variant="outline" :disabled="busy || !complete" data-testid="request-save">{{ t('inventory.request.saveDraft') }}</Button>
-            <Button type="button" :disabled="busy || !complete || form.department_id === 0" data-testid="request-submit" @click="save(true)">{{ t('inventory.request.submit') }}</Button>
+            <Button type="button" :disabled="busy || !complete || form.department_id === 0" data-testid="request-submit" @click="guardForm($event, ($event.currentTarget as HTMLButtonElement).form) && save(true)">{{ t('inventory.request.submit') }}</Button>
           </div>
         </div>
       </form>

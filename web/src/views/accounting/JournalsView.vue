@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
@@ -207,12 +209,12 @@ watch(() => pid.value, () => {
 
   <template v-else>
     <Card v-if="creating" class="mb-4">
-      <form v-autofocus novalidate data-testid="journal-form" @submit.prevent="post">
+      <form v-autofocus novalidate data-testid="journal-form" @submit.prevent="guardForm($event) && post()">
         <CardHeader><CardTitle>{{ t('journals.formTitle') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2">
             <FormField :label="t('journals.date')" :error="fieldError('journal_date')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.date" name="date" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.date" name="date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('journals.reference')">
               <template #default="{ id }"><Input :id="id" v-model="form.reference" name="reference" maxlength="100" /></template>
@@ -277,8 +279,8 @@ watch(() => pid.value, () => {
         <FormField :label="t('journals.search')"><template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('journals.searchPlaceholder')" /></template></FormField>
       </template>
 
-          <FormField :label="t('journals.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
-          <FormField :label="t('journals.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+          <FormField :label="t('journals.from')"><template #default="{ id }"><DateInput :id="id" v-model="filter.from" name="from" /></template></FormField>
+          <FormField :label="t('journals.to')"><template #default="{ id }"><DateInput :id="id" v-model="filter.to" name="to" /></template></FormField>
           <FormField :label="t('journals.type')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="filter.type" name="type">

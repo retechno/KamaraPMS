@@ -137,3 +137,66 @@ describe('the split of a price difference', () => {
     expect(await split(previewLine('400', '600'))).toContain('part goes into the value of stock, the rest into purchase price variance')
   })
 })
+
+describe('the receipt and the bill, what is seen is what is sent', () => {
+  const po = {
+    id: 3, po_number: 'PO-000003', supplier_id: 2, supplier_name: 'Sumber', warehouse_id: 1, warehouse_name: 'Main',
+    lines: [{ line_no: 1, closed: false, item_id: 5, item_name: 'Syrup', item_code: 'SIRUP', unit_id: 3, unit_code: 'karton', stock_unit_code: 'botol', qty: '12', qty_stock: '288', qty_received: '0', qty_received_stock: '0', unit_price: '60000' }],
+  }
+  const confirmDraft = {
+    id: 4, receipt_id: 8, receipt_number: 'GR-000008', supplier_id: 2, supplier_name: 'Sumber', status: 'OPEN', matches: [],
+    lines: [{ line_no: 1, item_name: 'Syrup', item_code: 'SIRUP', unit_code: 'karton', stock_unit_code: 'botol', qty: '12', billable_qty: '12', unit_price: '60000' }],
+  }
+  const receiptPosts = () => POST.mock.calls.filter((c) => String(c[0]).endsWith('/inventory/receipts'))
+
+  async function billOn(): Promise<void> {
+    GET = vi.fn(async (path: string) => {
+      if (path.endsWith('/purchase-orders/{id}')) return { data: po }
+      if (path.endsWith('/warehouses')) return { data: { data: [{ id: 1, code: 'MAIN', name: 'Main', kind: 'MAIN', is_active: true }] } }
+      return { data: {} }
+    })
+    POST = vi.fn().mockResolvedValue({ data: { id: 9 } })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().me = { user: { id: 5, email: 'm@hotel.test', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['inventory.view', 'inventory.receive', 'inventory.bill', 'payables.post'] }] } as never
+    usePropertyStore().currentId = 7
+    usePropertyStore().current = { id: 7, currency_decimals: 0 } as never
+    usePropertyStore().clock = { business_date: '2026-10-16' } as never
+    await router.push('/inventory/receipts?po=3')
+    await router.isReady()
+    mounted.push(mount(ReceiptView as never, { attachTo: document.body, global: { plugins: [pinia, router] } }))
+    await flushPromises()
+    await body('[data-testid=bill-toggle]').setValue(true)
+    await body('input[name=invoice_number]').setValue('INV-1')
+  }
+
+  it('does not post the receipt, by the form or by the button, while the date of the bill is half typed', async () => {
+    await billOn()
+    const button = body('[data-testid=receipt-post-bill]').element as HTMLButtonElement
+    expect(button.disabled).toBe(false) // the button works, so that the guard is what stops it
+    await body('form[data-testid=receipt-form] input[data-slot=date-input-text]').setValue('3/2')
+    await body('[data-testid=receipt-form]').trigger('submit')
+    await flushPromises()
+    expect(receiptPosts().length).toBe(0)
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+    button.click()
+    await flushPromises()
+    expect(receiptPosts().length).toBe(0)
+  })
+
+  it('does not confirm the bill of a draft while a date of the invoice is half typed', async () => {
+    GET = vi.fn(async (path: string) => (path.includes('bill-drafts') ? { data: confirmDraft } : { data: { data: [] } }))
+    POST = vi.fn().mockResolvedValue({ data: {} })
+    await setup(BillDraftView, '/inventory/bill-drafts/4', ['inventory.bill', 'payables.post', 'inventory.view'])
+    await body('[name=invoice_number]').setValue('INV-1')
+    await body('[name=bill_date]').setValue('2026-10-16')
+    const button = body('[data-testid=bill-confirm]').element as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    const due = document.body.querySelectorAll('input[data-slot=date-input-text]')[1] as Element // the due date: the bill date itself stays filled
+    await new DOMWrapper(due).setValue('3/2')
+    button.click()
+    await flushPromises()
+    expect(POST.mock.calls.filter((c) => String(c[0]).endsWith('/confirm')).length).toBe(0)
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+})

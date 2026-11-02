@@ -291,3 +291,21 @@ describe('report views', () => {
     }
   })
 })
+
+describe('report views, what is seen is what is sent', () => {
+  it.each([
+    ['the general ledger', GeneralLedgerView, ''],
+    ['the trial balance', TrialBalanceView, ''],
+    ['the reconciliation', ReconciliationView, ''],
+  ])('%s does not load while a date is half typed, and says why', async (_name, component) => {
+    GET = vi.fn()
+    const w = await mountView(component)
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('form input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

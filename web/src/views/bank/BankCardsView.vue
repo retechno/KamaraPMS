@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -172,7 +174,7 @@ watch(key, () => void load())
         <ul v-else class="mt-0 list-none p-0 text-sm" data-testid="rule-list">
           <li v-for="r in rules" :key="r.id">{{ r.payment_method === 'CARD' ? t('cards.card') : r.payment_method === 'QRIS' ? t('cards.qris') : t('cards.ewallet') }} · {{ r.mdr_rate }}%<template v-if="Number(r.vat_rate) > 0"> + {{ t('cards.vat') }} {{ r.vat_rate }}%</template> · {{ r.settlement_days }} · {{ $date(r.effective_from) }}</li>
         </ul>
-        <form v-if="canManage" class="mt-3 flex flex-wrap items-end gap-3" novalidate data-testid="rule-form" @submit.prevent="addRule">
+        <form v-if="canManage" class="mt-3 flex flex-wrap items-end gap-3" novalidate data-testid="rule-form" @submit.prevent="guardForm($event) && addRule()">
           <FormField class="w-40" :label="t('cards.ruleMethod')" :error="fieldError('payment_method')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="rule.payment_method" name="rule_method">
@@ -192,7 +194,7 @@ watch(key, () => void load())
             <template #default="{ id }"><Input :id="id" v-model="rule.settlement_days" name="settlement_days" inputmode="numeric" /></template>
           </FormField>
           <FormField class="w-44" :label="t('cards.ruleFrom')" :error="fieldError('effective_from')">
-            <template #default="{ id }"><Input :id="id" v-model="rule.effective_from" name="effective_from" type="date" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="rule.effective_from" name="effective_from" /></template>
           </FormField>
           <Button type="submit" :disabled="busy || !rule.mdr_rate.trim() || !rule.effective_from" data-testid="add-rule">{{ t('cards.addRule') }}</Button>
         </form>

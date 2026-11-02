@@ -13,6 +13,8 @@ import QuantityInput from '@/components/app/QuantityInput.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -123,6 +125,7 @@ function addExtra(): void {
   extras.value.push({ account_id: accounts.value[0]?.id ?? 0, description: '', amount: '', vat: '' })
 }
 
+const dateRow = ref<HTMLElement | null>(null)
 const ready = computed(
   () =>
     canBill.value &&
@@ -260,10 +263,10 @@ const billsOfMatches = computed(() => {
       <ErrorNotice v-if="formError" :error="formError" inline data-testid="bill-error" />
 
       <template v-if="!billed && canBill">
-        <div class="grid gap-3 sm:grid-cols-3">
+        <div ref="dateRow" class="grid gap-3 sm:grid-cols-3">
           <FormField :label="t('inventory.bill.invoiceNumber')" required><template #default="{ id }"><Input :id="id" v-model="head.invoice" name="invoice_number" maxlength="60" data-testid="invoice-number" /></template></FormField>
-          <FormField :label="t('inventory.bill.billDate')" required><template #default="{ id }"><Input :id="id" v-model="head.date" type="date" name="bill_date" /></template></FormField>
-          <FormField :label="t('inventory.bill.dueDate')" :hint="t('inventory.bill.dueHint')"><template #default="{ id }"><Input :id="id" v-model="head.due" type="date" name="due_date" /></template></FormField>
+          <FormField :label="t('inventory.bill.billDate')" required><template #default="{ id }"><DateInput :id="id" v-model="head.date" name="bill_date" /></template></FormField>
+          <FormField :label="t('inventory.bill.dueDate')" :hint="t('inventory.bill.dueHint')"><template #default="{ id }"><DateInput :id="id" v-model="head.due" name="due_date" /></template></FormField>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full min-w-[44rem] text-sm" data-testid="bill-lines">
@@ -312,7 +315,7 @@ const billsOfMatches = computed(() => {
           </div>
         </section>
         <div class="flex justify-end gap-2">
-          <Button type="button" :disabled="busy || !ready || (needsApproval && (!approver.email.trim() || !approver.password))" data-testid="bill-confirm" @click="confirmBill">{{ t('inventory.bill.confirm') }}</Button>
+          <Button type="button" :disabled="busy || !ready || (needsApproval && (!approver.email.trim() || !approver.password))" data-testid="bill-confirm" @click="guardForm($event, dateRow) && confirmBill()">{{ t('inventory.bill.confirm') }}</Button>
         </div>
       </template>
       <p v-else-if="!canBill" class="muted" data-testid="no-bill-permission">{{ t('inventory.bill.noPermission') }}</p>

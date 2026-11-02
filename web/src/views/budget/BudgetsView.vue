@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
@@ -121,7 +123,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('budget.view')" class="muted" data-testid="no-access">{{ t('budget.noAccess', { permission: 'budget.view' }) }}</p>
   <template v-else>
     <Card v-if="creating" class="mb-4">
-      <form v-autofocus novalidate data-testid="new-form" @submit.prevent="create">
+      <form v-autofocus novalidate data-testid="new-form" @submit.prevent="guardForm($event) && create()">
         <CardHeader><CardTitle>{{ t('budget.newTitle') }}</CardTitle></CardHeader>
         <CardContent class="flex flex-col gap-4">
           <div class="grid gap-4 sm:grid-cols-2">
@@ -130,7 +132,7 @@ watch(() => pid.value, () => {
                 <NativeSelect v-if="yearOptions.length" :id="id" v-model="form.year_start" name="year_start" :disabled="!!copySource">
                   <option v-for="y in yearOptions" :key="y.value" :value="y.value">{{ y.label }} ({{ y.value }})</option>
                 </NativeSelect>
-                <Input v-else :id="id" v-model="form.year_start" name="year_start" type="date" :disabled="!!copySource" />
+                <DateInput v-else :id="id" v-model="form.year_start" name="year_start" :disabled="!!copySource" />
               </template>
             </FormField>
             <FormField :label="t('budget.copyFrom')">

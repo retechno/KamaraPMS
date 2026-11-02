@@ -125,3 +125,18 @@ describe('BudgetsView', () => {
     expect(w.find('[data-testid=budgets]').exists()).toBe(false)
   })
 })
+
+describe('BudgetsView, what is seen is what is sent', () => {
+  it('does not create a draft while the year start is half typed, and says why', async () => {
+    const { w } = mountView(['budget.view', 'budget.manage']) // no fiscal years readable: the year is a date field
+    await flushPromises()
+    await w.get('[data-testid=new-budget]').trigger('click')
+    await w.get('input[name=name]').setValue('Plan')
+    await w.get('[data-testid=new-form] input[data-slot=date-input-text]').setValue('3/2')
+    const before = POST.mock.calls.length
+    await w.get('[data-testid=new-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

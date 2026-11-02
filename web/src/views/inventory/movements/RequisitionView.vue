@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { departmentLabel, loadDepartments } from '@/composables/useDepartments'
 import { t } from '@/i18n'
@@ -261,7 +263,7 @@ async function reject(): Promise<void> {
 
   <div v-else-if="loaded" class="grid gap-4" :class="sr ? 'xl:grid-cols-[minmax(0,1fr)_24rem]' : ''">
     <section class="flex min-w-0 flex-col gap-4">
-      <form v-if="editable" novalidate class="flex flex-col gap-4" data-testid="sr-form" @submit.prevent="save(false)">
+      <form v-if="editable" novalidate class="flex flex-col gap-4" data-testid="sr-form" @submit.prevent="guardForm($event) && save(false)">
         <ErrorNotice v-if="formError" :error="formError" inline data-testid="sr-error" />
         <p v-if="sr?.status === 'RETURNED' && sr.returned_note" class="alert warning" data-testid="returned-note">{{ t('inventory.request.returnedNote', { note: sr.returned_note }) }}</p>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -283,7 +285,7 @@ async function reject(): Promise<void> {
               </NativeSelect>
             </template>
           </FormField>
-          <FormField :label="t('inventory.request.neededOn')" :error="fieldError('needed_on')"><template #default="{ id }"><Input :id="id" v-model="form.needed_on" type="date" name="needed_on" /></template></FormField>
+          <FormField :label="t('inventory.request.neededOn')" :error="fieldError('needed_on')"><template #default="{ id }"><DateInput :id="id" v-model="form.needed_on" name="needed_on" /></template></FormField>
         </div>
         <FormField :label="t('inventory.request.note')" :error="fieldError('note')"><template #default="{ id }"><Input :id="id" v-model="form.note" name="note" maxlength="300" /></template></FormField>
 
@@ -321,7 +323,7 @@ async function reject(): Promise<void> {
           <div class="flex flex-wrap gap-2">
             <Button v-if="sr" type="button" variant="ghost" data-testid="sr-cancel" :disabled="busy" @click="act('cancel', t('inventory.sr.cancelled'))">{{ t('inventory.request.cancel') }}</Button>
             <Button type="submit" variant="outline" :disabled="busy || !complete" data-testid="sr-save">{{ t('inventory.request.saveDraft') }}</Button>
-            <Button type="button" :disabled="busy || !complete" data-testid="sr-submit" @click="save(true)">{{ t('inventory.request.submit') }}</Button>
+            <Button type="button" :disabled="busy || !complete" data-testid="sr-submit" @click="guardForm($event, ($event.currentTarget as HTMLButtonElement).form) && save(true)">{{ t('inventory.request.submit') }}</Button>
           </div>
         </div>
       </form>

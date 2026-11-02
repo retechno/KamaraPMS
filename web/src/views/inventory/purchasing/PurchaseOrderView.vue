@@ -12,6 +12,8 @@ import QuantityInput from '@/components/app/QuantityInput.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -178,7 +180,7 @@ const canReceive = computed(() => !!order.value && (order.value.status === 'ORDE
   <!-- an order written directly: only for a property that does not order from requests -->
   <template v-else-if="loaded && isNew">
     <p v-if="settings?.po_requires_pr" class="alert warning" data-testid="requires-request">{{ t('inventory.order.requiresRequest') }}</p>
-    <form v-else novalidate class="flex flex-col gap-4" data-testid="order-form" @submit.prevent="create">
+    <form v-else novalidate class="flex flex-col gap-4" data-testid="order-form" @submit.prevent="guardForm($event) && create()">
       <ErrorNotice v-if="formError" :error="formError" inline data-testid="order-error" />
       <div class="grid gap-3 sm:grid-cols-3">
         <FormField :label="t('inventory.order.supplier')" :error="fieldError('supplier_id')" required>
@@ -191,7 +193,7 @@ const canReceive = computed(() => !!order.value && (order.value.status === 'ORDE
             <NativeSelect :id="id" v-model.number="form.warehouse_id" name="warehouse_id" :aria-invalid="invalid"><option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.code }} · {{ w.name }}</option></NativeSelect>
           </template>
         </FormField>
-        <FormField :label="t('inventory.order.expectedOn')" :error="fieldError('expected_on')"><template #default="{ id }"><Input :id="id" v-model="form.expected_on" type="date" name="expected_on" /></template></FormField>
+        <FormField :label="t('inventory.order.expectedOn')" :error="fieldError('expected_on')"><template #default="{ id }"><DateInput :id="id" v-model="form.expected_on" name="expected_on" /></template></FormField>
       </div>
       <FormField :label="t('inventory.order.notes')" :error="fieldError('notes')"><template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" maxlength="300" /></template></FormField>
       <div class="overflow-x-auto">

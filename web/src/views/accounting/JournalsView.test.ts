@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -234,5 +235,38 @@ describe('JournalsView', () => {
       w.unmount()
       document.body.innerHTML = ''
     })
+  })
+})
+
+describe('JournalsView, what is seen is what is sent', () => {
+  beforeEach(() => setLocale('en'))
+
+  it('does not search while a date of the filter is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('input[name=q]').setValue('cash')
+    await w.get('input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=apply]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('does not post while the date of the journal is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=new-journal]').trigger('click')
+    await w.get('input[name=description]').setValue('Cash sale')
+    await w.get('select[name=account_0]').setValue(1)
+    await w.get('select[name=account_1]').setValue(2)
+    await w.get('input[name=debit_0]').setValue('100000')
+    await w.get('input[name=credit_1]').setValue('100000')
+    await w.get('[data-testid=journal-form] input[data-slot=date-input-text]').setValue('3/2')
+    const before = POST.mock.calls.length
+    await w.get('[data-testid=journal-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.length).toBe(before)
+    expect(w.get('[data-testid=journal-form]').text()).toContain('Write as dd/mm/yyyy')
   })
 })

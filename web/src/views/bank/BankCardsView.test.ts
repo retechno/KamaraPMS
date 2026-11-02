@@ -141,3 +141,17 @@ describe('BankCardsView', () => {
     expect(GET).not.toHaveBeenCalled()
   })
 })
+
+describe('BankCardsView, what is seen is what is sent', () => {
+  it('does not add a rule while the date is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[name=mdr_rate]').setValue('2.5')
+    await w.get('[data-testid=rule-form] input[data-slot=date-input-text]').setValue('3/2')
+    const before = POST.mock.calls.length
+    await w.get('[data-testid=rule-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

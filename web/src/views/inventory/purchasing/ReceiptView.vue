@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -237,7 +239,7 @@ const sourceLabel = computed(() => (po.value ? t('inventory.receipt.forOrder', {
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
 
   <!-- a new receipt, against an order or without one -->
-  <form v-else-if="loaded && isNew" novalidate class="flex flex-col gap-4" data-testid="receipt-form" @submit.prevent="post(false)">
+  <form v-else-if="loaded && isNew" novalidate class="flex flex-col gap-4" data-testid="receipt-form" @submit.prevent="guardForm($event) && post(false)">
     <ErrorNotice v-if="formError" :error="formError" inline data-testid="receipt-error" />
     <p v-if="!po && settings && settings.direct_receipt_limit === null" class="alert warning" data-testid="direct-not-allowed">{{ t('inventory.receipt.directNotAllowed') }}</p>
     <p v-else-if="!po && settings?.direct_receipt_limit && Number(settings.direct_receipt_limit) > 0" class="muted text-sm" data-testid="direct-limit">{{ t('inventory.receipt.directLimit', { limit: formatMoney(settings.direct_receipt_limit) }) }}</p>
@@ -310,8 +312,8 @@ const sourceLabel = computed(() => (po.value ? t('inventory.receipt.forOrder', {
       <label class="flex items-center gap-2 text-sm font-medium"><input v-model="bill.on" type="checkbox" name="receive_and_bill" data-testid="bill-toggle" /> {{ t('inventory.receipt.receiveAndBill') }}</label>
       <div v-if="bill.on" class="mt-3 grid gap-3 sm:grid-cols-3">
         <FormField :label="t('inventory.receipt.invoiceNumber')" :error="fieldError('bill.supplier_invoice_number')" required><template #default="{ id }"><Input :id="id" v-model="bill.invoice" name="invoice_number" maxlength="60" /></template></FormField>
-        <FormField :label="t('inventory.receipt.billDate')" :error="fieldError('bill_date')" required><template #default="{ id }"><Input :id="id" v-model="bill.date" type="date" name="bill_date" /></template></FormField>
-        <FormField :label="t('inventory.receipt.dueDate')"><template #default="{ id }"><Input :id="id" v-model="bill.due" type="date" name="due_date" /></template></FormField>
+        <FormField :label="t('inventory.receipt.billDate')" :error="fieldError('bill_date')" required><template #default="{ id }"><DateInput :id="id" v-model="bill.date" name="bill_date" /></template></FormField>
+        <FormField :label="t('inventory.receipt.dueDate')"><template #default="{ id }"><DateInput :id="id" v-model="bill.due" name="due_date" /></template></FormField>
       </div>
       <p v-if="bill.on" class="muted mt-2 text-sm">{{ t('inventory.receipt.billHint') }}</p>
     </section>
@@ -320,7 +322,7 @@ const sourceLabel = computed(() => (po.value ? t('inventory.receipt.forOrder', {
       <Button v-if="!po" type="button" variant="outline" size="sm" data-testid="line-add" :disabled="freeItems(0).length === 0" @click="addLine">{{ t('inventory.receipt.addLine') }}</Button><span v-else />
       <div class="flex flex-wrap gap-2">
         <Button as-child variant="outline"><RouterLink :to="po ? `/inventory/purchase-orders/${po.id}` : '/inventory/purchasing?tab=receipts'">{{ t('common.cancel') }}</RouterLink></Button>
-        <Button v-if="bill.on" type="button" :disabled="busy || !complete" data-testid="receipt-post-bill" @click="post(true)">{{ t('inventory.receipt.postAndBill') }}</Button>
+        <Button v-if="bill.on" type="button" :disabled="busy || !complete" data-testid="receipt-post-bill" @click="guardForm($event, ($event.currentTarget as HTMLButtonElement).form) && post(true)">{{ t('inventory.receipt.postAndBill') }}</Button>
         <Button v-else type="submit" :disabled="busy || !complete" data-testid="receipt-post">{{ t('inventory.receipt.post') }}</Button>
       </div>
     </div>

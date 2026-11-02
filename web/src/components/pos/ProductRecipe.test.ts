@@ -237,3 +237,15 @@ describe('the findings of the audit', () => {
     }
   })
 })
+
+describe('the report of the POS sales without a deduction, what is seen is what is sent', () => {
+  it('does not load while a date is half typed, and says why', async () => {
+    await setup(InventoryPosGapView, ['inventory.view'], () => ({ data: { data: [] } }))
+    const before = GET.mock.calls.length
+    await body('form[data-testid=gap-filters] input[data-slot=date-input-text]').setValue('3/2')
+    await body('form[data-testid=gap-filters]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+})

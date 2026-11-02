@@ -8,7 +8,8 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
@@ -62,9 +63,9 @@ watch(pid, load, { immediate: true })
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>
-    <form class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="gap-filters" @submit.prevent="load">
-      <FormField :label="t('inventory.posGap.from')"><template #default="{ id }"><Input :id="id" v-model="pick.from" type="date" name="from" /></template></FormField>
-      <FormField :label="t('inventory.posGap.to')"><template #default="{ id }"><Input :id="id" v-model="pick.to" type="date" name="to" /></template></FormField>
+    <form class="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="gap-filters" @submit.prevent="guardForm($event) && load()">
+      <FormField :label="t('inventory.posGap.from')"><template #default="{ id }"><DateInput :id="id" v-model="pick.from" name="from" /></template></FormField>
+      <FormField :label="t('inventory.posGap.to')"><template #default="{ id }"><DateInput :id="id" v-model="pick.to" name="to" /></template></FormField>
       <FormField v-if="outlets.length" :label="t('inventory.posGap.outlet')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model.number="pick.outlet" name="outlet" data-testid="gap-outlet">
