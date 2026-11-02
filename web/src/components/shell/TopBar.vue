@@ -51,7 +51,9 @@ const shortcut = finderShortcut()
 const crumbs = computed(() => {
   const hit = activeNav(route.path, nav.sections.value)
   if (!hit) return [routeTitle(route)].filter(Boolean)
-  return [t(`nav.sections.${hit.section.id}` as never), t(`nav.items.${hit.item.id}` as never)]
+  // a page under a menu item that names its own heading (a report) says that heading, not the item it hangs under
+  const page = route.meta.titleKey && route.path !== hit.item.to ? routeTitle(route) : t(`nav.items.${hit.item.id}` as never)
+  return [t(`nav.sections.${hit.section.id}` as never), page]
 })
 
 const local = computed(() => (property.clock ? wallClock(property.clock.property_local_time) : null))

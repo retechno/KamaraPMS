@@ -9,12 +9,14 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { currentLocale, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
+import { guardForm } from '@/utils/forms'
 import { type ReportDef, type ReportKey, type Table, reports } from './reportDefs'
 
 const auth = useAuthStore()
@@ -129,7 +131,7 @@ watch([key, pid], () => {
     </Card>
 
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="run">
+      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate data-testid="filters" @submit.prevent="guardForm($event) && run()">
         <FormField class="w-72" :label="t('reports.report')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model="key" name="report">
@@ -138,10 +140,10 @@ watch([key, pid], () => {
           </template>
         </FormField>
         <template v-if="def.input === 'range'">
-          <FormField float-hint :hint="$weekday(range.from)" :label="t('reports.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
-          <FormField float-hint :hint="$weekday(range.to)" :label="t('reports.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+          <FormField :label="t('reports.from')"><template #default="{ id }"><DateInput :id="id" v-model="range.from" name="from" /></template></FormField>
+          <FormField :label="t('reports.to')"><template #default="{ id }"><DateInput :id="id" v-model="range.to" name="to" /></template></FormField>
         </template>
-        <FormField float-hint :hint="$weekday(range.date)" v-else-if="def.input === 'date'" :label="t('reports.date')"><template #default="{ id }"><Input :id="id" v-model="range.date" name="date" type="date" /></template></FormField>
+        <FormField v-else-if="def.input === 'date'" :label="t('reports.date')"><template #default="{ id }"><DateInput :id="id" v-model="range.date" name="date" /></template></FormField>
         <FormField v-else-if="def.input === 'hours'" :label="t('reports.minHours')"><template #default="{ id }"><Input :id="id" v-model.number="range.minHours" name="min_hours" type="number" min="0" /></template></FormField>
         <Button type="submit" :disabled="busy" data-testid="run">{{ t('reports.run') }}</Button>
         <Button type="button" variant="outline" :disabled="busy || !table" data-testid="csv" @click="download">{{ t('reports.csv') }}</Button>

@@ -8,12 +8,13 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { usePosOutlet } from '@/composables/usePosOutlet'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
+import { guardForm } from '@/utils/forms'
 
 /**
  * The report of an outlet for a range of business dates (docs/architecture/34-pos.md 13.2): sales, service and tax; payments by method; voids, discounts and complimentary with who gave and who approved;
@@ -81,7 +82,7 @@ function csv(): void {
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <EmptyState v-else-if="loaded && outlets.length === 0" :title="t('posFloor.noOutlet')" :description="t('posFloor.noOutletHint')" />
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3" novalidate @submit.prevent="load">
+    <form class="mb-8 flex flex-wrap items-end gap-3" novalidate @submit.prevent="guardForm($event) && load()">
       <FormField :label="t('posFloor.outlet')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="outletId" name="outlet" data-testid="report-outlet">
@@ -89,8 +90,8 @@ function csv(): void {
           </NativeSelect>
         </template>
       </FormField>
-      <FormField :label="t('posReport.from')"><template #default="{ id }"><Input :id="id" v-model="from" type="date" name="from" data-testid="report-from" /></template></FormField>
-      <FormField :label="t('posReport.to')"><template #default="{ id }"><Input :id="id" v-model="to" type="date" name="to" data-testid="report-to" /></template></FormField>
+      <FormField :label="t('posReport.from')"><template #default="{ id }"><DateInput :id="id" v-model="from" name="from" data-testid="report-from" /></template></FormField>
+      <FormField :label="t('posReport.to')"><template #default="{ id }"><DateInput :id="id" v-model="to" name="to" data-testid="report-to" /></template></FormField>
       <Button type="button" variant="outline" :disabled="!report" data-testid="report-csv" @click="csv">{{ t('posReport.csv') }}</Button>
     </form>
     <ErrorNotice v-if="error" :error="error" inline />

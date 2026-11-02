@@ -10,10 +10,11 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { downloadCsv } from '@/views/accounting/reportApi'
+import { guardForm } from '@/utils/forms'
 
 /**
  * The schedule of a day (docs/architecture/36-banquet.md 4.10, mockup 50): every session of the day by its start time, with the room, the set-up, the guests, the contact and the state of the BEO, made to be
@@ -69,8 +70,8 @@ const guests = (s: BanquetScheduleRow): string => String(s.pax_actual ?? s.pax_g
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>
-    <form class="mb-4 flex flex-wrap items-end gap-3 print:hidden" novalidate data-testid="report-period" @submit.prevent="load">
-      <FormField :label="t('banquet.reports.schedule.day')"><template #default="{ id }"><Input :id="id" v-model="day" type="date" name="day" class="w-40" /></template></FormField>
+    <form class="mb-8 flex flex-wrap items-end gap-3 print:hidden" novalidate data-testid="report-period" @submit.prevent="guardForm($event) && load()">
+      <FormField :label="t('banquet.reports.schedule.day')"><template #default="{ id }"><DateInput :id="id" v-model="day" name="day" class="w-40" /></template></FormField>
       <Button type="submit" variant="outline" :disabled="busy" data-testid="report-show">{{ t('inventory.reports.show') }}</Button>
       <div class="ml-auto flex flex-wrap gap-2">
         <Button type="button" variant="outline" data-testid="report-print" @click="print">{{ t('inventory.reports.print') }}</Button>

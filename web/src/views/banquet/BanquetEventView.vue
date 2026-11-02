@@ -21,7 +21,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { confirm } from '@/composables/useConfirm'
 import { toast } from '@/composables/useToast'
@@ -30,6 +30,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatDateShort, formatMoney } from '@/utils/format'
 import { formatHoldRange } from '@/utils/banquet'
+import { guardForm } from '@/utils/forms'
 
 /**
  * One event (docs/architecture/36-banquet.md 6.4 to 6.7): the header with what can be done to it, a strip with the money (contract, deposits, bill), and the tabs: Sessions (room, hours, guests and place in the queue of
@@ -305,12 +306,12 @@ const range = (s: BanquetSession): string => (s.start_time ? `${s.start_time.sli
 
     <Dialog :open="tentOpen" @update:open="(v) => (tentOpen = v)">
       <DialogContent class="max-w-md p-5" data-testid="tentative-dialog" @interact-outside.prevent>
-        <form novalidate class="flex flex-col gap-3" @submit.prevent="makeTentative">
+        <form novalidate class="flex flex-col gap-3" @submit.prevent="guardForm($event) && makeTentative()">
           <DialogTitle>{{ t('banquet.event.makeTentative') }}</DialogTitle>
           <DialogDescription>{{ t('banquet.event.tentativeHint') }}</DialogDescription>
           <ErrorNotice v-if="tentError" :error="tentError" inline />
           <FormField :label="t('banquet.event.optionDate')" required :error="tentError?.fieldMessage('option_until')">
-            <template #default="{ id }"><Input :id="id" v-model="tentDate" name="option_until" type="date" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="tentDate" name="option_until" /></template>
           </FormField>
           <div class="flex justify-end gap-2">
             <Button type="button" variant="outline" @click="tentOpen = false">{{ t('common.cancel') }}</Button>

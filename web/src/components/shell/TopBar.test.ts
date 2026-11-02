@@ -26,7 +26,7 @@ const previewOf = (over: object = {}) => ({
 const mounted: VueWrapper[] = []
 const body = <T extends Element = HTMLElement>(sel: string): T | null => document.body.querySelector<T>(sel)
 
-async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[]; permissions?: string[]; preview?: object } = {}) {
+async function mountBar(opts: { path?: string; meta?: object; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[]; permissions?: string[]; preview?: object } = {}) {
   const GET = api.GET as unknown as ReturnType<typeof vi.fn> // the typed client is too deep for vi.mocked
   GET.mockReset()
   GET.mockResolvedValue({ data: opts.preview })
@@ -39,7 +39,7 @@ async function mountBar(opts: { path?: string; mode?: 'full' | 'rail' | 'drawer'
   property.currentId = 7
   property.clock = (opts.clock === undefined ? clock() : opts.clock) as never
   const select = vi.spyOn(property, 'select').mockResolvedValue()
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' }, meta: { title: 'Stay' } }] })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' }, meta: { title: 'Stay', ...opts.meta } }] })
   await router.push(opts.path ?? '/arrivals')
   const w = mount(TopBar, {
     attachTo: document.body,
@@ -72,6 +72,14 @@ describe('TopBar', () => {
   it('shows where the person is: the section and the page', async () => {
     const { w } = await mountBar({ path: '/arrivals' })
     expect(w.get('[data-testid=breadcrumb]').text()).toBe('Front desk/Arrivals')
+  })
+
+  it('ends the breadcrumb of a report with the heading of its page, not with the menu item it sits under', async () => {
+    const { w } = await mountBar({ path: '/inventory/reports/usage', meta: { titleKey: 'inventory.reports.usage.title' } })
+    expect(w.get('[data-testid=breadcrumb]').text()).toBe('Inventory/Usage by department')
+    await setLocale('id')
+    const idle = await mountBar({ path: '/inventory/reports/usage', meta: { titleKey: 'inventory.reports.usage.title' } })
+    expect(idle.w.get('[data-testid=breadcrumb]').text()).toBe('Persediaan/Pemakaian per departemen')
   })
 
   it('shows the route title for a page outside the menu', async () => {

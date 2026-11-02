@@ -8,12 +8,13 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { addDays } from '@/utils/dates'
 import { formatDateShort, formatDateTime, formatMoney, formatPercent } from '@/utils/format'
 import { money } from '@/views/accounting/reportApi'
+import { guardForm } from '@/utils/forms'
 import DayReportActions from './DayReportActions.vue'
 import { methodName } from './dayLabels'
 import { useDayReport } from './useDayReport'
@@ -54,9 +55,9 @@ const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-m
     <ErrorNotice :error="error" inline data-testid="report-error" />
     <p v-if="denied" class="muted m-0" data-testid="no-access">{{ t('dayReports.denied', { permission: 'report.view' }) }}</p>
     <template v-else>
-      <form class="flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="run">
-        <FormField :label="t('dayReports.from')"><template #default="{ id }"><Input :id="id" v-model="f.from" type="date" name="from" data-testid="co-from" /></template></FormField>
-        <FormField :label="t('dayReports.to')"><template #default="{ id }"><Input :id="id" v-model="f.to" type="date" name="to" data-testid="co-to" /></template></FormField>
+      <form class="mb-5 flex flex-wrap items-end gap-3 print:hidden" novalidate @submit.prevent="guardForm($event) && run()">
+        <FormField :label="t('dayReports.from')"><template #default="{ id }"><DateInput :id="id" v-model="f.from" name="from" data-testid="co-from" /></template></FormField>
+        <FormField :label="t('dayReports.to')"><template #default="{ id }"><DateInput :id="id" v-model="f.to" name="to" data-testid="co-to" /></template></FormField>
         <FormField :label="t('dayReports.corrections.kindLabel')"><template #default="{ id }">
           <NativeSelect :id="id" v-model="f.kind" name="kind" data-testid="co-kind">
             <option value="ALL">{{ t('dayReports.all') }}</option>

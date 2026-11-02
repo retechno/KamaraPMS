@@ -149,3 +149,16 @@ describe('ReportsView', () => {
     expect(w.get('[data-testid=note]').text()).toContain('Open now: 2 (1 high priority); the oldest has waited 26 hour(s).')
   })
 })
+
+describe('ReportsView, what is seen is what is sent', () => {
+  it('does not load while a date is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('[data-testid=filters] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

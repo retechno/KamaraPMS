@@ -36,7 +36,7 @@ function pick(p: Period): void {
     <FormField v-if="!props.noDate" :label="props.single ? t('inventory.reports.asOf') : t('inventory.reports.to')"><template #default="{ id }"><DateInput :id="id" v-model="to" name="to" class="w-40" /></template></FormField>
     <slot />
     <Button type="submit" variant="outline" :disabled="props.busy" data-testid="report-show">{{ t('inventory.reports.show') }}</Button>
-    <PeriodPicks v-if="!props.single && !props.noDate" :business-date="businessDate" :years="[]" @pick="pick" />
+    <PeriodPicks v-if="!props.single && !props.noDate" size="default" :business-date="businessDate" :years="[]" @pick="pick" />
     <div class="ml-auto flex flex-wrap gap-2">
       <slot name="actions" />
       <Button type="button" variant="outline" data-testid="report-print" @click="print">{{ t('inventory.reports.print') }}</Button>

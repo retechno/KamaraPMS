@@ -7,10 +7,12 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { formatHoldRange } from '@/utils/banquet'
+import { guardForm } from '@/utils/forms'
 
 /**
  * Adds a session to an event, or changes / moves one (docs/architecture/36-banquet.md 6.5, 6.6). Once the room, the day and the hours are filled the room is checked against the schedule: what is
@@ -121,7 +123,7 @@ const canSave = computed(() => !busy.value && !blocked.value && (!worse.value ||
 <template>
   <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
     <DialogContent class="max-h-[90dvh] max-w-lg overflow-y-auto p-5" data-testid="banquet-session-dialog" @interact-outside.prevent>
-      <form novalidate class="flex flex-col gap-3" @submit.prevent="save">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="guardForm($event) && save()">
         <DialogTitle>{{ session ? (moving ? t('banquet.session.move') : t('banquet.session.edit')) : t('banquet.session.new') }}</DialogTitle>
         <DialogDescription>{{ t(needsRoom ? 'banquet.session.hintHeld' : 'banquet.session.hintInquiry') }}</DialogDescription>
         <ErrorNotice v-if="error" :error="error" inline />
@@ -138,7 +140,7 @@ const canSave = computed(() => !busy.value && !blocked.value && (!worse.value ||
         </FormField>
         <div class="grid gap-3 sm:grid-cols-3">
           <FormField :label="t('banquet.session.date')" required :error="error?.fieldMessage('session_date')">
-            <template #default="{ id }"><Input :id="id" v-model="form.date" name="session_date" type="date" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="form.date" name="session_date" /></template>
           </FormField>
           <FormField :label="t('banquet.session.start')" :error="error?.fieldMessage('start_time')">
             <template #default="{ id }"><Input :id="id" v-model="form.start" name="start_time" type="time" /></template>
