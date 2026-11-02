@@ -155,11 +155,11 @@ describe('useNavPins', () => {
   describe('the pages opened last', () => {
     it('puts the page the person is on first, once, and keeps five', async () => {
       const pins = await setup()
-      for (const path of ['/guests', '/groups', '/reservations', '/arrivals', '/departures', '/in-house']) pins.track(path)
-      expect(ids(pins.recent.value)).toEqual(['inHouse', 'departures', 'arrivals', 'reservations', 'groups'])
+      for (const path of ['/guests', '/groups', '/reservations', '/walk-in', '/availability', '/arrivals', '/departures', '/in-house']) pins.track(path) // the last three are one page: Guests today
+      expect(ids(pins.recent.value)).toEqual(['guestsToday', 'availability', 'walkIn', 'reservations', 'groups'])
       expect(pins.recent.value).toHaveLength(RECENT_LIMIT)
       pins.track('/groups')
-      expect(ids(pins.recent.value)).toEqual(['groups', 'inHouse', 'departures', 'arrivals', 'reservations'])
+      expect(ids(pins.recent.value)).toEqual(['groups', 'guestsToday', 'availability', 'walkIn', 'reservations'])
       pins.track('/groups')
       expect(ids(pins.recent.value)[0]).toBe('groups')
       expect(ids(pins.recent.value).filter((x) => x === 'groups')).toHaveLength(1)
@@ -211,6 +211,41 @@ describe('useNavPins', () => {
       expect(ids(pins.pinned.value)).toEqual(['dashboard', 'roomStatus'])
       expect(ids(pins.recent.value)).toEqual([])
       expect(pins.showRecent.value).toBe(true)
+    })
+  })
+  describe('the ids of the three old guest lists', () => {
+    it('reads a pin of any of them as the one item, and a person who pinned all three has one pin, in the place of the first', async () => {
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard', 'departures', 'guests', 'arrivals', 'inHouse'] }))
+      const pins = await setup()
+      expect(ids(pins.pinned.value)).toEqual(['dashboard', 'guestsToday', 'guests'])
+      expect(pins.isPinned('guestsToday')).toBe(true)
+      pins.togglePin('guestsToday') // one tap takes the one pin off, whatever ids were stored
+      expect(ids(pins.pinned.value)).toEqual(['dashboard', 'guests'])
+      expect(JSON.parse(localStorage.getItem('pms.nav.1')!).pins).toEqual(['dashboard', 'guests'])
+    })
+
+    it('reads a person with only the three old pins as one pin', async () => {
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['arrivals', 'inHouse', 'departures'] }))
+      const pins = await setup()
+      expect(ids(pins.pinned.value)).toEqual(['guestsToday'])
+    })
+
+    it('merges the old recent ids once, and not with a page that is pinned or the page the person is on', async () => {
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['arrivals'], recent: ['inHouse', 'guests', 'departures', 'groups'] }))
+      const pinned = await setup()
+      expect(ids(pinned.recent.value)).toEqual(['guests', 'groups']) // Guests today is pinned
+      wrapper!.unmount()
+      resetNavPins()
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard'], recent: ['departures', 'guests', 'arrivals', 'inHouse', 'groups'] }))
+      const merged = await setup()
+      expect(ids(merged.recent.value)).toEqual(['guestsToday', 'guests', 'groups'])
+    })
+
+    it('tracks the three routes as one page, first, once', async () => {
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard'], recent: ['departures', 'guests'] }))
+      const pins = await setup()
+      pins.track('/in-house')
+      expect(ids(pins.recent.value)).toEqual(['guestsToday', 'guests'])
     })
   })
 })

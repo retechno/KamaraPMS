@@ -71,7 +71,7 @@ describe('TopBar', () => {
 
   it('shows where the person is: the section and the page', async () => {
     const { w } = await mountBar({ path: '/arrivals' })
-    expect(w.get('[data-testid=breadcrumb]').text()).toBe('Front desk/Arrivals')
+    expect(w.get('[data-testid=breadcrumb]').text()).toBe('Front desk/Guests today')
   })
 
   it('ends the breadcrumb of a report with the heading of its page, not with the menu item it sits under', async () => {
@@ -248,6 +248,31 @@ describe('TopBar', () => {
       }
     })
 
+    it('says "Audit · 3" on a phone when three steps are pending, with the whole text as its label, in both languages', async () => {
+      const stuck = previewOf({
+        can_run: false,
+        blockers: { ...previewOf().blockers, unresolved_arrivals: [{ reservation_room_id: 1 }], unresolved_departures: [{ stay_id: 2 }, { stay_id: 3 }], open_shifts: [{ id: 9 }] },
+      })
+      const { w } = await mountBar({ mode: 'drawer', clock: clock({ night_audit_allowed: true }), preview: stuck })
+      const status = w.get('[data-testid=night-audit-status]')
+      expect(status.text()).toBe('Audit · 3')
+      expect(status.attributes('aria-label')).toBe('Night audit · 3 pending')
+      expect(status.attributes('data-state')).toBe('pending')
+      await setLocale('id')
+      await flushPromises()
+      expect(w.get('[data-testid=night-audit-status]').text()).toBe('Audit · 3')
+      expect(w.get('[data-testid=night-audit-status]').attributes('aria-label')).toBe('Audit malam · 3 tertunda')
+      await setLocale('en')
+    })
+
+    it('keeps the whole text on a wide bar, and the number is not lost in the short one', async () => {
+      const stuck = previewOf({ can_run: false, blockers: { ...previewOf().blockers, unresolved_departures: [{ stay_id: 2 }] } })
+      const wide = await mountBar({ clock: clock({ night_audit_allowed: true }), preview: stuck })
+      expect(wide.w.get('[data-testid=night-audit-status]').text()).toBe('Night audit · 1 pending')
+      const phone = await mountBar({ mode: 'drawer', clock: clock({ night_audit_allowed: true }), preview: stuck })
+      expect(phone.w.get('[data-testid=night-audit-status]').text()).toBe('Audit · 1')
+    })
+
     it('is short on a phone: the day without its year, and "Overdue" in words when night audit is late', async () => {
       const { w } = await mountBar({ mode: 'drawer' })
       expect(w.get('[data-testid=business-date]').text()).toContain('30 Sep')
@@ -277,7 +302,7 @@ describe('TopBar', () => {
       await flushPromises()
       expect(currentLocale()).toBe('id')
       expect(localStorage.getItem('pms.locale')).toBe('id')
-      expect(w.get('[data-testid=breadcrumb]').text()).toBe('Front Desk/Kedatangan')
+      expect(w.get('[data-testid=breadcrumb]').text()).toBe('Front Desk/Tamu hari ini')
       expect(w.get('[data-testid=business-date]').text()).toContain('Tanggal bisnis')
     })
 
@@ -328,7 +353,7 @@ describe('TopBar', () => {
   describe('a phone', () => {
     it('shows the menu button and the title of the page, and leaves the property to the drawer', async () => {
       const { w } = await mountBar({ mode: 'drawer', path: '/arrivals' })
-      expect(w.get('[data-testid=page-title]').text()).toBe('Arrivals')
+      expect(w.get('[data-testid=page-title]').text()).toBe('Guests today')
       expect(w.find('[data-testid=breadcrumb]').exists()).toBe(false)
       expect(w.find('[data-testid=property-switcher]').exists()).toBe(false)
       await w.get('[data-testid=open-menu]').trigger('click')

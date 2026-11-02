@@ -121,10 +121,8 @@ export const id: Messages = {
       groups: 'Grup',
       availability: 'Ketersediaan',
       tapeChart: 'Bagan kamar',
-      arrivals: 'Kedatangan',
+      guestsToday: 'Tamu hari ini',
       walkIn: 'Walk-in',
-      inHouse: 'Menginap',
-      departures: 'Keberangkatan',
       roomStatus: 'Status kamar',
       housekeeping: 'Housekeeping',
       cleaningList: 'Daftar pembersihan',
@@ -474,7 +472,7 @@ export const id: Messages = {
   },
   frontDesk: {
     page: {
-      title: 'Front Desk',
+      title: 'Tamu hari ini',
       description: 'Siapa yang datang hari ini, siapa yang menginap, dan siapa yang akan pulang.',
       arrivals: 'Kedatangan',
       inHouse: 'Menginap',
@@ -9164,6 +9162,7 @@ export const id: Messages = {
     localTime: 'lokal',
     nightAuditOverdue: 'Audit malam terlambat',
     nightAuditReady: 'Audit malam siap',
+    nightAuditPendingShort: 'Audit · {n}',
     nightAuditPending: 'Audit malam · {n} tertunda',
     nightAuditChecking: 'Audit malam · memeriksa',
     nightAuditNotYet: 'Audit malam nanti',

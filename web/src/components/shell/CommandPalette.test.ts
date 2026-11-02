@@ -59,8 +59,8 @@ describe('CommandPalette', () => {
     await openPalette()
     expect($('[data-testid=palette-page-dashboard]')).not.toBeNull()
     await type('depart')
-    expect($('[data-testid=palette-page-departures]')).not.toBeNull()
-    expect($('[data-testid=palette-page-arrivals]')).toBeNull()
+    expect($('[data-testid=palette-page-guestsToday-departures]')).not.toBeNull() // a tab is found by its name and goes straight to it
+    expect($('[data-testid=palette-page-guestsToday-arrivals]')).toBeNull()
   })
 
   it('goes to the page on Enter, after moving with the arrow keys', async () => {
@@ -122,6 +122,54 @@ describe('CommandPalette', () => {
     await openPalette(['reservation.read'])
     setLocale('id')
     await type('kedatangan')
-    expect($('[data-testid=palette-page-arrivals]')).not.toBeNull()
+    expect($('[data-testid=palette-page-guestsToday-arrivals]')).not.toBeNull()
+  })
+  describe('the pages opened last', () => {
+    const remember = (recent: string[], more: object = {}) => localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard'], recent, ...more }))
+    beforeEach(() => localStorage.clear())
+
+    it('are the first group of an empty finder, with the section of each', async () => {
+      remember(['guests', 'groups', 'departures'])
+      await openPalette()
+      const rows = Array.from(body().querySelectorAll('[data-testid^=palette-recent-]')).map((e) => e.getAttribute('data-testid'))
+      expect(rows).toEqual(['palette-recent-guests', 'palette-recent-groups', 'palette-recent-guestsToday'])
+      const titles = Array.from(body().querySelectorAll('#palette-results p')).map((e) => e.textContent)
+      expect(titles[0]).toBe('Recently opened')
+      expect(titles[1]).toBe('Pages')
+      expect($('[data-testid=palette-recent-guests]')!.textContent).toContain('Front desk')
+      expect($('[data-testid=palette-page-dashboard]')).not.toBeNull() // the pages are still below
+      expect($('[data-testid=palette-recent-guestsToday]')).not.toBeNull() // one entry for the three old ids
+      expect(body().querySelectorAll('[data-testid=palette-recent-guestsToday]')).toHaveLength(1)
+    })
+
+    it('are replaced by the search when something is typed, and come back when it is cleared', async () => {
+      remember(['guests', 'groups'])
+      await openPalette()
+      await type('tape')
+      expect(body().querySelectorAll('[data-testid^=palette-recent-]')).toHaveLength(0)
+      expect($('[data-testid=palette-page-tapeChart]')).not.toBeNull()
+      await type('')
+      expect(body().querySelectorAll('[data-testid^=palette-recent-]')).toHaveLength(2)
+    })
+
+    it('are not there when there are none, or when the person hid them in the menu', async () => {
+      await openPalette()
+      expect(body().querySelectorAll('[data-testid^=palette-recent-]')).toHaveLength(0)
+      expect(body().textContent).not.toContain('Recently opened')
+      mounted?.unmount()
+      mounted = null
+      body().innerHTML = ''
+      remember(['guests', 'groups'], { showRecent: false })
+      await openPalette()
+      expect(body().querySelectorAll('[data-testid^=palette-recent-]')).toHaveLength(0)
+    })
+
+    it('go to the page on Enter', async () => {
+      remember(['guests'])
+      const { router } = await openPalette()
+      await press('Enter')
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe('/guests')
+    })
   })
 })

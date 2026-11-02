@@ -75,7 +75,7 @@ describe('SidebarNav', () => {
     const { w } = await mountNav('/')
     setLocale('id')
     await flushPromises()
-    expect(w.get('[data-testid=nav-arrivals]').text()).toBe('Kedatangan')
+    expect(w.get('[data-testid=nav-guestsToday]').text()).toBe('Tamu hari ini')
     expect(w.get('[data-testid=section-rooms]').text()).toContain('Kamar')
   })
 
@@ -92,5 +92,72 @@ describe('SidebarNav', () => {
     const { w } = await mountNav('/')
     await w.get('[data-testid=nav-guests]').trigger('click')
     expect(w.emitted('navigate')).toHaveLength(1)
+  })
+  describe('Guests today', () => {
+    it('is one item, active (with its section open) on arrivals, in-house and departures', async () => {
+      for (const path of ['/arrivals', '/in-house', '/departures']) {
+        const { w } = await mountNav(path)
+        expect(w.find('[data-testid=nav-arrivals]').exists(), path).toBe(false)
+        expect(w.find('[data-testid=nav-inHouse]').exists(), path).toBe(false)
+        expect(w.find('[data-testid=nav-departures]').exists(), path).toBe(false)
+        expect(w.get('[data-testid=nav-guestsToday]').attributes('aria-current'), path).toBe('page')
+        expect(w.get('[data-testid=nav-guestsToday]').text()).toBe('Guests today')
+        expect(w.get('[data-testid=toggle-frontDesk]').attributes('aria-expanded'), path).toBe('true')
+      }
+    })
+
+    it('shows one pin for a person who pinned the old items, and does not list it as a recent page', async () => {
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['arrivals', 'inHouse', 'departures', 'dashboard'], recent: ['departures'] }))
+      const { w } = await mountNav('/guests')
+      expect(w.findAll('[data-testid^=pinned-]').map((e) => e.attributes('data-testid'))).toEqual(['pinned-guestsToday', 'pinned-dashboard'])
+      expect(w.find('[data-testid=section-recent]').exists()).toBe(false) // it is pinned, so it is not "recent"
+    })
+  })
+
+  describe('the sections that are closed until needed', () => {
+    const shown = (w: Awaited<ReturnType<typeof mountNav>>['w'], id: string) => (w.get(`[data-testid=section-${id}] ul`).element as HTMLElement).style.display !== 'none'
+    const backOffice: [string, string][] = [['accounting', '/accounting/accounts'], ['tax', '/tax/status'], ['bank', '/bank/accounts'], ['budget', '/budget'], ['assets', '/assets'], ['payables', '/payables/bills']]
+
+    it('are closed on the first page, all six, and open when the page is inside them', async () => {
+      const home = await mountNav('/')
+      for (const [id] of backOffice) expect(shown(home.w, id), id).toBe(false)
+      for (const [id, path] of backOffice) {
+        const { w } = await mountNav(path)
+        expect(shown(w, id), `${id} on ${path}`).toBe(true)
+        for (const [other] of backOffice.filter(([o]) => o !== id)) expect(shown(w, other), `${other} on ${path}`).toBe(false)
+      }
+    })
+
+    it('follow what the person chose: open stays open, closed stays closed', async () => {
+      localStorage.setItem('pms.nav.open', JSON.stringify({ accounting: true, billing: false }))
+      const { w } = await mountNav('/')
+      expect(shown(w, 'accounting')).toBe(true) // a back-office section the person opened
+      expect(shown(w, 'billing')).toBe(false) // a daily section the person closed
+      expect(shown(w, 'tax')).toBe(false)
+    })
+  })
+
+  describe('the last pages', () => {
+    const order = (w: Awaited<ReturnType<typeof mountNav>>['w']) => w.findAll('[data-testid=sidebar-nav] > section').map((s) => s.attributes('data-testid'))
+
+    it('are below every section, and the sections do not move whether there are any or not', async () => {
+      const without = await mountNav('/')
+      localStorage.setItem('pms.nav.1', JSON.stringify({ recent: ['guests', 'groups', 'reservations'] }))
+      const withRecent = await mountNav('/')
+      expect(withRecent.w.find('[data-testid=section-recent]').exists()).toBe(true)
+      const sectionsOnly = (list: (string | undefined)[]) => list.filter((x) => x !== 'section-recent')
+      expect(sectionsOnly(order(withRecent.w))).toEqual(order(without.w))
+      expect(order(withRecent.w).at(-1)).toBe('section-recent')
+      expect(order(withRecent.w).indexOf('section-recent')).toBeGreaterThan(order(withRecent.w).indexOf('section-setup'))
+    })
+
+    it('are hidden and shown with the button they had, and a pinned page stays at the top', async () => {
+      localStorage.setItem('pms.nav.1', JSON.stringify({ pins: ['dashboard'], recent: ['guests', 'groups'] }))
+      const { w } = await mountNav('/reservations')
+      expect(order(w)[0]).toBe('section-pinned')
+      expect((w.get('[data-testid=section-recent] ul').element as HTMLElement).style.display).not.toBe('none')
+      await w.get('[data-testid=toggle-recent]').trigger('click')
+      expect((w.get('[data-testid=section-recent] ul').element as HTMLElement).style.display).toBe('none')
+    })
   })
 })

@@ -61,7 +61,7 @@ describe('FrontDeskView', () => {
 
   it('has the page title, the business date and the three tabs with their counts', async () => {
     await mountDesk()
-    expect(mounted!.get('h1').text()).toBe('Arrivals') // titled like the menu item of the open tab
+    expect(mounted!.get('h1').text()).toBe('Guests today') // the title of the menu item; the tabs are below
     expect(mounted!.get('[data-testid=front-desk-date]').text()).toBe('30 Sep 2026')
     expect(mounted!.get('[data-testid=tab-arrivals]').text()).toContain('Arrivals')
     expect(mounted!.get('[data-testid=count-arrivals]').text()).toBe('2')
@@ -69,9 +69,9 @@ describe('FrontDeskView', () => {
     expect(mounted!.get('[data-testid=count-departures]').text()).toBe('1')
   })
 
-  it('is titled like the menu item of the tab that is open', async () => {
+  it('keeps the title of the menu item on every tab', async () => {
     await mountDesk('in-house')
-    expect(mounted!.get('h1').text()).toBe('In-house')
+    expect(mounted!.get('h1').text()).toBe('Guests today')
   })
 
   it('shows the tab of its route and only that one', async () => {
