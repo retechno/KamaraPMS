@@ -34,6 +34,18 @@ describe('ReportPeriodBar', () => {
     expect((w.get('input[name=to]').element as HTMLInputElement).value).toBe('2026-09-30')
   })
 
+  it('gives the show button and the period picks one height', () => {
+    const { w } = mountBar()
+    const show = w.get('[data-testid=report-show]').classes()
+    const picks = w.findAll('[data-testid^=pick-]')
+    expect(picks.length).toBeGreaterThan(0)
+    for (const pick of picks) {
+      expect(pick.classes()).toContain('h-9')
+      expect(pick.classes()).not.toContain('h-8')
+    }
+    expect(show).toContain('h-9')
+  })
+
   it('shows the report for a whole period, and not while a date is half typed', async () => {
     const { w, shown } = mountBar()
     await w.get('[data-testid=report-period]').trigger('submit')
