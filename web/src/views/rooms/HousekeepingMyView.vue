@@ -219,7 +219,7 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
           role="tab"
           :aria-selected="scope === s"
           :data-testid="`scope-${s}`"
-          :class="cn('min-h-10 flex-1 cursor-pointer rounded-md border-0 px-3 text-sm font-semibold', scope === s ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')"
+          :class="cn('min-h-10 flex-1 cursor-pointer pointer-coarse:min-h-11 rounded-md border-0 px-3 text-sm font-semibold', scope === s ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')"
           @click="scope = s"
         >{{ s === 'mine' ? t('myTasks.scopeMine') : t('myTasks.scopeAll') }}</button>
       </div>
@@ -271,8 +271,8 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
         </div>
 
         <div v-if="ofPerson.length" class="mb-3 flex gap-1.5 rounded-lg bg-muted p-1" role="tablist" :aria-label="t('myTasks.tabsLabel')" data-testid="tabs">
-          <button type="button" role="tab" :aria-selected="tab === 'next'" data-testid="tab-next" :class="cn('min-h-10 flex-1 cursor-pointer rounded-md border-0 px-3 text-sm font-semibold', tab === 'next' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')" @click="tab = 'next'">{{ t('myTasks.tabNext', { n: next.length }) }}</button>
-          <button type="button" role="tab" :aria-selected="tab === 'done'" data-testid="tab-done" :class="cn('min-h-10 flex-1 cursor-pointer rounded-md border-0 px-3 text-sm font-semibold', tab === 'done' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')" @click="tab = 'done'">{{ t('myTasks.tabDone', { n: done.length }) }}</button>
+          <button type="button" role="tab" :aria-selected="tab === 'next'" data-testid="tab-next" :class="cn('min-h-10 flex-1 cursor-pointer pointer-coarse:min-h-11 rounded-md border-0 px-3 text-sm font-semibold', tab === 'next' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')" @click="tab = 'next'">{{ t('myTasks.tabNext', { n: next.length }) }}</button>
+          <button type="button" role="tab" :aria-selected="tab === 'done'" data-testid="tab-done" :class="cn('min-h-10 flex-1 cursor-pointer pointer-coarse:min-h-11 rounded-md border-0 px-3 text-sm font-semibold', tab === 'done' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground')" @click="tab = 'done'">{{ t('myTasks.tabDone', { n: done.length }) }}</button>
         </div>
 
         <EmptyState

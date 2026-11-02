@@ -38,7 +38,7 @@ const pinned = computed(() => !!item.value && !!pins?.isPinned(item.value.id))
         <button
           v-if="item && pins"
           type="button"
-          :class="cn('grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent hover:bg-accent print:hidden', pinned ? 'text-foreground' : 'text-muted-foreground')"
+          :class="cn('relative grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent hover:bg-accent print:hidden pointer-coarse:after:absolute pointer-coarse:after:-inset-2.5', pinned ? 'text-foreground' : 'text-muted-foreground')"
           :aria-pressed="pinned"
           :aria-label="pinned ? t('nav.unpinPage') : t('nav.pinPage')"
           :title="pinned ? t('nav.unpinPage') : t('nav.pinPage')"

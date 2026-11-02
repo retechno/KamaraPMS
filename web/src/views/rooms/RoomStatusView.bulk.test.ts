@@ -52,6 +52,15 @@ describe('RoomStatusView: the bulk change', () => {
     w.unmount()
   })
 
+  it('makes the checkbox of a tile a 44 px target on a finger (pointer: coarse) and keeps 36 px for a mouse', async () => {
+    const w = mountView(MAID)
+    await flushPromises()
+    const classes = w.get('[data-testid=pick-101]').classes()
+    expect(classes).toContain('size-9')
+    expect(classes).toContain('pointer-coarse:size-11')
+    w.unmount()
+  })
+
   it('selects rooms, shows the bar with the number on each button, and hides "Inspected" without housekeeping.inspect', async () => {
     const w = mountView(MAID)
     await flushPromises()

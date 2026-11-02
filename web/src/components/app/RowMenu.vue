@@ -35,7 +35,7 @@ function choose(key: string): void {
 <template>
   <Popover v-if="items.length" v-model:open="open">
     <PopoverTrigger as-child>
-      <Button type="button" size="sm" variant="ghost" :aria-label="label ?? t('common.moreActions')" data-slot="row-menu-trigger"><MoreVertical /></Button>
+      <Button type="button" size="sm" variant="ghost" class="pointer-coarse:min-w-11" :aria-label="label ?? t('common.moreActions')" data-slot="row-menu-trigger"><MoreVertical /></Button>
     </PopoverTrigger>
     <PopoverContent class="w-48 p-1">
       <div data-slot="row-menu">
