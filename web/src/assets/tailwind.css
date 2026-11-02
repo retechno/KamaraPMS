@@ -263,6 +263,39 @@
 }
 
 /*
+ * Fingers (a phone, a tablet: `pointer: coarse`): a checkbox or a radio is 24 px, and the label that holds it is a target of 44 px with the box in it, so a tap on the text
+ * counts. It is not in a layer on purpose: a utility such as `size-4` on the input must not win here. A mouse keeps the compact box. A checkbox that is alone in a cell has
+ * no label to grow: there the cell or the label around it must be made 44 px by the page (see `RoomStatusView`).
+ */
+@media (pointer: coarse) {
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 24px;
+    height: 24px;
+  }
+  label:has(> input[type='checkbox']),
+  label:has(> input[type='radio']) {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+
+/*
+ * A link or a plain button in the cell of a table or in the card of a phone is a line of text, 19 px high. On a finger it is 44 px high (the row grows by a few pixels; a
+ * widened hit area would overlap the row above and the buttons under it). It is in the components layer, so a utility (`hidden`, `block`, `min-h-*`) still wins. The buttons of
+ * the kit (`data-slot`) have their own size.
+ */
+@media (pointer: coarse) {
+  @layer components {
+    :is(td, [data-slot='data-card']) :is(a, button):not([data-slot]) {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+    }
+  }
+}
+
+/*
  * Printing a page (the reports of the inventory are saved as PDF from the browser): A4, no menu or top bar, nothing that only works on screen. A report adds its own title block
  * (`ReportPrintHeader`) and hides its filters with `print:hidden`.
  */

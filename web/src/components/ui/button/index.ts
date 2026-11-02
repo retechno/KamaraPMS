@@ -16,10 +16,11 @@ export const buttonVariants = cva(
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-md px-3 text-xs',
-        lg: 'h-10 rounded-md px-6',
-        icon: 'size-9',
+        // A finger needs 44 px (pointer-coarse: a phone or a tablet); a mouse keeps the compact sizes.
+        default: 'h-9 px-4 py-2 pointer-coarse:min-h-[44px]',
+        sm: 'h-8 rounded-md px-3 text-xs pointer-coarse:min-h-[44px]',
+        lg: 'h-10 rounded-md px-6 pointer-coarse:min-h-[44px]',
+        icon: 'size-9 pointer-coarse:size-[44px]',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

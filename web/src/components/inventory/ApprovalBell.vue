@@ -79,7 +79,7 @@ watch([pid, shown], () => void load())
 <template>
   <Popover v-if="shown" v-model:open="open">
     <PopoverTrigger as-child>
-      <button type="button" class="relative grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border border-border bg-background text-foreground hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" :aria-label="t('inventory.bell.label', { n: list.unseen })" data-testid="approval-bell">
+      <button type="button" class="relative grid size-9 pointer-coarse:size-[44px] shrink-0 cursor-pointer place-items-center rounded-md border border-border bg-background text-foreground hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" :aria-label="t('inventory.bell.label', { n: list.unseen })" data-testid="approval-bell">
         <Bell class="size-4" aria-hidden="true" />
         <span v-if="list.unseen > 0" class="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-white" data-testid="bell-count">{{ list.unseen > 99 ? '99+' : list.unseen }}</span>
       </button>

@@ -9,7 +9,7 @@ const model = defineModel<string | number | null>()
 </script>
 
 <template>
-  <select v-bind="$attrs" v-model="model" data-slot="select" :class="cn('h-9 w-full px-2 min-w-0 rounded-md border border-border bg-card text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive', props.class)">
+  <select v-bind="$attrs" v-model="model" data-slot="select" :class="cn('h-9 w-full px-2 min-w-0 rounded-md border border-border bg-card text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive pointer-coarse:min-h-[44px]', props.class)">
     <slot />
   </select>
 </template>

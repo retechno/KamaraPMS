@@ -332,7 +332,7 @@ watch(checkedInCount, () => void load()) // a check-in made from the room panel
       <li v-for="a in rows" :key="a.reservation_room_id" class="rounded-lg border border-border p-3" :data-testid="`card-${a.reservation_room_id}`">
         <div class="flex items-start justify-between gap-2">
           <div>
-            <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left font-medium text-primary" @click="openDetail(a)">{{ a.guest_name || '—' }}</button>
+            <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left font-medium text-primary pointer-coarse:inline-flex pointer-coarse:min-h-[44px] pointer-coarse:items-center" @click="openDetail(a)">{{ a.guest_name || '—' }}</button>
             <div class="text-sm text-muted-foreground">{{ a.confirmation_number }} · {{ a.room_number || t('frontDesk.arrivals.noRoom') }} · {{ a.room_type_code }}</div>
           </div>
           <ReadinessBadge :readiness="a.readiness" />
@@ -347,7 +347,7 @@ watch(checkedInCount, () => void load()) // a check-in made from the room panel
           <Button v-for="x in primary(a)" :key="x" type="button" size="sm" :variant="x === 'checkIn' ? checkInVariant(a) : 'outline'" @click="act(x, a)">{{ t(`frontDesk.arrivals.action.${x}`) }}</Button>
         </div>
         <details v-if="more(a).length || (canAssign(a) && a.room_id)" class="mt-2">
-          <summary class="cursor-pointer text-sm text-muted-foreground">{{ t('frontDesk.inHouse.moreActions') }}</summary>
+          <summary class="cursor-pointer text-sm text-muted-foreground pointer-coarse:py-[13px]">{{ t('frontDesk.inHouse.moreActions') }}</summary>
           <div class="mt-2 flex flex-wrap gap-1.5">
             <Button v-if="canAssign(a) && a.room_id" type="button" size="sm" variant="outline" :data-testid="`card-change-room-${a.reservation_room_id}`" @click="startChange(a)">{{ t('roomPicker.change') }}</Button>
             <Button v-for="x in more(a)" :key="x" type="button" size="sm" variant="outline" @click="act(x, a)">{{ t(`frontDesk.arrivals.action.${x}`) }}</Button>

@@ -371,10 +371,10 @@ const ghost = computed(() => {
             </div>
           </div>
           <div
-            class="relative grid h-10 border-b border-border"
+            class="relative grid h-10 border-b border-border pointer-coarse:h-[44px]"
             :style="gridStyle" :data-room-id="room.room_id" :data-testid="`room-${room.room_number}`" :data-drop="rowState(room.room_id)" :title="rowState(room.room_id) === 'no' ? refusalText(room.room_id) : undefined" role="row"
           >
-            <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 font-medium" role="rowheader"><RoomLink :room-id="room.room_id" :number="room.room_number" /></div>
+            <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 font-medium" role="rowheader"><RoomLink :room-id="room.room_id" :number="room.room_number" class="pointer-coarse:after:-inset-y-[12.25px]" /></div>
             <!-- the nights: the lines between them, and the weekend and the business date -->
             <div class="pointer-events-none z-0 grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }" aria-hidden="true">
               <span v-for="d in dates" :key="d" :class="cn('border-l border-border', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')" />
@@ -390,7 +390,7 @@ const ghost = computed(() => {
               <Popover :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
                 <PopoverTrigger as-child>
                   <button
-                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && (canMove(p.booking, rights)) && 'cursor-grab', drag?.active && drag.booking === p.booking && drag.kind === 'move' && 'opacity-40', pullRefusal && drag?.booking === p.booking && 'ring-2 ring-destructive', endClass(p))"
+                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none pointer-coarse:my-0 pointer-coarse:h-[44px]', fine && (canMove(p.booking, rights)) && 'cursor-grab', drag?.active && drag.booking === p.booking && drag.kind === 'move' && 'opacity-40', pullRefusal && drag?.booking === p.booking && 'ring-2 ring-destructive', endClass(p))"
                     :data-arrives-today="arrivesToday(p) || undefined" :data-departs-today="departsToday(p) || undefined"
                     :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-${room.room_number}-${p.start >= 0 ? dates[p.start] : ''}`" :data-booking="p.booking.reservation_room_id"
                     :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })" aria-haspopup="menu"
@@ -439,7 +439,7 @@ const ghost = computed(() => {
         <template v-for="u in unassignedRows" :key="u.room_type_id">
           <div class="border-b border-t border-border bg-muted px-2 py-1 text-left text-[13px] font-semibold" :data-testid="`unassigned-${u.room_type_code}`">
             <button
-              type="button" class="flex items-center gap-1 text-left font-semibold" :aria-expanded="isOpen(u.room_type_id)" :aria-label="t(isOpen(u.room_type_id) ? 'tapeChart.hideUnassigned' : 'tapeChart.showUnassigned', { type: u.room_type_code })"
+              type="button" class="flex items-center gap-1 text-left font-semibold pointer-coarse:min-h-[44px]" :aria-expanded="isOpen(u.room_type_id)" :aria-label="t(isOpen(u.room_type_id) ? 'tapeChart.hideUnassigned' : 'tapeChart.showUnassigned', { type: u.room_type_code })"
               :data-testid="`unassigned-toggle-${u.room_type_code}`" @click="toggleUnassigned(u.room_type_id)"
             >
               <component :is="isOpen(u.room_type_id) ? ChevronDown : ChevronRight" class="size-4" aria-hidden="true" />
@@ -456,7 +456,7 @@ const ghost = computed(() => {
             </div>
           </div>
           <template v-else>
-            <div v-for="(lane, li) in u.lanes" :key="li" class="relative grid h-10 border-b border-border" :style="gridStyle" :data-testid="`unassigned-lane-${u.room_type_code}-${li + 1}`" role="row">
+            <div v-for="(lane, li) in u.lanes" :key="li" class="relative grid h-10 border-b border-border pointer-coarse:h-[44px]" :style="gridStyle" :data-testid="`unassigned-lane-${u.room_type_code}-${li + 1}`" role="row">
               <div class="sticky left-0 z-10 flex items-center border-r border-border bg-card px-2 text-[13px] text-muted-foreground" role="rowheader">{{ u.room_type_code }}<span class="sr-only"> {{ t('tapeChart.lane', { n: li + 1 }) }}</span></div>
               <div class="pointer-events-none z-0 grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }" aria-hidden="true">
                 <span v-for="d in dates" :key="d" :class="cn('border-l border-border', isWeekend(d) && 'bg-muted/40', d === businessDate && 'bg-primary/10')" />
@@ -464,7 +464,7 @@ const ghost = computed(() => {
               <Popover v-for="p in lane" :key="p.key" :open="menu === p.key" @update:open="(v: boolean) => (menu = v ? p.key : null)">
                 <PopoverTrigger as-child>
                   <button
-                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40', endClass(p))"
+                    type="button" :class="cn(barClass(p.booking), 'relative z-10 my-1 touch-none pointer-coarse:my-0 pointer-coarse:h-[44px]', fine && canMove(p.booking, rights) && 'cursor-grab', drag?.active && drag.booking === p.booking && 'opacity-40', endClass(p))"
                     :data-arrives-today="arrivesToday(p) || undefined"
                     :style="{ gridColumn: `${p.start + 2} / span ${p.span}`, gridRow: '1' }" :data-testid="`bar-unassigned-${p.booking.reservation_room_id}`" :data-booking="p.booking.reservation_room_id" aria-haspopup="menu"
                     :aria-label="t('tapeChart.barLabel', { guest: p.booking.guest_name || p.booking.confirmation_number, number: p.booking.confirmation_number, from: p.arrival, to: p.departure })"

@@ -23,7 +23,7 @@ async function open(): Promise<void> {
     tabindex="0"
     data-slot="room-link"
     :aria-label="t('roomPanel.openFor', { number })"
-    :class="cn('inline cursor-pointer font-semibold text-primary underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring', props.class)"
+    :class="cn('inline cursor-pointer pointer-coarse:relative font-semibold text-primary underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:after:absolute pointer-coarse:after:-inset-x-[12px] pointer-coarse:after:-inset-y-[14px]', props.class)"
     @click.stop="open"
     @keydown.enter.prevent.stop="open"
     @keydown.space.prevent.stop="open"

@@ -173,7 +173,7 @@ function rateSaved(): void {
           <Button v-for="a in primary(row)" :key="a" type="button" size="sm" :variant="actionVariant(a, row)" :data-owes="a === 'checkOut' ? owesAtCheckOut(row) : undefined" @click="act(a, row)"><Wallet v-if="a === 'checkOut' && owesAtCheckOut(row)" class="text-warning-text" aria-hidden="true" />{{ t(actionLabelKey(a, row)) }}</Button>
         </div>
         <details v-if="more(row).length" class="mt-2">
-          <summary class="cursor-pointer text-sm text-muted-foreground">{{ t('frontDesk.inHouse.moreActions') }}</summary>
+          <summary class="cursor-pointer text-sm text-muted-foreground pointer-coarse:py-[13px]">{{ t('frontDesk.inHouse.moreActions') }}</summary>
           <div class="mt-2 flex flex-wrap gap-1.5">
             <Button v-for="a in more(row)" :key="a" type="button" size="sm" variant="outline" @click="act(a, row)">{{ t(`frontDesk.inHouse.action.${a}`) }}</Button>
           </div>
