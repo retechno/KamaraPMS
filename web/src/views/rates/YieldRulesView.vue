@@ -230,7 +230,7 @@ watch(pid, load, { immediate: true })
         </div>
 
         <h3 class="mb-2 mt-5 text-sm font-semibold">{{ t('yieldRules.when') }}</h3>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
           <FormField :label="t('yieldRules.ratePlan')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="form.rate_plan_id" name="rate_plan_id">
@@ -346,7 +346,7 @@ watch(pid, load, { immediate: true })
         <p class="m-0 text-sm text-muted-foreground">{{ t('yieldRules.checkHint') }}</p>
       </CardHeader>
       <CardContent>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
           <FormField :label="t('yieldRules.ratePlan')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="check.plan" name="quote_plan"><option v-for="p in plans" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option></NativeSelect>

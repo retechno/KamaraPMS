@@ -168,7 +168,7 @@ async function confirm(): Promise<void> {
       <ErrorNotice :error="error" class="mt-3" data-testid="tape-error" />
 
       <form class="mt-3 flex flex-col gap-3" novalidate @submit.prevent="guardForm($event) && confirm()">
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-x-3 gap-y-7 sm:grid-cols-2">
           <FormField :label="t('tapeChart.dates.arrival')" :hint="inHouse ? t('tapeChart.dates.arrivalLocked') : undefined">
             <template #default="{ id }"><DateInput :id="id" v-model="newArrival" name="arrival_date" :disabled="!arrivalEditable" /></template>
           </FormField>

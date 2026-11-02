@@ -71,7 +71,7 @@ function messageOf(p: Problem): string {
 const current = computed(() => problemOf(text.value))
 const typedDate = computed(() => parseDisplayDate(text.value))
 const invalid = computed(() => problem.value !== '' || attrs['aria-invalid'] === true || attrs['aria-invalid'] === 'true')
-const weekday = computed(() => (invalid.value || current.value !== '' || !typedDate.value ? '' : formatDateWeekdayLong(typedDate.value)))
+const weekday = computed(() => (props.disabled || invalid.value || current.value !== '' || !typedDate.value ? '' : formatDateWeekdayLong(typedDate.value)))
 const describedBy = computed(() => [attrs['aria-describedby'], problem.value ? problemId : ''].filter(Boolean).join(' ') || undefined)
 const message = computed(() => messageOf(problem.value))
 

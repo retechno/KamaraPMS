@@ -275,7 +275,7 @@ watch(planId, () => void loadGrid())
               <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.to" name="to" :aria-invalid="invalid" /></template>
             </FormField>
           </div>
-          <fieldset class="mt-4 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2">
+          <fieldset class="mt-8 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2">
             <legend class="px-1 text-sm font-medium">{{ t('restrictions.roomTypes') }}</legend>
             <label v-for="rt in activeTypes" :key="rt.id" class="flex items-center gap-1.5 text-sm">
               <input type="checkbox" class="size-4 accent-primary" :checked="form.typeIds.includes(rt.id)" :name="`type-${rt.code}`" @change="toggle(form.typeIds, rt.id)" />
