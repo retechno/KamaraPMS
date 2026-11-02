@@ -45,10 +45,22 @@ async function onAPhone<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Opens the "..." menu of a room and returns the test ids of its items (the menu is drawn in the body, only while it is open). */
+async function openMenu(w: ReturnType<typeof mountBoard>, number: string): Promise<string[]> {
+  await w.get(`[data-testid=room-${number}] [data-slot=row-menu-trigger]`).trigger('click')
+  await flushPromises()
+  return Array.from(document.body.querySelectorAll('[data-slot=row-menu] [data-testid]')).map((e) => e.getAttribute('data-testid') ?? '')
+}
+
+/** The test ids of the buttons of the row of a room, outside the menu. */
+const rowButtons = (w: ReturnType<typeof mountBoard>, number: string): string[] =>
+  w.get(`[data-testid=room-${number}]`).findAll('button, a').filter((b) => b.attributes('data-slot') !== 'row-menu-trigger').map((b) => b.attributes('data-testid') ?? '')
+
 describe('HousekeepingView', () => {
   beforeEach(() => {
     GET = vi.fn()
     POST = vi.fn()
+    document.body.innerHTML = ''
   })
 
   it('lists rooms with status, derived occupancy and blocks', async () => {
@@ -66,9 +78,10 @@ describe('HousekeepingView', () => {
   it('offers only the legal next statuses and hides INSPECTED without housekeeping.inspect', async () => {
     const w = mountBoard(['housekeeping.update'], [room({ status: 'CLEAN', allowed_next: ['INSPECTED', 'DIRTY'] })])
     await flushPromises()
-    expect(w.find('[data-testid=act-DIRTY]').exists()).toBe(true)
-    expect(w.find('[data-testid=act-INSPECTED]').exists()).toBe(false)
-    expect(w.find('[data-testid=act-CLEAN]').exists()).toBe(false)
+    expect(await openMenu(w, '201')).toEqual(['act-DIRTY', 'flags-201']) // mark dirty is not the next step: it is in the menu
+    expect(rowButtons(w, '201')).toEqual([]) // no main button: INSPECTED needs housekeeping.inspect
+    expect(document.body.querySelector('[data-testid=act-INSPECTED]')).toBeNull()
+    expect(document.body.querySelector('[data-testid=act-CLEAN]')).toBeNull()
   })
 
   it('shows INSPECTED to supervisors and no actions to read-only users', async () => {
@@ -140,7 +153,9 @@ describe('HousekeepingView', () => {
   it('edits the flags of a room', async () => {
     const w = mountBoard(['housekeeping.update'], [room({ priority: 'NORMAL', dnd: false, make_up_requested: false })])
     await flushPromises()
-    await w.get('[data-testid=flags-201]').trigger('click')
+    expect(await openMenu(w, '201')).toContain('flags-201')
+    ;(document.body.querySelector('[data-testid=flags-201]') as HTMLElement).click()
+    await flushPromises()
     await w.get('select[name=priority]').setValue('HIGH')
     await w.get('input[name=dnd]').setValue(true)
     await w.get('input[name=note]').setValue('VIP')
@@ -165,7 +180,8 @@ describe('HousekeepingView', () => {
     expect(numbers()).toEqual(['301', '201', '202'])
     await w.get('[data-testid=sort-room_number]').trigger('click')
     expect(numbers()).toEqual(['201', '202', '301'])
-    expect(w.get('[data-testid=report-201]').attributes('href')).toBe('/maintenance?room=1')
+    expect(await openMenu(w, '201')).toEqual(['report-201'])
+    expect(document.body.querySelector('[data-testid=report-201]')!.getAttribute('href')).toBe('/maintenance?room=1')
   })
 
   it('names the empty board and an empty filter differently', async () => {
@@ -181,7 +197,10 @@ describe('HousekeepingView', () => {
 
   it('speaks Indonesian', async () => {
     setLocale('id')
-    const w = mountBoard(['housekeeping.update'], [room({ priority: 'HIGH', dnd: true, occupancy: 'OCCUPIED', block: { type: 'OOS', end_date: '2026-10-04' } })])
+    const w = mountBoard(['housekeeping.update'], [
+      room({ priority: 'HIGH', dnd: true, occupancy: 'OCCUPIED' }),
+      room({ room_id: 2, room_number: '202', block: { type: 'OOS', end_date: '2026-10-04' } }), // a blocked room has no main button
+    ])
     await flushPromises()
     expect(w.get('[data-testid=room-201] [data-testid=status]').text()).toBe('Kotor')
     expect(w.get('[data-testid=act-CLEANING]').text()).toBe('Mulai bersihkan')
@@ -237,12 +256,105 @@ describe('HousekeepingView', () => {
       await flushPromises()
       const card = w.get('[data-testid=room-201]')
       expect(card.findAll('dt').map((e) => e.text())).toEqual(['Occupancy'])
-      expect(card.text()).not.toContain('Block')
-      expect(card.text()).not.toContain('Flags')
+      expect(card.text()).not.toContain('Notes')
       w.unmount()
       const flagged = mountBoard(['housekeeping.update'], [room({ priority: 'HIGH', dnd: true })])
       await flushPromises()
-      expect(flagged.get('[data-testid=room-201]').findAll('dt').map((e) => e.text())).toEqual(['Occupancy', 'Flags'])
+      expect(flagged.get('[data-testid=room-201]').findAll('dt').map((e) => e.text())).toEqual(['Occupancy', 'Notes'])
+    })
+  })
+
+  describe('one next step per room', () => {
+    const UPDATE = ['housekeeping.update']
+    const INSPECT = ['housekeeping.update', 'housekeeping.inspect']
+    const cases: { name: string; permissions: string[]; over: Record<string, unknown>; button: string[]; menu: string[] }[] = [
+      { name: 'dirty: start cleaning is the button, mark clean is in the menu', permissions: UPDATE, over: {}, button: ['act-CLEANING'], menu: ['act-CLEAN', 'flags-201'] },
+      { name: 'being cleaned: mark clean is the button', permissions: UPDATE, over: { status: 'CLEANING', allowed_next: ['CLEAN', 'DIRTY'] }, button: ['act-CLEAN'], menu: ['act-DIRTY', 'flags-201'] },
+      { name: 'clean with housekeeping.inspect: inspect is the button', permissions: INSPECT, over: { status: 'CLEAN', allowed_next: ['INSPECTED', 'DIRTY'] }, button: ['act-INSPECTED'], menu: ['act-DIRTY', 'flags-201'] },
+      { name: 'clean without housekeeping.inspect: no button', permissions: UPDATE, over: { status: 'CLEAN', allowed_next: ['INSPECTED', 'DIRTY'] }, button: [], menu: ['act-DIRTY', 'flags-201'] },
+      { name: 'inspected: no button', permissions: INSPECT, over: { status: 'INSPECTED', allowed_next: ['DIRTY'] }, button: [], menu: ['act-DIRTY', 'flags-201'] },
+      { name: 'blocked (OOS): no button', permissions: UPDATE, over: { block: { type: 'OOS', end_date: '2026-10-04' } }, button: [], menu: ['act-CLEANING', 'act-CLEAN', 'flags-201'] },
+      { name: 'out of order: no button', permissions: INSPECT, over: { status: 'CLEAN', allowed_next: ['INSPECTED', 'DIRTY'], block: { type: 'OOO', end_date: '2026-10-04' } }, button: [], menu: ['act-INSPECTED', 'act-DIRTY', 'flags-201'] },
+    ]
+    for (const c of cases) {
+      it(`${c.name}`, async () => {
+        const w = mountBoard(c.permissions, [room(c.over)])
+        await flushPromises()
+        expect(rowButtons(w, '201')).toEqual(c.button)
+        expect(await openMenu(w, '201')).toEqual(c.menu)
+        w.unmount()
+      })
+    }
+
+    it('shows no button and no empty menu for a room with nothing allowed', async () => {
+      const w = mountBoard(['maintenance.report'], [room({ allowed_next: [] })])
+      await flushPromises()
+      expect(rowButtons(w, '201')).toEqual([]) // only the report link is in the menu
+      expect(await openMenu(w, '201')).toEqual(['report-201'])
+      w.unmount()
+      const none = mountBoard([], [room({})])
+      await flushPromises()
+      expect(none.find('[data-slot=row-menu-trigger]').exists()).toBe(false)
+      expect(none.find('[data-slot=row-actions]').exists()).toBe(false)
+    })
+
+    it('has the same actions in the row of the table and the card of a phone', async () => {
+      const board = [room({}), room({ room_id: 2, room_number: '202', status: 'CLEAN', allowed_next: ['INSPECTED', 'DIRTY'] })]
+      const table = mountBoard(INSPECT, board)
+      await flushPromises()
+      const wide = [await openMenu(table, '201'), rowButtons(table, '201')]
+      table.unmount()
+      document.body.innerHTML = ''
+      await onAPhone(async () => {
+        const card = mountBoard(INSPECT, board)
+        await flushPromises()
+        expect([await openMenu(card, '201'), rowButtons(card, '201')]).toEqual(wide)
+        card.unmount()
+      })
+    })
+
+    it('keeps the Notes column empty when a room has nothing, and tells a block from a note', async () => {
+      const w = mountBoard(UPDATE, [
+        room({}),
+        room({ room_id: 2, room_number: '202', block: { type: 'OOO', end_date: '2026-10-04' } }),
+        room({ room_id: 3, room_number: '203', dnd: true, flag_note: 'allergic to feathers' }),
+      ])
+      await flushPromises()
+      const heads = w.findAll('thead th').map((h) => h.text())
+      expect(heads).not.toContain('Block')
+      expect(heads).not.toContain('Flags')
+      const at = heads.indexOf('Notes')
+      expect(at).toBeGreaterThan(-1)
+      const notes = (n: string) => w.get(`[data-testid=room-${n}]`).findAll('td')[at]!
+      expect(notes('201').text()).toBe('')
+      expect(notes('201').find('[data-testid=block]').exists()).toBe(false)
+      expect(notes('201').find('[data-testid=flags]').exists()).toBe(false)
+      expect(notes('202').get('[data-testid=block]').text()).toBe('OOO until 4 Oct 2026')
+      expect(notes('202').find('[data-testid=flags]').exists()).toBe(false)
+      expect(notes('203').find('[data-testid=block]').exists()).toBe(false)
+      expect(notes('203').get('[data-testid=flags]').text()).toContain('allergic to feathers')
+      expect(notes('203').get('[data-testid=flags]').text()).toContain('DND')
+    })
+
+    it('shows at most one button and the menu trigger in every row of a board of 50 rooms', async () => {
+      const statuses = [
+        { status: 'DIRTY', allowed_next: ['CLEANING', 'CLEAN'] },
+        { status: 'CLEANING', allowed_next: ['CLEAN', 'DIRTY'] },
+        { status: 'CLEAN', allowed_next: ['INSPECTED', 'DIRTY'] },
+        { status: 'INSPECTED', allowed_next: ['DIRTY'] },
+        { status: 'DIRTY', allowed_next: ['CLEANING', 'CLEAN'], block: { type: 'OOO', end_date: '2026-10-04' } },
+      ]
+      const board = Array.from({ length: 50 }, (_, i) => room({ room_id: i + 1, room_number: String(101 + i), ...statuses[i % statuses.length] }))
+      const w = mountBoard(['housekeeping.update', 'housekeeping.inspect', 'maintenance.report'], board)
+      await flushPromises()
+      const rows = w.findAll('tbody tr')
+      expect(rows).toHaveLength(50)
+      for (const r of rows) {
+        const buttons = r.findAll('button, a').filter((b) => b.attributes('data-slot') !== 'row-menu-trigger')
+        expect(buttons.length).toBeLessThanOrEqual(1)
+        expect(r.findAll('[data-slot=row-menu-trigger]')).toHaveLength(1)
+      }
+      expect(w.findAll('tbody button, tbody a').length).toBeLessThanOrEqual(100) // was about 200
     })
   })
 })
