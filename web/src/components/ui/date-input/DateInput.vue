@@ -3,7 +3,7 @@ import { CalendarDays } from 'lucide-vue-next'
 import { computed, onMounted, ref, useAttrs, useId, watch, type HTMLAttributes } from 'vue'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
-import { formatDisplayDate, looksLikeWholeDate, maskDateInput, parseDisplayDate } from '@/utils/dates'
+import { addDays, formatDisplayDate, looksLikeWholeDate, maskDateInput, parseDisplayDate } from '@/utils/dates'
 import { formatDateWeekdayLong } from '@/utils/format'
 
 /**
@@ -18,12 +18,14 @@ import { formatDateWeekdayLong } from '@/utils/format'
  * emits nothing; when the field loses the focus with a text that is not a date, the text stays, the field is marked invalid with a message, and the model
  * keeps the last valid date. `change` is emitted when the date was chosen (typed whole or picked), not on every key.
  *
+ * `exclusiveEnd` is for the end of a range of nights that does not include it ("until"): the line under the field then says the last night ("Last night: Thursday, 5 Nov 2026") instead of the weekday. `compact` draws no line.
+ *
  * What is seen must be what is sent: the text field also carries the reason in its validity (`setCustomValidity`: a text that is not complete, a date that is
  * not on the calendar, a date outside `min` and `max`; '' when it is valid or empty). A form that is about to be sent asks `guardForm` (utils/forms.ts), which
  * stops it and puts the cursor on the first field that is not valid; the field then shows its message (the `invalid` event).
  */
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ name?: string; min?: string; max?: string; disabled?: boolean; class?: HTMLAttributes['class'] }>()
+const props = defineProps<{ name?: string; min?: string; max?: string; disabled?: boolean; exclusiveEnd?: boolean; compact?: boolean; class?: HTMLAttributes['class'] }>()
 const model = defineModel<string | null>()
 const emit = defineEmits<{ change: [value: string] }>()
 const attrs = useAttrs()
@@ -71,7 +73,10 @@ function messageOf(p: Problem): string {
 const current = computed(() => problemOf(text.value))
 const typedDate = computed(() => parseDisplayDate(text.value))
 const invalid = computed(() => problem.value !== '' || attrs['aria-invalid'] === true || attrs['aria-invalid'] === 'true')
-const weekday = computed(() => (props.disabled || invalid.value || current.value !== '' || !typedDate.value ? '' : formatDateWeekdayLong(typedDate.value)))
+// The line under the field: the weekday of the date, or for the end of a range that does not include it (`exclusiveEnd`) the last night, the day before. `compact` draws no line (a field in a table row); the message stays.
+const hint = computed(() => (props.compact || props.disabled || invalid.value || current.value !== '' || !typedDate.value ? '' : formatDateWeekdayLong(typedDate.value)))
+const lastNight = computed(() => (props.exclusiveEnd && hint.value && typedDate.value ? t('dateInput.lastNight', { date: formatDateWeekdayLong(addDays(typedDate.value, -1)) }) : ''))
+const weekday = computed(() => (props.exclusiveEnd ? '' : hint.value))
 const describedBy = computed(() => [attrs['aria-describedby'], problem.value ? problemId : ''].filter(Boolean).join(' ') || undefined)
 const message = computed(() => messageOf(problem.value))
 
@@ -194,5 +199,6 @@ function openCalendar(): void {
     </div>
     <p v-if="message" :id="problemId" class="absolute left-0 top-full m-0 mt-0.5 w-full text-xs leading-tight text-destructive" role="alert" data-slot="date-input-problem">{{ message }}</p>
     <p v-else-if="weekday" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-muted-foreground" data-slot="date-input-weekday">{{ weekday }}</p>
+    <p v-else-if="lastNight" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-muted-foreground" data-slot="date-input-last-night">{{ lastNight }}</p>
   </div>
 </template>

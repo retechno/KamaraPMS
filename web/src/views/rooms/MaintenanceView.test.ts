@@ -249,4 +249,15 @@ describe('MaintenanceView, what is seen is what is sent', () => {
     expect(POST).not.toHaveBeenCalled()
     expect(w.text()).toContain('Write as dd/mm/yyyy')
   })
+
+  it('refuses an end of the block that is not after the business date', async () => {
+    const w = await mountView()
+    await flushPromises()
+    await w.get('[data-testid=select-MNT000001]').trigger('click')
+    await w.get('[data-testid=block-form] input[data-slot=date-input-text]').setValue('30/09/2026') // the business date: no night
+    await w.get('[data-testid=block-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Earliest date: 01/10/2026.')
+  })
 })

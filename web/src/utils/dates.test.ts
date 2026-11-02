@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { addDays, formatBusinessDate, formatDisplayDate, looksLikeWholeDate, maskDateInput, parseDisplayDate, todayIn, wallClock } from './dates'
+import { afterEach, describe, expect, it } from 'vitest'
+import { addDays, formatBusinessDate, formatDisplayDate, looksLikeWholeDate, maskDateInput, parseDisplayDate, todayIn, wallClock, weekdayLabels } from './dates'
 
 describe('dates', () => {
   it('formats business dates without time zones', () => {
@@ -118,5 +118,26 @@ describe('the shape of a typed date', () => {
     for (const whole of ['31/02/2026', '2/11/2026', '02-11-2026', '02.11.2026', '02112026', '2026-02-30', ' 02/11/2026 ']) expect(looksLikeWholeDate(whole)).toBe(true)
     for (const part of ['', '02', '02/11', '02/11/20', '02/11/26', '0211202', 'besok', '2026-1-5']) expect(looksLikeWholeDate(part)).toBe(false)
     expect(parseDisplayDate('31/02/2026')).toBeNull() // whole, but not on the calendar
+  })
+})
+
+describe('the names of the weekdays', () => {
+  const zone = process.env.TZ
+  afterEach(() => {
+    if (zone === undefined) delete process.env.TZ
+    else process.env.TZ = zone
+  })
+
+  it('are Monday first, in the language asked for', () => {
+    expect(weekdayLabels('en')).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
+    expect(weekdayLabels('id')).toEqual(['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'])
+    expect(weekdayLabels('en', 'long')[0]).toBe('Monday')
+    expect(weekdayLabels('id', 'long')[6]).toBe('Minggu')
+  })
+
+  it('are the same in a time zone west of Greenwich (nothing moves a day back)', () => {
+    process.env.TZ = 'America/Los_Angeles'
+    expect(weekdayLabels('en')).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
+    expect(weekdayLabels('id')).toEqual(['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'])
   })
 })

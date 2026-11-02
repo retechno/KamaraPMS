@@ -271,7 +271,7 @@ watch(businessDate, (bd) => {
               <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.start_date" name="start_date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('roomBlocks.until')" :error="fieldError('end_date')">
-              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.end_date" name="end_date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.end_date" name="end_date" exclusive-end :min="form.start_date ? addDays(form.start_date, 1) : undefined" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField class="sm:col-span-2 lg:col-span-4" :label="t('roomBlocks.reason')" :error="fieldError('reason')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>

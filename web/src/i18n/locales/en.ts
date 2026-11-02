@@ -42,6 +42,7 @@ export const en = {
     notOnCalendar: '{text} is not on the calendar',
     tooEarly: 'Earliest date: {date}.',
     tooLate: 'Latest date: {date}.',
+    lastNight: 'Last night: {date}',
   },
   nav: {
     pinned: 'Pinned',
@@ -1507,7 +1508,7 @@ export const en = {
     takeOut: 'Take the room out of sale',
     ooo: 'Out of order',
     oos: 'Out of service',
-    until: 'Until (not including)',
+    until: 'Until (not included)',
     blockRoom: 'Block room',
     noticeReported: 'Request {number} reported.',
     noticeSaved: 'Saved.',

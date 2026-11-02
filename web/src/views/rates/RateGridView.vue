@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
-import { addDays } from '@/utils/dates'
+import { addDays, weekdayLabels } from '@/utils/dates'
 import { formatMoney } from '@/utils/format'
 import { guardForm } from '@/utils/forms'
 
@@ -36,9 +36,7 @@ const notice = ref('')
 const saving = ref(false)
 
 const KEYS: Weekday[] = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
-// A weekday has one name per language: take it from a known Monday (2024-01-01) and the days after it.
-const weekdayName = (i: number) => new Date(Date.UTC(2024, 0, 1 + i)).toLocaleDateString(i18n.global.locale.value, { weekday: 'short', timeZone: 'UTC' })
-const WEEKDAYS = computed(() => KEYS.map((key, i) => ({ key, label: weekdayName(i) })))
+const WEEKDAYS = computed(() => weekdayLabels(i18n.global.locale.value).map((label, i) => ({ key: KEYS[i]!, label })))
 const form = reactive({ from: '', to: '', weekdays: [] as Weekday[], amount: '', typeIds: [] as number[] })
 
 const canManage = computed(() => auth.can('rate.manage', property.currentId))
@@ -217,7 +215,7 @@ watch(planId, () => void loadGrid())
               <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.from" name="from" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('rateGrid.until')" :error="fieldError('to')">
-              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.to" name="to" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.to" name="to" exclusive-end :min="form.from ? addDays(form.from, 1) : undefined" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('rateGrid.amount')" :error="fieldError('amount')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.amount" name="amount" inputmode="decimal" :aria-invalid="invalid" /></template>

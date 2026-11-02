@@ -153,4 +153,18 @@ describe('RoomBlocksView, what is seen is what is sent', () => {
     expect(POST).not.toHaveBeenCalled()
     expect(w.text()).toContain('Write as dd/mm/yyyy')
   })
+
+  it('refuses an end that is not after the start, and says the last night of a good one', async () => {
+    const w = mountCalendar(['room_block.manage'])
+    await flushPromises()
+    await w.get('input[name=start_date]').setValue('2026-10-03')
+    const end = w.findAll('[data-testid=block-form] input[data-slot=date-input-text]')[1]!
+    await end.setValue('06/10/2026')
+    expect(w.get('[data-slot=date-input-last-night]').text()).toBe('Last night: Monday, 5 Oct 2026')
+    await end.setValue('03/10/2026')
+    await w.get('[data-testid=block-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Earliest date: 04/10/2026.')
+  })
 })
