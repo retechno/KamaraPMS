@@ -470,3 +470,16 @@ describe('the lists of the masters', () => {
     expect(router.currentRoute.value.path).toBe('/inventory/categories')
   })
 })
+
+describe('costing, what is seen is what is sent', () => {
+  it('does not choose a stock card while a date is half typed, and says why', async () => {
+    await setup(InventoryCostingView, undefined, '/inventory/costing?warehouse=3&item=7')
+    const before = GET.mock.calls.length
+    const form = document.body.querySelector('[data-testid=card-show]')!.closest('form') as HTMLFormElement
+    await new DOMWrapper(form.querySelector('input[data-slot=date-input-text]') as Element).setValue('3/2')
+    await new DOMWrapper(form).trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+})
