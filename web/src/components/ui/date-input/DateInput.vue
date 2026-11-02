@@ -166,7 +166,7 @@ function openCalendar(): void {
         :aria-invalid="invalid || undefined"
         :aria-describedby="describedBy"
         data-slot="date-input-text"
-        class="h-9 w-full min-w-0 rounded-md border border-border bg-card px-3 pr-10 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive pointer-coarse:min-h-11 pointer-coarse:pr-[52px]"
+        class="h-9 w-full min-w-0 rounded-md border border-border bg-card px-3 pr-10 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive pointer-coarse:min-h-[44px] pointer-coarse:pr-[52px]"
         @input="onTextInput"
         @blur="onTextBlur"
         @invalid="onInvalid"

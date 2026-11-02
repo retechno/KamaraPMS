@@ -270,13 +270,28 @@
 @media (pointer: coarse) {
   input[type='checkbox'],
   input[type='radio'] {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 24px;
+    height: 24px;
   }
   label:has(> input[type='checkbox']),
   label:has(> input[type='radio']) {
-    min-height: 2.75rem;
+    min-height: 44px;
     align-items: center;
+  }
+}
+
+/*
+ * A link or a plain button in the cell of a table or in the card of a phone is a line of text, 19 px high. On a finger it is 44 px high (the row grows by a few pixels; a
+ * widened hit area would overlap the row above and the buttons under it). It is in the components layer, so a utility (`hidden`, `block`, `min-h-*`) still wins. The buttons of
+ * the kit (`data-slot`) have their own size.
+ */
+@media (pointer: coarse) {
+  @layer components {
+    :is(td, [data-slot='data-card']) :is(a, button):not([data-slot]) {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+    }
   }
 }
 

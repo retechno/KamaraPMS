@@ -17,24 +17,24 @@ import { NativeSelect } from '@/components/ui/native-select'
 describe('touch targets (pointer: coarse)', () => {
   it('gives every size of a button a minimum of 44 px and keeps the compact size of a mouse', () => {
     const size = (s: 'default' | 'sm' | 'lg' | 'icon') => mount(Button, { props: { size: s }, slots: { default: 'x' } }).classes()
-    expect(size('default')).toEqual(expect.arrayContaining(['h-9', 'pointer-coarse:min-h-11']))
-    expect(size('sm')).toEqual(expect.arrayContaining(['h-8', 'pointer-coarse:min-h-11']))
-    expect(size('lg')).toEqual(expect.arrayContaining(['h-10', 'pointer-coarse:min-h-11']))
-    expect(size('icon')).toEqual(expect.arrayContaining(['size-9', 'pointer-coarse:size-11']))
+    expect(size('default')).toEqual(expect.arrayContaining(['h-9', 'pointer-coarse:min-h-[44px]']))
+    expect(size('sm')).toEqual(expect.arrayContaining(['h-8', 'pointer-coarse:min-h-[44px]']))
+    expect(size('lg')).toEqual(expect.arrayContaining(['h-10', 'pointer-coarse:min-h-[44px]']))
+    expect(size('icon')).toEqual(expect.arrayContaining(['size-9', 'pointer-coarse:size-[44px]']))
   })
 
   it('does the same for a text input, a select and the field of a date', () => {
-    expect(mount(Input).classes()).toContain('pointer-coarse:min-h-11')
-    expect(mount(NativeSelect).classes()).toContain('pointer-coarse:min-h-11')
-    expect(mount(DateInput, { props: { modelValue: '' } }).get('input').classes()).toContain('pointer-coarse:min-h-11')
+    expect(mount(Input).classes()).toContain('pointer-coarse:min-h-[44px]')
+    expect(mount(NativeSelect).classes()).toContain('pointer-coarse:min-h-[44px]')
+    expect(mount(DateInput, { props: { modelValue: '' } }).get('input').classes()).toContain('pointer-coarse:min-h-[44px]')
   })
 
   it('makes the "..." trigger of a row at least 44 px wide', async () => {
     const w = mount(RowMenu, { props: { items: [{ key: 'a', label: 'A' }] }, attachTo: document.body })
     await flushPromises()
     const trigger = document.body.querySelector('[data-slot=row-menu-trigger]')!
-    expect(trigger.className).toContain('pointer-coarse:min-w-11')
-    expect(trigger.className).toContain('pointer-coarse:min-h-11') // from the button size
+    expect(trigger.className).toContain('pointer-coarse:min-w-[44px]')
+    expect(trigger.className).toContain('pointer-coarse:min-h-[44px]') // from the button size
     w.unmount()
     document.body.innerHTML = ''
   })
@@ -44,13 +44,18 @@ describe('touch targets (pointer: coarse)', () => {
     setActivePinia(pinia)
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { template: '<div />' } }] })
     const w = mount(RoomLink, { props: { roomId: 1, number: '201' }, global: { plugins: [pinia, router] } })
-    expect(w.classes()).toEqual(expect.arrayContaining(['relative', 'pointer-coarse:after:absolute', 'pointer-coarse:after:-inset-x-3']))
+    expect(w.classes()).toEqual(expect.arrayContaining(['pointer-coarse:relative', 'pointer-coarse:after:absolute', 'pointer-coarse:after:-inset-x-[12px]', 'pointer-coarse:after:-inset-y-[14px]']))
   })
 
   it('has a rule for the checkboxes and the labels around them in the style sheet', () => {
     const css = readFileSync('src/assets/tailwind.css', 'utf8')
     const rule = css.slice(css.indexOf('@media (pointer: coarse)'))
-    expect(rule).toMatch(/input\[type='checkbox'\][\s\S]*width: 1\.5rem/)
-    expect(rule).toMatch(/label:has\(> input\[type='checkbox'\]\)[\s\S]*min-height: 2\.75rem/)
+    expect(rule).toMatch(/input\[type='checkbox'\][\s\S]*width: 24px/)
+    expect(rule).toMatch(/label:has\(> input\[type='checkbox'\]\)[\s\S]*min-height: 44px/)
+  })
+
+  it('makes a plain link or button in a table cell or a card 44 px high, in the components layer so a utility still wins', () => {
+    const css = readFileSync('src/assets/tailwind.css', 'utf8')
+    expect(css).toMatch(/@layer components \{\s*:is\(td, \[data-slot='data-card'\]\) :is\(a, button\):not\(\[data-slot\]\) \{[^}]*min-height: 44px/)
   })
 })

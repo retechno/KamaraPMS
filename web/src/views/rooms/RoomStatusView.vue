@@ -402,7 +402,7 @@ watch(() => property.currentId, () => {
         <button
           v-if="canChange"
           type="button"
-          class="absolute right-0 top-0 grid size-9 cursor-pointer pointer-coarse:size-11 place-items-center rounded-lg border-0 bg-transparent p-0 focus-visible:ring-2 focus-visible:ring-ring"
+          class="absolute right-0 top-0 grid size-9 cursor-pointer pointer-coarse:size-[44px] place-items-center rounded-lg border-0 bg-transparent p-0 focus-visible:ring-2 focus-visible:ring-ring"
           :aria-pressed="isPicked(r)"
           :aria-label="t('roomStatus.selectRoom', { number: r.room_number })"
           :data-testid="`pick-${r.room_number}`"

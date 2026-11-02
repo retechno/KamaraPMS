@@ -57,7 +57,7 @@ describe('RoomStatusView: the bulk change', () => {
     await flushPromises()
     const classes = w.get('[data-testid=pick-101]').classes()
     expect(classes).toContain('size-9')
-    expect(classes).toContain('pointer-coarse:size-11')
+    expect(classes).toContain('pointer-coarse:size-[44px]')
     w.unmount()
   })
 

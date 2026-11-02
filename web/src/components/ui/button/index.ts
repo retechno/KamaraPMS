@@ -17,10 +17,10 @@ export const buttonVariants = cva(
       },
       size: {
         // A finger needs 44 px (pointer-coarse: a phone or a tablet); a mouse keeps the compact sizes.
-        default: 'h-9 px-4 py-2 pointer-coarse:min-h-11',
-        sm: 'h-8 rounded-md px-3 text-xs pointer-coarse:min-h-11',
-        lg: 'h-10 rounded-md px-6 pointer-coarse:min-h-11',
-        icon: 'size-9 pointer-coarse:size-11',
+        default: 'h-9 px-4 py-2 pointer-coarse:min-h-[44px]',
+        sm: 'h-8 rounded-md px-3 text-xs pointer-coarse:min-h-[44px]',
+        lg: 'h-10 rounded-md px-6 pointer-coarse:min-h-[44px]',
+        icon: 'size-9 pointer-coarse:size-[44px]',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

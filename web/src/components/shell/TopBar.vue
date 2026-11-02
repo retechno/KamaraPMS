@@ -91,7 +91,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-card px-3 sm:px-4" data-testid="topbar">
+  <header class="sticky top-0 z-30 flex h-14 items-center gap-3 pointer-coarse:gap-1 border-b border-border bg-card px-3 sm:px-4" data-testid="topbar">
     <Button v-if="!props.canCollapse" variant="ghost" size="icon" :aria-label="t('shell.openMenu')" data-testid="open-menu" @click="emit('menu')">
       <Menu />
     </Button>
@@ -133,7 +133,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
       <kbd class="hidden shrink-0 rounded border border-border bg-card px-1.5 text-[11px] text-muted-foreground sm:inline" data-testid="search-shortcut">{{ shortcut }}</kbd>
     </button>
 
-    <div :class="cn('flex items-center gap-2', !phone && 'ml-auto')">
+    <div :class="cn('flex items-center gap-2 pointer-coarse:gap-1', phone ? 'min-w-0' : 'ml-auto')">
       <template v-if="property.hasProperties">
         <PropertySwitcher v-if="!phone" class="w-44 xl:w-52" />
         <component
@@ -142,8 +142,8 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
           v-bind="audit ? { to: audit.to } : {}"
           :class="
             cn(
-              'inline-flex h-9 items-center whitespace-nowrap rounded-md border no-underline',
-              phone ? 'gap-1.5 px-2 text-xs' : 'gap-2 px-2.5 text-sm',
+              'inline-flex h-9 items-center whitespace-nowrap rounded-md border no-underline pointer-coarse:h-[44px]',
+              phone ? 'min-w-0 shrink gap-1.5 px-2 text-xs' : 'gap-2 px-2.5 text-sm',
               audit?.state === 'overdue' ? 'border-status-noshow-line bg-status-noshow-bg text-status-noshow' : audit?.state === 'pending' ? 'border-warning/50 bg-warning/15 text-warning-text' : 'border-border bg-background text-foreground',
               audit && audit.state !== 'overdue' && 'hover:bg-accent',
             )
@@ -152,12 +152,12 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
           data-testid="business-date"
         >
           <span v-if="audit" :class="cn('size-2 shrink-0 rounded-full', audit.dot)" aria-hidden="true" />
-          <span v-if="phone" class="flex flex-col leading-tight">
+          <span v-if="phone" class="flex min-w-0 flex-col leading-tight">
             <strong>{{ businessDayShort }}</strong>
             <!-- the state of the audit under the date: the title of the page keeps the room it needs -->
             <span
               v-if="audit"
-              :class="cn(audit.state === 'overdue' || audit.state === 'pending' ? 'text-[10px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
+              :class="cn(audit.state === 'overdue' || audit.state === 'pending' ? 'truncate text-[10px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
               :data-state="audit.state"
               data-testid="night-audit-status"
             >{{ audit.short }}</span>
@@ -184,7 +184,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
         <DropdownMenuTrigger as-child>
           <button
             type="button"
-            class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-foreground text-sm font-bold text-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            class="grid size-9 pointer-coarse:size-[44px] shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-foreground text-sm font-bold text-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             :aria-label="t('shell.accountMenu')"
             :title="auth.displayName"
             data-testid="user-menu"
