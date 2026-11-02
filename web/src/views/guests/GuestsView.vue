@@ -49,8 +49,10 @@ const canRead = computed(() => auth.can('guest.read', property.currentId))
 const canWrite = computed(() => auth.can('guest.write', property.currentId))
 
 // One page of 50 at a time; a new search starts from the first page.
-const list = usePagedList<Guest>(async (cursor) => {
-  const { data } = await api.GET('/api/v1/guests', { params: { query: { q: query.value, property_id: property.currentId ?? undefined, limit: 50, cursor, ...sortParams.value } } })
+// What the list asks for is read once, when a search starts; "Show more" goes on with it, not with what the field holds by then.
+const snapshot = () => ({ q: query.value, property_id: property.currentId ?? undefined, ...sortParams.value })
+const list = usePagedList<Guest, ReturnType<typeof snapshot>>(snapshot, async (cursor, asked) => {
+  const { data } = await api.GET('/api/v1/guests', { params: { query: { ...asked, limit: 50, cursor } } })
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
 const { rows: results, loadingMore, hasMore } = list

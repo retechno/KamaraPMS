@@ -31,6 +31,8 @@ const CSV_SECTIONS = ['FLASH', 'REVENUE', 'TAX', 'PAYMENTS', 'Z_REPORTS', 'GUEST
 const filter = ref({ from: '', to: '' })
 const rows = ref<NightAuditPackSummary[]>([])
 const cursor = ref<string | null>(null)
+// The period of the packs on the screen: "Show more" asks for the next page of that period (the cursor belongs to it), not of what the fields hold by then.
+let shownRange = { from: '', to: '' }
 const loading = ref(false)
 const error = ref<ApiError | null>(null)
 const detail = ref<NightAuditPackManifest | null>(null)
@@ -62,12 +64,14 @@ async function load(more = false): Promise<void> {
   loading.value = true
   error.value = null
   try {
+    const range = more ? shownRange : { ...filter.value }
     const query: Record<string, string> = {}
-    if (filter.value.from) query.from = filter.value.from
-    if (filter.value.to) query.to = filter.value.to
+    if (range.from) query.from = range.from
+    if (range.to) query.to = range.to
     if (more && cursor.value) query.cursor = cursor.value
     const { data } = await api.GET('/api/v1/properties/{propertyId}/night-audit/packs', { params: { path: { propertyId }, query } })
     rows.value = more ? [...rows.value, ...(data?.items ?? [])] : (data?.items ?? [])
+    if (!more) shownRange = range
     cursor.value = data?.next_cursor ?? null
     emailEnabled.value = data?.email_enabled ?? true
   } catch (e) {

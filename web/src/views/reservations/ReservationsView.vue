@@ -198,10 +198,14 @@ function query() {
 }
 
 // One page of 50 at a time. Only the latest request counts: a slow answer to an older search must not replace the answer to a newer one (usePagedList keeps to that).
-const list = usePagedList<ReservationSummary>(async (cursor) => {
-  const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId: property.currentId! }, query: { ...query(), cursor } } })
-  return { data: data?.data ?? [], next_cursor: data?.next_cursor }
-})
+// What the list asks for is read once, when a search starts; "Show more" goes on with it, not with what the fields hold by then.
+const list = usePagedList<ReservationSummary, { propertyId: number; asked: ReturnType<typeof query> }>(
+  () => ({ propertyId: property.currentId!, asked: query() }),
+  async (cursor, { propertyId, asked }) => {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/reservations', { params: { path: { propertyId }, query: { ...asked, cursor } } })
+    return { data: data?.data ?? [], next_cursor: data?.next_cursor }
+  },
+)
 const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list
 
 async function load(): Promise<void> {

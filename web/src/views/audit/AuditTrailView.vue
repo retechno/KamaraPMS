@@ -70,8 +70,8 @@ const MIN_SEARCH = 3
 const searchText = computed(() => filter.document.trim())
 const searchTooShort = computed(() => searchText.value.length > 0 && [...searchText.value].length < MIN_SEARCH)
 
-function query(cursor?: string): Record<string, string | number | undefined> {
-  const q: Record<string, string | number | undefined> = { limit: 50, cursor, ...sortParams.value }
+function query(): Record<string, string | number | undefined> {
+  const q: Record<string, string | number | undefined> = { limit: 50, ...sortParams.value }
   for (const [k, v] of Object.entries(filter)) {
     if (k !== 'document' && k !== 'self_approved' && String(v).trim()) q[k] = k === 'user_id' ? Number(v) : String(v).trim()
   }
@@ -81,16 +81,19 @@ function query(cursor?: string): Record<string, string | number | undefined> {
   return q
 }
 
-async function fetchPage(propertyId: number, cursor?: string) {
-  const { data } = await api.GET('/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId }, query: query(cursor) } })
+async function fetchPage(propertyId: number, asked: Record<string, string | number | undefined>, cursor?: string) {
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId }, query: { ...asked, cursor } } })
   return { entries: data?.data ?? [], next: data?.next_cursor }
 }
 
-// One page of 50 at a time, newest first; every filter, the search too, is asked of the server.
-const list = usePagedList<AuditLog>(async (cursor) => {
-  const page = await fetchPage(pid.value!, cursor)
-  return { data: page.entries, next_cursor: page.next }
-})
+// One page of 50 at a time, newest first; every filter, the search too, is asked of the server. The query is read once, when a search starts: "Show more" goes on with it.
+const list = usePagedList<AuditLog, { propertyId: number; asked: Record<string, string | number | undefined> }>(
+  () => ({ propertyId: pid.value!, asked: query() }),
+  async (cursor, { propertyId, asked }) => {
+    const page = await fetchPage(propertyId, asked, cursor)
+    return { data: page.entries, next_cursor: page.next }
+  },
+)
 const { rows, error, loading, loadingMore, loaded, hasMore } = list
 
 async function load(): Promise<void> {

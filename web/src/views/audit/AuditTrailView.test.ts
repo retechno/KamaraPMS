@@ -359,3 +359,31 @@ describe('AuditTrailView, what is seen is what is sent', () => {
     expect(w.text()).toContain('Write as dd/mm/yyyy')
   })
 })
+
+describe('AuditTrailView, show more keeps the filter of the page it continues', () => {
+  it('asks the next page with the user of the first page, not the edited one; a new filter starts again', async () => {
+    const w = mountView()
+    await flushPromises()
+    GET = vi.fn(async (path: string, o: { params: { query?: { cursor?: string } } }) => {
+      if (path === '/api/v1/users') return { data: { data: USERS } }
+      return { data: o.params.query?.cursor ? { data: [entry(1)] } : { data: [entry(2)], next_cursor: 'c2' } }
+    })
+    await w.get('select[name=user_id]').setValue('3')
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    await w.get('select[name=user_id]').setValue('9') // edited, not applied
+    await w.get('[data-testid=more]').trigger('click')
+    await flushPromises()
+    const query = (i: number) => (auditCalls()[i]?.[1] as { params: { query: Record<string, unknown> } }).params.query
+    expect(auditCalls()).toHaveLength(2)
+    expect(query(0)).toMatchObject({ user_id: 3 })
+    expect(query(0).cursor).toBeUndefined()
+    expect(query(1)).toMatchObject({ user_id: 3, cursor: 'c2' })
+    expect(w.find('[data-testid=entry-2]').exists()).toBe(true)
+    expect(w.find('[data-testid=entry-1]').exists()).toBe(true)
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    expect(query(2)).toMatchObject({ user_id: 9 })
+    expect(query(2).cursor).toBeUndefined()
+  })
+})

@@ -290,3 +290,24 @@ describe('CashierView, what is seen is what is sent', () => {
     expect(w.text()).toContain('Write as dd/mm/yyyy')
   })
 })
+
+describe('CashierView, show more keeps the filter of the page it continues', () => {
+  it('asks the next page with the method of the first page, not the edited one; a new filter starts again', async () => {
+    const row = (id: number) => ({ id, payment_number: `PAY00000${id}`, folio_id: 3, payment_type: 'PAYMENT', payment_method: 'CASH', amount: '10', status: 'POSTED' })
+    const w = mountView(['folio.read'], vi.fn(async (_p: string, o: { params: { query: { cursor?: string } } }) => ({ data: { data: o.params.query.cursor ? [row(2)] : [row(1)], totals: [], next_cursor: o.params.query.cursor ? undefined : 'c2' } })))
+    await flushPromises()
+    const query = (i: number) => (GET.mock.calls[i]?.[1] as { params: { query: Record<string, unknown> } }).params.query
+    expect(query(0)).toMatchObject({ business_date: '2026-09-30', cursor: undefined })
+    await w.get('select[name=method]').setValue('CARD') // edited, not applied
+    await w.get('[data-testid=more]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls).toHaveLength(2)
+    expect(query(1)).toMatchObject({ business_date: '2026-09-30', cursor: 'c2' })
+    expect(query(1).method).toBeUndefined()
+    expect(w.find('[data-testid=payment-PAY000001]').exists()).toBe(true)
+    expect(w.find('[data-testid=payment-PAY000002]').exists()).toBe(true)
+    await w.get('form[role=search]').trigger('submit')
+    await flushPromises()
+    expect(query(2)).toMatchObject({ method: 'CARD', cursor: undefined })
+  })
+})
