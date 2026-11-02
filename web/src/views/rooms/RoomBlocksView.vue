@@ -15,6 +15,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -24,6 +25,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { blockColumns, windowDates } from '@/utils/blocks'
 import { addDays, formatBusinessDate } from '@/utils/dates'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -248,7 +250,7 @@ watch(businessDate, (bd) => {
     </Card>
 
     <Card v-if="canManage" class="mb-4">
-      <form novalidate data-testid="block-form" @submit.prevent="create">
+      <form novalidate data-testid="block-form" @submit.prevent="guardForm($event) && create()">
         <CardHeader><CardTitle>{{ t('roomBlocks.newBlock') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -266,10 +268,10 @@ watch(businessDate, (bd) => {
               </template>
             </FormField>
             <FormField :label="t('roomBlocks.from')" :error="fieldError('start_date')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.start_date" name="start_date" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.start_date" name="start_date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('roomBlocks.until')" :error="fieldError('end_date')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.end_date" name="end_date" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.end_date" name="end_date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField class="sm:col-span-2 lg:col-span-4" :label="t('roomBlocks.reason')" :error="fieldError('reason')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>

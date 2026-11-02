@@ -7,11 +7,12 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatDate, formatMoney } from '@/utils/format'
 import { canChangeArrival, dateChange, datesVerdict, isConfirmed, nightsOf, type TapeRights } from '@/utils/tape'
+import { guardForm } from '@/utils/forms'
 
 /**
  * The confirmation of new dates for a booking (a pull of the right or left end of its block, or "Change dates" in the menu): always shown before anything is sent. The nights that are added are priced
@@ -166,13 +167,13 @@ async function confirm(): Promise<void> {
       <DialogDescription class="mt-1" data-testid="tape-dates-who">{{ booking?.guest_name || booking?.confirmation_number }} · {{ booking?.confirmation_number }}</DialogDescription>
       <ErrorNotice :error="error" class="mt-3" data-testid="tape-error" />
 
-      <form class="mt-3 flex flex-col gap-3" novalidate @submit.prevent="confirm">
+      <form class="mt-3 flex flex-col gap-3" novalidate @submit.prevent="guardForm($event) && confirm()">
         <div class="grid gap-3 sm:grid-cols-2">
           <FormField :label="t('tapeChart.dates.arrival')" :hint="inHouse ? t('tapeChart.dates.arrivalLocked') : undefined">
-            <template #default="{ id }"><Input :id="id" v-model="newArrival" type="date" name="arrival_date" :disabled="!arrivalEditable" /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="newArrival" name="arrival_date" :disabled="!arrivalEditable" /></template>
           </FormField>
           <FormField :label="t('tapeChart.dates.departure')">
-            <template #default="{ id }"><Input :id="id" v-model="newDeparture" type="date" name="departure_date" data-autofocus /></template>
+            <template #default="{ id }"><DateInput :id="id" v-model="newDeparture" name="departure_date" data-autofocus /></template>
           </FormField>
         </div>
 

@@ -139,4 +139,15 @@ describe('RestrictionsView', () => {
     await flushPromises()
     expect(w.find('[data-testid=no-plans]').exists()).toBe(true)
   })
+
+  it('does not send while a date is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=cell-DLX-2026-12-05]').trigger('click')
+    await w.get('form[data-testid=fill-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form[data-testid=fill-form]').trigger('submit')
+    await flushPromises()
+    expect(PUT).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
 })

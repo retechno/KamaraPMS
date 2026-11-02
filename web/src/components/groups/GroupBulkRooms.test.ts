@@ -239,3 +239,30 @@ describe('GroupBulkRooms', () => {
     setLocale('en')
   })
 })
+
+describe('GroupBulkRooms, what is seen is what is sent', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    setLocale('en')
+    GET = vi.fn(async (path: string) => (path.endsWith('/room-types') ? typesPage : plansPage))
+    POST = vi.fn(async (path: string) => (path.endsWith('/preview') ? { data: previewOf() } : { data: { reservations: [{}, {}], rooms: 2, nights: 4, replayed: false } }))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    mounted.splice(0).forEach((w) => w.unmount())
+    document.body.innerHTML = ''
+  })
+
+  it('does not book while a date of a row is half typed, and says why', async () => {
+    const w = mountForm()
+    await settle()
+    await w.get('[name=count_0]').setValue('2')
+    await settle()
+    expect(w.get('[data-testid=bulk-save]').attributes('disabled')).toBeUndefined()
+    await w.get('input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=bulk-save]').trigger('click')
+    await flushPromises()
+    expect(POST.mock.calls.some((c) => String(c[0]).endsWith('/room-batches'))).toBe(false)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

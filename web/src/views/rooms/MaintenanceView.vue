@@ -14,6 +14,7 @@ import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -25,6 +26,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { useSubscriptionStore } from '@/stores/subscription'
 import { addDays } from '@/utils/dates'
+import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -384,7 +386,7 @@ watch(() => route.query.room, (v) => {
               </div>
             </form>
 
-            <form v-if="canBlock" class="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3" novalidate data-testid="block-form" @submit.prevent="block">
+            <form v-if="canBlock" class="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3" novalidate data-testid="block-form" @submit.prevent="guardForm($event) && block()">
               <FormField class="w-44" :label="t('maintenance.takeOut')">
                 <template #default="{ id }">
                   <NativeSelect :id="id" v-model="action.blockType" name="block_type">
@@ -394,7 +396,7 @@ watch(() => route.query.room, (v) => {
                 </template>
               </FormField>
               <FormField class="w-40" :label="t('maintenance.until')" :error="fieldError('end_date')">
-                <template #default="{ id, invalid }"><Input :id="id" v-model="action.blockEnd" name="block_end" type="date" :min="businessDate" :aria-invalid="invalid" /></template>
+                <template #default="{ id, invalid }"><DateInput :id="id" v-model="action.blockEnd" name="block_end" :min="businessDate" :aria-invalid="invalid" /></template>
               </FormField>
               <Button type="submit" variant="outline" size="sm" :disabled="busy || !action.blockEnd" data-testid="block-room">{{ t('maintenance.blockRoom') }}</Button>
             </form>

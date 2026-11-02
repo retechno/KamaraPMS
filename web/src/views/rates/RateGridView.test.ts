@@ -138,3 +138,16 @@ describe('RateGridView', () => {
     expect(empty.find('[data-testid=grid]').exists()).toBe(false)
   })
 })
+
+describe('RateGridView, what is seen is what is sent', () => {
+  it('does not send while a date is half typed, and says why', async () => {
+    const w = mountGrid()
+    await flushPromises()
+    await w.get('[data-testid=fill-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('input[name=amount]').setValue('1750000')
+    await w.get('[data-testid=fill-form]').trigger('submit')
+    await flushPromises()
+    expect(PUT).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

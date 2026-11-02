@@ -142,3 +142,15 @@ describe('RoomBlocksView', () => {
     setLocale('en')
   })
 })
+
+describe('RoomBlocksView, what is seen is what is sent', () => {
+  it('does not send while a date is half typed, and says why', async () => {
+    const w = mountCalendar(['room_block.manage'])
+    await flushPromises()
+    await w.get('[data-testid=block-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=block-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

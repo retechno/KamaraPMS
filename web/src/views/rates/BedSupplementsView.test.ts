@@ -83,3 +83,16 @@ describe('BedSupplementsView', () => {
     expect(w.find('[data-testid=supplement-1]').exists()).toBe(true)
   })
 })
+
+describe('BedSupplementsView, what is seen is what is sent', () => {
+  it('does not send while a date is half typed, and says why', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=new-supplement]').trigger('click')
+    await w.get('form[data-testid=supplement-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form[data-testid=supplement-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

@@ -609,3 +609,19 @@ describe('without a mouse, and without the right', () => {
     for (const bar of Array.from(document.body.querySelectorAll('[data-booking]'))) expect(bar.className).toContain('text-[13px]')
   })
 })
+
+describe('the dates dialog, what is seen is what is sent', () => {
+  it('does not amend the booking while a date is half typed, and says why', async () => {
+    setup()
+    await flush()
+    await openMenu('bar-101-2026-10-05')
+    await find('[data-testid=menu-dates]').trigger('click')
+    await flush()
+    const fields = document.body.querySelectorAll('[data-testid=tape-dates-dialog] input[data-slot=date-input-text]')
+    await new DOMWrapper(fields[1]!).setValue('3/2')
+    await find('[data-testid=tape-dates-dialog] form').trigger('submit')
+    await flush()
+    expect(PATCH).not.toHaveBeenCalled()
+    expect(find('[data-testid=tape-dates-dialog]').text()).toContain('Write as dd/mm/yyyy')
+  })
+})
