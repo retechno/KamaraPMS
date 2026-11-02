@@ -82,7 +82,7 @@ watch(() => [pid.value, lastClosed.value], () => {
   <template v-else>
     <p class="mb-4 text-sm text-muted-foreground">{{ t('accounting.rcIntro') }}</p>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-3 p-4" novalidate @submit.prevent="guardForm($event) && load()">
+      <form class="flex flex-wrap items-end gap-3 px-4 pb-8 pt-4" novalidate @submit.prevent="guardForm($event) && load()">
         <FormField :label="t('accounting.rcAsOf')"><template #default="{ id }"><DateInput :id="id" v-model="asOf" name="as_of" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('accounting.rcCheck') }}</Button>
         <Button v-if="lastClosed" type="button" variant="ghost" :disabled="busy" data-testid="as-of-closed" @click="pick(lastClosed)">{{ t('accounting.rcLastClosed') }}</Button>

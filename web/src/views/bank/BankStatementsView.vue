@@ -147,7 +147,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('bank.view')" class="muted" data-testid="no-access">{{ t('bankStatements.noAccess', { permission: 'bank.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="guardForm($event) && load()">
+      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="load">
         <FormField class="w-72" :label="t('bankStatements.bankAccount')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model.number="bank" name="bank" @change="load">

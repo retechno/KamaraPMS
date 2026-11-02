@@ -258,7 +258,7 @@ const steps = ['1', '2', '3', '4'] as const
 
     <section aria-labelledby="card-h" data-testid="card">
       <h2 id="card-h" class="m-0 mb-2 text-sm font-semibold">{{ t('inventory.costing.cardTitle') }}</h2>
-      <form class="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" @submit.prevent="guardForm($event) && choose()">
+      <form class="mb-6 grid gap-x-3 gap-y-6 sm:grid-cols-2 xl:grid-cols-5" @submit.prevent="guardForm($event) && choose()">
         <FormField :label="t('inventory.costing.warehouse')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model.number="pick.warehouse" name="warehouse" data-testid="card-warehouse">

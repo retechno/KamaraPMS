@@ -63,7 +63,7 @@ watch(pid, load, { immediate: true })
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <template v-else>
-    <form class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="gap-filters" @submit.prevent="guardForm($event) && load()">
+    <form class="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" novalidate data-testid="gap-filters" @submit.prevent="guardForm($event) && load()">
       <FormField :label="t('inventory.posGap.from')"><template #default="{ id }"><DateInput :id="id" v-model="pick.from" name="from" /></template></FormField>
       <FormField :label="t('inventory.posGap.to')"><template #default="{ id }"><DateInput :id="id" v-model="pick.to" name="to" /></template></FormField>
       <FormField v-if="outlets.length" :label="t('inventory.posGap.outlet')">
