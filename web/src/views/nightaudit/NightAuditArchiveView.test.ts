@@ -206,3 +206,28 @@ describe('NightAuditArchiveView, what is seen is what is sent', () => {
     expect(w.get('[data-testid=late]').text()).toContain('Write as dd/mm/yyyy')
   })
 })
+
+describe('NightAuditArchiveView, show more keeps the period of the page it continues', () => {
+  it('asks the next page with the from date of the first page, not the edited one; a new filter starts again', async () => {
+    const w = mountView()
+    await flushPromises()
+    GET = vi.fn((_u: string, o: { params: { query: { cursor?: string } } }) => Promise.resolve({ data: o.params.query.cursor ? { items: [summary('2026-09-20', 'COMPLETE')], next_cursor: null } : { items: [summary('2026-09-29', 'COMPLETE')], next_cursor: 'c2' } }))
+    const from = () => w.get('[data-testid=filters] input[name=from] input[data-slot=date-input-text], [data-testid=filters] input[data-slot=date-input-text]')
+    await from().setValue('01/09/2026')
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    await from().setValue('03/11/2026') // edited, not applied
+    await w.get('[data-testid=load-more]').trigger('click')
+    await flushPromises()
+    const query = (i: number) => (GET.mock.calls[i]?.[1] as { params: { query: Record<string, unknown> } }).params.query
+    expect(GET.mock.calls).toHaveLength(2)
+    expect(query(0)).toMatchObject({ from: '2026-09-01' })
+    expect(query(1)).toMatchObject({ from: '2026-09-01', cursor: 'c2' })
+    expect(w.text()).toContain('29 Sep 2026')
+    expect(w.text()).toContain('20 Sep 2026')
+    await w.get('[data-testid=filters]').trigger('submit')
+    await flushPromises()
+    expect(query(2)).toMatchObject({ from: '2026-11-03' })
+    expect(query(2).cursor).toBeUndefined()
+  })
+})
