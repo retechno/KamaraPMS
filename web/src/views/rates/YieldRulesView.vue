@@ -17,9 +17,10 @@ import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
-import { t } from '@/i18n'
+import { i18n, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { weekdayLabels } from '@/utils/dates'
 import { guardForm } from '@/utils/forms'
 
 const auth = useAuthStore()
@@ -39,6 +40,8 @@ const fieldError = (field: string) => error.value?.fieldMessage(field)
 
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const
 type Day = (typeof DAYS)[number]
+const dayNames = computed(() => weekdayLabels(i18n.global.locale.value))
+const dayName = (d: Day) => dayNames.value[DAYS.indexOf(d)] ?? d
 
 const blank = () => ({
   code: '', name: '', rate_plan_id: '' as number | '', room_type_id: '' as number | '', stay_from: '', stay_to: '', weekdays: [] as Day[],
@@ -88,7 +91,7 @@ const typeCode = (id: number | null) => (id === null ? t('yieldRules.allTypesSho
 function conditions(r: YieldRule): string {
   const parts: string[] = [`${planCode(r.rate_plan_id)}, ${typeCode(r.room_type_id)}`]
   if (r.stay_from || r.stay_to) parts.push(t('yieldRules.condStay', { from: r.stay_from ?? '…', to: r.stay_to ?? '…' }))
-  if (r.weekdays?.length) parts.push(r.weekdays.join(' '))
+  if (r.weekdays?.length) parts.push(r.weekdays.map((d) => dayName(d)).join(' '))
   if (r.occupancy_from || r.occupancy_to) parts.push(t('yieldRules.condOccupancy', { from: r.occupancy_from ?? '0', to: r.occupancy_to ?? '100' }))
   if (r.lead_days_min !== null || r.lead_days_max !== null) parts.push(t('yieldRules.condLead', { from: r.lead_days_min ?? 0, to: r.lead_days_max ?? '…' }))
   if (r.stay_nights_min !== null || r.stay_nights_max !== null) parts.push(t('yieldRules.condNights', { from: r.stay_nights_min ?? 1, to: r.stay_nights_max ?? '…' }))
@@ -275,7 +278,7 @@ watch(pid, load, { immediate: true })
         <fieldset class="mt-3 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2" data-testid="weekdays">
           <legend class="px-1 text-sm font-medium">{{ t('yieldRules.weekdays') }}</legend>
           <label v-for="d in DAYS" :key="d" class="flex items-center gap-1.5 text-sm">
-            <input v-model="form.weekdays" type="checkbox" name="weekdays" :value="d" class="size-4 accent-primary" /><span>{{ d }}</span>
+            <input v-model="form.weekdays" type="checkbox" name="weekdays" :value="d" class="size-4 accent-primary" /><span>{{ dayName(d) }}</span>
           </label>
         </fieldset>
 

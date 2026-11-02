@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/problem'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import YieldRulesView from './YieldRulesView.vue'
@@ -58,7 +59,7 @@ describe('YieldRulesView', () => {
     await flushPromises()
     const busy = w.get('[data-testid=rule-BUSY]').text()
     expect(busy).toContain('DLX')
-    expect(busy).toContain('FRI SAT')
+    expect(busy).toContain('Fri Sat')
     expect(busy).toContain('occupancy 70.00% to 100%')
     expect(busy).toContain('+20.0000%')
     expect(w.get('[data-testid=rule-OFFSEASON]').text()).toContain('Off')
@@ -165,5 +166,20 @@ describe('YieldRulesView, what is seen is what is sent', () => {
     await flushPromises()
     expect(POST).not.toHaveBeenCalled()
     expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('names the weekdays in the language of the page, and the end of the stay is a night that is included', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=new-rule]').trigger('click')
+    const labels = () => w.findAll('[data-testid=weekdays] label').map((l) => l.text())
+    expect(labels()).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
+    expect(w.findAll('[data-testid=weekdays] input').map((i) => i.attributes('value'))).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'])
+    await setLocale('id')
+    await flushPromises()
+    expect(labels()).toEqual(['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'])
+    await w.findAll('form[data-testid=rule-form] input[data-slot=date-input-text]')[1]!.setValue('03/11/2026')
+    expect(w.find('[data-slot=date-input-last-night]').exists()).toBe(false)
+    await setLocale('en')
   })
 })

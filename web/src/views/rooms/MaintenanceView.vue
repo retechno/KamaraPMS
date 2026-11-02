@@ -396,7 +396,7 @@ watch(() => route.query.room, (v) => {
                 </template>
               </FormField>
               <FormField class="w-40" :label="t('maintenance.until')" :error="fieldError('end_date')">
-                <template #default="{ id, invalid }"><DateInput :id="id" v-model="action.blockEnd" name="block_end" :min="businessDate" :aria-invalid="invalid" /></template>
+                <template #default="{ id, invalid }"><DateInput :id="id" v-model="action.blockEnd" name="block_end" exclusive-end :min="businessDate ? addDays(businessDate, 1) : undefined" :aria-invalid="invalid" /></template>
               </FormField>
               <Button type="submit" variant="outline" size="sm" :disabled="busy || !action.blockEnd" data-testid="block-room">{{ t('maintenance.blockRoom') }}</Button>
             </form>

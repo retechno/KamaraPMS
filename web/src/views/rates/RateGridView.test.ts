@@ -150,4 +150,19 @@ describe('RateGridView, what is seen is what is sent', () => {
     expect(PUT).not.toHaveBeenCalled()
     expect(w.text()).toContain('Write as dd/mm/yyyy')
   })
+
+  it('says the last night under the end, and refuses an end that is not after the start', async () => {
+    const w = mountGrid()
+    await flushPromises()
+    await w.get('input[name=from]').setValue('2026-10-05')
+    await w.get('input[name=amount]').setValue('1750000')
+    const end = w.findAll('[data-testid=fill-form] input[data-slot=date-input-text]')[1]!
+    await end.setValue('08/10/2026')
+    expect(w.get('[data-slot=date-input-last-night]').text()).toBe('Last night: Wednesday, 7 Oct 2026')
+    await end.setValue('05/10/2026')
+    await w.get('[data-testid=fill-form]').trigger('submit')
+    await flushPromises()
+    expect(PUT).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Earliest date: 06/10/2026.')
+  })
 })

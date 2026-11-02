@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import FormField from '@/components/app/FormField.vue'
 import PeriodPicks from '@/components/app/PeriodPicks.vue'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
+import { guardForm } from '@/utils/forms'
 import type { Period } from '@/utils/periods'
 
 /**
@@ -30,9 +31,9 @@ function pick(p: Period): void {
 </script>
 
 <template>
-  <form class="mb-4 flex flex-wrap items-end gap-3 print:hidden" novalidate data-testid="report-period" @submit.prevent="emit('show')">
-    <FormField v-if="!props.single" :label="t('inventory.reports.from')"><template #default="{ id }"><Input :id="id" v-model="from" type="date" name="from" class="w-40" /></template></FormField>
-    <FormField v-if="!props.noDate" :label="props.single ? t('inventory.reports.asOf') : t('inventory.reports.to')"><template #default="{ id }"><Input :id="id" v-model="to" type="date" name="to" class="w-40" /></template></FormField>
+  <form class="mb-8 flex flex-wrap items-end gap-x-3 gap-y-7 print:hidden" novalidate data-testid="report-period" @submit.prevent="guardForm($event) && emit('show')">
+    <FormField v-if="!props.single" :label="t('inventory.reports.from')"><template #default="{ id }"><DateInput :id="id" v-model="from" name="from" class="w-40" /></template></FormField>
+    <FormField v-if="!props.noDate" :label="props.single ? t('inventory.reports.asOf') : t('inventory.reports.to')"><template #default="{ id }"><DateInput :id="id" v-model="to" name="to" class="w-40" /></template></FormField>
     <slot />
     <Button type="submit" variant="outline" :disabled="props.busy" data-testid="report-show">{{ t('inventory.reports.show') }}</Button>
     <PeriodPicks v-if="!props.single && !props.noDate" :business-date="businessDate" :years="[]" @pick="pick" />

@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { windowDates } from '@/utils/blocks'
-import { addDays } from '@/utils/dates'
+import { addDays, weekdayLabels } from '@/utils/dates'
 import { guardForm } from '@/utils/forms'
 
 // The sales restriction grid: what each night is under for a room type and a rate plan (the effective view, resolved by the server), and a fill that sets or clears
@@ -38,8 +38,7 @@ const notice = ref('')
 const saving = ref(false)
 
 const KEYS: Weekday[] = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
-const weekdayName = (i: number) => new Date(Date.UTC(2024, 0, 1 + i)).toLocaleDateString(i18n.global.locale.value, { weekday: 'short', timeZone: 'UTC' })
-const WEEKDAYS = computed(() => KEYS.map((key, i) => ({ key, label: weekdayName(i) })))
+const WEEKDAYS = computed(() => weekdayLabels(i18n.global.locale.value).map((label, i) => ({ key: KEYS[i]!, label })))
 
 type Choice = '' | 'yes' | 'no' | 'clear'
 const blank = () => ({
@@ -272,7 +271,7 @@ watch(planId, () => void loadGrid())
               <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.from" name="from" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('restrictions.until')" :error="fieldError('to')">
-              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.to" name="to" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.to" name="to" exclusive-end :min="form.from ? addDays(form.from, 1) : undefined" :aria-invalid="invalid" /></template>
             </FormField>
           </div>
           <fieldset class="mt-8 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-border px-3 py-2">

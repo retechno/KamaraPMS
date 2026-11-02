@@ -150,4 +150,17 @@ describe('RestrictionsView', () => {
     expect(PUT).not.toHaveBeenCalled()
     expect(w.text()).toContain('Write as dd/mm/yyyy')
   })
+
+  it('refuses an end that is not after the start, and says the last night of a good one', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=cell-DLX-2026-12-05]').trigger('click') // from the 5th, until the 6th
+    const end = w.findAll('form[data-testid=fill-form] input[data-slot=date-input-text]')[1]!
+    expect(w.get('[data-slot=date-input-last-night]').text()).toBe('Last night: Saturday, 5 Dec 2026')
+    await end.setValue('05/12/2026')
+    await w.get('form[data-testid=fill-form]').trigger('submit')
+    await flushPromises()
+    expect(PUT).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Earliest date: 06/12/2026.')
+  })
 })
