@@ -52,10 +52,10 @@ const columns = computed<Column<FolioSummary>[]>(() => [
 ])
 
 // One page of 50 at a time; the filter of the status is asked of the server, and a new search starts from the first page.
-const list = usePagedList<FolioSummary>(async (cursor) => {
-  const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', {
-    params: { path: { propertyId: property.currentId! }, query: { limit: 50, cursor, folio_type: kind.value === 'OUTLET' ? 'OUTLET' : undefined, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, cancelled_with_balance: followUp.value || undefined, q: q.value.trim() || undefined, ...sortParams.value } },
-  })
+// What the list asks for is read once, when a search starts; "Show more" goes on with it, not with what the fields hold by then.
+const snapshot = () => ({ propertyId: property.currentId!, folio_type: kind.value === 'OUTLET' ? ('OUTLET' as const) : undefined, status: (status.value || undefined) as 'OPEN' | 'CLOSED' | undefined, cancelled_with_balance: followUp.value || undefined, q: q.value.trim() || undefined, ...sortParams.value })
+const list = usePagedList<FolioSummary, ReturnType<typeof snapshot>>(snapshot, async (cursor, { propertyId, ...asked }) => {
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/folios', { params: { path: { propertyId }, query: { limit: 50, cursor, ...asked } } })
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
 const { rows, error, loading, loadingMore, loaded: searched, hasMore } = list

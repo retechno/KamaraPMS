@@ -14,8 +14,13 @@ export interface Page<T> {
  * A list that is read one page at a time (the API's `limit` and `cursor`, 50 rows a page). The first page is read by `reload()`, and again whenever a filter or a search
  * changes; the next one by `loadMore()`, which adds it to the rows. The pages are never all read at once. Only the latest request counts: an answer that comes after a
  * newer search was made is dropped, so a slow answer cannot replace a newer one.
+ *
+ * What the list asks for (the filters, the search, the sort) is read once per `reload()` by `snapshot()` and handed to `fetchPage` as `params`. `loadMore()` never reads
+ * the screen again: it asks for the next page with the params of the page it continues, so a filter that is edited and not yet applied cannot be mixed into the rows of
+ * the old one (the cursor belongs to the old query). The params of a reload are kept when its first page is taken in, so a reload that fails, or an older one that
+ * answers late, leaves the params that go with the rows and the cursor on the screen.
  */
-export function usePagedList<T>(fetchPage: (cursor: string | undefined) => Promise<Page<T>>) {
+export function usePagedList<T, P>(snapshot: () => P, fetchPage: (cursor: string | undefined, params: P) => Promise<Page<T>>) {
   const rows = ref<T[]>([]) as Ref<T[]>
   const nextCursor = ref<string | undefined>()
   const total = ref<number | null>(null)
@@ -25,6 +30,8 @@ export function usePagedList<T>(fetchPage: (cursor: string | undefined) => Promi
   const loaded = ref(false)
   const error = ref<ApiError | null>(null)
   let generation = 0
+  /** The params of the first page that is on the screen: what `loadMore()` continues with. */
+  let frozen: { params: P } | null = null
 
   const hasMore = computed(() => nextCursor.value !== undefined)
 
@@ -34,9 +41,11 @@ export function usePagedList<T>(fetchPage: (cursor: string | undefined) => Promi
     loading.value = true
     loadingMore.value = false
     error.value = null
+    const params = snapshot()
     try {
-      const page = await fetchPage(undefined)
+      const page = await fetchPage(undefined, params)
       if (mine !== generation) return
+      frozen = { params }
       rows.value = page.data ?? []
       nextCursor.value = page.next_cursor
       total.value = page.total ?? null
@@ -52,12 +61,13 @@ export function usePagedList<T>(fetchPage: (cursor: string | undefined) => Promi
   /** Adds the next page to the rows. */
   async function loadMore(): Promise<void> {
     const cursor = nextCursor.value
-    if (cursor === undefined || loading.value || loadingMore.value) return
+    if (cursor === undefined || frozen === null || loading.value || loadingMore.value) return
+    const { params } = frozen
     const mine = generation
     loadingMore.value = true
     error.value = null
     try {
-      const page = await fetchPage(cursor)
+      const page = await fetchPage(cursor, params)
       if (mine !== generation) return
       rows.value = [...rows.value, ...(page.data ?? [])]
       nextCursor.value = page.next_cursor
@@ -73,6 +83,7 @@ export function usePagedList<T>(fetchPage: (cursor: string | undefined) => Promi
   /** Forgets everything (another property was chosen). */
   function reset(): void {
     generation++
+    frozen = null
     rows.value = []
     nextCursor.value = undefined
     total.value = null

@@ -74,14 +74,11 @@ async function print(paymentId: number): Promise<void> {
 // The totals come with the first page of the day. A search that was replaced by a later one (the day arrived while the first was on its way) must not write its totals over the new ones.
 let latestTotals = 0
 let askedWithoutDay = false
-const list = usePagedList<Payment>(async (cursor) => {
+// What the list asks for is read once, when a search starts (the day, the method, the order); "Show more" goes on with those, not with what the fields hold by then.
+const snapshot = () => ({ propertyId: property.currentId!, business_date: date.value || undefined, method: (method.value || undefined) as 'CASH' | undefined, ...sortParams.value })
+const list = usePagedList<Payment, ReturnType<typeof snapshot>>(snapshot, async (cursor, { propertyId, ...asked }) => {
   const mine = cursor ? latestTotals : ++latestTotals
-  const { data } = await api.GET('/api/v1/properties/{propertyId}/payments', {
-    params: {
-      path: { propertyId: property.currentId! },
-      query: { limit: 50, cursor, business_date: date.value || undefined, method: (method.value || undefined) as 'CASH' | undefined, ...sortParams.value },
-    },
-  })
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/payments', { params: { path: { propertyId }, query: { limit: 50, cursor, ...asked } } })
   if (!cursor && mine === latestTotals) totals.value = data?.totals ?? []
   return { data: data?.data ?? [], next_cursor: data?.next_cursor }
 })
