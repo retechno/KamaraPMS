@@ -11,7 +11,8 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -89,9 +90,9 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('statements.noAccess', { what: t('statements.whatTrial'), permission: 'accounting.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate @submit.prevent="load">
-        <FormField float-hint :hint="$weekday(range.from)" :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="from" type="date" /></template></FormField>
-        <FormField float-hint :hint="$weekday(range.to)" :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="to" type="date" /></template></FormField>
+      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate @submit.prevent="guardForm($event) && load()">
+        <FormField :label="t('statements.from')"><template #default="{ id }"><DateInput :id="id" v-model="range.from" name="from" /></template></FormField>
+        <FormField :label="t('statements.to')"><template #default="{ id }"><DateInput :id="id" v-model="range.to" name="to" /></template></FormField>
         <PeriodPicks :business-date="period.businessDate.value" :years="period.years.value" @pick="period.pick" />
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
       </form>

@@ -10,7 +10,8 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t, te } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -257,7 +258,7 @@ const steps = ['1', '2', '3', '4'] as const
 
     <section aria-labelledby="card-h" data-testid="card">
       <h2 id="card-h" class="m-0 mb-2 text-sm font-semibold">{{ t('inventory.costing.cardTitle') }}</h2>
-      <form class="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" @submit.prevent="choose">
+      <form class="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" @submit.prevent="guardForm($event) && choose()">
         <FormField :label="t('inventory.costing.warehouse')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model.number="pick.warehouse" name="warehouse" data-testid="card-warehouse">
@@ -274,8 +275,8 @@ const steps = ['1', '2', '3', '4'] as const
             </NativeSelect>
           </template>
         </FormField>
-        <FormField :label="t('inventory.costing.from')"><template #default="{ id }"><Input :id="id" v-model="pick.from" type="date" name="from" /></template></FormField>
-        <FormField :label="t('inventory.costing.to')"><template #default="{ id }"><Input :id="id" v-model="pick.to" type="date" name="to" /></template></FormField>
+        <FormField :label="t('inventory.costing.from')"><template #default="{ id }"><DateInput :id="id" v-model="pick.from" name="from" /></template></FormField>
+        <FormField :label="t('inventory.costing.to')"><template #default="{ id }"><DateInput :id="id" v-model="pick.to" name="to" /></template></FormField>
         <div class="flex items-end"><Button type="submit" variant="outline" data-testid="card-show">{{ t('inventory.costing.show') }}</Button></div>
       </form>
 

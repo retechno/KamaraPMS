@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -145,7 +147,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('bank.view')" class="muted" data-testid="no-access">{{ t('bankStatements.noAccess', { permission: 'bank.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="load">
+      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="guardForm($event) && load()">
         <FormField class="w-72" :label="t('bankStatements.bankAccount')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model.number="bank" name="bank" @change="load">
@@ -158,7 +160,7 @@ watch(() => pid.value, () => {
     </Card>
 
     <Card v-if="importing" class="mb-4">
-      <form novalidate data-testid="import-form" @submit.prevent="runImport">
+      <form novalidate data-testid="import-form" @submit.prevent="guardForm($event) && runImport()">
         <CardHeader>
           <CardTitle>{{ t('bankStatements.importTitle') }}</CardTitle>
           <p class="m-0 text-sm text-muted-foreground">{{ t('bankStatements.importHint', { date: 'date', description: 'description', reference: 'reference', amount: 'amount', credit: 'credit', debit: 'debit' }) }}</p>
@@ -166,10 +168,10 @@ watch(() => pid.value, () => {
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <FormField :label="t('bankStatements.from')" :error="fieldError('period_from')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.period_from" name="period_from" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.period_from" name="period_from" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('bankStatements.to')" :error="fieldError('period_to')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.period_to" name="period_to" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.period_to" name="period_to" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('bankStatements.opening')" :error="fieldError('opening_balance')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.opening_balance" name="opening_balance" inputmode="decimal" :aria-invalid="invalid" /></template>

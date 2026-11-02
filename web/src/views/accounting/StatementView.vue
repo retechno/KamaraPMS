@@ -13,7 +13,8 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -132,10 +133,10 @@ watch([() => pid.value, income, cashFlow], () => {
   <p v-else-if="!can('accounting.view')" class="muted" data-testid="no-access">{{ t('statements.noAccess', { what: t('statements.whatStatements'), permission: 'accounting.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate @submit.prevent="load">
+      <form class="flex flex-wrap items-end gap-x-4 gap-y-6 px-4 pb-8 pt-4" novalidate @submit.prevent="guardForm($event) && load()">
         <template v-if="ranged">
-          <FormField float-hint :hint="$weekday(form.from)" :label="t('statements.from')"><template #default="{ id }"><Input :id="id" v-model="form.from" name="from" type="date" /></template></FormField>
-          <FormField float-hint :hint="$weekday(form.to)" :label="t('statements.to')"><template #default="{ id }"><Input :id="id" v-model="form.to" name="to" type="date" /></template></FormField>
+          <FormField :label="t('statements.from')"><template #default="{ id }"><DateInput :id="id" v-model="form.from" name="from" /></template></FormField>
+          <FormField :label="t('statements.to')"><template #default="{ id }"><DateInput :id="id" v-model="form.to" name="to" /></template></FormField>
           <FormField v-if="cashFlow" :label="t('statements.method')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="form.method" name="method">
@@ -146,7 +147,7 @@ watch([() => pid.value, income, cashFlow], () => {
           </FormField>
           <PeriodPicks :business-date="period.businessDate.value" :years="period.years.value" @pick="period.pick" />
         </template>
-        <FormField float-hint :hint="$weekday(form.as_of)" v-else :label="t('statements.asOf')"><template #default="{ id }"><Input :id="id" v-model="form.as_of" name="as_of" type="date" /></template></FormField>
+        <FormField v-else :label="t('statements.asOf')"><template #default="{ id }"><DateInput :id="id" v-model="form.as_of" name="as_of" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('statements.show') }}</Button>
       </form>
     </Card>

@@ -129,3 +129,18 @@ describe('the date filter of the financial reports', () => {
     expect(w.get('[data-testid=pick-fiscal-year]').text()).toBe('Tahun buku berjalan')
   })
 })
+
+describe('the statement view, what is seen is what is sent', () => {
+  beforeEach(() => setLocale('en'))
+
+  it('does not load while a date is half typed, and says why', async () => {
+    const w = mount(StatementView, { global: await setup([YEAR], '/accounting/income-statement') })
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('form input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})
