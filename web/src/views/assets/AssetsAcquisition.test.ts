@@ -364,3 +364,14 @@ describe('the opening balances, review of the first screens', () => {
     expect(banner.className).not.toContain('notice')
   })
 })
+
+describe('the Make-asset dialog, what is seen is what is sent', () => {
+  it('does not make the asset while the date in service is half typed, and says why', async () => {
+    await setup(AssetWaitingView, MANAGE, '/assets/waiting')
+    await click('[data-testid=make-1]')
+    await type('[data-testid=make-dialog] input[data-slot=date-input-text]', '3/2')
+    await click('[data-testid=make-confirm]')
+    expect(callTo(POST, '/assets/from-line')).toBeUndefined()
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+})

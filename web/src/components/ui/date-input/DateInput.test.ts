@@ -296,6 +296,23 @@ describe('DateInput, what is seen is what is sent', () => {
     expect(document.body.querySelector('[data-slot=date-input-last-night]')).toBeNull()
   })
 
+  it('keeps the message of a compact field in the flow (a table row grows only while it is wrong) and floats it for a normal one', async () => {
+    const compact = mountField({ compact: true }, '2026-11-03')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')).toBeNull() // a valid row has nothing more than the field
+    await compact.text().setValue('31/02/2026')
+    await compact.text().trigger('blur')
+    const flowing = document.body.querySelector('[data-slot=date-input-problem]')!
+    expect(flowing.classList.contains('absolute')).toBe(false)
+    expect(flowing.classList.contains('break-words')).toBe(true)
+    await compact.text().setValue('03/11/2026')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')).toBeNull() // and the row is back to its height
+    document.body.innerHTML = ''
+    const normal = mountField({}, '2026-11-03')
+    await normal.text().setValue('31/02/2026')
+    await normal.text().trigger('blur')
+    expect(document.body.querySelector('[data-slot=date-input-problem]')!.classList.contains('absolute')).toBe(true)
+  })
+
   it('draws no line under a compact field, but still says what is wrong', async () => {
     const { text } = mountField({ compact: true }, '2026-11-03')
     expect(document.body.querySelector('[data-slot=date-input-weekday]')).toBeNull()

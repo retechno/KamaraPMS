@@ -309,3 +309,57 @@ describe('payables views', () => {
     }
   })
 })
+
+describe('payables views, what is seen is what is sent', () => {
+  const half = (w: Awaited<ReturnType<typeof mountView>>, form: string) => w.get(`${form} input[data-slot=date-input-text]`).setValue('3/2')
+
+  it('the aging is not loaded while its date is half typed, and the screen says why', async () => {
+    const w = await mountView(AgingView)
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=apply]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the bills filter does not load while a date is half typed', async () => {
+    const w = await mountView(BillsView)
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await half(w, 'form:has([data-testid=apply])')
+    await w.get('[data-testid=apply]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the bill is not posted while its date is half typed', async () => {
+    const w = await mountView(BillsView)
+    await flushPromises()
+    await w.get('[data-testid=new-bill]').trigger('click')
+    await w.get('select[name=supplier_id]').setValue(1)
+    await w.get('input[name=invoice]').setValue('INV-77')
+    await w.get('input[name=amount_0]').setValue('1000000')
+    await half(w, '[data-testid=bill-form]')
+    await w.get('[data-testid=bill-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the payment is not posted while its date is half typed', async () => {
+    const w = await mountView(PaymentsView)
+    await flushPromises()
+    await w.get('[data-testid=new-payment]').trigger('click')
+    await w.get('select[name=supplier_id]').setValue(1)
+    await flushPromises()
+    await w.get('[data-testid=pay-all]').trigger('click')
+    await half(w, '[data-testid=payment-form]')
+    await w.get('[data-testid=payment-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

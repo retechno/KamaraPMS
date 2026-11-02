@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
@@ -87,7 +89,7 @@ async function submit(): Promise<void> {
 <template>
   <Dialog :open="!!line" @update:open="(v) => { if (!v) emit('close') }">
     <DialogContent v-if="line" class="max-h-[90dvh] max-w-2xl overflow-y-auto p-5" data-testid="make-dialog" @interact-outside.prevent>
-      <form novalidate class="flex flex-col gap-3" @submit.prevent="submit">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="guardForm($event) && submit()">
         <DialogTitle>{{ isBatch ? t('assets.make.titleBatch') : t('assets.make.title') }}</DialogTitle>
         <DialogDescription data-testid="make-source">
           {{ t(`assets.waiting.source.${line.source}`) }} {{ line.bill_number ?? line.document_number }}<template v-if="line.supplier_name"> · {{ line.supplier_name }}</template> · {{ formatDate(line.journal_date) }} · {{ t('assets.make.account', { account: line.account_code }) }} · {{ t('assets.make.cost', { cost: formatMoney(line.cost) }) }}
@@ -114,7 +116,7 @@ async function submit(): Promise<void> {
             </template>
           </FormField>
           <FormField :label="t('assets.col.department')" :error="error?.fieldMessage('department_id')"><template #default="{ id }"><DepartmentSelect :id="id" v-model="form.department_id" /></template></FormField>
-          <FormField :label="t('assets.make.inServiceDate')" required :error="error?.fieldMessage('in_service_date')"><template #default="{ id }"><Input :id="id" v-model="form.in_service_date" name="in_service_date" type="date" /></template></FormField>
+          <FormField :label="t('assets.make.inServiceDate')" required :error="error?.fieldMessage('in_service_date')"><template #default="{ id }"><DateInput :id="id" v-model="form.in_service_date" name="in_service_date" /></template></FormField>
         </div>
         <fieldset v-if="depreciable" class="m-0 flex flex-col gap-1 border-0 p-0" :aria-label="t('assets.make.startRule')">
           <legend class="mb-1 p-0 text-sm font-medium">{{ t('assets.make.startRule') }}</legend>

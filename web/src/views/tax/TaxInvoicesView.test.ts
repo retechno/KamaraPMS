@@ -177,3 +177,22 @@ describe('tax invoices', () => {
     expect(nobody.find('[data-testid=no-access]').exists()).toBe(true)
   })
 })
+
+describe('tax invoices, what is seen is what is sent', () => {
+  it('neither the list nor the coverage is asked for while a date is half typed', async () => {
+    const w = await mountView()
+    await flushPromises()
+    const before = GET.mock.calls.length
+    await w.get('form:has([data-testid=apply]) input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=apply]').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+    await w.get('[data-testid=range-card] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('input[name=range_to]').setValue('2026-09-30')
+    await w.get('[data-testid=range-card] form').trigger('submit')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBe(before)
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/invoices/coverage'))).toBe(false)
+  })
+})

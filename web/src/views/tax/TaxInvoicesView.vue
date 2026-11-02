@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -288,7 +290,7 @@ watch(() => [route.query.source_type, route.query.id], () => {
 
     <Card class="mb-4">
       <CardContent class="pt-4">
-        <form class="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" novalidate @submit.prevent="load">
+        <form class="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" novalidate @submit.prevent="guardForm($event) && load()">
           <FormField :label="t('taxInvoices.status')">
             <template #default="{ id }">
               <NativeSelect :id="id" v-model="filter.status" name="status">
@@ -298,8 +300,8 @@ watch(() => [route.query.source_type, route.query.id], () => {
               </NativeSelect>
             </template>
           </FormField>
-          <FormField :label="t('taxInvoices.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
-          <FormField :label="t('taxInvoices.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+          <FormField :label="t('taxInvoices.from')"><template #default="{ id }"><DateInput :id="id" v-model="filter.from" name="from" /></template></FormField>
+          <FormField :label="t('taxInvoices.to')"><template #default="{ id }"><DateInput :id="id" v-model="filter.to" name="to" /></template></FormField>
           <FormField :label="t('taxInvoices.search')"><template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('taxInvoices.searchHint')" /></template></FormField>
           <div class="flex items-end"><Button type="submit" variant="outline" data-testid="apply">{{ t('taxInvoices.apply') }}</Button></div>
         </form>
@@ -371,9 +373,9 @@ watch(() => [route.query.source_type, route.query.id], () => {
       <CardHeader><CardTitle>{{ t('taxInvoices.exportTitle') }}</CardTitle></CardHeader>
       <CardContent>
         <p class="mt-0 text-sm text-muted-foreground">{{ t('taxInvoices.exportHint') }}</p>
-        <form class="grid gap-4 sm:grid-cols-4" novalidate @submit.prevent="checkCoverage">
-          <FormField :label="t('taxInvoices.from')" :error="fieldError('from')"><template #default="{ id }"><Input :id="id" v-model="range.from" name="range_from" type="date" /></template></FormField>
-          <FormField :label="t('taxInvoices.to')" :error="fieldError('to')"><template #default="{ id }"><Input :id="id" v-model="range.to" name="range_to" type="date" /></template></FormField>
+        <form class="grid gap-4 sm:grid-cols-4" novalidate @submit.prevent="guardForm($event) && checkCoverage()">
+          <FormField :label="t('taxInvoices.from')" :error="fieldError('from')"><template #default="{ id }"><DateInput :id="id" v-model="range.from" name="range_from" /></template></FormField>
+          <FormField :label="t('taxInvoices.to')" :error="fieldError('to')"><template #default="{ id }"><DateInput :id="id" v-model="range.to" name="range_to" /></template></FormField>
           <div class="flex items-end gap-2">
             <Button type="submit" variant="outline" :disabled="!range.from || !range.to" data-testid="coverage-check">{{ t('taxInvoices.checkCoverage') }}</Button>
             <Button v-if="can('tax.invoice')" type="button" :disabled="busy || !range.from || !range.to" data-testid="export" @click="exportCsv">{{ t('taxInvoices.exportCsv') }}</Button>

@@ -424,3 +424,55 @@ describe('the texts', () => {
     expect(i18n.global.te('assets.register.title')).toBe(true)
   })
 })
+
+describe('the assets, what is seen is what is sent', () => {
+  it('the edit of an asset is not sent while a date is half typed, and the dialog says why', async () => {
+    await setup(AssetView, SETUP, '/assets/2')
+    await click('[data-testid=asset-edit]')
+    await type('[data-testid=edit-dialog] input[data-slot=date-input-text]', '3/2')
+    await click('[data-testid=edit-save]')
+    expect(PATCH).not.toHaveBeenCalled()
+    expect(PUT).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the settings are not saved while the date the register starts is half typed', async () => {
+    await setup(AssetSettingsView)
+    await type('input[data-slot=date-input-text]', '3/2')
+    await click('[data-testid=settings-save]')
+    expect(PUT).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+
+  it('the opening balances are not checked nor imported while a date is half typed', async () => {
+    await setup(AssetOpeningView)
+    await type('input[name=as_of]', '2026-09-30')
+    await type('[data-testid=csv-text]', 'name,category,in_service_date,cost\nWooden wardrobe,FFE,2020-01-10,36000000')
+    await click('[data-testid=dry-run]')
+    const valid = POST.mock.calls.length
+    expect(valid).toBe(1) // the dry run of a good date goes through, so that the import is offered
+    await type('input[data-slot=date-input-text]', '3/2')
+    await click('[data-testid=dry-run]')
+    expect(POST.mock.calls.length).toBe(valid)
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+    expect((document.body.querySelector('[data-testid=confirm-import]') as HTMLButtonElement).disabled).toBe(false) // the button works, it is the date that stops it
+    await click('[data-testid=confirm-import]')
+    expect(POST.mock.calls.length).toBe(valid)
+    expect(POST.mock.calls.some((c) => (c[1] as { body: { dry_run: boolean } }).body.dry_run === false)).toBe(false)
+  })
+
+  it('the single old asset is not checked while a date is half typed', async () => {
+    await setup(AssetOpeningView)
+    await click('[data-testid=toggle-single]')
+    await type('input[name=as_of]', '2026-09-30')
+    await type('input[name=name]', 'Pickup L300')
+    await choose('select[name=category]', 'FFE')
+    await type('input[name=cost]', '150000000')
+    await type('[data-testid=single-form] input[data-slot=date-input-text]', '3/2')
+    const form = document.body.querySelector('[data-testid=single-form]') as HTMLFormElement
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Write as dd/mm/yyyy')
+  })
+})

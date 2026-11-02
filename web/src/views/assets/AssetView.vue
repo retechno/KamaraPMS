@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { toast } from '@/composables/useToast'
@@ -421,7 +423,7 @@ async function disposed(): Promise<void> {
 
   <Dialog :open="editing" @update:open="(v) => (editing = v)">
     <DialogContent class="max-h-[90dvh] max-w-lg overflow-y-auto p-5" data-testid="edit-dialog" @interact-outside.prevent>
-      <form novalidate class="flex flex-col gap-3" @submit.prevent="save">
+      <form novalidate class="flex flex-col gap-3" @submit.prevent="guardForm($event) && save()">
         <DialogTitle>{{ t('assets.asset.edit') }}</DialogTitle>
         <DialogDescription>{{ t('assets.asset.editHint') }}</DialogDescription>
         <ErrorNotice v-if="formError" :error="formError" inline />
@@ -437,11 +439,11 @@ async function disposed(): Promise<void> {
         <FormField :label="t('assets.col.department')"><template #default="{ id }"><DepartmentSelect :id="id" v-model="form.department_id" /></template></FormField>
         <div class="grid gap-3 sm:grid-cols-2">
           <FormField :label="t('assets.asset.serial')"><template #default="{ id }"><Input :id="id" v-model="form.serial_no" name="serial_no" maxlength="100" /></template></FormField>
-          <FormField :label="t('assets.asset.warranty')" :error="formError?.fieldMessage('warranty_until')"><template #default="{ id }"><Input :id="id" v-model="form.warranty_until" name="warranty_until" type="date" /></template></FormField>
+          <FormField :label="t('assets.asset.warranty')" :error="formError?.fieldMessage('warranty_until')"><template #default="{ id }"><DateInput :id="id" v-model="form.warranty_until" name="warranty_until" /></template></FormField>
         </div>
         <FormField :label="t('assets.asset.notes')"><template #default="{ id }"><Input :id="id" v-model="form.notes" name="notes" maxlength="500" /></template></FormField>
         <div v-if="startEditable" class="grid gap-3 sm:grid-cols-2" data-testid="edit-start">
-          <FormField :label="t('assets.col.inService')" :error="formError?.fieldMessage('in_service_date')"><template #default="{ id }"><Input :id="id" v-model="form.in_service_date" name="in_service_date" type="date" /></template></FormField>
+          <FormField :label="t('assets.col.inService')" :error="formError?.fieldMessage('in_service_date')"><template #default="{ id }"><DateInput :id="id" v-model="form.in_service_date" name="in_service_date" /></template></FormField>
           <FormField :label="t('assets.make.startRule')" :hint="t('assets.make.startHint')" :error="formError?.fieldMessage('start_rule')">
             <template #default="{ id }"><NativeSelect :id="id" v-model="form.start_rule" name="start_rule"><option v-for="r in ['IN_SERVICE_MONTH', 'NEXT_MONTH']" :key="r" :value="r">{{ t(`assets.startRule.${r}`) }}</option></NativeSelect></template>
           </FormField>

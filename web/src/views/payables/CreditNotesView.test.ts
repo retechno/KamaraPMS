@@ -138,3 +138,22 @@ describe('CreditNotesView', () => {
     expect(viewer.find('[data-testid=void]').exists()).toBe(false)
   })
 })
+
+describe('CreditNotesView, what is seen is what is sent', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('does not post the credit note while its date is half typed, and says why', async () => {
+    const w = await mountView(['payables.view', 'payables.post'], '/payables/credit-notes?bill=3')
+    await flushPromises()
+    await w.get('input[name=supplier_credit_number]').setValue('CR-77')
+    await w.get('input[name=reason]').setValue('returned')
+    await w.get('input[name=amount_0]').setValue('300000')
+    await w.get('[data-testid=credit-form] input[data-slot=date-input-text]').setValue('3/2')
+    await w.get('[data-testid=credit-form]').trigger('submit')
+    await flushPromises()
+    expect(POST).not.toHaveBeenCalled()
+    expect(w.text()).toContain('Write as dd/mm/yyyy')
+  })
+})

@@ -73,7 +73,7 @@ function messageOf(p: Problem): string {
 const current = computed(() => problemOf(text.value))
 const typedDate = computed(() => parseDisplayDate(text.value))
 const invalid = computed(() => problem.value !== '' || attrs['aria-invalid'] === true || attrs['aria-invalid'] === 'true')
-// The line under the field: the weekday of the date, or for the end of a range that does not include it (`exclusiveEnd`) the last night, the day before. `compact` draws no line (a field in a table row); the message stays.
+// The line under the field: the weekday of the date, or for the end of a range that does not include it (`exclusiveEnd`) the last night, the day before. `compact` draws no line (a field in a table row); the message stays and, there, takes its own place under the field (it wraps and the row grows only while the field is wrong) instead of floating over the next row.
 const hint = computed(() => (props.compact || props.disabled || invalid.value || current.value !== '' || !typedDate.value ? '' : formatDateWeekdayLong(typedDate.value)))
 const lastNight = computed(() => (props.exclusiveEnd && hint.value && typedDate.value ? t('dateInput.lastNight', { date: formatDateWeekdayLong(addDays(typedDate.value, -1)) }) : ''))
 const weekday = computed(() => (props.exclusiveEnd ? '' : hint.value))
@@ -197,7 +197,7 @@ function openCalendar(): void {
         @change="onNativeChange"
       />
     </div>
-    <p v-if="message" :id="problemId" class="absolute left-0 top-full m-0 mt-0.5 w-full text-xs leading-tight text-destructive" role="alert" data-slot="date-input-problem">{{ message }}</p>
+    <p v-if="message" :id="problemId" :class="cn('m-0 mt-0.5 w-full text-xs leading-tight text-destructive', compact ? 'break-words' : 'absolute left-0 top-full')" role="alert" data-slot="date-input-problem">{{ message }}</p>
     <p v-else-if="weekday" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-muted-foreground" data-slot="date-input-weekday">{{ weekday }}</p>
     <p v-else-if="lastNight" class="absolute left-0 top-full m-0 mt-0.5 whitespace-nowrap text-xs text-muted-foreground" data-slot="date-input-last-night">{{ lastNight }}</p>
   </div>

@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -258,7 +260,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">{{ t('supplierCredits.noAccess', { permission: 'payables.view' }) }}</p>
   <template v-else>
     <Card v-if="creating" class="mb-4">
-      <form v-autofocus novalidate data-testid="credit-form" @submit.prevent="post">
+      <form v-autofocus novalidate data-testid="credit-form" @submit.prevent="guardForm($event) && post()">
         <CardHeader><CardTitle>{{ t('supplierCredits.formTitle') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -272,7 +274,7 @@ watch(() => pid.value, () => {
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.number" name="supplier_credit_number" maxlength="60" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('supplierCredits.date')" :error="fieldError('credit_date')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.date" name="credit_date" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.date" name="credit_date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField class="sm:col-span-2 lg:col-span-4" :label="t('supplierCredits.reason')" :error="fieldError('reason')">
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.reason" name="reason" maxlength="500" :aria-invalid="invalid" /></template>

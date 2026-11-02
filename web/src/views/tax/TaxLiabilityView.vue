@@ -11,7 +11,8 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -77,8 +78,8 @@ watch(() => [pid.value, property.clock?.business_date], () => {
   <p v-else-if="!can('tax.view')" class="muted" data-testid="no-access">{{ t('taxLiability.noAccess', { permission: 'tax.view' }) }}</p>
   <template v-else>
     <Card class="mb-4">
-      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="load">
-        <FormField :label="t('taxLiability.asOf')"><template #default="{ id }"><Input :id="id" v-model="asOf" name="as_of" type="date" /></template></FormField>
+      <form class="flex items-end gap-3 p-4" novalidate @submit.prevent="guardForm($event) && load()">
+        <FormField :label="t('taxLiability.asOf')"><template #default="{ id }"><DateInput :id="id" v-model="asOf" name="as_of" /></template></FormField>
         <Button type="submit" variant="outline" :disabled="busy" data-testid="apply">{{ t('taxLiability.show') }}</Button>
       </form>
     </Card>

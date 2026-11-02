@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { loadDepartments } from '@/composables/useDepartments'
@@ -37,6 +39,8 @@ const imports = ref<AssetOpeningImport[]>([])
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
 
+const datesRow = ref<HTMLElement | null>(null)
+const singleForm = ref<HTMLElement | null>(null)
 const as_of = ref('')
 const journal_date = ref('')
 const mode = ref<'WITH_JOURNAL' | 'REGISTER_ONLY'>('WITH_JOURNAL')
@@ -174,9 +178,9 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
   <p v-else-if="!canSetup" class="muted" data-testid="no-setup">{{ t('assets.opening.needSetup') }}</p>
   <template v-else>
     <Card class="flex flex-col gap-4 p-4" data-testid="opening-form">
-      <div class="grid gap-3 sm:grid-cols-3">
-        <FormField :label="t('assets.opening.asOf')" :hint="t('assets.opening.asOfHint')" required><template #default="{ id }"><Input :id="id" v-model="as_of" name="as_of" type="date" /></template></FormField>
-        <FormField :label="t('assets.opening.journalDate')" :hint="t('assets.opening.journalDateHint')"><template #default="{ id }"><Input :id="id" v-model="journal_date" name="journal_date" type="date" :disabled="mode === 'REGISTER_ONLY'" /></template></FormField>
+      <div ref="datesRow" class="grid gap-x-3 gap-y-7 sm:grid-cols-3">
+        <FormField :label="t('assets.opening.asOf')" :hint="t('assets.opening.asOfHint')" required><template #default="{ id }"><DateInput :id="id" v-model="as_of" name="as_of" /></template></FormField>
+        <FormField :label="t('assets.opening.journalDate')" :hint="t('assets.opening.journalDateHint')"><template #default="{ id }"><DateInput :id="id" v-model="journal_date" name="journal_date" :disabled="mode === 'REGISTER_ONLY'" /></template></FormField>
       </div>
       <fieldset class="m-0 grid gap-2 border-0 p-0 sm:grid-cols-2" :aria-label="t('assets.opening.mode')">
         <label class="flex cursor-pointer gap-2 rounded-lg border border-border p-3 text-sm" :class="mode === 'WITH_JOURNAL' ? 'border-primary bg-primary/5' : ''">
@@ -191,8 +195,8 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
         <FormField :label="t('assets.opening.file')" :hint="t('assets.opening.fileHint')"><template #default="{ id }"><input :id="id" type="file" accept=".csv,text/csv,text/plain" class="text-sm" data-testid="csv-file" @change="onFile" /></template></FormField>
         <FormField :label="t('assets.opening.paste')"><template #default="{ id }"><textarea :id="id" v-model="csv" name="csv" rows="5" class="w-full rounded-md border border-input bg-background p-2 font-mono text-xs" data-testid="csv-text" /></template></FormField>
       </template>
-      <form v-else novalidate class="flex flex-col gap-3" data-testid="single-form" @submit.prevent="run(true)">
-        <div class="grid gap-3 sm:grid-cols-3">
+      <form v-else ref="singleForm" novalidate class="flex flex-col gap-3" data-testid="single-form" @submit.prevent="guardForm($event, datesRow) && run(true)">
+        <div class="grid gap-x-3 gap-y-7 sm:grid-cols-3">
           <FormField :label="t('assets.asset.name')" required><template #default="{ id }"><Input :id="id" v-model="row.name" name="name" maxlength="150" /></template></FormField>
           <FormField :label="t('assets.col.category')" required>
             <template #default="{ id }"><NativeSelect :id="id" v-model="row.category" name="category"><option value="">–</option><option v-for="c in categories" :key="c.id" :value="c.code">{{ c.code }} · {{ c.name }}</option></NativeSelect></template>
@@ -204,20 +208,20 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
           <FormField :label="t('assets.col.department')">
             <template #default="{ id }"><NativeSelect :id="id" v-model="row.department" name="department"><option value="">–</option><option v-for="d in departments" :key="d.id" :value="d.code">{{ d.code }} · {{ d.name }}</option></NativeSelect></template>
           </FormField>
-          <FormField :label="t('assets.asset.acquired')"><template #default="{ id }"><Input :id="id" v-model="row.acquisition_date" name="acquisition_date" type="date" /></template></FormField>
-          <FormField :label="t('assets.col.inService')" required><template #default="{ id }"><Input :id="id" v-model="row.in_service_date" name="in_service_date" type="date" /></template></FormField>
+          <FormField :label="t('assets.asset.acquired')"><template #default="{ id }"><DateInput :id="id" v-model="row.acquisition_date" name="acquisition_date" /></template></FormField>
+          <FormField :label="t('assets.col.inService')" required><template #default="{ id }"><DateInput :id="id" v-model="row.in_service_date" name="in_service_date" /></template></FormField>
           <FormField :label="t('assets.opening.accumulated')"><template #default="{ id }"><Input :id="id" v-model="row.accumulated_depreciation" name="accumulated_depreciation" inputmode="decimal" /></template></FormField>
           <FormField :label="t('assets.opening.monthsDone')"><template #default="{ id }"><Input :id="id" v-model="row.months_done" name="months_done" inputmode="numeric" /></template></FormField>
         </div>
         <details class="text-sm">
           <summary class="cursor-pointer font-medium">{{ t('assets.opening.moreFields') }}</summary>
-          <div class="mt-3 grid gap-3 sm:grid-cols-3">
+          <div class="mt-3 grid gap-x-3 gap-y-7 sm:grid-cols-3">
             <FormField :label="t('assets.asset.residual')"><template #default="{ id }"><Input :id="id" v-model="row.residual_value" name="residual_value" inputmode="decimal" /></template></FormField>
             <FormField :label="t('assets.opening.lifeMonths')"><template #default="{ id }"><Input :id="id" v-model="row.life_months" name="life_months" inputmode="numeric" /></template></FormField>
             <FormField :label="t('assets.settings.method')"><template #default="{ id }"><NativeSelect :id="id" v-model="row.method" name="method"><option value="">–</option><option value="SL">{{ t('assets.method.SL') }}</option><option value="DB">{{ t('assets.method.DB') }}</option></NativeSelect></template></FormField>
             <FormField :label="t('assets.opening.unitCount')"><template #default="{ id }"><Input :id="id" v-model="row.unit_count" name="unit_count" inputmode="numeric" /></template></FormField>
             <FormField :label="t('assets.asset.serial')"><template #default="{ id }"><Input :id="id" v-model="row.serial_no" name="serial_no" /></template></FormField>
-            <FormField :label="t('assets.asset.warranty')"><template #default="{ id }"><Input :id="id" v-model="row.warranty_until" name="warranty_until" type="date" /></template></FormField>
+            <FormField :label="t('assets.asset.warranty')"><template #default="{ id }"><DateInput :id="id" v-model="row.warranty_until" name="warranty_until" /></template></FormField>
             <FormField :label="t('assets.asset.fiscalGroup')"><template #default="{ id }"><Input :id="id" v-model="row.fiscal_group" name="fiscal_group" placeholder="G1" /></template></FormField>
             <FormField :label="t('assets.opening.fiscalMethod')"><template #default="{ id }"><NativeSelect :id="id" v-model="row.fiscal_method" name="fiscal_method"><option value="">–</option><option value="SL">{{ t('assets.method.SL') }}</option><option value="DB">{{ t('assets.method.DB') }}</option></NativeSelect></template></FormField>
             <FormField :label="t('assets.opening.fiscalAccum')"><template #default="{ id }"><Input :id="id" v-model="row.fiscal_accumulated_depreciation" name="fiscal_accumulated_depreciation" inputmode="decimal" /></template></FormField>
@@ -226,7 +230,7 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
         </details>
       </form>
       <div class="flex justify-end gap-2">
-        <Button type="button" :disabled="busy || !ready" data-testid="dry-run" @click="run(true)">{{ t('assets.opening.check') }}</Button>
+        <Button type="button" :disabled="busy || !ready" data-testid="dry-run" @click="guardForm($event, datesRow, singleForm) && run(true)">{{ t('assets.opening.check') }}</Button>
       </div>
     </Card>
 
@@ -279,7 +283,7 @@ const canImport = computed(() => !!result.value && result.value.valid && result.
         </Card>
       </div>
       <div class="flex justify-end gap-2">
-        <Button type="button" :disabled="busy || !canImport" data-testid="confirm-import" @click="run(false)">{{ t('assets.opening.import', { n: result.rows.length }) }}</Button>
+        <Button type="button" :disabled="busy || !canImport" data-testid="confirm-import" @click="guardForm($event, datesRow, singleForm) && run(false)">{{ t('assets.opening.import', { n: result.rows.length }) }}</Button>
       </div>
     </section>
 

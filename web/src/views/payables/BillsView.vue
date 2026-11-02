@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
@@ -201,7 +203,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">{{ t('payables.bNoAccess', { permission: 'payables.view' }) }}</p>
   <template v-else>
     <Card v-if="creating" class="mb-4">
-      <form v-autofocus novalidate data-testid="bill-form" @submit.prevent="post">
+      <form v-autofocus novalidate data-testid="bill-form" @submit.prevent="guardForm($event) && post()">
         <CardHeader><CardTitle>{{ t('payables.bFormTitle') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -214,10 +216,10 @@ watch(() => pid.value, () => {
               <template #default="{ id, invalid }"><Input :id="id" v-model="form.invoice" name="invoice" maxlength="60" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('payables.billDate')" :error="fieldError('bill_date')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.bill_date" name="bill_date" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.bill_date" name="bill_date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('payables.dueDate')" :hint="t('payables.dueHint')" :error="fieldError('due_date')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.due_date" name="due_date" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.due_date" name="due_date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField class="sm:col-span-2 lg:col-span-4" :label="t('payables.description')">
               <template #default="{ id }"><Input :id="id" v-model="form.description" name="description" maxlength="300" /></template>
@@ -280,7 +282,7 @@ watch(() => pid.value, () => {
 
     <Card>
       <CardContent class="pt-4">
-        <form class="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6" novalidate @submit.prevent="load">
+        <form class="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6" novalidate @submit.prevent="guardForm($event) && load()">
           <FormField :label="t('payables.supplier')">
             <template #default="{ id }">
               <Combobox :id="id" v-model="filter.supplier" name="supplier" :options="[{ value: 0, label: `${t('payables.all')}` }, ...suppliers.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))]" />
@@ -295,8 +297,8 @@ watch(() => pid.value, () => {
               </NativeSelect>
             </template>
           </FormField>
-          <FormField :label="t('payables.from')"><template #default="{ id }"><Input :id="id" v-model="filter.from" name="from" type="date" /></template></FormField>
-          <FormField :label="t('payables.to')"><template #default="{ id }"><Input :id="id" v-model="filter.to" name="to" type="date" /></template></FormField>
+          <FormField :label="t('payables.from')"><template #default="{ id }"><DateInput :id="id" v-model="filter.from" name="from" /></template></FormField>
+          <FormField :label="t('payables.to')"><template #default="{ id }"><DateInput :id="id" v-model="filter.to" name="to" /></template></FormField>
           <FormField :label="t('payables.search')"><template #default="{ id }"><Input :id="id" v-model="filter.q" name="q" type="search" :placeholder="t('payables.billSearch')" /></template></FormField>
           <div class="flex items-end gap-3">
             <label class="flex items-center gap-2 pb-2 text-sm">

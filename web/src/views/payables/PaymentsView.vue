@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
+import { guardForm } from '@/utils/forms'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
@@ -208,7 +210,7 @@ watch(() => pid.value, () => {
   <p v-else-if="!can('payables.view')" class="muted" data-testid="no-access">{{ t('payables.pNoAccess', { permission: 'payables.view' }) }}</p>
   <template v-else>
     <Card v-if="creating" class="mb-4">
-      <form v-autofocus novalidate data-testid="payment-form" @submit.prevent="post">
+      <form v-autofocus novalidate data-testid="payment-form" @submit.prevent="guardForm($event) && post()">
         <CardHeader><CardTitle>{{ t('payables.pPay') }}</CardTitle></CardHeader>
         <CardContent>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -218,7 +220,7 @@ watch(() => pid.value, () => {
               </template>
             </FormField>
             <FormField :label="t('payables.paymentDate')" :error="fieldError('payment_date')">
-              <template #default="{ id, invalid }"><Input :id="id" v-model="form.payment_date" name="payment_date" type="date" :aria-invalid="invalid" /></template>
+              <template #default="{ id, invalid }"><DateInput :id="id" v-model="form.payment_date" name="payment_date" :aria-invalid="invalid" /></template>
             </FormField>
             <FormField :label="t('payables.paidFrom')">
               <template #default="{ id }">
