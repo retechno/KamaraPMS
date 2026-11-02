@@ -61,6 +61,7 @@ describe('HousekeepingView', () => {
     GET = vi.fn()
     POST = vi.fn()
     document.body.innerHTML = ''
+    setLocale('en') // a test that fails before it puts the language back must not turn the next ones Indonesian
   })
 
   it('lists rooms with status, derived occupancy and blocks', async () => {
