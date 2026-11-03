@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Menu, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-vue-next'
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import BanquetBell from '@/components/banquet/BanquetBell.vue'
 import ApprovalBell from '@/components/inventory/ApprovalBell.vue'
@@ -87,11 +87,50 @@ const initials = computed(() => {
   return ((words[0]?.[0] ?? '') + (words.length > 1 ? (words.at(-1)?.[0] ?? '') : '')).toUpperCase() || '?'
 })
 
+// ---- a phone: the title is in the bar only while the page's own heading (its h1) is not in sight; it says nothing twice
+const bar = ref<HTMLElement | null>(null)
+const headingInSight = ref(false)
+let observer: IntersectionObserver | null = null
+let retry: ReturnType<typeof setTimeout> | undefined
+
+function stopWatchingHeading(): void {
+  observer?.disconnect()
+  observer = null
+  clearTimeout(retry)
+  headingInSight.value = false
+}
+
+/**
+ * Watches the h1 of the page. It counts as out of sight once it goes under the bar, which is sticky: the top margin of the root is the negative height of the bar. The page (a route
+ * that loads its view when it is asked for) may draw its heading after the bar looked, so it looks again a few times; no h1 (or no IntersectionObserver) leaves the title in the bar.
+ */
+function watchHeading(attempt = 0): void {
+  stopWatchingHeading()
+  if (!phone.value || typeof IntersectionObserver === 'undefined') return
+  const h1 = document.querySelector('main h1')
+  if (!h1) {
+    if (attempt < 30) retry = setTimeout(() => watchHeading(attempt + 1), 100)
+    return
+  }
+  headingInSight.value = true // until the observer says otherwise, so the title does not flash
+  observer = new IntersectionObserver(
+    (entries) => {
+      const last = entries.at(-1)
+      if (last) headingInSight.value = last.isIntersecting
+    },
+    { rootMargin: `-${bar.value?.offsetHeight || 56}px 0px 0px 0px` },
+  )
+  observer.observe(h1)
+}
+const titleShown = computed(() => phone.value && !headingInSight.value)
+watch([() => route.fullPath, phone], () => void nextTick(() => watchHeading()), { immediate: true, flush: 'post' })
+onBeforeUnmount(stopWatchingHeading)
+
 const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight', dark: 'account.themeDark', system: 'account.themeSystem' }
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 flex h-14 items-center gap-3 pointer-coarse:gap-1 border-b border-border bg-card px-3 sm:px-4" data-testid="topbar">
+  <header ref="bar" class="sticky top-0 z-30 flex h-14 items-center gap-3 pointer-coarse:gap-1 border-b border-border bg-card px-3 sm:px-4" data-testid="topbar">
     <Button v-if="!props.canCollapse" variant="ghost" size="icon" :aria-label="t('shell.openMenu')" data-testid="open-menu" @click="emit('menu')">
       <Menu />
     </Button>
@@ -108,10 +147,10 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
     </Button>
 
     <!-- a phone: the title of the page -->
-    <p v-if="phone" class="m-0 min-w-0 flex-1 truncate text-base font-semibold" data-testid="page-title">{{ crumbs.at(-1) }}</p>
+    <p v-if="titleShown" class="m-0 min-w-0 flex-1 truncate text-base font-semibold" data-testid="page-title">{{ crumbs.at(-1) }}</p>
 
     <!-- a laptop or a desktop: where the person is -->
-    <nav v-else-if="crumbs.length" aria-label="Breadcrumb" class="hidden min-w-0 shrink truncate text-sm lg:block" data-testid="breadcrumb">
+    <nav v-else-if="!phone && crumbs.length" aria-label="Breadcrumb" class="hidden min-w-0 shrink truncate text-sm lg:block" data-testid="breadcrumb">
       <template v-for="(c, i) in crumbs" :key="i">
         <span v-if="i > 0" class="px-1 text-muted-foreground" aria-hidden="true">/</span>
         <span :class="i === crumbs.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'">{{ c }}</span>
@@ -133,7 +172,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
       <kbd class="hidden shrink-0 rounded border border-border bg-card px-1.5 text-[11px] text-muted-foreground sm:inline" data-testid="search-shortcut">{{ shortcut }}</kbd>
     </button>
 
-    <div :class="cn('flex items-center gap-2 pointer-coarse:gap-1', phone ? 'min-w-0' : 'ml-auto')">
+    <div :class="cn('flex items-center gap-2 pointer-coarse:gap-1', 'ml-auto', phone && 'min-w-0')">
       <template v-if="property.hasProperties">
         <PropertySwitcher v-if="!phone" class="w-44 xl:w-52" />
         <component

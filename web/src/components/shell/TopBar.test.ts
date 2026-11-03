@@ -377,3 +377,125 @@ describe('TopBar', () => {
     expect(desk.w.emitted('toggleSidebar')).toHaveLength(1)
   })
 })
+
+
+describe('TopBar, the title of the page on a phone', () => {
+  class FakeObserver {
+    static all: FakeObserver[] = []
+    observed: Element[] = []
+    disconnected = false
+    constructor(public callback: (entries: { isIntersecting: boolean }[]) => void, public options?: { rootMargin?: string }) {
+      FakeObserver.all.push(this)
+    }
+    observe(el: Element): void {
+      this.observed.push(el)
+    }
+    disconnect(): void {
+      this.disconnected = true
+    }
+    see(isIntersecting: boolean): void {
+      this.callback([{ isIntersecting }])
+    }
+  }
+  const live = () => FakeObserver.all.filter((o) => !o.disconnected)
+  const heading = (text = 'Guests today'): HTMLElement => {
+    document.querySelector('main')?.remove()
+    const main = document.createElement('main')
+    main.innerHTML = `<h1>${text}</h1>`
+    document.body.appendChild(main)
+    return main.querySelector('h1') as HTMLElement
+  }
+
+  beforeEach(() => {
+    FakeObserver.all = []
+    vi.stubGlobal('IntersectionObserver', FakeObserver)
+    localStorage.clear()
+    setLocale('en')
+  })
+  afterEach(() => {
+    mounted.splice(0).forEach((w) => w.unmount())
+    document.body.innerHTML = ''
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('is hidden while the heading of the page is in sight, and back in the bar when it has scrolled away', async () => {
+    const h1 = heading()
+    const { w } = await mountBar({ mode: 'drawer' })
+    expect(live()).toHaveLength(1)
+    expect(live()[0]!.observed).toEqual([h1])
+    live()[0]!.see(true)
+    await flushPromises()
+    expect(w.find('[data-testid=page-title]').exists()).toBe(false)
+    live()[0]!.see(false)
+    await flushPromises()
+    expect(w.get('[data-testid=page-title]').text()).toBe('Guests today')
+    live()[0]!.see(true)
+    await flushPromises()
+    expect(w.find('[data-testid=page-title]').exists()).toBe(false)
+  })
+
+  it('has the title in the bar when the page has no heading, and when the browser has no observer', async () => {
+    const { w } = await mountBar({ mode: 'drawer' })
+    expect(FakeObserver.all).toHaveLength(0)
+    expect(w.get('[data-testid=page-title]').exists()).toBe(true)
+    mounted.splice(0).forEach((x) => x.unmount())
+    vi.unstubAllGlobals()
+    heading()
+    const without = await mountBar({ mode: 'drawer' })
+    expect(without.w.get('[data-testid=page-title]').exists()).toBe(true)
+  })
+
+  it('counts the heading as gone once it goes under the bar: the margin of the root is minus the height of the bar', async () => {
+    heading()
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 60 })
+    try {
+      await mountBar({ mode: 'drawer' })
+      expect(live()[0]!.options?.rootMargin).toBe('-60px 0px 0px 0px')
+    } finally {
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).offsetHeight
+    }
+  })
+
+  it('looks at the heading of the next page when the route changes, and lets the old one go', async () => {
+    const first = heading('Guests today')
+    const { router } = await mountBar({ mode: 'drawer' })
+    const old = live()[0]!
+    expect(old.observed).toEqual([first])
+    const second = heading('Reservations')
+    await router.push('/reservations')
+    await flushPromises()
+    expect(old.disconnected).toBe(true)
+    expect(live()).toHaveLength(1)
+    expect(live()[0]!.observed).toEqual([second])
+  })
+
+  it('finds a heading that is drawn after the bar looked (a page that loads its view when it is asked for)', async () => {
+    vi.useFakeTimers()
+    const { w } = await mountBar({ mode: 'drawer' })
+    expect(live()).toHaveLength(0)
+    heading()
+    await vi.advanceTimersByTimeAsync(150)
+    expect(live()).toHaveLength(1)
+    live()[0]!.see(true)
+    await flushPromises()
+    expect(w.find('[data-testid=page-title]').exists()).toBe(false)
+  })
+
+  it('stops watching when the bar goes away', async () => {
+    heading()
+    const { w } = await mountBar({ mode: 'drawer' })
+    expect(live()).toHaveLength(1)
+    w.unmount()
+    expect(live()).toHaveLength(0)
+  })
+
+  it('does nothing on a laptop or a desktop: the breadcrumb stays and no heading is watched', async () => {
+    heading()
+    const { w } = await mountBar({ mode: 'full' })
+    expect(FakeObserver.all).toHaveLength(0)
+    expect(w.get('[data-testid=breadcrumb]').text()).toBe('Front desk/Guests today')
+    expect(w.find('[data-testid=page-title]').exists()).toBe(false)
+  })
+})
