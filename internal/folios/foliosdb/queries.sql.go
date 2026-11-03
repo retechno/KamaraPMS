@@ -330,6 +330,43 @@ func (q *Queries) FolioTotals(ctx context.Context, arg FolioTotalsParams) (Folio
 	return i, err
 }
 
+const folioTotalsOf = `-- name: FolioTotalsOf :many
+SELECT folio_id, COALESCE(sum(debit), 0)::numeric AS debit, COALESCE(sum(credit), 0)::numeric AS credit
+FROM folio_items WHERE property_id = $1 AND folio_id = ANY($2::bigint[]) GROUP BY folio_id
+`
+
+type FolioTotalsOfParams struct {
+	PropertyID int64
+	FolioIds   []int64
+}
+
+type FolioTotalsOfRow struct {
+	FolioID int64
+	Debit   decimal.Decimal
+	Credit  decimal.Decimal
+}
+
+// The ledger totals of many folios at once: the same sums as FolioTotals, one row per folio that has items.
+func (q *Queries) FolioTotalsOf(ctx context.Context, arg FolioTotalsOfParams) ([]FolioTotalsOfRow, error) {
+	rows, err := q.db.Query(ctx, folioTotalsOf, arg.PropertyID, arg.FolioIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FolioTotalsOfRow{}
+	for rows.Next() {
+		var i FolioTotalsOfRow
+		if err := rows.Scan(&i.FolioID, &i.Debit, &i.Credit); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getBookingGroupBrief = `-- name: GetBookingGroupBrief :one
 SELECT id, code, name, company_id, contact_name, contact_email, contact_phone, arrival_date, departure_date, is_active
 FROM booking_groups WHERE tenant_id = $1 AND property_id = $2 AND id = $3
@@ -3216,6 +3253,59 @@ func (q *Queries) ListFolioTransfers(ctx context.Context, arg ListFolioTransfers
 			&i.MovedOnTransferID,
 			&i.FromRoom,
 			&i.ToRoom,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFoliosOfStays = `-- name: ListFoliosOfStays :many
+SELECT id, tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, status, opened_at, closed_at, closed_by, version, created_at, created_by, updated_at, updated_by, closed_on, bill_to_company_id, booking_group_id, outlet_id, banquet_event_id FROM folios WHERE tenant_id = $1 AND property_id = $2 AND stay_id = ANY($3::bigint[]) ORDER BY stay_id, (folio_type = 'GUEST') DESC, id
+`
+
+type ListFoliosOfStaysParams struct {
+	TenantID   int64
+	PropertyID int64
+	StayIds    []int64
+}
+
+// Every folio of many stays at once, in the order of ListStayFolios within each stay.
+func (q *Queries) ListFoliosOfStays(ctx context.Context, arg ListFoliosOfStaysParams) ([]Folio, error) {
+	rows, err := q.db.Query(ctx, listFoliosOfStays, arg.TenantID, arg.PropertyID, arg.StayIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Folio{}
+	for rows.Next() {
+		var i Folio
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.PropertyID,
+			&i.FolioNumber,
+			&i.ReservationID,
+			&i.StayID,
+			&i.FolioType,
+			&i.Status,
+			&i.OpenedAt,
+			&i.ClosedAt,
+			&i.ClosedBy,
+			&i.Version,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+			&i.ClosedOn,
+			&i.BillToCompanyID,
+			&i.BookingGroupID,
+			&i.OutletID,
+			&i.BanquetEventID,
 		); err != nil {
 			return nil, err
 		}

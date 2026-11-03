@@ -100,12 +100,14 @@ func (s *Service) ListInHouse(ctx context.Context, propertyID int64, f InHouseFi
 	}
 	out := make([]InHouseRow, len(rows))
 	folioOf := make([][]folios.StayFolio, len(rows))
+	balances, err := s.folios.StayBalances(ctx, p.TenantID, propertyID, ids)
+	if err != nil {
+		return nil, err
+	}
 	names := map[int64]string{}
 	var companyIDs []int64
 	for i, r := range rows {
-		if folioOf[i], err = s.folios.StayFolios(ctx, p.TenantID, propertyID, r.ID); err != nil {
-			return nil, err
-		}
+		folioOf[i] = balances[r.ID].Folios
 		for _, f := range folioOf[i] {
 			if f.BillToCompanyID != nil {
 				if _, seen := names[*f.BillToCompanyID]; !seen {
@@ -125,14 +127,6 @@ func (s *Service) ListInHouse(ctx context.Context, propertyID int64, f InHouseFi
 		}
 	}
 	for i, r := range rows {
-		total := decimal.Zero
-		for _, f := range folioOf[i] {
-			b, err := decimal.NewFromString(f.Balance)
-			if err != nil {
-				return nil, err
-			}
-			total = total.Add(b)
-		}
 		rt := rateOf[r.ID]
 		bill := billing[r.ID]
 		if bill == nil {
@@ -145,7 +139,7 @@ func (s *Service) ListInHouse(ctx context.Context, propertyID int64, f InHouseFi
 			Company: payingCompany(bill, folioOf[i], names), Billing: bill,
 			Rate:     InHouseRate{RatePlanCode: r.RatePlanCode, RatePlanName: r.RatePlanName, Amount: rt.Amount.StringFixed(prop.CurrencyDecimals), PriceMode: rt.PriceMode, IsOverride: rt.IsOverride},
 			Stay:     InHouseStay{Arrival: r.ArrivalDate, Departure: r.DepartureDate, Nights: r.ArrivalDate.DaysUntil(r.DepartureDate), Adults: int(r.AdultCount), Children: int(r.ChildCount)},
-			Balance:  inHouseBalance(total, folioOf[i], prop.CurrencyDecimals),
+			Balance:  balances[r.ID],
 			Checkout: InHouseCheckout{Status: checkoutStatus(folioOf[i], uncharged[r.ID]), UnchargedNights: uncharged[r.ID]},
 		}
 	}
@@ -165,14 +159,6 @@ func payingCompany(bill []InHouseBilling, fs []folios.StayFolio, names map[int64
 		}
 	}
 	return nil
-}
-
-// inHouseBalance is the balance of a stay from its folios. A stay without a folio has no balance: that is NO_FOLIO with no amount, not a zero.
-func inHouseBalance(total decimal.Decimal, fs []folios.StayFolio, decimals int32) InHouseBalance {
-	if len(fs) == 0 {
-		return InHouseBalance{Status: "NO_FOLIO", Folios: []folios.StayFolio{}}
-	}
-	return InHouseBalance{Amount: total.StringFixed(decimals), Status: balanceStatus(total), Folios: fs}
 }
 
 // checkoutStatus is what is known before a check-out, from the folios (their ledger balances) and the nights not charged yet. The order is the order of what has to be dealt with first.
@@ -205,16 +191,6 @@ func checkoutStatus(fs []folios.StayFolio, uncharged int) string {
 		return "CHARGES_PENDING"
 	}
 	return "READY"
-}
-
-func balanceStatus(d decimal.Decimal) string {
-	switch d.Sign() {
-	case 1:
-		return "OUTSTANDING"
-	case -1:
-		return "CREDIT"
-	}
-	return "SETTLED"
 }
 
 // nightStatus says where a night stands: not charged, charged on the open business day, or charged on a day that has closed.

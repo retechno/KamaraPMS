@@ -18727,6 +18727,16 @@ components:
           type: array
           items: { $ref: "#/components/schemas/InHouseRow" }
         next_cursor: { type: string }
+    StayBalance:
+      type: object
+      required: [amount, status, folios]
+      description: What a stay owes, from its folios. The in-house list and the unfinished departures of the night audit report it with the same computation.
+      properties:
+        amount: { type: string, description: "The sum of the balances of the folios of the stay; each is also in `folios`. Empty with NO_FOLIO." }
+        status: { type: string, enum: [SETTLED, OUTSTANDING, CREDIT, NO_FOLIO], description: "Zero, above zero or below zero for `amount`; NO_FOLIO when the stay has no folio (then `amount` is empty: no folio is not a zero balance)." }
+        folios:
+          type: array
+          items: { $ref: "#/components/schemas/StayFolio" }
     InHouseRow:
       type: object
       required: [id, stay_number, version, reservation_id, confirmation_number, guest, room, company, billing, rate, stay, balance, checkout]
@@ -18788,15 +18798,7 @@ components:
             nights: { type: integer }
             adults: { type: integer }
             children: { type: integer }
-        balance:
-          type: object
-          required: [amount, status, folios]
-          properties:
-            amount: { type: string, description: "The sum of the balances of the folios of the stay; each is also in `folios`. Empty with NO_FOLIO." }
-            status: { type: string, enum: [SETTLED, OUTSTANDING, CREDIT, NO_FOLIO], description: "Zero, above zero or below zero for `amount`; NO_FOLIO when the stay has no folio (then `amount` is empty: no folio is not a zero balance)." }
-            folios:
-              type: array
-              items: { $ref: "#/components/schemas/StayFolio" }
+        balance: { $ref: "#/components/schemas/StayBalance" }
         checkout:
           type: object
           required: [status, uncharged_nights]
@@ -19058,13 +19060,14 @@ components:
         arrival_date: { $ref: "#/components/schemas/Date" }
     UnresolvedDeparture:
       type: object
-      required: [stay_id, stay_number, guest, departure_date]
+      required: [stay_id, stay_number, guest, departure_date, balance]
       properties:
         stay_id: { type: integer, format: int64 }
         stay_number: { type: string }
         room: { type: string }
         guest: { type: string }
         departure_date: { $ref: "#/components/schemas/Date" }
+        balance: { $ref: "#/components/schemas/StayBalance" }
     NightAuditBlockers:
       type: object
       required: [unresolved_arrivals, unresolved_departures, charge_errors, invalid_charges, open_shifts, accounting_readiness]
