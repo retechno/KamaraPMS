@@ -439,12 +439,12 @@ describe('TopBar, the title of the page on a phone', () => {
   it('has the title in the bar when the page has no heading, and when the browser has no observer', async () => {
     const { w } = await mountBar({ mode: 'drawer' })
     expect(FakeObserver.all).toHaveLength(0)
-    expect(w.get('[data-testid=page-title]').exists()).toBe(true)
+    expect(w.find('[data-testid=page-title]').exists()).toBe(true)
     mounted.splice(0).forEach((x) => x.unmount())
     vi.unstubAllGlobals()
     heading()
     const without = await mountBar({ mode: 'drawer' })
-    expect(without.w.get('[data-testid=page-title]').exists()).toBe(true)
+    expect(without.w.find('[data-testid=page-title]').exists()).toBe(true)
   })
 
   it('counts the heading as gone once it goes under the bar: the margin of the root is minus the height of the bar', async () => {
