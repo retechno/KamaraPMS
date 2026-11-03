@@ -20,6 +20,7 @@ import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { RowAction } from '@/components/app/rowActions'
+import { useLayoutMode } from '@/composables/useLayoutMode'
 import { usePagedList } from '@/composables/usePagedList'
 import { useServerSort } from '@/composables/useServerSort'
 import { toast } from '@/composables/useToast'
@@ -33,6 +34,7 @@ import { type ReservationAction, reservationActions } from '@/utils/reservationA
 import { type AssignLine, isUnassigned, lineOfSummary } from '@/utils/roomAssign'
 import { formatMoney } from '@/utils/format'
 import { STATUS_FILTER, apiStatusOf, uiStatus } from '@/utils/reservationStatus'
+import { addDays } from '@/utils/dates'
 
 /**
  * The reservation list: a workspace to scan. Every filter is asked of the server (a page is never filtered after it is cut), and the filters are kept in the address, so a search can be
@@ -53,6 +55,8 @@ type Field = (typeof FIELDS)[number]
 const fromAddress = (k: Field): string => (typeof route?.query[k] === 'string' ? (route.query[k] as string) : '')
 const filter = reactive<Record<Field, string>>(Object.fromEntries(FIELDS.map((k) => [k, fromAddress(k)])) as Record<Field, string>)
 
+const { mode } = useLayoutMode()
+const phone = computed(() => mode.value === 'drawer') // a phone has all the filters in its sheet: no "More filters"
 
 const canRead = computed(() => auth.can('reservation.read', property.currentId))
 const canCreate = computed(() => auth.can('reservation.create', property.currentId))
@@ -62,6 +66,35 @@ const filtered = computed(() => FIELDS.some((k) => filter[k] !== ''))
 
 // How many filters are on, for the "Filter (n)" button of a phone (the search text is in the bar and is not counted).
 const activeFilters = computed(() => FIELDS.filter((k) => k !== 'q' && filter[k] !== '').length)
+
+// ---- the presets: a chip is a whole set of filters, from the business date of the property (never the clock of the browser)
+type Preset = { id: string; label: string; needsDate: boolean; filters: Partial<Record<Field, string>> }
+const presets = computed<Preset[]>(() => {
+  const d = businessDate.value
+  return [
+    { id: 'today', label: t('reservations.presetToday'), needsDate: true, filters: { arrivalFrom: d, arrivalTo: d } },
+    { id: 'tomorrow', label: t('reservations.presetTomorrow'), needsDate: true, filters: { arrivalFrom: d && addDays(d, 1), arrivalTo: d && addDays(d, 1) } },
+    { id: 'week', label: t('reservations.presetWeek'), needsDate: true, filters: { arrivalFrom: d, arrivalTo: d && addDays(d, 6) } }, // seven days with both ends in
+    { id: 'draft', label: t('reservations.presetDraft'), needsDate: false, filters: { status: 'DRAFT' } },
+    { id: 'cancelled', label: t('reservations.presetCancelled'), needsDate: false, filters: { status: 'CANCELLED' } },
+  ]
+})
+/** A chip is lit only when the filters of the address are that preset and nothing else (a chip that is lit while another filter is on would lie about the list). */
+const presetOn = (p: Preset): boolean => FIELDS.every((k) => fromAddressNow(k) === (p.filters[k] ?? ''))
+const fromAddressNow = (k: Field): string => (typeof route?.query[k] === 'string' ? (route.query[k] as string) : '')
+/** A preset replaces the whole set of filters, the search text too; the lit one, clicked again, gives the default list back. */
+function applyPreset(p: Preset): void {
+  if (presetOn(p)) return clear()
+  dateKey.value++
+  for (const k of FIELDS) filter[k] = p.filters[k] ?? ''
+  search()
+}
+
+// ---- the filters that are not always in sight: the dates, the room type, the rate plan and the company
+const EXTRA: Field[] = ['arrivalFrom', 'arrivalTo', 'departureFrom', 'departureTo', 'roomType', 'ratePlan', 'company']
+const extraActive = computed(() => EXTRA.filter((k) => filter[k] !== '').length)
+const moreOpen = ref(extraActive.value > 0)
+watch(extraActive, (n) => (moreOpen.value = n > 0)) // opens by itself when one of them is on (a preset, the address), closes when none is
 
 const columns = computed<Column<ReservationSummary>[]>(() => [
   { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true, card: 'primary' as const },
@@ -213,8 +246,13 @@ async function load(): Promise<void> {
   await list.reload()
 }
 
+/** What the fields hold, as it was when the list was last asked for: a field that moves to what was already asked does not ask again. */
+const signature = (): string => JSON.stringify(FIELDS.map((k) => filter[k]))
+let asked = signature()
+
 /** Searches again from the first page; the filters go to the address. */
 function search(): void {
+  asked = signature()
   const next = Object.fromEntries(FIELDS.filter((k) => filter[k] !== '').map((k) => [k, filter[k]]))
   void router.replace({ query: { ...next, ...sortQuery.value } })
   list.reset() // a new search shows nothing of the old one, and a failed one shows no list
@@ -237,8 +275,10 @@ watch(sort, () => {
   list.reset()
   void load()
 })
-// Choosing a filter searches at once; the text waits for the search button (or Enter).
-watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departureFrom, filter.departureTo, filter.roomType, filter.ratePlan, filter.company], search)
+// Choosing a filter searches at once (a whole date counts as chosen: the date field changes its model only then); the text waits for the search button (or Enter). A chip asks by itself.
+watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departureFrom, filter.departureTo, filter.roomType, filter.ratePlan, filter.company], () => {
+  if (signature() !== asked) search() // a preset has asked already
+})
 </script>
 
 <template>
@@ -260,6 +300,19 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
   <p v-else-if="!canRead" class="muted" data-testid="no-access">{{ t('reservations.noAccess') }}</p>
 
   <template v-else>
+    <div class="mb-3 flex flex-wrap gap-2" role="group" :aria-label="t('reservations.presetsLabel')" data-testid="presets">
+      <Button
+        v-for="p in presets"
+        :key="p.id"
+        type="button"
+        size="sm"
+        :variant="presetOn(p) ? 'default' : 'outline'"
+        :aria-pressed="presetOn(p)"
+        :disabled="p.needsDate && !businessDate"
+        :data-testid="`preset-${p.id}`"
+        @click="applyPreset(p)"
+      >{{ p.label }}</Button>
+    </div>
     <FilterBar class="mb-4 flex flex-wrap items-end gap-x-3 gap-y-7" role="search" data-testid="filters" :active="activeFilters" @submit="search">
       <template #search>
         <FormField class="min-w-52 flex-1" :label="t('reservations.search')">
@@ -276,19 +329,19 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
           </NativeSelect>
         </template>
       </FormField>
-      <FormField class="w-40" :label="t('reservations.arrivalFrom')">
+      <FormField v-show="phone || moreOpen" class="w-40" :label="t('reservations.arrivalFrom')">
         <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.arrivalFrom" name="arrival_from" /></template>
       </FormField>
-      <FormField class="w-40" :label="t('reservations.arrivalTo')">
+      <FormField v-show="phone || moreOpen" class="w-40" :label="t('reservations.arrivalTo')">
         <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.arrivalTo" name="arrival_to" /></template>
       </FormField>
-      <FormField class="w-40" :label="t('reservations.departureFrom')">
+      <FormField v-show="phone || moreOpen" class="w-40" :label="t('reservations.departureFrom')">
         <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.departureFrom" name="departure_from" /></template>
       </FormField>
-      <FormField class="w-40" :label="t('reservations.departureTo')">
+      <FormField v-show="phone || moreOpen" class="w-40" :label="t('reservations.departureTo')">
         <template #default="{ id }"><DateInput :id="id" :key="dateKey" v-model="filter.departureTo" name="departure_to" /></template>
       </FormField>
-      <FormField v-if="types.length" class="w-36" :label="t('reservations.roomType')">
+      <FormField v-if="types.length" v-show="phone || moreOpen" class="w-36" :label="t('reservations.roomType')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="filter.roomType" name="room_type_id">
             <option value="">{{ t('reservations.any') }}</option>
@@ -296,7 +349,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
           </NativeSelect>
         </template>
       </FormField>
-      <FormField v-if="ratePlans.length" class="w-36" :label="t('reservations.ratePlan')">
+      <FormField v-if="ratePlans.length" v-show="phone || moreOpen" class="w-36" :label="t('reservations.ratePlan')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="filter.ratePlan" name="rate_plan_id">
             <option value="">{{ t('reservations.any') }}</option>
@@ -304,7 +357,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
           </NativeSelect>
         </template>
       </FormField>
-      <FormField v-if="companies.length" class="w-44" :label="t('reservations.company')">
+      <FormField v-if="companies.length" v-show="phone || moreOpen" class="w-44" :label="t('reservations.company')">
         <template #default="{ id }">
           <NativeSelect :id="id" v-model="filter.company" name="company_id">
             <option value="">{{ t('reservations.any') }}</option>
@@ -314,6 +367,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
       </FormField>
       <template #actions>
         <Button type="submit" :disabled="loading">{{ t('reservations.search') }}</Button>
+        <Button v-if="!phone" type="button" variant="ghost" :aria-expanded="moreOpen" data-testid="more-filters" @click="moreOpen = !moreOpen">{{ t('reservations.moreFilters') }}<span v-if="extraActive" data-testid="more-filters-count"> ({{ extraActive }})</span></Button>
       <Button v-if="filtered" type="button" variant="outline" data-testid="clear-filters" @click="clear">{{ t('dataTable.clearFilters') }}</Button>
       </template>
     </FilterBar>
@@ -341,7 +395,7 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         <div v-if="row.group_code" class="text-xs text-muted-foreground">{{ row.group_code }}</div>
       </template>
       <template #cell-guest_name="{ row }">
-        <div>{{ row.guest_name || '—' }}</div>
+        <RouterLink v-if="row.guest_name" :to="`/reservations/${row.id}`" data-testid="guest-link">{{ row.guest_name }}</RouterLink><div v-else>—</div>
         <div class="text-xs text-muted-foreground">{{ paxOf(row) }}</div>
       </template>
       <template #cell-room="{ row }">
@@ -373,12 +427,11 @@ watch(() => [filter.status, filter.arrivalFrom, filter.arrivalTo, filter.departu
         <div :data-testid="`company-${row.confirmation_number}`">{{ companyOf(row) || '—' }}</div>
         <div v-if="billingCompanies(row).length" class="text-xs text-muted-foreground" :data-testid="`billing-${row.confirmation_number}`">{{ t('reservations.billedTo', { names: billingCompanies(row).join(', ') }) }}</div>
       </template>
-      <template #cell-status="{ row, card }">
+      <template #cell-status="{ row }">
         <StatusBadge domain="reservation" :status="String(uiStatus(row.display_status))" :title="row.status === 'DRAFT' ? t('reservations.noInventory') : undefined" />
-        <div v-if="row.deposit || !card" class="mt-0.5 text-xs text-muted-foreground tabular-nums">
+        <div v-if="row.deposit" class="mt-0.5 text-xs text-muted-foreground tabular-nums">
           {{ t('reservations.deposit') }}
-          <span v-if="row.deposit" :data-testid="`deposit-${row.confirmation_number}`">{{ $money(row.deposit.paid) }}</span>
-          <span v-else :data-testid="`deposit-${row.confirmation_number}`">—</span>
+          <span :data-testid="`deposit-${row.confirmation_number}`">{{ $money(row.deposit.paid) }}</span>
         </div>
       </template>
       <template #empty><EmptyState :title="filtered ? t('reservations.noMatch') : t('reservations.empty')" :description="filtered ? t('emptyState.noMatch') : t('emptyState.reservations')" :action-label="filtered ? t('dataTable.clearFilters') : canCreate ? t('reservations.newReservation') : ''" :action-to="filtered ? '' : '/reservations/new'" :action-variant="filtered ? 'outline' : 'default'" data-testid="empty" @action="clear" /></template>
