@@ -86,12 +86,12 @@ describe('ReservationsView', () => {
     expect(w.find('[data-testid=new]').exists()).toBe(true)
   })
 
-  it('shows a dash for what is missing, never a zero: no rate, no company, no deposit, no room', async () => {
+  it('shows a dash for what is missing, never a zero: no rate, no company, no room, and no deposit line', async () => {
     const w = await mountView(['reservation.read'], { data: [row({ rooms: [room({ rate_amount: '', room_number: undefined })], company_name: undefined })] })
     const r = w.get('[data-testid=res-RES000001]')
     expect(r.get('[data-testid=rate-RES000001]').text()).toContain('—')
     expect(r.get('[data-testid=company-RES000001]').text()).toBe('—')
-    expect(r.get('[data-testid=deposit-RES000001]').text()).toBe('—')
+    expect(r.find('[data-testid=deposit-RES000001]').exists()).toBe(false) // no deposit: no "Deposit —" line either
     expect(r.get('[data-testid=room-RES000001]').text()).toBe('No room')
   })
 
