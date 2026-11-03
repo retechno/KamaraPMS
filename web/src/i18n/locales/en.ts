@@ -3423,6 +3423,8 @@ export const en = {
     currencyHint: 'Amounts are in {currency}, the currency of the property. A statement in another currency is refused.',
   },
   reconcile: {
+    pickLine: 'Select statement line {n}',
+    pickRow: 'Select this line',
     title: 'Reconcile {statement}',
     aStatement: 'a statement',
     all: 'All statements',

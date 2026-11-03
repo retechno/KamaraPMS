@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useAssetAccess } from '@/composables/useAssetAccess'
 import { t } from '@/i18n'
 import { downloadFile } from '@/utils/documents'
@@ -218,8 +219,8 @@ const columns = computed<Column<Asset>[]>(() => [
       :columns="columns" :rows="rows" row-key="id" :loading="!loaded" :empty-title="t('assets.register.empty')" :empty-description="t('assets.register.emptyHint')"
       :row-test-id="(r) => `asset-${r.number}`" :has-more="hasMore" :loading-more="loadingMore" :total="total" :count-label="countLabel" cards data-testid="asset-table" @load-more="load(true)"
     >
-      <template #header-select><input type="checkbox" class="size-4 accent-primary" :checked="allSelected" :aria-label="t('assets.register.selectAll')" data-testid="select-all" @change="toggleAll" /></template>
-      <template #cell-select="{ row }"><input type="checkbox" class="size-4 accent-primary" :checked="selected.has(row.id)" :aria-label="t('assets.register.select', { number: row.number })" :data-testid="`select-${row.number}`" @change="toggle(row.id)" /></template>
+      <template #header-select><Checkbox :model-value="allSelected" :aria-label="t('assets.register.selectAll')" data-testid="select-all" @change="toggleAll" /></template>
+      <template #cell-select="{ row }"><Checkbox :model-value="selected.has(row.id)" :aria-label="t('assets.register.select', { number: row.number })" :data-testid="`select-${row.number}`" @change="toggle(row.id)" /></template>
       <template #cell-name="{ row }">
         <RouterLink :to="`/assets/${row.id}`" class="font-semibold text-primary hover:underline">{{ row.name }}</RouterLink>
         <div class="text-xs text-muted-foreground">{{ row.number }}<template v-if="row.serial_no"> · {{ row.serial_no }}</template><template v-if="row.source === 'OPENING'"> · {{ t('assets.register.fromOpening') }}</template><template v-if="row.unit_count > 1"> · {{ t('assets.register.units', { n: row.unit_count }) }}</template></div>

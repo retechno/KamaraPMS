@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { i18n, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -146,7 +147,7 @@ const columns = computed<Column<GroupMember>[]>(() => [
         </div>
         <DataTable :columns="columns" :rows="cancellable" row-key="reservation_id" :row-test-id="(m) => `cancel-row-${m.confirmation_number}`" cards>
           <template #cell-select="{ row: m }">
-            <input type="checkbox" class="size-4 accent-primary" :checked="isSelected(m)" :disabled="running" :aria-label="t('groupCancel.pick')" :name="`cancel_${m.reservation_id}`" :data-testid="`cancel-pick-${m.reservation_id}`" @change="toggle(m, ($event.target as HTMLInputElement).checked)" />
+            <Checkbox :model-value="isSelected(m)" :disabled="running" :aria-label="t('groupCancel.pick')" :name="`cancel_${m.reservation_id}`" :data-testid="`cancel-pick-${m.reservation_id}`" @change="toggle(m, ($event.target as HTMLInputElement).checked)" />
           </template>
           <template #cell-confirmation_number="{ row: m }"><RouterLink :to="`/reservations/${m.reservation_id}`" class="text-primary hover:underline">{{ m.confirmation_number }}</RouterLink></template>
           <template #cell-rooms="{ row: m }">

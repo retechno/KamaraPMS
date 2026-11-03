@@ -9,6 +9,7 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -88,7 +89,7 @@ function billPicked(): void {
     </div>
     <DataTable :columns="columns" :rows="drafts" row-key="id" :loading="!loaded" :empty-title="t('inventory.drafts.empty')" :empty-description="t('emptyState.inventoryDrafts')"
       :row-to="(r) => `/inventory/bill-drafts/${r.id}`" :row-test-id="(r) => `draft-${r.receipt_number}`" data-testid="drafts-table">
-      <template #cell-pick="{ row }"><input type="checkbox" :checked="picked.includes(row.id)" :disabled="!canPick(row)" :aria-label="t('inventory.drafts.pick', { number: row.receipt_number })" :data-testid="`pick-${row.receipt_number}`" @change="toggle(row)" /></template>
+      <template #cell-pick="{ row }"><Checkbox :model-value="picked.includes(row.id)" :disabled="!canPick(row)" :aria-label="t('inventory.drafts.pick', { number: row.receipt_number })" :data-testid="`pick-${row.receipt_number}`" @change="toggle(row)" /></template>
       <template #cell-receipt_number="{ row }"><RouterLink :to="`/inventory/bill-drafts/${row.id}`" class="text-primary hover:underline">{{ row.receipt_number }}</RouterLink></template>
       <template #cell-po_number="{ row }">{{ row.po_number ?? t('inventory.drafts.noOrder') }}</template>
       <template #cell-status="{ row }"><Badge :variant="draftVariant(row.status)">{{ t(`inventory.draftStatus.${row.status}`) }}</Badge></template>

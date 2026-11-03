@@ -15,6 +15,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -478,18 +479,16 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       <CardContent>
         <DataTable :columns="candidateColumns" :rows="candidates" row-key="payment_id" :row-test-id="(c) => `candidate-${c.payment_number}`" :row-class="(c) => (c.invoiceable ? undefined : 'text-muted-foreground')" :caption="t('clAccount.newInvoice')">
           <template #header-select>
-            <input
-              type="checkbox"
-              class="size-4 accent-primary"
+            <Checkbox
               :aria-label="t('clAccount.selectAll')"
               data-testid="pick-all"
-              :checked="invoiceable.length > 0 && picked.length === invoiceable.length"
+              :model-value="invoiceable.length > 0 && picked.length === invoiceable.length"
               :disabled="!invoiceable.length"
               @change="toggleAll(($event.target as HTMLInputElement).checked)"
             />
           </template>
           <template #cell-select="{ row }">
-            <input v-model="picked" type="checkbox" class="size-4 accent-primary" :value="row.payment_id" :disabled="!row.invoiceable" :aria-label="t('clAccount.invoiceRow', { number: row.payment_number })" />
+            <Checkbox v-model="picked" :value="row.payment_id" :disabled="!row.invoiceable" :aria-label="t('clAccount.invoiceRow', { number: row.payment_number })" />
           </template>
           <template #cell-checked_out_at="{ row }">{{ row.checked_out_at ? row.checked_out_at.slice(0, 10) : '' }}<small v-if="!row.invoiceable && row.stay_status !== 'CHECKED_OUT'" class="ml-1 text-muted-foreground">{{ t('clAccount.inHouse') }}</small></template>
           <template #cell-amount="{ row }">{{ $money(row.amount) }}<small v-if="Number(row.credited)" class="block text-muted-foreground" :data-testid="`credited-${row.payment_number}`">{{ t('clAccount.creditedOf', { amount: $money(row.credited), net: $money(row.net) }) }}</small></template>

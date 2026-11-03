@@ -11,6 +11,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 
@@ -210,8 +211,8 @@ const ready = computed(() => form.name.trim() !== '' && form.code.trim() !== '' 
             <tr class="border-t border-border" data-testid="unit-stock">
               <td class="py-2 pr-2"><strong>{{ unitCode(stockRow.unit_id) }}</strong> <span class="text-xs text-muted-foreground">({{ t('inventory.itemForm.stockUnitRow') }})</span></td>
               <td class="py-2 pr-2">1 / 1</td>
-              <td class="py-2 pr-2"><input v-model="stockRow.purchase" type="checkbox" class="size-4 accent-primary" :aria-label="t('inventory.itemForm.purchase')" /> <input type="radio" :checked="stockRow.purchase && stockRow.defaultPurchase" class="ml-2 accent-primary" :disabled="!stockRow.purchase" :aria-label="t('inventory.itemForm.defaultPurchase')" @click.prevent="setDefault('defaultPurchase', stockRow)" /></td>
-              <td class="py-2 pr-2"><input v-model="stockRow.recipe" type="checkbox" class="size-4 accent-primary" :aria-label="t('inventory.itemForm.recipe')" /> <input type="radio" :checked="stockRow.recipe && stockRow.defaultRecipe" class="ml-2 accent-primary" :disabled="!stockRow.recipe" :aria-label="t('inventory.itemForm.defaultRecipe')" @click.prevent="setDefault('defaultRecipe', stockRow)" /></td>
+              <td class="py-2 pr-2"><Checkbox v-model="stockRow.purchase" :aria-label="t('inventory.itemForm.purchase')" /> <input type="radio" :checked="stockRow.purchase && stockRow.defaultPurchase" class="ml-2 accent-primary" :disabled="!stockRow.purchase" :aria-label="t('inventory.itemForm.defaultPurchase')" @click.prevent="setDefault('defaultPurchase', stockRow)" /></td>
+              <td class="py-2 pr-2"><Checkbox v-model="stockRow.recipe" :aria-label="t('inventory.itemForm.recipe')" /> <input type="radio" :checked="stockRow.recipe && stockRow.defaultRecipe" class="ml-2 accent-primary" :disabled="!stockRow.recipe" :aria-label="t('inventory.itemForm.defaultRecipe')" @click.prevent="setDefault('defaultRecipe', stockRow)" /></td>
               <td />
             </tr>
             <tr v-for="(r, i) in rows" :key="i" class="border-t border-border" :data-testid="`unit-row-${i}`">
@@ -228,8 +229,8 @@ const ready = computed(() => form.name.trim() !== '' && form.code.trim() !== '' 
                   <span class="text-xs text-muted-foreground">{{ unitCode(form.stock_unit_id) }}</span>
                 </span>
               </td>
-              <td class="py-2 pr-2"><input v-model="r.purchase" type="checkbox" class="size-4 accent-primary" :aria-label="t('inventory.itemForm.purchase')" /> <input type="radio" :checked="r.purchase && r.defaultPurchase" class="ml-2 accent-primary" :disabled="!r.purchase" :aria-label="t('inventory.itemForm.defaultPurchase')" @click.prevent="setDefault('defaultPurchase', r)" /></td>
-              <td class="py-2 pr-2"><input v-model="r.recipe" type="checkbox" class="size-4 accent-primary" :aria-label="t('inventory.itemForm.recipe')" /> <input type="radio" :checked="r.recipe && r.defaultRecipe" class="ml-2 accent-primary" :disabled="!r.recipe" :aria-label="t('inventory.itemForm.defaultRecipe')" @click.prevent="setDefault('defaultRecipe', r)" /></td>
+              <td class="py-2 pr-2"><Checkbox v-model="r.purchase" :aria-label="t('inventory.itemForm.purchase')" /> <input type="radio" :checked="r.purchase && r.defaultPurchase" class="ml-2 accent-primary" :disabled="!r.purchase" :aria-label="t('inventory.itemForm.defaultPurchase')" @click.prevent="setDefault('defaultPurchase', r)" /></td>
+              <td class="py-2 pr-2"><Checkbox v-model="r.recipe" :aria-label="t('inventory.itemForm.recipe')" /> <input type="radio" :checked="r.recipe && r.defaultRecipe" class="ml-2 accent-primary" :disabled="!r.recipe" :aria-label="t('inventory.itemForm.defaultRecipe')" @click.prevent="setDefault('defaultRecipe', r)" /></td>
               <td class="py-2 text-right"><Button type="button" variant="ghost" size="sm" :data-testid="`unit-remove-${i}`" @click="rows.splice(i, 1)">{{ t('common.remove') }}</Button></td>
             </tr>
           </tbody>

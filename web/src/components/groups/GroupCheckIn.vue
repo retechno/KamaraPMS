@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { i18n, t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -279,7 +280,7 @@ async function depositDone(message: string): Promise<void> {
 
         <DataTable :columns="columns" :rows="rows" row-key="reservation_room_id" :loading="!loaded" cards>
           <template #cell-select="{ row: a }">
-            <input type="checkbox" class="size-4 accent-primary" :checked="isSelected(a)" :disabled="!selectable(a) || running" :aria-label="t('groupCheckIn.pick')" :name="`pick_${a.reservation_room_id}`" :data-testid="`pick-${a.reservation_room_id}`" @change="toggle(a, ($event.target as HTMLInputElement).checked)" />
+            <Checkbox :model-value="isSelected(a)" :disabled="!selectable(a) || running" :aria-label="t('groupCheckIn.pick')" :name="`pick_${a.reservation_room_id}`" :data-testid="`pick-${a.reservation_room_id}`" @change="toggle(a, ($event.target as HTMLInputElement).checked)" />
           </template>
           <template #cell-room_number="{ row: a }">
             <span :data-testid="`room-${a.reservation_room_id}`">{{ a.room_number || t('groupCheckIn.noRoom') }}</span>

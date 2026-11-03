@@ -12,6 +12,7 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { confirm } from '@/composables/useConfirm'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
@@ -144,12 +145,9 @@ async function save(): Promise<void> {
         <p class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('roles.permissionsHint') }}</p>
         <section v-for="[group, items] in groups" :key="group" class="mb-3 rounded-lg border border-border" :data-testid="`group-${group}`">
           <div class="flex items-center gap-2 px-3.5 py-2">
-            <input
-              type="checkbox"
-              class="size-4 accent-primary"
-              :checked="allChosen(items)"
-              :indeterminate.prop="someChosen(items)"
-              :aria-checked="someChosen(items) ? 'mixed' : allChosen(items)"
+            <Checkbox
+              :model-value="allChosen(items)"
+              :indeterminate="someChosen(items)"
               :aria-label="permissionGroupText(group)"
               :data-testid="`group-check-${group}`"
               @change="toggleGroup(items, ($event.target as HTMLInputElement).checked)"
