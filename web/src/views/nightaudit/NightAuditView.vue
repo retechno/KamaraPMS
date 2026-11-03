@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import { CheckCircle2, RefreshCw } from 'lucide-vue-next'
+import { CheckCircle2, RefreshCw, Wallet } from 'lucide-vue-next'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { NightAuditPackManifest, NightAuditPreview, NightAuditResult } from '@/api/types'
+import type { CheckOutResult, NightAuditPackManifest, NightAuditPreview, NightAuditResult, StayDetail } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import type { RowAction } from '@/components/app/rowActions'
 import FormField from '@/components/app/FormField.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StepCard from '@/components/app/StepCard.vue'
+import CheckOutWizard from '@/components/CheckOutWizard.vue'
+import StayActions from '@/components/StayActions.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Checkbox } from '@/components/ui/checkbox'
+import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { methodName } from '@/views/reports/day/dayLabels'
 import { openPdf } from '@/utils/documents'
@@ -23,6 +28,8 @@ import { findingText } from '@/utils/findings'
 import { useAuthStore } from '@/stores/auth'
 import { useNightAuditStore } from '@/stores/nightAudit'
 import { usePropertyStore } from '@/stores/property'
+import { formatBalance } from '@/utils/format'
+import { actionLabelKey, actionVariant, owesAtCheckOut } from '@/utils/inHouse'
 import { chargeIssueCount, pendingSteps } from '@/utils/nightAuditReadiness'
 
 const auth = useAuthStore()
@@ -94,7 +101,86 @@ const departureColumns = computed<Column<(typeof departures.value)[number]>[]>((
   { key: 'guest', label: t('nightAudit.guest') },
   { key: 'room', label: t('nightAudit.room') },
   { key: 'departure_date', label: t('nightAudit.departure'), format: 'date' as const },
+  { key: 'balance', label: t('nightAudit.balance'), align: 'right' as const, card: 'money' as const },
+  ...(can('frontdesk.checkout') || can('reservation.update') ? [{ key: 'actions', label: t('nightAudit.actions'), align: 'right' as const }] : []),
 ])
+
+// ---- the unfinished departures: the check-out and the extension are done here, in a sheet, and the steps are read again after
+type Departure = NonNullable<NightAuditPreview['blockers']['unresolved_departures']>[number]
+type Work = 'checkout' | 'extend'
+const work = ref<{ kind: Work; row: Departure; detail: StayDetail | null } | null>(null)
+const opening = ref(false)
+const workOpen = computed({
+  get: () => !!work.value?.detail,
+  set: (v: boolean) => {
+    if (!v) work.value = null
+  },
+})
+
+const balanceText = (d: Departure): string => (!d.balance ? '—' : d.balance.status === 'NO_FOLIO' ? t('today.noFolio') : formatBalance(d.balance.amount)) // a preview without a balance (an older server) shows a dash
+
+/** The actions of a row of the table and of its card: the check-out is the main one (its label and look say that the guest owes money), the extension is next to it, or in the menu on a phone. */
+function departureActions(d: Departure): RowAction[] {
+  const acts: RowAction[] = []
+  if (can('frontdesk.checkout')) {
+    const owes = owesAtCheckOut(d)
+    acts.push({
+      key: 'checkOut', label: t(actionLabelKey('checkOut', d)), primary: true, variant: actionVariant('checkOut', d), icon: owes ? Wallet : undefined, iconClass: 'text-warning-text',
+      disabled: opening.value, testId: `check-out-${d.stay_id}`, onSelect: () => void openWork('checkout', d),
+    })
+  }
+  if (can('reservation.update')) {
+    acts.push({ key: 'extend', label: t('frontDesk.inHouse.action.extend'), primary: true, disabled: opening.value, testId: `extend-${d.stay_id}`, onSelect: () => void openWork('extend', d) })
+  }
+  return acts
+}
+
+async function readStay(row: Departure): Promise<StayDetail | null> {
+  const propertyId = pid.value
+  if (propertyId === null) return null
+  const { data } = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: row.stay_id } } })
+  return data ?? null
+}
+
+async function openWork(kind: Work, row: Departure): Promise<void> {
+  opening.value = true
+  try {
+    const detail = await readStay(row)
+    if (!detail) throw new Error('no stay')
+    work.value = { kind, row, detail }
+  } catch (e) {
+    toast.error(e instanceof ApiError ? e.message : t('today.stayNotLoaded'))
+  } finally {
+    opening.value = false
+  }
+}
+
+/** The stay changed under the sheet (a conflict): the stay in the sheet and the steps are read again; the error stays where it was shown. */
+async function reread(): Promise<void> {
+  const current = work.value
+  if (current) {
+    try {
+      const detail = await readStay(current.row)
+      if (detail && work.value === current) work.value = { ...current, detail }
+    } catch {
+      // the sheet keeps what it has; the failure that brought us here is on screen
+    }
+  }
+  await load()
+}
+
+async function checkedOut(r: CheckOutResult): Promise<void> {
+  work.value = null
+  toast.success(t('stay.checkedOut', { n: r.posted_room_charges.length }))
+  await load()
+}
+
+async function changed(message: string): Promise<void> {
+  if (!message) return reread() // a conflict: nothing was changed
+  work.value = null
+  toast.success(message)
+  await load()
+}
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -285,9 +371,12 @@ watch(pid, () => {
         <p v-if="!departures.length" class="m-0 text-sm text-muted-foreground">{{ t('nightAudit.nobodyOverdue') }}</p>
         <template v-else>
           <p class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('nightAudit.departuresHelp') }}</p>
-          <DataTable :columns="departureColumns" :rows="departures" row-key="stay_id" :row-test-id="(s) => `departure-${s.stay_id}`">
+          <DataTable :columns="departureColumns" :rows="departures" row-key="stay_id" :row-test-id="(s) => `departure-${s.stay_id}`" cards :row-actions="departureActions">
             <template #cell-stay_number="{ row }"><RouterLink :to="`/stays/${row.stay_id}`">{{ row.stay_number }}</RouterLink></template>
             <template #cell-room="{ row }">{{ row.room || '—' }}</template>
+            <template #cell-balance="{ row }">
+              <span :class="owesAtCheckOut(row) && 'font-medium text-warning-text'" :data-testid="`departure-balance-${row.stay_id}`" :data-owes="owesAtCheckOut(row)">{{ balanceText(row) }}</span>
+            </template>
           </DataTable>
         </template>
       </StepCard>
@@ -383,4 +472,13 @@ watch(pid, () => {
       </StepCard>
     </template>
   </template>
+
+  <Sheet v-model:open="workOpen">
+    <SheetContent v-if="work?.detail" class="p-6" data-testid="departure-sheet">
+      <SheetTitle class="text-lg">{{ t(work.kind === 'checkout' ? 'today.checkOutTitle' : 'nightAudit.extendTitle', { guest: work.row.guest }) }}</SheetTitle>
+      <SheetDescription class="mt-1">{{ t('today.checkOutSubtitle', { stay: work.row.stay_number, room: work.row.room || '—' }) }}</SheetDescription>
+      <CheckOutWizard v-if="work.kind === 'checkout'" :detail="work.detail" class="mt-4" @done="checkedOut" @failed="reread" @cancel="work = null" />
+      <StayActions v-else :detail="work.detail" initial="extend" class="mt-4" @changed="changed" />
+    </SheetContent>
+  </Sheet>
 </template>
