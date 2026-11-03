@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { Eye, EyeOff } from 'lucide-vue-next'
+import { computed, reactive, ref, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
 import FormField from '@/components/app/FormField.vue'
@@ -16,6 +17,9 @@ const router = useRouter()
 const route = useRoute()
 
 const form = reactive({ tenant_code: rememberedTenantCode(), email: '', password: '' })
+const showPassword = ref(false) // the eye of the password field; not kept anywhere, hidden on every visit
+const forgotOpen = ref(false)
+const forgotId = useId()
 const busy = ref(false)
 const message = ref('')
 
@@ -64,8 +68,33 @@ async function submit(): Promise<void> {
             <template #default="{ id }"><Input :id="id" v-model="form.email" :data-autofocus="form.tenant_code ? '' : undefined" name="email" type="email" autocomplete="username" required /></template>
           </FormField>
           <FormField :label="t('login.password')">
-            <template #default="{ id }"><Input :id="id" v-model="form.password" name="password" type="password" autocomplete="current-password" required /></template>
+            <template #default="{ id }">
+              <div class="relative">
+                <Input :id="id" v-model="form.password" name="password" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" class="pr-10 pointer-coarse:pr-[52px]" required />
+                <button
+                  type="button"
+                  class="absolute right-0 top-1/2 flex size-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-[44px]"
+                  :aria-pressed="showPassword"
+                  :aria-label="t('login.showPassword')"
+                  data-testid="toggle-password"
+                  @click="showPassword = !showPassword"
+                >
+                  <EyeOff v-if="showPassword" class="size-4" aria-hidden="true" /><Eye v-else class="size-4" aria-hidden="true" />
+                </button>
+              </div>
+            </template>
           </FormField>
+          <div class="-mt-2">
+            <button
+              type="button"
+              class="cursor-pointer border-0 bg-transparent p-0 text-sm text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-[44px]"
+              :aria-expanded="forgotOpen"
+              :aria-controls="forgotId"
+              data-testid="forgot-password"
+              @click="forgotOpen = !forgotOpen"
+            >{{ t('login.forgot') }}</button>
+            <p v-if="forgotOpen" :id="forgotId" class="m-0 mt-1 text-sm text-muted-foreground" data-testid="forgot-help">{{ t('login.forgotHelp') }}</p>
+          </div>
           <Button type="submit" :disabled="busy">{{ busy ? t('login.signingIn') : t('login.signIn') }}</Button>
           <NativeSelect :model-value="locale" class="w-auto justify-self-end" :aria-label="t('language.label')" @change="void setLocale(($event.target as HTMLSelectElement).value as Locale)">
             <option v-for="l in LOCALES" :key="l" :value="l">{{ t(`language.${l}` as never) }}</option>
