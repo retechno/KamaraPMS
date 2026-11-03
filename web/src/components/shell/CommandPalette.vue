@@ -9,6 +9,7 @@ import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { openRoomPanel, roomDirectory } from '@/composables/useRoomPanel'
 import { toast } from '@/composables/useToast'
+import { useNavPins } from '@/composables/useNavPins'
 import { useVisibleNavigation } from '@/composables/useVisibleNavigation'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -27,10 +28,11 @@ const auth = useAuthStore()
 const property = usePropertyStore()
 const router = useRouter()
 const navigation = useVisibleNavigation()
+const navPins = useNavPins()
 
 interface Entry {
   key: string
-  group: 'actions' | 'rooms' | 'pages' | 'guests' | 'reservations'
+  group: 'actions' | 'rooms' | 'recent' | 'pages' | 'guests' | 'reservations'
   label: string
   hint?: string
   to?: string
@@ -61,15 +63,45 @@ const pages = computed<Entry[]>(() =>
   ),
 )
 
+// A page with tabs is one entry; a tab is found by its name and goes straight to it (typing "departures" gives "Guests today · Departures").
+const tabPages = computed<Entry[]>(() =>
+  navigation.sections.value.flatMap((s) =>
+    s.items.flatMap((i) =>
+      (i.tabs ?? []).map((tab) => ({
+        key: `page-${i.id}-${tab.id}`,
+        group: 'pages' as const,
+        label: `${t(`nav.items.${i.id}` as never)} \u00b7 ${t(tab.labelKey as never)}`,
+        hint: t(`nav.sections.${s.id}` as never),
+        to: tab.to,
+      })),
+    ),
+  ),
+)
+
 const matchedPages = computed(() => {
   const q = query.value.trim().toLowerCase()
-  const all = pages.value
-  return (q ? all.filter((p) => `${p.label} ${p.hint}`.toLowerCase().includes(q)) : all).slice(0, q ? 8 : 6)
+  if (!q) return pages.value.slice(0, 6)
+  const own = pages.value.filter((p) => `${p.label} ${p.hint}`.toLowerCase().includes(q))
+  const tabs = tabPages.value.filter((p) => p.label.toLowerCase().includes(q) && !own.some((o) => o.key === p.key.replace(/-[^-]+$/, '')))
+  return [...own, ...tabs].slice(0, 8)
 })
 
-const entries = computed(() => [...actionEntries.value, ...roomEntries.value, ...matchedPages.value, ...remote.value])
+// The pages opened last, on an empty input only (typing gives the search); the person's choice to hide them in the menu hides them here too.
+const recentEntries = computed<Entry[]>(() =>
+  query.value.trim() || !navPins.showRecent.value
+    ? []
+    : navPins.recent.value.map((r) => ({
+        key: `recent-${r.item.id}`,
+        group: 'recent' as const,
+        label: t(`nav.items.${r.item.id}` as never),
+        hint: t(`nav.sections.${r.section.id}` as never),
+        to: r.item.to,
+      })),
+)
+
+const entries = computed(() => [...actionEntries.value, ...roomEntries.value, ...recentEntries.value, ...matchedPages.value, ...remote.value])
 const groups = computed(() =>
-  (['actions', 'rooms', 'pages', 'guests', 'reservations'] as const)
+  (['actions', 'rooms', 'recent', 'pages', 'guests', 'reservations'] as const)
     .map((g) => ({ id: g, items: entries.value.filter((e) => e.group === g) }))
     .filter((g) => g.items.length > 0),
 )
@@ -224,7 +256,7 @@ function onKey(event: KeyboardEvent): void {
   }
 }
 
-const groupTitle = (g: Entry['group']): string => t(g === 'pages' ? 'shell.searchPages' : g === 'guests' ? 'shell.searchGuests' : g === 'rooms' ? 'shell.searchRooms' : g === 'actions' ? 'shell.searchActions' : 'shell.searchReservations')
+const groupTitle = (g: Entry['group']): string => t(g === 'recent' ? 'nav.recent' : g === 'pages' ? 'shell.searchPages' : g === 'guests' ? 'shell.searchGuests' : g === 'rooms' ? 'shell.searchRooms' : g === 'actions' ? 'shell.searchActions' : 'shell.searchReservations')
 </script>
 
 <template>

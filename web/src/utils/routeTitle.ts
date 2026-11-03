@@ -1,6 +1,6 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import { t, te } from '@/i18n'
-import { navigation } from '@/navigation'
+import { navigation, navRoutes } from '@/navigation'
 
 /**
  * The title of a page in the language of the page, for the tab of the browser and the breadcrumb: the label the menu gives it when it is in the menu,
@@ -8,7 +8,7 @@ import { navigation } from '@/navigation'
  */
 export function routeTitle(route: Pick<RouteLocationNormalizedLoaded, 'path' | 'name' | 'meta'>): string {
   for (const section of navigation) {
-    const item = section.items.find((i) => i.to === route.path)
+    const item = section.items.find((i) => navRoutes(i).includes(route.path))
     if (item) return t(`nav.items.${item.id}` as never)
   }
   const titleKey = route.meta.titleKey

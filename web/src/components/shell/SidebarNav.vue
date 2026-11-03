@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { t } from '@/i18n'
 
 /**
- * The menu. At the top, the pages the person pinned and the pages they opened last; below, every section, collapsible, with the current page highlighted. In `rail`
+ * The menu. At the top, the pages the person pinned; then every section, collapsible, with the current page highlighted; at the bottom, the pages they opened last. In `rail`
  * mode only icons show (a button for the pinned and recent pages, then each section linking to its first page); the full menu is one tap away in the drawer.
  */
 defineProps<{ rail?: boolean }>()
@@ -120,7 +120,31 @@ const headingClass = 'px-2 pb-1 text-xs font-semibold uppercase tracking-wide te
         </ul>
       </section>
 
-      <section v-if="recent.length" class="mb-2" data-testid="section-recent" aria-labelledby="nav-recent-title">
+      <p v-if="pinned.length" :class="cn(headingClass, 'm-0 mt-1')" data-testid="all-menu">{{ t('nav.allMenu') }}</p>
+
+      <section v-for="section in sections" :key="section.id" :data-testid="`section-${section.id}`" class="mb-1">
+        <button
+          type="button"
+          :aria-expanded="isOpen(section.id, section.defaultOpen)"
+          :data-testid="`toggle-${section.id}`"
+          class="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent"
+          @click="toggle(section.id, section.defaultOpen)"
+        >
+          <component :is="section.icon" class="size-4 shrink-0" aria-hidden="true" />
+          <span class="flex-1">{{ t(`nav.sections.${section.id}` as never) }}</span>
+          <ChevronDown :class="cn('size-4 shrink-0 transition-transform', !isOpen(section.id, section.defaultOpen) && '-rotate-90')" aria-hidden="true" />
+        </button>
+        <ul v-show="isOpen(section.id, section.defaultOpen)" class="m-0 mt-0.5 list-none p-0">
+          <li v-for="item in section.items" :key="item.id" class="group flex items-center">
+            <RouterLink :to="item.to" :data-testid="`nav-${item.id}`" :aria-current="isActive(item) ? 'page' : undefined" :class="cn(linkClass(item), 'ml-3')" @click="emit('navigate')">
+              {{ label(item) }}
+            </RouterLink>
+          </li>
+        </ul>
+      </section>
+
+      <!-- the last pages are below every section: they come and go, and must not move the items above them -->
+      <section v-if="recent.length" class="mt-2 border-t border-border pt-2" data-testid="section-recent" aria-labelledby="nav-recent-title">
         <div class="flex items-center">
           <p id="nav-recent-title" :class="cn(headingClass, 'm-0 flex-1')">{{ t('nav.recent') }}</p>
           <button
@@ -140,29 +164,6 @@ const headingClass = 'px-2 pb-1 text-xs font-semibold uppercase tracking-wide te
           <li v-for="item in recent" :key="item.item.id">
             <RouterLink :to="item.item.to" :data-testid="`recent-${item.item.id}`" :aria-current="isActive(item.item) ? 'page' : undefined" :class="linkClass(item.item)" @click="emit('navigate')">
               {{ label(item.item) }}
-            </RouterLink>
-          </li>
-        </ul>
-      </section>
-
-      <p v-if="hasShortcuts" :class="cn(headingClass, 'm-0 mt-1')" data-testid="all-menu">{{ t('nav.allMenu') }}</p>
-
-      <section v-for="section in sections" :key="section.id" :data-testid="`section-${section.id}`" class="mb-1">
-        <button
-          type="button"
-          :aria-expanded="isOpen(section.id, section.defaultOpen)"
-          :data-testid="`toggle-${section.id}`"
-          class="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent"
-          @click="toggle(section.id, section.defaultOpen)"
-        >
-          <component :is="section.icon" class="size-4 shrink-0" aria-hidden="true" />
-          <span class="flex-1">{{ t(`nav.sections.${section.id}` as never) }}</span>
-          <ChevronDown :class="cn('size-4 shrink-0 transition-transform', !isOpen(section.id, section.defaultOpen) && '-rotate-90')" aria-hidden="true" />
-        </button>
-        <ul v-show="isOpen(section.id, section.defaultOpen)" class="m-0 mt-0.5 list-none p-0">
-          <li v-for="item in section.items" :key="item.id" class="group flex items-center">
-            <RouterLink :to="item.to" :data-testid="`nav-${item.id}`" :aria-current="isActive(item) ? 'page' : undefined" :class="cn(linkClass(item), 'ml-3')" @click="emit('navigate')">
-              {{ label(item) }}
             </RouterLink>
           </li>
         </ul>

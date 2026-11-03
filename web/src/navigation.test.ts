@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n'
 import { router } from '@/router'
-import { activeNav, findNavItem, navigation, permitted, visibleNavigation } from './navigation'
+import { activeNav, canonicalNavIds, findNavItem, navRoutes, navigation, permitted, visibleNavigation } from './navigation'
 
 const items = navigation.flatMap((s) => s.items)
 
@@ -183,5 +183,46 @@ describe('the modules of the plan', () => {
 
   it('asks for a permission of its own for each page of POS, and the same one in the router', () => {
     for (const i of navigation.flatMap((s) => s.items).filter((x) => x.module === 'POS')) expect(i.permission, i.id).toBeTruthy()
+  })
+})
+
+describe('Guests today (arrivals, in-house and departures are one item)', () => {
+  it('has one item, which answers to the three routes and points at /arrivals', () => {
+    const own = items.filter((i) => ['guestsToday', 'arrivals', 'inHouse', 'departures'].includes(i.id))
+    expect(own.map((i) => i.id)).toEqual(['guestsToday'])
+    expect(own[0]!.to).toBe('/arrivals')
+    expect(navRoutes(own[0]!)).toEqual(['/arrivals', '/in-house', '/departures'])
+    for (const to of navRoutes(own[0]!)) expect(router.resolve(to).name, to).not.toBe('not-found') // the old links keep working
+  })
+
+  it('is the active item, in the same section, on all three routes', () => {
+    for (const path of ['/arrivals', '/in-house', '/departures']) {
+      const hit = activeNav(path)
+      expect(hit?.item.id, path).toBe('guestsToday')
+      expect(hit?.section.id, path).toBe('frontDesk')
+    }
+    expect(activeNav('/walk-in')?.item.id).toBe('walkIn')
+  })
+
+  it('reads the ids of the three old items as the new one, once, in the place of the first', () => {
+    expect(canonicalNavIds(['arrivals'])).toEqual(['guestsToday'])
+    expect(canonicalNavIds(['arrivals', 'inHouse', 'departures'])).toEqual(['guestsToday'])
+    expect(canonicalNavIds(['dashboard', 'departures', 'guests', 'arrivals', 'guestsToday'])).toEqual(['dashboard', 'guestsToday', 'guests'])
+    expect(canonicalNavIds(['guests', 'dashboard'])).toEqual(['guests', 'dashboard'])
+  })
+
+  it('is titled in both languages (the menu and the page)', () => {
+    const t = (locale: 'en' | 'id', key: string) => i18n.global.t(key, {}, { locale })
+    expect(t('en', 'nav.items.guestsToday')).toBe('Guests today')
+    expect(t('id', 'nav.items.guestsToday')).toBe('Tamu hari ini')
+    expect(t('en', 'frontDesk.page.title')).toBe('Guests today')
+    expect(t('id', 'frontDesk.page.title')).toBe('Tamu hari ini')
+  })
+})
+
+describe('the sections that are closed until needed', () => {
+  it('says so for the six back-office sections, and the daily sections are the only ones open', () => {
+    for (const id of ['accounting', 'tax', 'bank', 'budget', 'assets', 'payables']) expect(navigation.find((s) => s.id === id)?.defaultOpen, id).toBe(false)
+    expect(navigation.filter((s) => s.defaultOpen === true).map((s) => s.id)).toEqual(['frontDesk', 'rooms', 'billing', 'endOfDay'])
   })
 })

@@ -75,7 +75,7 @@ const audit = computed(() => {
   // "ready" is only said when the audit can run now; with steps left it is amber and counts them, and the link goes to the first
   if (state === 'pending') {
     const text = t('shell.nightAuditPending', { n: nightAudit.pending.value })
-    return { state, to, text, short: text, dot: 'bg-warning' }
+    return { state, to, text, short: t('shell.nightAuditPendingShort', { n: nightAudit.pending.value }), dot: 'bg-warning' }
   }
   if (state === 'ready') return { state, to, text: t('shell.nightAuditReady'), short: t('shell.nightAuditReady'), dot: 'bg-success' }
   if (state === 'checking') return { state, to, text: t('shell.nightAuditChecking'), short: t('shell.nightAuditChecking'), dot: 'bg-muted-foreground' }
@@ -159,6 +159,8 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
               v-if="audit"
               :class="cn(audit.state === 'overdue' || audit.state === 'pending' ? 'truncate text-[10px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
               :data-state="audit.state"
+              :aria-label="audit.text"
+              :title="audit.text"
               data-testid="night-audit-status"
             >{{ audit.short }}</span>
           </span>

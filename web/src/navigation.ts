@@ -17,6 +17,11 @@ export interface NavItem {
   permission?: string | string[]
   /** The optional module of the plan the page belongs to (docs/architecture/26-subscriptions.md): a tenant without it does not see the item. */
   module?: string
+  /**
+   * Other pages that are this item (one item for a page with tabs, each tab a route of its own): the item is active on all of them. The quick finder finds a tab by its name
+   * (`labelKey`) and goes straight to it; the menu has one entry.
+   */
+  tabs?: { id: string; to: string; labelKey: string }[]
 }
 
 export interface NavSection {
@@ -37,9 +42,16 @@ export const navigation: NavSection[] = [
       { id: 'reservations', to: '/reservations', permission: 'reservation.read' },
       { id: 'tapeChart', to: '/reservations/tape', permission: 'reservation.read' },
       { id: 'availability', to: '/availability', permission: 'reservation.read' },
-      { id: 'arrivals', to: '/arrivals', permission: 'reservation.read' },
-      { id: 'inHouse', to: '/in-house', permission: 'reservation.read' },
-      { id: 'departures', to: '/departures', permission: 'reservation.read' },
+      {
+        id: 'guestsToday',
+        to: '/arrivals',
+        permission: 'reservation.read',
+        tabs: [
+          { id: 'arrivals', to: '/arrivals', labelKey: 'frontDesk.page.arrivals' },
+          { id: 'inHouse', to: '/in-house', labelKey: 'frontDesk.page.inHouse' },
+          { id: 'departures', to: '/departures', labelKey: 'frontDesk.page.departures' },
+        ],
+      },
       { id: 'walkIn', to: '/walk-in', permission: 'reservation.read' },
       { id: 'guests', to: '/guests', permission: 'guest.read' },
       { id: 'groups', to: '/groups', permission: 'reservation.read' },
@@ -103,6 +115,7 @@ export const navigation: NavSection[] = [
   {
     id: 'assets',
     icon: Armchair,
+    defaultOpen: false,
     items: [
       { id: 'assetRegister', to: '/assets', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
       { id: 'assetWaiting', to: '/assets/waiting', permission: ['asset.read', 'asset.manage', 'asset.depreciate', 'asset.dispose', 'asset.setup'], module: 'INVENTORY' },
@@ -154,6 +167,7 @@ export const navigation: NavSection[] = [
   {
     id: 'accounting',
     icon: BookOpen,
+    defaultOpen: false,
     items: [
       { id: 'chartOfAccounts', to: '/accounting/accounts', permission: 'accounting.view' },
       { id: 'systemAccounts', to: '/accounting/mapping', permission: 'accounting.view' },
@@ -173,6 +187,7 @@ export const navigation: NavSection[] = [
   {
     id: 'payables',
     icon: Truck,
+    defaultOpen: false,
     items: [
       { id: 'suppliers', to: '/payables/suppliers', permission: 'payables.view' },
       { id: 'supplierBills', to: '/payables/bills', permission: 'payables.view' },
@@ -184,6 +199,7 @@ export const navigation: NavSection[] = [
   {
     id: 'tax',
     icon: Percent,
+    defaultOpen: false,
     items: [
       { id: 'taxStatus', to: '/tax/status', permission: 'tax.view' },
       { id: 'filingProfiles', to: '/tax/profiles', permission: 'tax.view' },
@@ -195,6 +211,7 @@ export const navigation: NavSection[] = [
   {
     id: 'bank',
     icon: Landmark,
+    defaultOpen: false,
     items: [
       { id: 'bankAccounts', to: '/bank/accounts', permission: 'bank.view' },
       { id: 'bankStatements', to: '/bank/statements', permission: 'bank.view' },
@@ -204,6 +221,7 @@ export const navigation: NavSection[] = [
   {
     id: 'budget',
     icon: PiggyBank,
+    defaultOpen: false,
     items: [
       { id: 'budgets', to: '/budget', permission: 'budget.view' },
       { id: 'budgetVsActual', to: '/budget/vs-actual', permission: 'budget.view' },
@@ -233,6 +251,26 @@ export const navigation: NavSection[] = [
     ],
   },
 ]
+
+/** The ids that menus stored before the three guest lists became one item (`guestsToday`): a pin or a recent page with one of them is that item now. */
+export const NAV_ID_ALIASES: Readonly<Record<string, string>> = { arrivals: 'guestsToday', inHouse: 'guestsToday', departures: 'guestsToday' }
+
+/** Maps stored ids to the ids of the menu and drops the repeats: the first place of an id stays, so the order is stable (all three old pins make one pin). */
+export function canonicalNavIds(ids: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of ids) {
+    const id = NAV_ID_ALIASES[raw] ?? raw
+    if (!seen.has(id)) {
+      seen.add(id)
+      out.push(id)
+    }
+  }
+  return out
+}
+
+/** The routes an item answers to: its own and those of its tabs. */
+export const navRoutes = (item: Pick<NavItem, 'to' | 'tabs'>): string[] => [...new Set([item.to, ...(item.tabs?.map((tab) => tab.to) ?? [])])]
 
 /** Does `can` allow the item: the permission it names, or any of the permissions when it names a list. */
 export const permitted = (i: Pick<NavItem, 'permission'>, can: (permission: string) => boolean): boolean => !i.permission || [i.permission].flat().some((p) => can(p))
@@ -266,10 +304,16 @@ export interface ActiveNav {
  */
 export function activeNav(path: string, sections: NavSection[] = navigation): ActiveNav | null {
   let best: ActiveNav | null = null
+  let bestLength = 0
   for (const section of sections) {
     for (const item of section.items) {
-      const hit = item.to === '/' ? path === '/' : path === item.to || path.startsWith(`${item.to}/`)
-      if (hit && (!best || item.to.length > best.item.to.length)) best = { section, item }
+      for (const route of navRoutes(item)) {
+        const hit = route === '/' ? path === '/' : path === route || path.startsWith(`${route}/`)
+        if (hit && (!best || route.length > bestLength)) {
+          best = { section, item }
+          bestLength = route.length
+        }
+      }
     }
   }
   return best

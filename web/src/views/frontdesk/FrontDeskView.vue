@@ -43,8 +43,8 @@ const tabs = computed(() => [
   { value: 'departures' as const, label: t('frontDesk.page.departures') },
 ])
 
-// The page is titled like the menu item of the tab that is open (Arrivals, In-house, Departures).
-const title = computed(() => tabs.value.find((x) => x.value === props.tab)?.label ?? t('frontDesk.page.title'))
+// One page, one title (the menu item "Guests today"); the tabs are Arrivals, In-house and Departures.
+const title = computed(() => t('frontDesk.page.title'))
 
 function select(value: string | number): void {
   const path = PATHS[value as Tab]

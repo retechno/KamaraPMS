@@ -1,6 +1,6 @@
 import { computed, inject, ref } from 'vue'
 import { routeLocationKey } from 'vue-router'
-import { activeNav, type ActiveNav } from '@/navigation'
+import { activeNav, canonicalNavIds, type ActiveNav } from '@/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { useVisibleNavigation } from './useVisibleNavigation'
 
@@ -60,14 +60,14 @@ export function useNavPins() {
   }
 
   const pinIds = computed<string[]>(
-    () => stored.value.pins ?? DEFAULT_PINS.map((d) => d.id).filter((id) => nav.byId(id)),
+    () => (stored.value.pins ? canonicalNavIds(stored.value.pins) : DEFAULT_PINS.map((d) => d.id).filter((id) => nav.byId(id))),
   )
   const visible = (id: string): ActiveNav | undefined => nav.byId(id)
   const pinned = computed<ActiveNav[]>(() => pinIds.value.map(visible).filter((x): x is ActiveNav => !!x))
   // The pages opened last, without the page the person is on and without the pinned ones: those are in the menu already, and the list is for getting back to the others.
   const here = computed(() => (route ? activeNav(route.path, nav.sections.value)?.item.id : undefined))
   const recent = computed<ActiveNav[]>(() =>
-    (stored.value.recent ?? [])
+    canonicalNavIds(stored.value.recent ?? [])
       .filter((id) => id !== here.value && !pinIds.value.includes(id))
       .map(visible)
       .filter((x): x is ActiveNav => !!x)
@@ -94,9 +94,9 @@ export function useNavPins() {
     const hit = activeNav(path, nav.sections.value)
     if (!hit) return
     const id = hit.item.id
-    if (stored.value.recent?.[0] === id) return
+    if (canonicalNavIds(stored.value.recent ?? [])[0] === id) return
     update((s) => {
-      s.recent = [id, ...(s.recent ?? []).filter((x) => x !== id)].slice(0, RECENT_LIMIT)
+      s.recent = [id, ...canonicalNavIds(s.recent ?? []).filter((x) => x !== id)].slice(0, RECENT_LIMIT)
     })
   }
 

@@ -122,10 +122,8 @@ export const en = {
       groups: 'Groups',
       availability: 'Availability',
       tapeChart: 'Tape chart',
-      arrivals: 'Arrivals',
+      guestsToday: 'Guests today',
       walkIn: 'Walk-in',
-      inHouse: 'In-house',
-      departures: 'Departures',
       roomStatus: 'Room status',
       housekeeping: 'Housekeeping',
       cleaningList: 'Cleaning list',
@@ -475,7 +473,7 @@ export const en = {
   },
   frontDesk: {
     page: {
-      title: 'Front desk',
+      title: 'Guests today',
       description: 'Who arrives today, who is in house and who is due to leave.',
       arrivals: 'Arrivals',
       inHouse: 'In-house',
@@ -9166,6 +9164,7 @@ export const en = {
     localTime: 'local',
     nightAuditOverdue: 'Night audit overdue',
     nightAuditReady: 'Night audit ready',
+    nightAuditPendingShort: 'Audit · {n}',
     nightAuditPending: 'Night audit · {n} pending',
     nightAuditChecking: 'Night audit · checking',
     nightAuditNotYet: 'Night audit later',

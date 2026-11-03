@@ -58,7 +58,7 @@ describe('AppShell', () => {
     expect(mounted!.get('[data-testid=sidebar]').attributes('data-mode')).toBe('full')
     expect(mounted!.find('[data-testid=topbar]').exists()).toBe(true)
     expect(mounted!.get('main [data-testid=page]').text()).toBe('The page')
-    expect(mounted!.get('[data-testid=nav-arrivals]').attributes('aria-current')).toBe('page')
+    expect(mounted!.get('[data-testid=nav-guestsToday]').attributes('aria-current')).toBe('page')
   })
 
   it('collapses the sidebar to the rail and back, remembering the choice', async () => {
@@ -80,7 +80,7 @@ describe('AppShell', () => {
     await mounted!.get('[data-testid=open-menu]').trigger('click')
     await flushPromises()
     const drawer = document.body.querySelector('[data-testid=drawer]')!
-    expect(drawer.textContent).toContain('Arrivals')
+    expect(drawer.textContent).toContain('Guests today')
   })
 
   it('has no sidebar on a phone, only the drawer; choosing a page closes it', async () => {
@@ -126,7 +126,7 @@ describe('AppShell', () => {
     await flushPromises()
     await router.push('/stays/3') // not a page of the menu: not remembered
     await flushPromises()
-    expect(JSON.parse(localStorage.getItem('pms.nav.1')!).recent).toEqual(['guests', 'arrivals'])
+    expect(JSON.parse(localStorage.getItem('pms.nav.1')!).recent).toEqual(['guests', 'guestsToday'])
     expect(mounted!.get('[data-testid=section-recent]').text()).toContain('Guests')
   })
 

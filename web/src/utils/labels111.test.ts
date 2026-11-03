@@ -33,10 +33,10 @@ describe('routeTitle', () => {
   const route = (path: string, name: string, title: string) => ({ path, name, meta: { title } }) as never
 
   it('gives a page of the menu the label of the menu, and a page outside it its own title', async () => {
-    expect(routeTitle(route('/arrivals', 'arrivals', 'Arrivals'))).toBe('Arrivals')
+    expect(routeTitle(route('/arrivals', 'arrivals', 'Arrivals'))).toBe('Guests today')
     expect(routeTitle(route('/stays/5', 'stay', 'Stay'))).toBe('Stay')
     await setLocale('id')
-    expect(routeTitle(route('/arrivals', 'arrivals', 'Arrivals'))).toBe('Kedatangan')
+    expect(routeTitle(route('/arrivals', 'arrivals', 'Arrivals'))).toBe('Tamu hari ini')
     expect(routeTitle(route('/stays/5', 'stay', 'Stay'))).toBe('Menginap')
     expect(routeTitle(route('/account', 'account', 'Account'))).toBe('Akun')
     expect(routeTitle(route('/x', 'not-known', 'Fallback'))).toBe('Fallback')
