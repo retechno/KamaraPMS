@@ -3421,6 +3421,8 @@ export const id: Messages = {
     currencyHint: 'Jumlah dalam {currency}, mata uang properti. Statement dalam mata uang lain ditolak.',
   },
   reconcile: {
+    pickLine: 'Pilih baris rekening koran {n}',
+    pickRow: 'Pilih baris ini',
     title: 'Rekonsiliasi {statement}',
     aStatement: 'rekening koran',
     all: 'Semua rekening koran',

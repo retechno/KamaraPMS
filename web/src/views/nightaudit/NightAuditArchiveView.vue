@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DateInput } from '@/components/ui/date-input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -259,7 +260,7 @@ watch(pid, () => {
           </thead>
           <tbody>
             <tr v-for="s in detail.sections" :key="s.section" :data-testid="`section-${s.section}`">
-              <td><input v-model="picked" type="checkbox" :value="s.section" :disabled="!hasData(s)" :aria-label="t(`nightAuditArchive.section.${s.section}` as never)" /></td>
+              <td><Checkbox v-model="picked" :value="s.section" :disabled="!hasData(s)" :aria-label="t(`nightAuditArchive.section.${s.section}` as never)" /></td>
               <td>{{ t(`nightAuditArchive.section.${s.section}` as never) }}</td>
               <td>
                 <Badge :variant="s.status === 'OK' ? 'success' : s.status === 'FAILED' ? 'destructive' : 'secondary'">{{ t(`nightAuditArchive.state.${s.status}` as never) }}</Badge>

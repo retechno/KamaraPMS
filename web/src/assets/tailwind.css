@@ -264,8 +264,9 @@
 
 /*
  * Fingers (a phone, a tablet: `pointer: coarse`): a checkbox or a radio is 24 px, and the label that holds it is a target of 44 px with the box in it, so a tap on the text
- * counts. It is not in a layer on purpose: a utility such as `size-4` on the input must not win here. A mouse keeps the compact box. A checkbox that is alone in a cell has
- * no label to grow: there the cell or the label around it must be made 44 px by the page (see `RoomStatusView`).
+ * counts. It is not in a layer on purpose: a utility such as `size-4` on the input must not win here. A mouse keeps the compact box. This rule stays for the checkboxes that are
+ * still raw in a flex label (the list of `rawCheckbox.guard.test.ts`). A new checkbox is the `Checkbox` component (components/ui/checkbox), which has its own 44 px label and is
+ * also the way for a box that has no label to grow: alone in a table cell or a card, where this rule has nothing to hold on to.
  */
 @media (pointer: coarse) {
   input[type='checkbox'],

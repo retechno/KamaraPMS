@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { methodName } from '@/views/reports/day/dayLabels'
 import { openPdf } from '@/utils/documents'
@@ -260,10 +261,10 @@ watch(pid, () => {
           </p>
           <DataTable :columns="arrivalColumns" :rows="arrivals" row-key="reservation_room_id" :row-test-id="(a) => `arrival-${a.reservation_room_id}`">
             <template #header-select>
-              <input type="checkbox" :checked="allSelected" :aria-label="t('nightAudit.selectAll')" data-testid="select-all" @change="toggleAll" />
+              <Checkbox :model-value="allSelected" :aria-label="t('nightAudit.selectAll')" data-testid="select-all" @change="toggleAll" />
             </template>
             <template #cell-select="{ row }">
-              <input v-model="noShow.selected" type="checkbox" :value="row.reservation_room_id" :aria-label="t('nightAudit.selectOne', { number: row.confirmation_number })" />
+              <Checkbox v-model="noShow.selected" :value="row.reservation_room_id" :aria-label="t('nightAudit.selectOne', { number: row.confirmation_number })" />
             </template>
             <template #cell-confirmation_number="{ row }"><RouterLink :to="`/reservations/${row.reservation_id}`">{{ row.confirmation_number }}</RouterLink></template>
             <template #cell-room_type="{ row }">{{ row.room_type }}<template v-if="row.room"> · {{ row.room }}</template></template>

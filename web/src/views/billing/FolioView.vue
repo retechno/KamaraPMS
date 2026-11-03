@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { routingText } from '@/utils/routing'
@@ -582,13 +583,13 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         :row-actions="itemActions"
       >
         <template #cell-select="{ row: i }">
-          <input
-            v-if="transferable(i)" type="checkbox" class="size-4 accent-primary" :checked="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
+          <Checkbox
+            v-if="transferable(i)" :model-value="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
           />
         </template>
         <template #cell-description="{ row: i, card }">
-          <input
-            v-if="card && transferable(i)" type="checkbox" class="mr-2 size-4 align-middle accent-primary" :checked="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
+          <Checkbox
+            v-if="card && transferable(i)" label-class="mr-2" :model-value="selected.includes(i.id)" :aria-label="t('folioTransfer.pick')" :data-testid="`select-${i.id}`" @change="toggleSelect(i)"
           />
           <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-left text-primary underline-offset-2 hover:underline" :data-testid="`toggle-${i.id}`" :aria-expanded="open === i.id" @click="open = open === i.id ? null : i.id">{{ transferText(i) }}</button>
           <div v-if="folio?.folio_type === 'MASTER' && (i.room_number || i.guest_name) && i.charge_code !== 'TRF'" class="text-xs text-muted-foreground" :data-testid="`whose-${i.id}`">

@@ -8,6 +8,7 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import ReportPrintHeader from '@/components/inventory/ReportPrintHeader.vue'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -99,7 +100,7 @@ watch(pid, load, { immediate: true })
       <table class="w-full min-w-[44rem] text-sm" data-testid="low-table">
         <thead>
           <tr class="text-left text-xs text-muted-foreground">
-            <th v-if="canRequest" class="w-8 py-1 pr-2 font-medium print:hidden"><input type="checkbox" :checked="allSelected" :aria-label="t('inventory.reports.lowStock.selectAll')" data-testid="low-select-all" @change="toggleAll(($event.target as HTMLInputElement).checked)" /></th>
+            <th v-if="canRequest" class="w-8 py-1 pr-2 font-medium print:hidden"><Checkbox :model-value="allSelected" :aria-label="t('inventory.reports.lowStock.selectAll')" data-testid="low-select-all" @change="toggleAll(($event.target as HTMLInputElement).checked)" /></th>
             <th class="py-1 pr-2 font-medium">{{ t('inventory.reports.value.warehouse') }}</th><th class="py-1 pr-2 font-medium">{{ t('inventory.reports.item') }}</th>
             <th class="py-1 pr-2 text-right font-medium">{{ t('inventory.reports.low.qty') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.reports.low.min') }}</th>
             <th class="py-1 pr-2 text-right font-medium">{{ t('inventory.reports.low.missing') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.reports.low.reorder') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.reports.lowStock.max') }}</th><th class="py-1 pr-2 text-right font-medium">{{ t('inventory.reports.lowStock.suggest') }}</th>
@@ -108,7 +109,7 @@ watch(pid, load, { immediate: true })
         </thead>
         <tbody>
           <tr v-for="x in rows" :key="keyOf(x)" class="border-t border-border" :data-testid="`low-${x.warehouse_code}-${x.item_code}`">
-            <td v-if="canRequest" class="py-2 pr-2 print:hidden"><input v-model="selected" type="checkbox" :value="keyOf(x)" :aria-label="t('inventory.reports.lowStock.select', { name: x.item_name })" :data-testid="`low-check-${x.warehouse_code}-${x.item_code}`" /></td>
+            <td v-if="canRequest" class="py-2 pr-2 print:hidden"><Checkbox v-model="selected" :value="keyOf(x)" :aria-label="t('inventory.reports.lowStock.select', { name: x.item_name })" :data-testid="`low-check-${x.warehouse_code}-${x.item_code}`" /></td>
             <td class="py-2 pr-2">{{ x.warehouse_code }}</td><td class="py-2 pr-2">{{ x.item_name }}<span class="block text-xs text-muted-foreground">{{ x.item_code }}</span></td>
             <td class="py-2 pr-2 text-right" :class="Number(x.qty) <= 0 ? 'font-semibold text-destructive' : ''">{{ formatReportQty(x.qty) }} {{ x.unit_code }}</td>
             <td class="py-2 pr-2 text-right">{{ formatReportQty(x.min_qty) }}</td><td class="py-2 pr-2 text-right font-semibold">▼ {{ formatReportQty(x.missing) }}</td>

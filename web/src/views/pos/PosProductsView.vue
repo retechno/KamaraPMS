@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { usePropertyStore } from '@/stores/property'
 import { formatMoney } from '@/utils/format'
@@ -326,7 +327,7 @@ watch(pid, load, { immediate: true })
             <tbody>
               <tr v-for="r in form.prices" :key="r.outletId" class="border-t border-border" :data-testid="`price-row-${r.outletId}`">
                 <td class="py-1.5 pr-2">{{ outletName(r.outletId) }}<span v-if="r.shared" class="block text-xs text-muted-foreground">{{ t('pos.products.sharedList') }}</span></td>
-                <td class="py-1.5 pr-2"><input v-model="r.sold" type="checkbox" class="size-4 accent-primary" :disabled="r.shared" :aria-label="t('pos.products.sold')" :name="`sold_${r.outletId}`" /></td>
+                <td class="py-1.5 pr-2"><Checkbox v-model="r.sold" :disabled="r.shared" :aria-label="t('pos.products.sold')" :name="`sold_${r.outletId}`" /></td>
                 <td class="py-1.5"><MoneyInput v-model="r.price" :decimals="decimals" :name="`price_${r.outletId}`" class="h-10 max-w-40" :disabled="r.shared || !r.sold" :aria-label="t('pos.products.price')" /></td>
               </tr>
             </tbody>

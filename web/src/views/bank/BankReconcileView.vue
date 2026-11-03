@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -353,7 +354,7 @@ watch([() => pid.value, sid], () => {
         <CardHeader><CardTitle>{{ t('reconcile.statementLines') }}</CardTitle></CardHeader>
         <CardContent>
           <DataTable :columns="lineColumns" :rows="statement.lines" row-key="id" :row-test-id="(l) => `line-${l.line_no}`" :row-class="(l) => (l.matched ? 'done text-muted-foreground' : selectedLines.includes(l.id) ? 'bg-accent' : undefined)" :caption="t('reconcile.statementLines')" data-testid="lines">
-            <template #cell-pick="{ row }"><input v-model="selectedLines" type="checkbox" class="size-4 accent-primary" name="line" :value="row.id" :disabled="row.matched" :data-testid="`pick-line-${row.line_no}`" /></template>
+            <template #cell-pick="{ row }"><Checkbox v-model="selectedLines" name="line" :aria-label="t('reconcile.pickLine', { n: row.line_no })" :value="row.id" :disabled="row.matched" :data-testid="`pick-line-${row.line_no}`" /></template>
             <template #cell-description="{ row }">{{ row.description }}<small v-if="row.reference" class="text-muted-foreground"> · {{ row.reference }}</small></template>
             <template #cell-clearings="{ row }">
               <span v-for="c in row.clearings" :key="c.id" class="mr-1.5 inline-block text-sm">
@@ -403,7 +404,7 @@ watch([() => pid.value, sid], () => {
               </div>
               <p v-if="!settle.lines.length" class="m-0 text-sm text-muted-foreground" data-testid="no-settle-lines">{{ t('reconcile.noSettle') }}</p>
               <DataTable v-else :columns="settleColumns" :rows="settle.lines" row-key="journal_line_id" :row-test-id="(u) => `settle-${u.journal_line_id}`" :caption="t('reconcile.paymentsOf')" data-testid="settle-lines">
-                <template #cell-pick="{ row }"><input v-model="settle.picked" type="checkbox" class="size-4 accent-primary" :value="row.journal_line_id" /></template>
+                <template #cell-pick="{ row }"><Checkbox v-model="settle.picked" :value="row.journal_line_id" :aria-label="t('reconcile.pickRow')" /></template>
               </DataTable>
               <p v-if="settle.picked.length" class="m-0 text-sm" data-testid="settle-summary">
                 {{ t('reconcile.settleSummary', { gross: $money(fromMilli(settleGross)), net: $money(fromMilli(settleNet)) }) }}
@@ -445,7 +446,7 @@ watch([() => pid.value, sid], () => {
         <CardContent>
           <p v-if="!uncleared.length" class="m-0 text-sm text-muted-foreground" data-testid="no-uncleared">{{ t('reconcile.allCleared', { date: statement.period_to }) }}</p>
           <DataTable v-else :columns="unclearedColumns" :rows="uncleared" row-key="journal_line_id" :row-test-id="(u) => `uncleared-${u.journal_line_id}`" :caption="t('reconcile.unclearedTitle')" data-testid="uncleared">
-            <template #cell-pick="{ row }"><input v-model="picked" type="checkbox" class="size-4 accent-primary" :value="row.journal_line_id" /></template>
+            <template #cell-pick="{ row }"><Checkbox v-model="picked" :value="row.journal_line_id" :aria-label="t('reconcile.pickRow')" /></template>
             <template #cell-remaining="{ row }">{{ $money(row.remaining) }}<small v-if="row.cleared !== '0'" class="text-muted-foreground">{{ ` ${t('reconcile.ofAmount', { amount: $money(row.amount) })}` }}</small></template>
           </DataTable>
           <div v-if="editable && picked.length" class="mt-3 flex items-center justify-end gap-3">

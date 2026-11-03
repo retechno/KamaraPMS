@@ -8,6 +8,7 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { formatMoney } from '@/utils/format'
 import { usePropertyStore } from '@/stores/property'
@@ -77,8 +78,8 @@ function done(message: string): void {
       <p v-if="!rows.length" class="m-0 text-sm text-muted-foreground" data-testid="transferred-empty">{{ t('folioTransfer.listEmpty') }}</p>
       <div v-else class="grid gap-2">
         <div v-for="r in rows" :key="r.id" class="grid gap-1 rounded-lg border border-border p-3 text-sm md:grid-cols-[2rem_1fr_auto] md:items-start" :data-testid="`transferred-${r.id}`">
-          <input
-            v-if="canReturn && r.returnable" type="checkbox" class="mt-1 size-4 accent-primary" :checked="picked.includes(r.head_transfer_id)" :disabled="!sameHolder(r) && !picked.includes(r.head_transfer_id)"
+          <Checkbox
+            v-if="canReturn && r.returnable" label-class="mt-1" :model-value="picked.includes(r.head_transfer_id)" :disabled="!sameHolder(r) && !picked.includes(r.head_transfer_id)"
             :aria-label="t('folioTransfer.pick')" :data-testid="`pick-transfer-${r.id}`" @change="toggle(r)"
           />
           <span v-else />

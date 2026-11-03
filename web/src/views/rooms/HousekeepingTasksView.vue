@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -320,10 +321,10 @@ watch(() => [filter.view, filter.status], () => void load())
           data-testid="tasks"
         >
           <template #header-pick>
-            <input type="checkbox" :aria-label="t('cleaning.tickAll')" data-testid="pick-all" :checked="openCount > 0 && picked.length === openCount" @change="toggleAll(($event.target as HTMLInputElement).checked)" />
+            <Checkbox :aria-label="t('cleaning.tickAll')" data-testid="pick-all" :model-value="openCount > 0 && picked.length === openCount" @change="toggleAll(($event.target as HTMLInputElement).checked)" />
           </template>
           <template #cell-pick="{ row: task }">
-            <input v-model="picked" type="checkbox" :value="task.id" :disabled="!open(task)" :aria-label="t('cleaning.tickRoom', { number: task.room_number })" />
+            <Checkbox v-model="picked" :value="task.id" :disabled="!open(task)" :aria-label="t('cleaning.tickRoom', { number: task.room_number })" />
           </template>
           <template #cell-room_number="{ row: task }">
             <b>{{ task.room_number }}</b>
