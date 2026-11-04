@@ -29,6 +29,17 @@ const search = {
   ],
 }
 const freePlan = { id: 9, code: 'COMP', name: 'Complimentary', price_mode: 'EXCLUSIVE', occupancy_kind: 'COMPLIMENTARY', nightly: [], missing_nights: 0, estimate: { net: '0', service: '0', tax: '0', total: '0' } }
+/** The calendar of the availability page: 14 nights from 2026-10-02; DLX has 2 left, then 0 on the 4th, oversold (-1) on the 5th. */
+const stripNight = (date: string, available: number) => ({ date, sellable: 3, blocked: 0, held: 3 - available, available, occupancy_percent: 50, in_house: 0, arrivals: 0, reservations: 0, complimentary: 0, house_use: 0 })
+const stripDates = Array.from({ length: 14 }, (_, i) => `2026-10-${String(2 + i).padStart(2, '0')}`)
+const stripCalendar = {
+  from: '2026-10-02', to: '2026-10-16',
+  room_types: [
+    { room_type_id: 10, code: 'DLX', name: 'Deluxe', rooms_total: 3, nights: stripDates.map((d) => stripNight(d, d === '2026-10-04' ? 0 : d === '2026-10-05' ? -1 : 2)) },
+    { room_type_id: 11, code: 'STD', name: 'Standard', rooms_total: 3, nights: stripDates.map((d) => stripNight(d, 1)) },
+  ],
+  totals: [],
+}
 const siti = { id: 3, code: 'GST000001', first_name: 'Siti', last_name: 'Nurhaliza' }
 
 const beds = [{ id: 5, code: 'KING', name: 'King', is_active: true }, { id: 6, code: 'TWIN', name: 'Twin', is_active: true }]
@@ -40,7 +51,7 @@ function mountView(permissions = ['reservation.read', 'reservation.create'], att
   const property = usePropertyStore()
   property.currentId = 7
   property.clock = { business_date: '2026-10-02' } as never
-  GET = vi.fn(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : search }))
+  GET = vi.fn(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/calendar') ? stripCalendar : path.endsWith('/bed-types') ? { data: beds } : search }))
   POST = vi.fn().mockResolvedValue({ data: { id: 42 } })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   const push = vi.spyOn(router, 'push')
@@ -52,6 +63,21 @@ describe('NewReservationView', () => {
     GET = vi.fn()
     POST = vi.fn()
     document.body.innerHTML = ''
+  })
+
+  it('shows the 14 nights from the arrival under the search, before anything is searched', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid=results]').exists()).toBe(false)
+    expect(GET).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/availability/calendar', { params: { path: { propertyId: 7 }, query: { from: '2026-10-02', to: '2026-10-16' } } })
+    expect(w.findAll('[data-testid=availability-strip] [data-strip-day]')).toHaveLength(14)
+  })
+
+  it('does not ask for the calendar of someone who may not create a reservation', async () => {
+    const { w } = mountView(['reservation.read'])
+    await flushPromises()
+    expect(w.find('[data-testid=availability-strip]').exists()).toBe(false)
+    expect(GET.mock.calls.some(([p]) => String(p).endsWith('/calendar'))).toBe(false)
   })
 
   it('needs create permission', async () => {
@@ -120,7 +146,7 @@ describe('NewReservationView', () => {
   it('asks for the reason when the plan is complimentary, and sends it', async () => {
     const { w } = mountView(['reservation.read', 'reservation.create', 'reservation.complimentary', 'reservation.complimentary_approve'])
     await flushPromises()
-    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : { ...search, room_types: [{ ...search.room_types[0], rate_plans: [...search.room_types[0]!.rate_plans, freePlan] }] } }))
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/calendar') ? stripCalendar : path.endsWith('/bed-types') ? { data: beds } : { ...search, room_types: [{ ...search.room_types[0], rate_plans: [...search.room_types[0]!.rate_plans, freePlan] }] } }))
     await w.get('form[data-testid=search-form]').trigger('submit')
     await flushPromises()
     expect(w.get('[data-testid=kind-COMP]').text()).toBe('Complimentary')
@@ -142,7 +168,7 @@ describe('NewReservationView', () => {
   async function pickAndChangeRate(permissions: string[]) {
     const { w } = mountView(permissions)
     await flushPromises()
-    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : priced }))
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/calendar') ? stripCalendar : path.endsWith('/bed-types') ? { data: beds } : priced }))
     await w.get('form[data-testid=search-form]').trigger('submit')
     await flushPromises()
     await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
@@ -159,7 +185,7 @@ describe('NewReservationView', () => {
   async function pickFree(permissions: string[]) {
     const { w } = mountView(permissions)
     await flushPromises()
-    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : { ...search, room_types: [{ ...search.room_types[0]!, rate_plans: [freePlan] }] } }))
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/calendar') ? stripCalendar : path.endsWith('/bed-types') ? { data: beds } : { ...search, room_types: [{ ...search.room_types[0]!, rate_plans: [freePlan] }] } }))
     await w.get('form[data-testid=search-form]').trigger('submit')
     await flushPromises()
     await w.get('[data-testid=pick-DLX-COMP]').trigger('click')
@@ -219,7 +245,7 @@ describe('NewReservationView', () => {
   it('does not offer a rate change to someone who may not override', async () => {
     const { w } = mountView()
     await flushPromises()
-    GET.mockImplementation(async () => ({ data: priced }))
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/calendar') ? stripCalendar : priced }))
     await w.get('form[data-testid=search-form]').trigger('submit')
     await flushPromises()
     await w.get('[data-testid=pick-DLX-BAR]').trigger('click')
@@ -405,7 +431,7 @@ describe('NewReservationView: company and group', () => {
         { bed_type_id: 6, code: 'TWIN', name: 'Twin', available_min: 1, per_night: [], rate_plans: [plan('30000')] },
       ] }, search.room_types[1]],
     }
-    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : variants }))
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/calendar') ? stripCalendar : path.endsWith('/bed-types') ? { data: beds } : variants }))
     await flushPromises()
     await w.get('form[data-testid=search-form]').trigger('submit')
     await flushPromises()
@@ -448,7 +474,7 @@ describe('NewReservationView: company and group', () => {
     document.body.innerHTML = ''
     const { w } = mountView(permissions)
     await flushPromises()
-    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/bed-types') ? { data: beds } : restrictedSearch }))
+    GET.mockImplementation(async (path: string) => ({ data: path.endsWith('/guests') ? { data: [siti] } : path.endsWith('/calendar') ? stripCalendar : path.endsWith('/bed-types') ? { data: beds } : restrictedSearch }))
     await w.get('form[data-testid=search-form]').trigger('submit')
     await flushPromises()
     return w

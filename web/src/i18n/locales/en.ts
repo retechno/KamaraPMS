@@ -1191,6 +1191,12 @@ export const en = {
     depositTaken: 'Deposit {number} taken; the folio balance is {balance}.',
   },
   newReservation: {
+    stripHeading: 'Rooms left in the next {n} nights from the arrival',
+    stripNote: 'Rooms left per night. The shaded nights are the stay. Advisory: only booking decides.',
+    stripCut: 'The stay is longer than {n} nights; the rest is not shown.',
+    stripStay: '(night of the stay)',
+    stripEmpty: 'No room type to show.',
+    stripFailed: 'The rooms left per night could not be loaded. The search below still works.',
     title: 'New reservation',
     reservations: 'Reservations',
     selectProperty: 'Select a property first.',

@@ -9,6 +9,7 @@ import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
 import type { Approval, AvailabilitySearch, BedType, Company, Group, Guest, PlanOffer, ReservationSource, TypeOffer, Violation } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import AvailabilityStrip from '@/components/AvailabilityStrip.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -323,6 +324,8 @@ async function book(approval?: Approval): Promise<void> {
         <Button type="submit" :disabled="searching"><Search />{{ t('newReservation.search') }}</Button>
       </form>
     </Card>
+
+    <AvailabilityStrip v-if="property.currentId !== null" :property-id="property.currentId" :arrival="search.arrival" :departure="search.departure" :business-date="businessDate" />
 
     <Card v-if="result" class="mb-4" data-testid="results">
       <CardHeader><CardTitle>{{ t('newReservation.nightsHeading', { n: result.nights.length }) }}</CardTitle></CardHeader>
