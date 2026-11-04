@@ -101,6 +101,18 @@ describe('ArrivalsView and the check-in panel', () => {
     expect(reader.w.find('[data-testid=open-4]').exists()).toBe(false)
   })
 
+  it('does not repeat the status the list was asked with on every row, and keeps the readiness', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    const row = w.get('[data-testid=open-4]').element.closest('tr') as HTMLElement
+    expect(row.querySelector('[data-slot=status-badge][data-status=RESERVED]')).toBeNull()
+    expect(row.querySelector('[data-testid=readiness]')).not.toBeNull() // the readiness is what the row adds
+    // a row whose status is not the one asked for would still say it
+    await w.get('select[name=status]').setValue('CANCELLED')
+    await flushPromises()
+    expect((w.get('[data-testid=open-4]').element.closest('tr') as HTMLElement).querySelector('[data-slot=status-badge][data-status=RESERVED]')).not.toBeNull()
+  })
+
   it('says the guests of an arrival in words, not as "2+0"', async () => {
     const { w } = mountView()
     await flushPromises()

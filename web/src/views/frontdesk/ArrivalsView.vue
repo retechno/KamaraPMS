@@ -62,6 +62,8 @@ const guestId = ref<number | null>(null)
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const chosenDate = ref('')
 const status = ref('CONFIRMED')
+/** The status the rows were asked with: the list of one status does not repeat it on every row (the readiness is what each row adds). */
+const shownStatus = ref('')
 // The search can come in the address (?q=): the reservation screens link here to check a guest in.
 const q = ref(typeof route?.query.q === 'string' ? route.query.q : '')
 const typeId = ref('')
@@ -134,6 +136,7 @@ async function load(): Promise<void> {
     })
     if (mine !== latest) return
     rows.value = data?.data ?? []
+    shownStatus.value = status.value
     loaded.value = true
     if (isDefault.value) emit('loaded', rows.value.length) // the count on the tab is the count of the default list
   } catch (e) {
@@ -296,8 +299,8 @@ watch(checkedInCount, () => void load()) // a check-in made from the room panel
         <div class="text-xs text-muted-foreground">{{ partyText(row.adult_count, row.child_count) }}</div>
       </template>
       <template #cell-state="{ row }">
-        <StatusBadge domain="reservation" :status="lineUiStatus(row.status)" />
-        <div class="mt-0.5"><ReadinessBadge :readiness="row.readiness" /></div>
+        <StatusBadge v-if="row.status !== shownStatus" domain="reservation" :status="lineUiStatus(row.status)" />
+        <div :class="row.status !== shownStatus && 'mt-0.5'"><ReadinessBadge :readiness="row.readiness" /></div>
         <div class="mt-0.5 text-xs text-muted-foreground tabular-nums">
           {{ t('frontDesk.arrivals.deposit') }}
           <span v-if="row.deposit" :data-testid="`deposit-${row.reservation_room_id}`">{{ $money(row.deposit.paid) }}</span>
