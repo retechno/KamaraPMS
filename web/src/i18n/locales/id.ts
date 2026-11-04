@@ -1190,6 +1190,12 @@ export const id: Messages = {
     depositTaken: 'Deposit {number} diterima; saldo folio {balance}.',
   },
   newReservation: {
+    stripHeading: 'Kamar tersisa dalam {n} malam sejak kedatangan',
+    stripNote: 'Jumlah kamar tersisa per malam. Malam yang diarsir adalah masa menginap. Hanya saran: yang menentukan adalah pemesanan.',
+    stripCut: 'Masa menginap lebih dari {n} malam; sisanya tidak ditampilkan.',
+    stripStay: '(malam menginap)',
+    stripEmpty: 'Tidak ada tipe kamar untuk ditampilkan.',
+    stripFailed: 'Sisa kamar per malam tidak bisa dimuat. Pencarian di bawah tetap bisa dipakai.',
     title: 'Reservasi baru',
     reservations: 'Reservasi',
     selectProperty: 'Pilih properti terlebih dahulu.',
