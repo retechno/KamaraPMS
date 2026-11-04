@@ -68,7 +68,7 @@ onBeforeUnmount(() => { request++ })
       <p v-if="failed" class="muted m-0" role="status" data-testid="strip-failed">{{ t('newReservation.stripFailed') }}</p>
       <template v-else-if="calendar">
         <p v-if="calendar.room_types.length === 0" class="muted m-0" data-testid="strip-empty">{{ t('newReservation.stripEmpty') }}</p>
-        <div v-else class="overflow-x-auto">
+        <div v-else class="relative overflow-x-auto" data-testid="strip-scroll"><!-- relative: the sr-only text of the nights out of view is absolute and would otherwise widen the page -->
           <table class="w-full min-w-[640px] border-collapse text-[13px]">
             <caption class="sr-only">{{ t('newReservation.stripHeading', { n: NIGHTS }) }}</caption>
             <thead>
@@ -94,7 +94,7 @@ onBeforeUnmount(() => { request++ })
             </tbody>
           </table>
         </div>
-        <p class="m-0 mt-2 text-[13px] text-muted-foreground">{{ t('newReservation.stripNote') }}<template v-if="cut"> {{ t('newReservation.stripCut', { n: NIGHTS }) }}</template></p>
+        <p class="m-0 mt-2 text-[13px] text-muted-foreground">{{ cut ? `${t('newReservation.stripNote')} ${t('newReservation.stripCut', { n: NIGHTS })}` : t('newReservation.stripNote') }}</p>
       </template>
     </CardContent>
   </Card>

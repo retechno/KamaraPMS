@@ -87,6 +87,7 @@ describe('AvailabilityStrip', () => {
     const w = mountStrip({ departure: '2026-10-25' })
     await flushPromises()
     expect(w.text()).toContain('longer than 14 nights')
+    expect(w.text()).toContain('only booking decides. The stay is longer') // a space between the two sentences
     await w.setProps({ departure: '2026-10-19' })
     expect(w.text()).not.toContain('longer than 14 nights')
   })
@@ -117,6 +118,15 @@ describe('AvailabilityStrip', () => {
     expect(w.get('[data-strip-day]').attributes('data-strip-day')).toBe('2026-10-08')
     expect(w.get('[data-strip-cell="DLX-2026-10-08"]').text()).toBe('2')
     expect(w.find('[data-strip-cell="DLX-2026-10-05"]').exists()).toBe(false)
+  })
+
+  it('keeps the sr-only text of the nights out of view inside the scrolling box (it is absolute: without a relative box it widens the page)', async () => {
+    const w = mountStrip({ departure: '2026-10-25' })
+    await flushPromises()
+    const box = w.get('[data-testid=strip-scroll]')
+    expect(box.classes()).toContain('overflow-x-auto')
+    expect(box.classes()).toContain('relative')
+    expect(box.findAll('.sr-only').length).toBeGreaterThan(0)
   })
 
   it('says it could not load, and keeps the page', async () => {
