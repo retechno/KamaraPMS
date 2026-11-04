@@ -97,4 +97,56 @@ describe('SystemView', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid=api-status]').text()).toBe('Unavailable')
   })
+
+  it('says "cannot be checked" when /healthz is not passed on but the application answers (a 401 is an answer)', async () => {
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/auth/me') throw problem(401, 'UNAUTHENTICATED')
+      throw problem(502, 'BAD_GATEWAY')
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(GET).toHaveBeenCalledWith('/api/v1/auth/me')
+    expect(wrapper.get('[data-testid=api-status]').text()).toBe('Cannot be checked')
+  })
+
+  it('says "cannot be checked" when /healthz fails with a network error but /auth/me answers', async () => {
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/auth/me') return { data: { user: { id: 5 } } }
+      throw new TypeError('Failed to fetch')
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.get('[data-testid=api-status]').text()).toBe('Cannot be checked')
+  })
+
+  it('says it is down when /healthz and /auth/me both fail', async () => {
+    GET.mockImplementation(async (path: string) => {
+      void path
+      throw problem(502, 'BAD_GATEWAY')
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.get('[data-testid=api-status]').text()).toBe('Unavailable')
+  })
+
+  it('does not ask /auth/me when /healthz answers, nor when /readyz says 503', async () => {
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/healthz') return { data: { status: 'ok' } }
+      throw problem(503, 'NOT_READY')
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(GET).not.toHaveBeenCalledWith('/api/v1/auth/me')
+    expect(wrapper.get('[data-testid=db-status]').text()).toBe('Unavailable')
+  })
+
+  it('says the database "cannot be checked" when /readyz is not passed on (502) and the application answers', async () => {
+    GET.mockImplementation(async (path: string) => {
+      if (path === '/healthz' || path === '/api/v1/auth/me') return { data: {} }
+      throw problem(502, 'BAD_GATEWAY')
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.get('[data-testid=db-status]').text()).toBe('Cannot be checked')
+  })
 })

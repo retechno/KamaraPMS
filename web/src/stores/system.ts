@@ -22,7 +22,7 @@ export const useSystemStore = defineStore('system', () => {
         await api.GET('/healthz')
         apiStatus.value = 'up'
       } catch (e) {
-        apiStatus.value = failure(e)
+        apiStatus.value = await failure(e)
         databaseStatus.value = 'unknown' // cannot tell while the API is unreachable
         lastError.value = asApiError(e)
         return
@@ -31,7 +31,7 @@ export const useSystemStore = defineStore('system', () => {
         await api.GET('/readyz')
         databaseStatus.value = 'up'
       } catch (e) {
-        databaseStatus.value = failure(e)
+        databaseStatus.value = await failure(e, true)
         lastError.value = asApiError(e)
       }
     } finally {
@@ -43,9 +43,24 @@ export const useSystemStore = defineStore('system', () => {
   return { apiStatus, databaseStatus, lastError, checkedAt, checking, check }
 })
 
-/** What a failed check says: down when nothing answered or the server said it is not well (5xx), unverified when it answered with something else (a 4xx: the route is not there, or not allowed). */
-function failure(e: unknown): ComponentStatus {
-  return e instanceof ApiError && e.status >= 400 && e.status < 500 ? 'unverified' : 'down'
+/**
+ * What a failed check says: unverified when the server answered with something else than a health check (a 4xx: the route is not there, or not allowed); down when nothing answered or it said it is not well (5xx).
+ * A proxy often passes only the routes of the application, so before calling a part down the check asks a route that is certainly the application's (`/auth/me`): any answer of it, even a 401, means the server is there and only the health route did not get through.
+ * `/readyz` answering 503 is the database itself saying so: that stays down.
+ */
+async function failure(e: unknown, readiness = false): Promise<ComponentStatus> {
+  if (e instanceof ApiError && e.status >= 400 && e.status < 500) return 'unverified'
+  if (readiness && e instanceof ApiError && e.status === 503) return 'down'
+  return (await applicationAnswers()) ? 'unverified' : 'down'
+}
+
+async function applicationAnswers(): Promise<boolean> {
+  try {
+    await api.GET('/api/v1/auth/me')
+    return true
+  } catch (e) {
+    return e instanceof ApiError && e.status < 500
+  }
 }
 
 function asApiError(e: unknown): ApiError {
