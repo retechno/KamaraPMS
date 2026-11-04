@@ -307,7 +307,8 @@ watch(() => property.currentId, () => {
     </div>
 
     <div class="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
-      <div class="flex flex-wrap gap-1" role="group" :aria-label="t('roomStatus.filterOccupancy')">
+      <div class="flex flex-wrap items-center gap-1" role="group" aria-labelledby="filter-occ-label">
+        <span id="filter-occ-label" class="mr-1 text-sm font-medium text-muted-foreground" data-testid="filter-occ-label">{{ t('roomStatus.filterOccupancy') }}:</span>
         <Button
           v-for="c in occupancyChips"
           :key="c.value"
@@ -320,7 +321,8 @@ watch(() => property.currentId, () => {
           {{ c.label }}
         </Button>
       </div>
-      <div class="flex flex-wrap gap-1" role="group" :aria-label="t('roomStatus.filterHousekeeping')">
+      <div class="flex flex-wrap items-center gap-1" role="group" aria-labelledby="filter-hk-label">
+        <span id="filter-hk-label" class="mr-1 text-sm font-medium text-muted-foreground" data-testid="filter-hk-label">{{ t('roomStatus.filterHousekeeping') }}:</span>
         <Button
           v-for="c in housekeepingChips"
           :key="c.value"

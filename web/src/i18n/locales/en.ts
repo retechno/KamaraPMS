@@ -427,7 +427,7 @@ export const en = {
     legendOccupied: 'Occupied: a white tile; the bar and the chip show the cleaning',
     blocked: 'Blocked',
     filterOccupancy: 'Occupancy',
-    filterHousekeeping: 'Housekeeping',
+    filterHousekeeping: 'Cleaning',
     noMatch: 'No room matches the filters.',
     dnd: 'Do not disturb',
     makeUp: 'Make-up requested',
