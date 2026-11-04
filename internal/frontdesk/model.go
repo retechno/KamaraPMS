@@ -223,13 +223,8 @@ type InHouseStay struct {
 	Children  int        `json:"children"`
 }
 
-// InHouseBalance is what the stay owes. Amount is the sum of the balances of its folios (the guest folio and the company folios), each of which is given in Folios with its own balance;
-// Status is SETTLED (zero), OUTSTANDING (above zero) or CREDIT (below zero) for that sum, or NO_FOLIO when the stay has no folio (Amount is then empty: no folio is not a zero balance).
-type InHouseBalance struct {
-	Amount string             `json:"amount"`
-	Status string             `json:"status"`
-	Folios []folios.StayFolio `json:"folios"`
-}
+// InHouseBalance is what the stay owes: the balance the night audit reports for an unfinished departure too (folios.StayBalance).
+type InHouseBalance = folios.StayBalance
 
 // Arrival is a CONFIRMED room due on a date.
 type Arrival struct {

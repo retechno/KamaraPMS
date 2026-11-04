@@ -16672,6 +16672,17 @@ export interface components {
             data: components["schemas"]["InHouseRow"][];
             next_cursor?: string;
         };
+        /** @description What a stay owes, from its folios. The in-house list and the unfinished departures of the night audit report it with the same computation. */
+        StayBalance: {
+            /** @description The sum of the balances of the folios of the stay; each is also in `folios`. Empty with NO_FOLIO. */
+            amount: string;
+            /**
+             * @description Zero, above zero or below zero for `amount`; NO_FOLIO when the stay has no folio (then `amount` is empty: no folio is not a zero balance).
+             * @enum {string}
+             */
+            status: "SETTLED" | "OUTSTANDING" | "CREDIT" | "NO_FOLIO";
+            folios: components["schemas"]["StayFolio"][];
+        };
         InHouseRow: {
             /** Format: int64 */
             id: number;
@@ -16724,16 +16735,7 @@ export interface components {
                 adults: number;
                 children: number;
             };
-            balance: {
-                /** @description The sum of the balances of the folios of the stay; each is also in `folios`. Empty with NO_FOLIO. */
-                amount: string;
-                /**
-                 * @description Zero, above zero or below zero for `amount`; NO_FOLIO when the stay has no folio (then `amount` is empty: no folio is not a zero balance).
-                 * @enum {string}
-                 */
-                status: "SETTLED" | "OUTSTANDING" | "CREDIT" | "NO_FOLIO";
-                folios: components["schemas"]["StayFolio"][];
-            };
+            balance: components["schemas"]["StayBalance"];
             /** @description What is known before a check-out; the check-out itself applies every rule, so a zero balance is no promise. */
             checkout: {
                 /** @enum {string} */
@@ -16980,6 +16982,7 @@ export interface components {
             room?: string;
             guest: string;
             departure_date: components["schemas"]["Date"];
+            balance: components["schemas"]["StayBalance"];
         };
         NightAuditBlockers: {
             /** @description Why the day close could not make its journal (accounting not set up, the system accounts, the room revenue account, the departments). The same blockers as GET .../accounting/readiness. */

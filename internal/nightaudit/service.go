@@ -10,6 +10,7 @@ import (
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/audit"
 	"kamarapms/internal/expected"
+	"kamarapms/internal/folios"
 	"kamarapms/internal/housekeeping"
 	"kamarapms/internal/nightaudit/nightauditdb"
 	"kamarapms/internal/platform/apperr"
@@ -38,7 +39,16 @@ type Service struct {
 	outlets OutletChecker
 	stock   StockChecker
 	pack    PackBuilder
+	balance BalanceReader
 }
+
+// BalanceReader reads the balances of many stays at once (folios.Service): the balance of the in-house list, for the unfinished departures.
+type BalanceReader interface {
+	StayBalances(ctx context.Context, tenantID, propertyID int64, stayIDs []int64) (map[int64]folios.StayBalance, error)
+}
+
+// SetBalanceReader wires the folios; without it an unfinished departure has no balance (NO_FOLIO).
+func (s *Service) SetBalanceReader(r BalanceReader) { s.balance = r }
 
 // StockChecker is the inventory at the close of the day: its findings, and its step of the close (internal/inventory through an adapter in internal/app).
 type StockChecker interface {
@@ -143,9 +153,23 @@ func (s *Service) analyze(ctx context.Context, p auth.Principal, propertyID int6
 	if err != nil {
 		return a, err
 	}
+	balances := map[int64]folios.StayBalance{}
+	if s.balance != nil && len(departures) > 0 {
+		ids := make([]int64, len(departures))
+		for i, r := range departures {
+			ids[i] = r.StayID
+		}
+		if balances, err = s.balance.StayBalances(ctx, p.TenantID, propertyID, ids); err != nil {
+			return a, err
+		}
+	}
 	for _, r := range departures {
+		bal, ok := balances[r.StayID]
+		if !ok {
+			bal = folios.StayBalance{Status: "NO_FOLIO", Folios: []folios.StayFolio{}}
+		}
 		a.blockers.UnresolvedDepartures = append(a.blockers.UnresolvedDepartures, Departure{
-			StayID: r.StayID, StayNumber: r.StayNumber, Room: deref(r.RoomNumber), Guest: name(r.GuestFirstName, r.GuestLastName), DepartureDate: r.DepartureDate,
+			StayID: r.StayID, StayNumber: r.StayNumber, Room: deref(r.RoomNumber), Guest: name(r.GuestFirstName, r.GuestLastName), DepartureDate: r.DepartureDate, Balance: bal,
 		})
 	}
 	if s.shifts != nil {

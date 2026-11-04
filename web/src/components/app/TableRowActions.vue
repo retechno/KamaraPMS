@@ -21,10 +21,10 @@ const run = (key: string): void => props.actions.find((a) => a.key === key)?.onS
 <template>
   <div class="flex items-center justify-end gap-1.5" data-slot="row-actions">
     <template v-for="a in buttons" :key="a.key">
-      <Button v-if="a.to" as-child size="sm" variant="outline" :data-testid="a.testId ?? a.key">
-        <RouterLink :to="a.to">{{ a.label }}</RouterLink>
+      <Button v-if="a.to" as-child size="sm" :variant="a.variant ?? 'outline'" :data-testid="a.testId ?? a.key">
+        <RouterLink :to="a.to"><component :is="a.icon" v-if="a.icon" :class="a.iconClass" aria-hidden="true" />{{ a.label }}</RouterLink>
       </Button>
-      <Button v-else type="button" size="sm" variant="outline" :disabled="a.disabled" :data-testid="a.testId ?? a.key" @click="a.onSelect?.()">{{ a.label }}</Button>
+      <Button v-else type="button" size="sm" :variant="a.variant ?? 'outline'" :disabled="a.disabled" :data-testid="a.testId ?? a.key" @click="a.onSelect?.()"><component :is="a.icon" v-if="a.icon" :class="a.iconClass" aria-hidden="true" />{{ a.label }}</Button>
     </template>
     <RowMenu :items="menu" @select="run" />
   </div>

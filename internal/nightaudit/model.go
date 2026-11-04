@@ -9,6 +9,7 @@ import (
 
 	"kamarapms/internal/accounting"
 	"kamarapms/internal/expected"
+	"kamarapms/internal/folios"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/roomcharge"
 	"kamarapms/internal/shifts"
@@ -25,13 +26,15 @@ type Arrival struct {
 	ArrivalDate        civil.Date `json:"arrival_date"`
 }
 
-// Departure is an unresolved departure: an OPEN stay that should have left.
+// Departure is an unresolved departure: an OPEN stay that should have left. Balance is what the stay owes, the same value and shape as the balance of the in-house list, so the
+// front desk can tell a departure that has to pay from one that can leave.
 type Departure struct {
-	StayID        int64      `json:"stay_id"`
-	StayNumber    string     `json:"stay_number"`
-	Room          string     `json:"room,omitempty"`
-	Guest         string     `json:"guest"`
-	DepartureDate civil.Date `json:"departure_date"`
+	StayID        int64              `json:"stay_id"`
+	StayNumber    string             `json:"stay_number"`
+	Room          string             `json:"room,omitempty"`
+	Guest         string             `json:"guest"`
+	DepartureDate civil.Date         `json:"departure_date"`
+	Balance       folios.StayBalance `json:"balance"`
 }
 
 // Blockers are the findings that stop the run (checks 2, 3, 4 and 6, a cashier shift still open when the property asks for the cash to be counted first, and an accounting setup that could not make the journal of the day).

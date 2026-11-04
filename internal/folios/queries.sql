@@ -363,6 +363,15 @@ WHERE property_id = @property_id AND folio_id = @folio_id AND transaction_type =
 -- name: ListStayFolios :many
 SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id ORDER BY (folio_type = 'GUEST') DESC, id;
 
+-- Every folio of many stays at once, in the order of ListStayFolios within each stay.
+-- name: ListFoliosOfStays :many
+SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = ANY(@stay_ids::bigint[]) ORDER BY stay_id, (folio_type = 'GUEST') DESC, id;
+
+-- The ledger totals of many folios at once: the same sums as FolioTotals, one row per folio that has items.
+-- name: FolioTotalsOf :many
+SELECT folio_id, COALESCE(sum(debit), 0)::numeric AS debit, COALESCE(sum(credit), 0)::numeric AS credit
+FROM folio_items WHERE property_id = @property_id AND folio_id = ANY(@folio_ids::bigint[]) GROUP BY folio_id;
+
 -- name: ListStayOpenFolios :many
 SELECT * FROM folios WHERE tenant_id = @tenant_id AND property_id = @property_id AND stay_id = @stay_id AND status = 'OPEN' ORDER BY id;
 

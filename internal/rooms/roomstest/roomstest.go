@@ -126,6 +126,7 @@ func Setup(t *testing.T) *Env {
 	rs.SetApprover(ia)
 	na := nightaudit.NewService(txm, c, aw, authz, ten, rc, rs, hk)
 	na.SetJournaler(acct)
+	na.SetBalanceReader(fo)
 	fd := frontdesk.NewService(txm, c, aw, authz, ten, avail, gs, hk, rs, fo, rc)
 	rm := rooms.NewService(txm, c, aw, authz, ten, hk, avail)
 	ten.OnPropertyCreated(rm.SeedProperty) // and the standard bed types

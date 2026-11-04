@@ -11,7 +11,7 @@ import { usePropertyStore } from '@/stores/property'
 import { newIdempotencyKey } from '@/utils/reservations'
 
 const props = defineProps<{ detail: StayDetail }>()
-const emit = defineEmits<{ done: [result: CheckOutResult]; cancel: [] }>()
+const emit = defineEmits<{ done: [result: CheckOutResult]; cancel: []; failed: [error: ApiError] }>()
 const property = usePropertyStore()
 
 type Step = 'review' | 'done'
@@ -45,7 +45,10 @@ async function submit(): Promise<void> {
     }
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
-    if (e instanceof ApiError) key = newIdempotencyKey()
+    if (e instanceof ApiError) {
+      key = newIdempotencyKey()
+      emit('failed', e) // the page that holds the wizard may need to read again (a stay that moved on under it)
+    }
   } finally {
     busy.value = false
   }
