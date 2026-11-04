@@ -279,7 +279,7 @@ const rooms = computed(() => {
                 :title="`${formatDate(d.business_date)}: ${formatPercent(d.occupancy_percent)} · ${t('dashboard.manager.adr')} ${formatMoney(d.adr)} · ${t('dashboard.manager.revpar')} ${formatMoney(d.revpar)}`"
               >
                 <span class="block min-h-0.5 w-full rounded-t-sm bg-primary" data-testid="trend-bar" :style="{ height: bar(d.occupancy_percent) }" />
-                <small class="mt-1 text-[10px] text-muted-foreground">{{ shortDate(d.business_date) }}</small>
+                <small class="mt-1 text-[12px] text-muted-foreground">{{ shortDate(d.business_date) }}</small>
               </div>
             </div>
           </CardContent>

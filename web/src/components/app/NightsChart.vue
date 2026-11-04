@@ -42,7 +42,7 @@ const clamp = (p: number): number => Math.min(100, Math.max(0, p))
               :style="{ height: `${clamp(b.percent)}%` }"
             />
           </div>
-          <small class="h-4 whitespace-nowrap pt-0.5 text-center text-[10px] leading-3 text-muted-foreground">
+          <small class="h-4 whitespace-nowrap pt-0.5 text-center text-[12px] leading-3 text-muted-foreground">
             <template v-if="b.short"><span class="sm:hidden" data-slot="label-short">{{ b.short }}</span><span class="hidden sm:inline" data-slot="label-long">{{ b.label }}</span></template>
             <template v-else>{{ b.label }}</template>
           </small>

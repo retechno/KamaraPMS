@@ -233,7 +233,7 @@ const minutesText = (m: number): string => formatDuration(m)
       <EmptyState v-if="!area" :title="t('posFloor.noTables')" :description="t('posFloor.noTablesHint')" data-testid="no-tables" />
       <div v-else class="relative w-full overflow-hidden rounded-xl border border-border bg-muted/40" :style="{ aspectRatio: `${area.grid_w} / ${area.grid_h}` }" data-testid="plan">
         <div
-          v-for="m in area.marks" :key="`m${m.id}`" class="absolute flex items-center justify-center rounded border border-dashed border-border bg-card/60 text-[11px] text-muted-foreground"
+          v-for="m in area.marks" :key="`m${m.id}`" class="absolute flex items-center justify-center rounded border border-dashed border-border bg-card/60 text-[12px] text-muted-foreground"
           :style="{ left: `${(m.x / area.grid_w) * 100}%`, top: `${(m.y / area.grid_h) * 100}%`, width: `${(m.w / area.grid_w) * 100}%`, height: `${(m.h / area.grid_h) * 100}%` }"
         >{{ m.label }}</div>
         <button
@@ -247,13 +247,13 @@ const minutesText = (m: number): string => formatDuration(m)
           <template v-if="tb.bills.length > 0">
             <span class="block w-full truncate tabular-nums">{{ tableTotal(tb) }}</span>
             <!-- how long (and the guests on a table wide enough to hold both): the second line, left out on a small table, cut when it does not fit -->
-            <span v-if="tb.w >= 3 && tb.h >= 3" class="block w-full truncate text-[11px] text-muted-foreground" data-testid="table-since">{{ tb.w >= 5 && tableGuests(tb) > 0 ? t('posFloor.guests', { n: tableGuests(tb) }) + ' · ' : '' }}{{ minutesText(tableMinutes(tb)) }}</span>
+            <span v-if="tb.w >= 3 && tb.h >= 3" class="block w-full truncate text-[12px] text-muted-foreground" data-testid="table-since">{{ tb.w >= 5 && tableGuests(tb) > 0 ? t('posFloor.guests', { n: tableGuests(tb) }) + ' · ' : '' }}{{ minutesText(tableMinutes(tb)) }}</span>
             <!-- one line of state: several bills are "2 bill", a bill that was asked for says so -->
-            <span v-if="tb.bills.length > 1" class="block w-full truncate text-[11px] font-medium" data-testid="table-state">{{ t('posFloor.bills', { n: tb.bills.length }) }}</span>
-            <span v-else-if="tb.status === 'AWAITING_PAYMENT'" class="block w-full truncate text-[11px] font-medium" data-testid="table-state">{{ t('posFloor.status_AWAITING_PAYMENT') }}</span>
+            <span v-if="tb.bills.length > 1" class="block w-full truncate text-[12px] font-medium" data-testid="table-state">{{ t('posFloor.bills', { n: tb.bills.length }) }}</span>
+            <span v-else-if="tb.status === 'AWAITING_PAYMENT'" class="block w-full truncate text-[12px] font-medium" data-testid="table-state">{{ t('posFloor.status_AWAITING_PAYMENT') }}</span>
           </template>
-          <template v-else-if="tb.holds.length > 0"><span class="block w-full truncate text-[11px]">{{ tb.holds[0]!.from_time }} · {{ tb.holds[0]!.name }}</span></template>
-          <span v-else class="text-[11px] text-muted-foreground">{{ t('posFloor.seats', { n: tb.capacity }) }}</span>
+          <template v-else-if="tb.holds.length > 0"><span class="block w-full truncate text-[12px]">{{ tb.holds[0]!.from_time }} · {{ tb.holds[0]!.name }}</span></template>
+          <span v-else class="text-[12px] text-muted-foreground">{{ t('posFloor.seats', { n: tb.capacity }) }}</span>
         </button>
       </div>
 

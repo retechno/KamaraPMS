@@ -500,7 +500,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
           <span class="tabular-nums text-muted-foreground">{{ formatMoney(p.price ?? '') }}</span>
           <span v-if="soldOut(p.id)" class="text-xs font-medium text-destructive">{{ t('posBill.soldOut') }}</span>
           <span v-else-if="alreadyOrdered(p.id) > 0" class="absolute right-1 top-1 rounded-full bg-primary px-1.5 text-xs text-primary-foreground" :data-testid="`ordered-${p.id}`">{{ alreadyOrdered(p.id) }}</span>
-          <span v-if="(p.option_groups ?? []).length > 0" class="text-[11px] text-muted-foreground">{{ t('posBill.hasOptions') }}</span>
+          <span v-if="(p.option_groups ?? []).length > 0" class="text-[12px] text-muted-foreground">{{ t('posBill.hasOptions') }}</span>
         </button>
       </div>
     </section>

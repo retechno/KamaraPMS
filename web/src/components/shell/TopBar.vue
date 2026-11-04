@@ -169,7 +169,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
     >
       <Search class="size-4 shrink-0" aria-hidden="true" />
       <span class="min-w-0 flex-1 truncate">{{ t('shell.searchPlaceholder') }}</span>
-      <kbd class="hidden shrink-0 rounded border border-border bg-card px-1.5 text-[11px] text-muted-foreground sm:inline" data-testid="search-shortcut">{{ shortcut }}</kbd>
+      <kbd class="hidden shrink-0 rounded border border-border bg-card px-1.5 text-[12px] text-muted-foreground sm:inline" data-testid="search-shortcut">{{ shortcut }}</kbd>
     </button>
 
     <div :class="cn('flex items-center gap-2 pointer-coarse:gap-1', 'ml-auto', phone && 'min-w-0')">
@@ -196,7 +196,7 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
             <!-- the state of the audit under the date: the title of the page keeps the room it needs -->
             <span
               v-if="audit"
-              :class="cn(audit.state === 'overdue' || audit.state === 'pending' ? 'truncate text-[10px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
+              :class="cn(audit.state === 'overdue' || audit.state === 'pending' ? 'truncate text-[12px] font-semibold' : 'text-xs sr-only xl:not-sr-only xl:text-muted-foreground')"
               :data-state="audit.state"
               :aria-label="audit.text"
               :title="audit.text"

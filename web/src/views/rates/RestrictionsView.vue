@@ -251,7 +251,7 @@ watch(planId, () => void loadGrid())
                 :data-testid="`cell-${rt.code}-${d}`"
                 @click="pick(rt.id, d)"
               >
-                <span v-for="m in marks(rt.id, d)" :key="m.key" :class="cn('rounded px-1 text-[10px] font-medium leading-4', m.tone)" :data-testid="`mark-${m.key}`">{{ m.label }}</span>
+                <span v-for="m in marks(rt.id, d)" :key="m.key" :class="cn('rounded px-1 text-[12px] font-medium leading-4', m.tone)" :data-testid="`mark-${m.key}`">{{ m.label }}</span>
                 <span v-if="!marks(rt.id, d).length" class="text-muted-foreground">·</span>
               </button>
             </td>

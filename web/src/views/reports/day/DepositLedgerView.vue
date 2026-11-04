@@ -29,7 +29,7 @@ watch(allowed, (ok) => {
 }, { immediate: true })
 
 const report = computed(() => data.value)
-const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-muted-foreground'
+const th = 'whitespace-nowrap px-2 py-2 text-[12px] font-medium uppercase text-muted-foreground'
 </script>
 
 <template>

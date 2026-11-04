@@ -42,7 +42,7 @@ const item = (r: CorrectionRow): string => (isPayment(r) ? methodName(r.payment_
 const figure = (r: CorrectionRow, v: string): string => (isPayment(r) ? '–' : money(v))
 /** The reference of a row: the folio, or the bill of the POS. */
 const reference = (r: CorrectionRow): string => r.folio || r.bill
-const th = 'whitespace-nowrap px-2 py-2 text-[11px] font-medium uppercase text-muted-foreground'
+const th = 'whitespace-nowrap px-2 py-2 text-[12px] font-medium uppercase text-muted-foreground'
 </script>
 
 <template>

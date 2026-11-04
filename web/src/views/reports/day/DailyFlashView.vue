@@ -83,7 +83,7 @@ const h = 'mb-2 mt-0 text-sm font-semibold'
         <Card v-if="flash.control" class="overflow-x-auto p-4" data-testid="flash-control">
           <h2 :class="h">{{ t('dayReports.flash.control') }} <Badge :variant="flash.control.balanced ? 'secondary' : 'destructive'" data-testid="control-badge">{{ flash.control.balanced ? t('dayReports.matches') : t('dayReports.differs') }}</Badge></h2>
           <table class="w-full border-collapse text-sm tabular-nums">
-            <thead><tr class="border-b border-border"><th class="px-2 py-1.5 text-left text-[11px] font-medium uppercase text-muted-foreground" /><th class="px-2 py-1.5 text-right text-[11px] font-medium uppercase text-muted-foreground">{{ t('dayReports.flash.today') }}</th><th class="px-2 py-1.5 text-right text-[11px] font-medium uppercase text-muted-foreground">{{ t('dayReports.flash.mtd') }}</th></tr></thead>
+            <thead><tr class="border-b border-border"><th class="px-2 py-1.5 text-left text-[12px] font-medium uppercase text-muted-foreground" /><th class="px-2 py-1.5 text-right text-[12px] font-medium uppercase text-muted-foreground">{{ t('dayReports.flash.today') }}</th><th class="px-2 py-1.5 text-right text-[12px] font-medium uppercase text-muted-foreground">{{ t('dayReports.flash.mtd') }}</th></tr></thead>
             <tbody>
               <tr v-for="k in (['gtr', 'gtp', 'refunds', 'to_city_ledger', 'expected_change', 'actual_change', 'difference'] as const)" :key="k" class="border-b border-border" :data-testid="`control-${k}`">
                 <td class="px-2 py-1.5">{{ t(`dayReports.flash.controlRows.${k}` as 'dayReports.flash.controlRows.gtr') }}</td>

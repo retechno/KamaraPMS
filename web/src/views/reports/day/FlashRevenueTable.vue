@@ -8,7 +8,7 @@ import { flashValue, flashVariance, rowLabel } from './flashLabels'
 
 /** The revenue of the daily flash as ONE table (docs/design/63): one heading, the groups A, B and C with the outlet as a heading row and one total row per group, then the totals and the sources. */
 const props = defineProps<{ revenue: DailyFlash['revenue']; hasBudget: boolean }>()
-const th = 'whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-medium uppercase text-muted-foreground'
+const th = 'whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-medium uppercase text-muted-foreground'
 const td = 'px-2 py-1.5 text-right'
 const blockTitle = (b: FlashBlock): string => (b.kind === 'OUTLET' ? b.title : t(`dayReports.flash.block.${b.kind}` as 'dayReports.flash.block.ROOMS'))
 const groupTitle = (code: string): string => t(`dayReports.flash.group.${code}` as 'dayReports.flash.group.A')
@@ -23,7 +23,7 @@ const variance = (l: FlashLine) => [td, l.favourable === true && 'text-success',
     <FlashCols :has-budget="hasBudget" />
     <thead>
       <tr class="border-b border-border">
-        <th class="px-2 py-1.5 text-left text-[11px] font-medium uppercase text-muted-foreground" />
+        <th class="px-2 py-1.5 text-left text-[12px] font-medium uppercase text-muted-foreground" />
         <th :class="th">{{ t('dayReports.flash.today') }}</th>
         <th :class="th">{{ t('dayReports.flash.mtd') }}</th>
         <th :class="th">{{ t('dayReports.flash.lastMonth') }}</th>

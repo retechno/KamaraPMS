@@ -43,7 +43,7 @@ const groupKey = (g: 'by_reason' | 'by_source' | 'by_company', key: string): str
   return key || t('dayReports.cancellations.noReason')
 }
 const held = (g: CancellationGroup): string => `${g.events} · ${money(g.value)}`
-const th = 'whitespace-nowrap px-2 py-2 text-left text-[11px] font-medium uppercase text-muted-foreground'
+const th = 'whitespace-nowrap px-2 py-2 text-left text-[12px] font-medium uppercase text-muted-foreground'
 </script>
 
 <template>
