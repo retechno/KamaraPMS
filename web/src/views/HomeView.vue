@@ -219,10 +219,10 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
         <RefreshCw :class="today.refreshing.value && 'animate-spin'" />
         {{ today.refreshing.value ? t('common.loading') : t('common.refresh') }}
       </Button>
-      <Button v-if="can('frontdesk.checkin')" as-child size="sm" variant="outline" data-testid="quick-walk-in">
+      <Button v-if="can('frontdesk.checkin')" as-child size="sm" data-testid="quick-walk-in">
         <RouterLink to="/walk-in"><DoorOpen />{{ t('dashboard.page.walkIn') }}</RouterLink>
       </Button>
-      <Button v-if="can('reservation.create')" as-child size="sm" data-testid="quick-new-reservation">
+      <Button v-if="can('reservation.create')" as-child size="sm" variant="outline" data-testid="quick-new-reservation">
         <RouterLink to="/reservations/new"><CalendarPlus />{{ t('dashboard.page.newReservation') }}</RouterLink>
       </Button>
     </template>

@@ -267,6 +267,16 @@ describe('HomeView, Today', () => {
       expect(id.get('[data-slot=page-header]').text()).toContain('3 tamu masih akan tiba')
     })
 
+    it('has the same main action as the front desk page: Walk-in solid first, New reservation an outline after it', async () => {
+      const all = await mountToday()
+      const walkIn = all.get('[data-testid=quick-walk-in]')
+      const booking = all.get('[data-testid=quick-new-reservation]')
+      expect(walkIn.classes()).toContain('bg-primary')
+      expect(booking.classes()).not.toContain('bg-primary')
+      expect(booking.classes()).toContain('border')
+      expect(walkIn.element.compareDocumentPosition(booking.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
     it('offers the quick actions the role may use', async () => {
       const all = await mountToday()
       expect(all.get('[data-testid=quick-new-reservation]').attributes('href')).toBe('/reservations/new')
