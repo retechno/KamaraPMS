@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -79,6 +79,28 @@ const legend = computed(() => [
 
 // ---- the grid
 const LABEL = '7rem'
+
+// The word beside a figure in the head of a type ("13 left") needs about 64 px; on a narrower column the head shows the numbers and says the words once, in the label cell. The column is measured, not guessed from the screen: the window can be 7 or 14 nights, and the chart scrolls on a phone.
+const UNIT_MIN_COLUMN = 64
+const columnWidth = ref(Number.POSITIVE_INFINITY) // unknown until it is measured (and where nothing is laid out): the words stay
+const showUnit = computed(() => columnWidth.value >= UNIT_MIN_COLUMN)
+const tapeEl = ref<HTMLElement | null>(null)
+let resizeObserver: ResizeObserver | null = null
+function measureColumn(): void {
+  const w = headCell.value?.getBoundingClientRect().width ?? 0
+  if (w > 0) columnWidth.value = w
+}
+watch(tapeEl, (el) => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  if (!el) return
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(measureColumn)
+    resizeObserver.observe(el)
+  }
+  measureColumn()
+}, { flush: 'post' })
+watch(() => dates.value.length, () => { void nextTick(measureColumn) }) // a longer window makes narrower columns in the same width
 const gridStyle = computed(() => ({ gridTemplateColumns: `${LABEL} repeat(${dates.value.length}, minmax(2.75rem, 1fr))`, '--days': String(dates.value.length) }))
 
 interface Placed { booking: TapeBooking; key: string; start: number; span: number; clippedLeft: boolean; clippedRight: boolean; arrival: string; departure: string }
@@ -134,6 +156,7 @@ onMounted(() => {
   mql?.addEventListener?.('change', syncFine)
 })
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
   mql?.removeEventListener?.('change', syncFine)
   stopDrag()
 })
@@ -342,7 +365,7 @@ const ghost = computed(() => {
     <p v-if="pullRefusal" class="alert warning m-0 mb-3" role="status" data-testid="tape-pull-refusal">{{ pullRefusal }}</p>
 
     <Card class="overflow-x-auto">
-      <div class="relative min-w-[720px] text-[13px]" data-testid="tape" :class="dragging && 'select-none'">
+      <div ref="tapeEl" class="relative min-w-[720px] text-[13px]" data-testid="tape" :class="dragging && 'select-none'">
         <!-- the dates -->
         <div class="sticky top-0 z-20 grid bg-card" :style="gridStyle" role="row">
           <div class="sticky left-0 z-30 border-b border-border bg-card" />
@@ -358,15 +381,18 @@ const ghost = computed(() => {
         <template v-for="(room, i) in chart.rooms" :key="room.room_id">
           <!-- the head of a room type: what is sold and what is left of the type on each night -->
           <div v-if="i === 0 || chart.rooms[i - 1]?.room_type_id !== room.room_type_id" class="grid border-b border-t border-border bg-muted text-[13px]" :style="gridStyle" :data-testid="`type-head-${room.room_type_code}`" role="row">
-            <div class="sticky left-0 z-10 bg-muted px-2 py-1 text-left font-semibold" role="rowheader">{{ room.room_type_code }}</div>
+            <div class="sticky left-0 z-10 flex items-center justify-between bg-muted px-2 py-1 text-left font-semibold" role="rowheader">
+              {{ room.room_type_code }}
+              <span v-if="!showUnit" class="flex flex-col text-right font-normal leading-tight text-muted-foreground" data-testid="head-units" aria-hidden="true"><span class="text-[13px]">{{ t('tapeChart.leftUnit') }}</span><span class="text-[12px]">{{ t('tapeChart.soldUnit') }}</span></span>
+            </div>
             <div class="grid" :style="{ gridColumn: '2 / -1', gridRow: '1', gridTemplateColumns: `repeat(${dates.length}, minmax(0, 1fr))` }">
               <span
                 v-for="(n, k) in availability.get(room.room_type_id)?.nights ?? []" :key="dates[k]" :data-sold="n.sold" :data-available="n.available" :data-blocked="n.blocked"
                 :title="t('tapeChart.nightFigures', { sold: n.sold, available: n.available, blocked: n.blocked })"
                 :class="cn('flex flex-col items-center justify-center whitespace-nowrap border-l border-border px-0.5 py-1 leading-tight', dates[k] === businessDate && 'bg-primary/10')"
               >
-                <span :class="cn('text-[13px] tabular-nums', n.available < 0 ? 'font-semibold text-destructive' : n.available === 0 ? 'font-semibold' : 'font-medium')" data-part="left">{{ t('tapeChart.left', { n: n.available }) }}</span>
-                <span class="text-[12px] tabular-nums text-muted-foreground" data-part="sold">{{ t('tapeChart.soldN', { n: n.sold }) }}</span>
+                <span :class="cn('text-[13px] tabular-nums', n.available < 0 ? 'font-semibold text-destructive' : n.available === 0 ? 'font-semibold' : 'font-medium')" data-part="left">{{ n.available }} <span :class="!showUnit && 'sr-only'">{{ t('tapeChart.leftUnit') }}</span></span>
+                <span class="text-[12px] tabular-nums text-muted-foreground" data-part="sold">{{ n.sold }} <span :class="!showUnit && 'sr-only'">{{ t('tapeChart.soldUnit') }}</span></span>
               </span>
             </div>
           </div>
