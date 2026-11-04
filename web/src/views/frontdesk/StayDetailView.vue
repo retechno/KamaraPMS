@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -166,7 +167,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <StatusBadge domain="stay" :status="detail.stay.status" data-testid="stay-status" />
           <span>
             <span data-testid="guest-name">{{ detail.guest.first_name }} {{ detail.guest.last_name }}</span><Button v-if="canEditGuest && detail.guest" type="button" variant="outline" size="sm" class="mx-1.5" data-testid="edit-guest" @click="editingGuest = true">{{ t('stay.editGuest') }}</Button> · {{ $date(detail.stay.arrival_date) }} &rarr; {{ $date(detail.stay.departure_date) }} ·
-            {{ t('stay.adults', { n: detail.stay.adult_count, c: detail.stay.child_count }) }} · {{ detail.line.room_type_code }}
+            {{ partyText(detail.stay.adult_count, detail.stay.child_count) }} · {{ detail.line.room_type_code }}
           </span>
         </p>
         <p class="mb-0 mt-2 text-sm text-muted-foreground">

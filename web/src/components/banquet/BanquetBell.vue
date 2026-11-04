@@ -72,7 +72,7 @@ watch([pid, shown], () => void load())
     <PopoverTrigger as-child>
       <button type="button" class="relative grid size-9 pointer-coarse:size-[44px] shrink-0 cursor-pointer place-items-center rounded-md border border-border bg-background text-foreground hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" :aria-label="t('banquet.bell.label', { n: unseen })" data-testid="banquet-bell">
         <CalendarDays class="size-4" aria-hidden="true" />
-        <span v-if="unseen > 0" class="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-white" data-testid="banquet-bell-count">{{ unseen > 99 ? '99+' : unseen }}</span>
+        <span v-if="unseen > 0" class="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[12px] font-bold leading-4 text-white" data-testid="banquet-bell-count">{{ unseen > 99 ? '99+' : unseen }}</span>
       </button>
     </PopoverTrigger>
     <PopoverContent class="w-80" data-testid="banquet-bell-content">

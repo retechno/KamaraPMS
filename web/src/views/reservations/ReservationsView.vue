@@ -27,6 +27,7 @@ import { toast } from '@/composables/useToast'
 import { useReservationLookups } from '@/composables/useReservationLookups'
 import { useRoomTypes } from '@/composables/useRoomTypes'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import type { AssignFailure } from '@/utils/assignRoom'
@@ -96,6 +97,8 @@ const extraActive = computed(() => EXTRA.filter((k) => filter[k] !== '').length)
 const moreOpen = ref(extraActive.value > 0)
 watch(extraActive, (n) => (moreOpen.value = n > 0)) // opens by itself when one of them is on (a preset, the address), closes when none is
 
+/** The status the list was asked with: a list of the drafts does not repeat "Draft" on every row (a list of all of them shows it). */
+const shownStatus = ref('')
 const columns = computed<Column<ReservationSummary>[]>(() => [
   { key: 'confirmation_number', label: t('reservations.confirmation'), sortable: true, card: 'primary' as const },
   { key: 'guest_name', label: t('reservations.guest'), sortable: true, card: 'secondary' as const },
@@ -103,7 +106,7 @@ const columns = computed<Column<ReservationSummary>[]>(() => [
   { key: 'arrival_date', label: t('reservations.stay'), sortable: true, class: 'whitespace-nowrap' },
   { key: 'rate', label: t('reservations.rate'), align: 'right', sortable: true, class: 'tabular-nums whitespace-nowrap px-2' },
   { key: 'company', label: t('reservations.company') },
-  { key: 'status', label: t('reservations.status'), sortable: true, class: 'whitespace-nowrap', card: 'badge' as const },
+  ...(shownStatus.value ? [] : [{ key: 'status', label: t('reservations.status'), sortable: true, class: 'whitespace-nowrap', card: 'badge' as const }]),
   { key: 'actions', label: t('reservations.actions'), align: 'right', class: 'w-16' },
 ])
 
@@ -119,12 +122,8 @@ const rateText = (r: ReservationSummary): string => {
   const hi = amounts[amounts.length - 1] as string
   return Number(lo) === Number(hi) ? formatMoney(lo) : `${formatMoney(lo)} – ${formatMoney(hi)}`
 }
-/** The party in words: "2 adults", "2 adults · 1 child" (in Indonesian "2 dewasa · 1 anak"), not "2+1". */
-const paxOf = (r: ReservationSummary): string => {
-  const adults = r.rooms.reduce((s, l) => s + l.adult_count, 0)
-  const children = r.rooms.reduce((s, l) => s + l.child_count, 0)
-  return [t('reservations.paxAdults', { n: adults }, adults), ...(children > 0 ? [t('reservations.paxChildren', { n: children }, children)] : [])].join(' · ')
-}
+/** The party in words, as everywhere (`partyText`), summed over the rooms of the reservation. */
+const paxOf = (r: ReservationSummary): string => partyText(r.rooms.reduce((s, l) => s + l.adult_count, 0), r.rooms.reduce((s, l) => s + l.child_count, 0))
 
 const actionsOf = (r: ReservationSummary): ReservationAction[] =>
   reservationActions(
@@ -249,10 +248,12 @@ async function load(): Promise<void> {
 /** What the fields hold, as it was when the list was last asked for: a field that moves to what was already asked does not ask again. */
 const signature = (): string => JSON.stringify(FIELDS.map((k) => filter[k]))
 let asked = signature()
+shownStatus.value = apiStatusOf(filter.status)
 
 /** Searches again from the first page; the filters go to the address. */
 function search(): void {
   asked = signature()
+  shownStatus.value = apiStatusOf(filter.status)
   const next = Object.fromEntries(FIELDS.filter((k) => filter[k] !== '').map((k) => [k, filter[k]]))
   void router.replace({ query: { ...next, ...sortQuery.value } })
   list.reset() // a new search shows nothing of the old one, and a failed one shows no list

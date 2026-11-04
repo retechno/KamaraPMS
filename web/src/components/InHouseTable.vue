@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { type InHouseAction, MORE_ACTIONS, PRIMARY_ACTIONS, actionLabelKey, actionTarget, actionVariant, actionsFor, fullName, owesAtCheckOut } from '@/utils/inHouse'
@@ -129,7 +130,7 @@ function rateSaved(): void {
           {{ $date(row.stay.arrival_date) }} → {{ $date(row.stay.departure_date) }}
           <Badge v-if="overdue(row)" variant="warning" class="ml-1" data-testid="overdue">{{ t('frontDesk.page.overdue') }}</Badge>
         </div>
-        <div class="text-xs text-muted-foreground">{{ t('frontDesk.inHouse.nights', { n: row.stay.nights }) }} · {{ row.stay.adults }}+{{ row.stay.children }}</div>
+        <div class="text-xs text-muted-foreground">{{ t('frontDesk.inHouse.nights', { n: row.stay.nights }) }} · {{ partyText(row.stay.adults, row.stay.children) }}</div>
       </template>
       <template #cell-balance="{ row }">
         <div :data-testid="`balance-${row.stay_number}`"><InHouseBalance :balance="row.balance" /></div>

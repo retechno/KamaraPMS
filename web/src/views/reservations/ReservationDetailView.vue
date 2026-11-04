@@ -29,6 +29,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { useReservationLookups } from '@/composables/useReservationLookups'
 import { vAutofocus } from '@/directives/autofocus'
 import { t, te } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { documentPath, openPdf } from '@/utils/documents'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -464,7 +465,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <span class="text-sm">{{ $date(line.arrival_date) }} &rarr; {{ $date(line.departure_date) }} ({{ t('reservation.nights', { n: line.nights }, line.nights) }})</span>
           <Badge v-if="line.bed_type_code" variant="outline" :data-testid="`bed-${line.id}`">{{ t('bedTypes.bed') }}: {{ line.bed_type_name || line.bed_type_code }}<template v-if="line.bed_locked"> · {{ t('bedTypes.kept') }}</template></Badge>
           <Badge v-if="line.occupancy_kind !== 'PAID'" variant="warning" :data-testid="`kind-${line.id}`">{{ t(`occupancy.kind_${line.occupancy_kind}`) }}</Badge>
-          <span class="text-sm text-muted-foreground">{{ t('reservation.party', { adults: line.adult_count, children: line.child_count, plan: line.rate_plan_code }) }}</span>
+          <span class="text-sm text-muted-foreground">{{ t('reservation.party', { party: partyText(line.adult_count, line.child_count), plan: line.rate_plan_code }) }}</span>
           <span v-if="line.stay_id" class="text-sm text-muted-foreground">{{ t('reservation.stay', { id: line.stay_id }) }}</span>
         </CardHeader>
         <CardContent>

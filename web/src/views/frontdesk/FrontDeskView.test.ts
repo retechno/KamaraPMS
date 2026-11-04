@@ -91,6 +91,16 @@ describe('FrontDeskView', () => {
     expect(router.currentRoute.value.path).toBe('/departures')
   })
 
+  it('has the same main action as Today: Walk-in solid first, New reservation an outline after it', async () => {
+    await mountDesk()
+    const walkIn = mounted!.get('[data-testid=walk-in]')
+    const booking = mounted!.get('[data-testid=new-reservation]')
+    expect(walkIn.classes()).toContain('bg-primary')
+    expect(booking.classes()).not.toContain('bg-primary')
+    expect(booking.classes()).toContain('border')
+    expect(walkIn.element.compareDocumentPosition(booking.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('offers walk-in and a new reservation to those who may', async () => {
     await mountDesk()
     expect(mounted!.get('[data-testid=walk-in]').attributes('href')).toBe('/walk-in')

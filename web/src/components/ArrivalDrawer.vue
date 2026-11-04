@@ -6,6 +6,7 @@ import ReadinessBadge from '@/components/ReadinessBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { type ArrivalAction, arrivalActions } from '@/utils/arrivals'
@@ -32,7 +33,7 @@ const actions = computed(() => (props.row ? arrivalActions(props.row, (p) => aut
           <dt class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('frontDesk.inHouse.sectionStay') }}</dt>
           <dd class="m-0 mt-1">
             <div>{{ $date(row.arrival_date) }} → {{ $date(row.departure_date) }}</div>
-            <div class="text-muted-foreground">{{ t('frontDesk.inHouse.party', { a: row.adult_count, c: row.child_count }) }}</div>
+            <div class="text-muted-foreground">{{ partyText(row.adult_count, row.child_count) }}</div>
             <div class="text-muted-foreground">{{ t('frontDesk.page.room') }} <RoomLink v-if="row.room_number" :room-id="row.room_id" :number="row.room_number" /><template v-else>{{ t('frontDesk.arrivals.noRoom') }}</template> · {{ row.room_type_name || row.room_type_code }}</div>
           </dd>
         </div>

@@ -184,7 +184,7 @@ watch(pid, load, { immediate: true })
       <h2 class="m-0 mb-2 text-sm font-semibold">{{ t('pos.check.title') }}</h2>
       <ul class="m-0 list-none space-y-1 p-0 text-sm">
         <li v-for="l in issueLines" :key="l.key" class="flex items-start gap-2" :class="l.blocking ? 'text-destructive' : 'text-muted-foreground'" :data-code="l.code" :data-level="l.blocking ? 'blocking' : 'advice'">
-          <span class="mt-0.5 shrink-0 rounded border border-current px-1.5 text-[11px] font-semibold uppercase leading-5" data-testid="issue-level">{{ t(l.blocking ? 'pos.check.levelBlocking' : 'pos.check.levelAdvice') }}</span>
+          <span class="mt-0.5 shrink-0 rounded border border-current px-1.5 text-[12px] font-semibold uppercase leading-5" data-testid="issue-level">{{ t(l.blocking ? 'pos.check.levelBlocking' : 'pos.check.levelAdvice') }}</span>
           <span class="min-w-0">{{ l.text }}</span>
         </li>
       </ul>

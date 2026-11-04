@@ -20,10 +20,10 @@ const title = (c: LedgerCheck): string => (KNOWN.has(c.key) ? t(`dayReports.ledg
     <table class="w-full border-collapse text-sm tabular-nums">
       <thead>
         <tr class="border-b border-border">
-          <th class="px-2 py-1.5 text-left text-[11px] font-medium uppercase text-muted-foreground" />
-          <th class="px-2 py-1.5 text-right text-[11px] font-medium uppercase text-muted-foreground">{{ t('dayReports.ledger.thisReport') }}</th>
-          <th class="px-2 py-1.5 text-right text-[11px] font-medium uppercase text-muted-foreground">{{ t('dayReports.ledger.other') }}</th>
-          <th class="px-2 py-1.5 text-right text-[11px] font-medium uppercase text-muted-foreground">{{ t('dayReports.difference') }}</th>
+          <th class="px-2 py-1.5 text-left text-[12px] font-medium uppercase text-muted-foreground" />
+          <th class="px-2 py-1.5 text-right text-[12px] font-medium uppercase text-muted-foreground">{{ t('dayReports.ledger.thisReport') }}</th>
+          <th class="px-2 py-1.5 text-right text-[12px] font-medium uppercase text-muted-foreground">{{ t('dayReports.ledger.other') }}</th>
+          <th class="px-2 py-1.5 text-right text-[12px] font-medium uppercase text-muted-foreground">{{ t('dayReports.difference') }}</th>
         </tr>
       </thead>
       <tbody>

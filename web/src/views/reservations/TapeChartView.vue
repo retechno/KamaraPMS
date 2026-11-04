@@ -351,7 +351,7 @@ const ghost = computed(() => {
             :class="cn('border-b border-l border-border px-1 py-1.5 text-center font-medium text-muted-foreground', isWeekend(d) && 'bg-muted/60', d === businessDate && 'bg-primary/10 text-primary')"
             role="columnheader"
           >
-            <span class="block text-[11px] uppercase">{{ weekday(d) }}</span>{{ dayLabel(d) }}
+            <span class="block text-[12px] uppercase">{{ weekday(d) }}</span>{{ dayLabel(d) }}
           </div>
         </div>
 

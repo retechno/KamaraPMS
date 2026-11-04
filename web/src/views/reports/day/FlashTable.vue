@@ -6,7 +6,7 @@ import { flashValue, flashVariance, rowLabel } from './flashLabels'
 
 /** A block of rows of the daily flash with the seven columns of the mockup (docs/design/63). A row without a budget has no budget and no variance. */
 defineProps<{ lines: FlashLine[]; testid: string; heading?: string; total?: FlashLine; totalLabel?: string; hasBudget: boolean }>()
-const th = 'whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-medium uppercase text-muted-foreground'
+const th = 'whitespace-nowrap px-2 py-1.5 text-right text-[12px] font-medium uppercase text-muted-foreground'
 </script>
 
 <template>
@@ -14,7 +14,7 @@ const th = 'whitespace-nowrap px-2 py-1.5 text-right text-[11px] font-medium upp
     <FlashCols :has-budget="hasBudget" />
     <thead>
       <tr class="border-b border-border">
-        <th class="px-2 py-1.5 text-left text-[11px] font-medium uppercase text-muted-foreground">{{ heading }}</th>
+        <th class="px-2 py-1.5 text-left text-[12px] font-medium uppercase text-muted-foreground">{{ heading }}</th>
         <th :class="th">{{ t('dayReports.flash.today') }}</th>
         <th :class="th">{{ t('dayReports.flash.mtd') }}</th>
         <th :class="th">{{ t('dayReports.flash.lastMonth') }}</th>

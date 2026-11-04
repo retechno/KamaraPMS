@@ -318,6 +318,7 @@ export const router = createRouter({
       props: true,
       meta: { title: 'User', adminOnly: true },
     },
+    { path: '/setup/system', name: 'system', component: () => import('@/views/setup/SystemView.vue'), meta: { title: 'System', adminOnly: true } },
     { path: '/setup/roles', name: 'roles', component: () => import('@/views/setup/RolesView.vue'), meta: { title: 'Roles', adminOnly: true } },
     {
       path: '/setup/roles/new',

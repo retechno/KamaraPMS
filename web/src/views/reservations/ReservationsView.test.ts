@@ -131,6 +131,16 @@ describe('ReservationsView', () => {
     expect(router.currentRoute.value.query).toEqual({})
   })
 
+  it('does not repeat the status on every row of a list asked for one status, and shows it for all of them', async () => {
+    const heads = (w: Awaited<ReturnType<typeof mountView>>) => w.findAll('th').map((h) => h.text())
+    const all = await mountView(['reservation.read'], { data: [row()] })
+    expect(heads(all)).toContain('Status')
+    expect(all.find('[data-slot=status-badge]').exists()).toBe(true)
+    const drafts = await mountView(['reservation.read'], { data: [row({ display_status: 'DRAFT' })] }, '/reservations?status=DRAFT')
+    expect(heads(drafts)).not.toContain('Status')
+    expect(drafts.find('[data-slot=status-badge]').exists()).toBe(false)
+  })
+
   it('starts from the filters in the address', async () => {
     await mountView(['reservation.read'], { data: [row()] }, '/reservations?status=CHECKED_IN&q=Siti&company=5')
     expect(lastQuery()).toMatchObject({ display_status: 'IN_HOUSE', q: 'Siti', company_id: 5 })

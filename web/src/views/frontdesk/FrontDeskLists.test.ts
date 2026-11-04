@@ -101,6 +101,10 @@ describe('front desk lists', () => {
     GET = vi.fn(async (path: string) => (path.endsWith('/arrivals') ? { data: { data: [arrival(1, 'Siti Nurhaliza')] } } : { data: { data: [] } }))
     mounted = mount(ArrivalsView, { attachTo: document.body, global: { plugins: [pinia, router] } })
     await flushPromises()
+    // the default list is the list of the reserved: it does not repeat that on every row; a row that is not the status asked for says its own
+    expect(mounted.find('[data-testid=arrival-1] [data-slot=status-badge]').exists()).toBe(false)
+    await mounted.get('select[name=status]').setValue('CANCELLED')
+    await flushPromises()
     expect(mounted.get('[data-testid=arrival-1] [data-slot=status-badge]').text()).toBe('Reserved')
   })
 

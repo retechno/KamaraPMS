@@ -224,7 +224,7 @@ watch(businessDate, () => {
               :key="d"
               :class="cn('min-w-11 border-b border-l border-border px-1 py-1.5 font-medium text-muted-foreground', isWeekend(d) && 'bg-muted/60', d === businessDate && 'bg-primary/10 text-primary')"
             >
-              <span class="block text-[10px] uppercase">{{ weekday(d) }}</span>{{ dayLabel(d) }}
+              <span class="block text-[12px] uppercase">{{ weekday(d) }}</span>{{ dayLabel(d) }}
             </th>
           </tr>
         </thead>
@@ -232,20 +232,20 @@ watch(businessDate, () => {
           <template v-for="g in groups" :key="g.key">
             <!-- one metric: the values sit in the group's own row; several: a title row, then one row per metric -->
             <tr v-if="detailed" :data-testid="`group-${g.code}`">
-              <th :class="cn('sticky left-0 z-10 border-b border-border bg-card px-2 py-1.5 text-left', g.level === 'bed' ? 'pl-5 text-[11px] font-normal' : 'font-medium', g.level === 'total' && 'border-t-2')">
+              <th :class="cn('sticky left-0 z-10 border-b border-border bg-card px-2 py-1.5 text-left', g.level === 'bed' ? 'pl-5 text-[12px] font-normal' : 'font-medium', g.level === 'total' && 'border-t-2')">
                 {{ g.title }}
-                <span v-if="g.sub" class="block text-[10px] font-normal text-muted-foreground">{{ g.sub }}</span>
+                <span v-if="g.sub" class="block text-[12px] font-normal text-muted-foreground">{{ g.sub }}</span>
               </th>
               <td :colspan="dates.length" :class="cn('border-b border-l border-border', g.level === 'total' && 'border-t-2')" />
             </tr>
             <tr v-for="m in metrics" :key="`${g.key}-${m}`" :data-testid="detailed ? `row-${g.code}-${m}` : `row-${g.code}`">
               <th
-                :class="cn('sticky left-0 z-10 border-b border-border bg-card px-2 py-1 text-left', detailed ? 'pl-5 text-[11px] font-normal text-muted-foreground' : 'py-1.5 font-medium', !detailed && g.level === 'bed' && 'pl-5 text-[11px] font-normal', !detailed && g.level === 'total' && 'border-t-2 font-semibold')"
+                :class="cn('sticky left-0 z-10 border-b border-border bg-card px-2 py-1 text-left', detailed ? 'pl-5 text-[12px] font-normal text-muted-foreground' : 'py-1.5 font-medium', !detailed && g.level === 'bed' && 'pl-5 text-[12px] font-normal', !detailed && g.level === 'total' && 'border-t-2 font-semibold')"
               >
                 <template v-if="detailed">{{ metricLabel(m) }}</template>
                 <template v-else>
                   {{ g.title }}
-                  <span v-if="g.sub" class="block text-[10px] font-normal text-muted-foreground">{{ g.sub }}</span>
+                  <span v-if="g.sub" class="block text-[12px] font-normal text-muted-foreground">{{ g.sub }}</span>
                 </template>
               </th>
               <td
@@ -256,8 +256,8 @@ watch(businessDate, () => {
                 :class="cn('border-b border-l border-border px-1 py-1 text-center tabular-nums', g.level === 'bed' && 'bg-muted/20 text-muted-foreground', g.level === 'total' && 'border-t-2 font-semibold', !detailed && g.level === 'type' && 'py-1.5', tone(n, m))"
               >
                 {{ value(n, m) }}
-                <span v-if="m === metrics[0] && n.restrictions?.length" :class="cn('block text-[10px] font-semibold', n.stop_sell_all ? 'text-destructive' : 'text-warning-foreground')" :data-testid="`marks-${g.code}-${n.date}`">{{ marksOf(n) }}</span>
-                <span v-if="!detailed && g.level === 'total'" class="block text-[10px] font-normal text-muted-foreground" :data-testid="`occupancy-${n.date}`">{{ n.occupancy_percent }}%</span>
+                <span v-if="m === metrics[0] && n.restrictions?.length" :class="cn('block text-[12px] font-semibold', n.stop_sell_all ? 'text-destructive' : 'text-warning-foreground')" :data-testid="`marks-${g.code}-${n.date}`">{{ marksOf(n) }}</span>
+                <span v-if="!detailed && g.level === 'total'" class="block text-[12px] font-normal text-muted-foreground" :data-testid="`occupancy-${n.date}`">{{ n.occupancy_percent }}%</span>
               </td>
             </tr>
           </template>

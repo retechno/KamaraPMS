@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertTriangle, BedDouble, CalendarPlus, DoorClosed, DoorOpen, MoonStar, Percent, RefreshCw, Wallet } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -22,7 +22,6 @@ import { useToday } from '@/composables/useToday'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { useSystemStore, type ComponentStatus } from '@/stores/system'
 import { arrivalActions, checkInVariant } from '@/utils/arrivals'
 import type { AssignFailure } from '@/utils/assignRoom'
 import { formatBusinessDate, wallClock } from '@/utils/dates'
@@ -42,12 +41,6 @@ const ROWS = 5
 
 const auth = useAuthStore()
 const property = usePropertyStore()
-const system = useSystemStore()
-// The status of the API and the database is for the administrator: the card and the check are not made for other staff.
-onMounted(() => {
-  if (auth.isAdmin) void system.check()
-})
-
 const pid = computed(() => property.currentId)
 const can = (permission: string) => pid.value !== null && auth.can(permission, pid.value)
 
@@ -204,8 +197,6 @@ const bars = computed<NightBar[]>(() =>
 
 const updated = computed(() => (today.updatedAt.value ? zoneTime(today.updatedAt.value, property.clock?.timezone) : ''))
 
-const label = (s: ComponentStatus): string => t(`dashboard.page.${s}` as never)
-const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s === 'down' ? ('destructive' as const) : ('outline' as const))
 </script>
 
 <template>
@@ -219,10 +210,10 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
         <RefreshCw :class="today.refreshing.value && 'animate-spin'" />
         {{ today.refreshing.value ? t('common.loading') : t('common.refresh') }}
       </Button>
-      <Button v-if="can('frontdesk.checkin')" as-child size="sm" variant="outline" data-testid="quick-walk-in">
+      <Button v-if="can('frontdesk.checkin')" as-child size="sm" data-testid="quick-walk-in">
         <RouterLink to="/walk-in"><DoorOpen />{{ t('dashboard.page.walkIn') }}</RouterLink>
       </Button>
-      <Button v-if="can('reservation.create')" as-child size="sm" data-testid="quick-new-reservation">
+      <Button v-if="can('reservation.create')" as-child size="sm" variant="outline" data-testid="quick-new-reservation">
         <RouterLink to="/reservations/new"><CalendarPlus />{{ t('dashboard.page.newReservation') }}</RouterLink>
       </Button>
     </template>
@@ -324,33 +315,6 @@ const variant = (s: ComponentStatus) => (s === 'up' ? ('success' as const) : s =
       <CardContent>
         <p class="m-0 mb-3 text-sm text-muted-foreground">{{ t('dashboard.page.setupBody') }}</p>
         <RouterLink to="/setup/properties/new">{{ t('dashboard.page.createProperty') }}</RouterLink>
-      </CardContent>
-    </Card>
-
-    <Card v-if="auth.isAdmin" aria-labelledby="status-title" data-testid="system-status-card">
-      <CardHeader class="flex-row items-center justify-between">
-        <CardTitle id="status-title">{{ t('dashboard.page.systemStatus') }}</CardTitle>
-        <Button variant="outline" size="sm" :disabled="system.checking" @click="system.check()">
-          {{ system.checking ? t('dashboard.page.checking') : t('common.refresh') }}
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <dl class="m-0 divide-y divide-border text-sm">
-          <div class="flex items-center justify-between py-2">
-            <dt class="font-medium">{{ t('dashboard.page.api') }}</dt>
-            <dd class="m-0"><Badge :variant="variant(system.apiStatus)" data-testid="api-status">{{ label(system.apiStatus) }}</Badge></dd>
-          </div>
-          <div class="flex items-center justify-between py-2">
-            <dt class="font-medium">{{ t('dashboard.page.database') }}</dt>
-            <dd class="m-0"><Badge :variant="variant(system.databaseStatus)" data-testid="db-status">{{ label(system.databaseStatus) }}</Badge></dd>
-          </div>
-        </dl>
-        <p v-if="system.lastError" class="m-0 mt-3 text-sm text-destructive" role="alert">
-          {{ system.lastError.message }}
-          <code>{{ system.lastError.code }}</code>
-          <span v-if="system.lastError.requestId"> · {{ t('dashboard.page.request', { id: system.lastError.requestId }) }}</span>
-        </p>
-        <p v-if="system.checkedAt" class="m-0 mt-3 text-sm text-muted-foreground">{{ t('dashboard.page.lastChecked', { time: system.checkedAt.toLocaleTimeString() }) }}</p>
       </CardContent>
     </Card>
   </div>

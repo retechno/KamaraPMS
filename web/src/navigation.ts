@@ -234,6 +234,7 @@ export const navigation: NavSection[] = [
       { id: 'properties', to: '/setup/properties', adminOnly: true },
       { id: 'users', to: '/setup/users', adminOnly: true },
       { id: 'roles', to: '/setup/roles', adminOnly: true },
+      { id: 'system', to: '/setup/system', adminOnly: true },
       { id: 'roomTypes', to: '/setup/room-types', permission: 'room.manage' },
       { id: 'bedTypes', to: '/setup/bed-types', permission: 'room.manage' },
       { id: 'roomsSetup', to: '/setup/rooms', permission: 'room.manage' },

@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { openCheckIn } from '@/composables/useCheckInSheet'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { labelOf } from '@/i18n/labels'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -100,7 +101,7 @@ const stayLine = computed(() => {
   return [
     `${formatBusinessDate(s.arrival_date)} → ${formatBusinessDate(s.departure_date)}`,
     t('roomPanel.nightOf', { n: s.night, total: s.nights }),
-    t('roomPanel.adults', { n: s.adult_count }, s.adult_count) + (s.child_count ? `, ${t('roomPanel.children', { n: s.child_count }, s.child_count)}` : ''),
+    partyText(s.adult_count, s.child_count),
     s.source ?? '',
   ].filter(Boolean).join(' · ')
 })

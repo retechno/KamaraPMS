@@ -82,7 +82,7 @@ const accum1590 = computed(() => !isZero(report.value?.account_1590))
 function print(): void {
   window.print()
 }
-const th = 'px-1.5 py-2 text-right text-[11px] font-medium uppercase leading-tight text-muted-foreground'
+const th = 'px-1.5 py-2 text-right text-[12px] font-medium uppercase leading-tight text-muted-foreground'
 </script>
 
 <template>
@@ -119,7 +119,7 @@ const th = 'px-1.5 py-2 text-right text-[11px] font-medium uppercase leading-tig
           </thead>
           <tbody>
             <tr v-for="r in report.rows" :key="r.category_id" class="border-b border-border" :data-testid="`recap-row-${r.category_code}`">
-              <td class="min-w-32 p-2">{{ r.category_name }}<br><span class="text-[11px] text-muted-foreground">{{ r.cost_account_code }}{{ r.accumulated_account_code ? `/${r.accumulated_account_code}` : '' }}</span></td>
+              <td class="min-w-32 p-2">{{ r.category_name }}<br><span class="text-[12px] text-muted-foreground">{{ r.cost_account_code }}{{ r.accumulated_account_code ? `/${r.accumulated_account_code}` : '' }}</span></td>
               <td class="p-2 text-right">{{ money(r.cost_opening) }}</td><td class="p-2 text-right">{{ money(r.cost_additions) }}</td><td v-if="reclassed" class="p-2 text-right">{{ money(r.cost_reclass) }}</td><td class="p-2 text-right">{{ money(r.cost_disposals) }}</td><td class="p-2 text-right font-medium">{{ money(r.cost_closing) }}</td>
               <td class="border-l border-border p-2 text-right">{{ money(r.accum_opening) }}</td><td class="p-2 text-right">{{ money(r.accum_additions) }}</td><td class="p-2 text-right">{{ money(r.accum_depreciation) }}</td><td v-if="reclassed" class="p-2 text-right">{{ money(r.accum_reclass) }}</td><td class="p-2 text-right">{{ money(r.accum_disposals) }}</td><td class="p-2 text-right font-medium">{{ money(r.accum_closing) }}</td>
               <td class="p-2 text-right font-medium">{{ money(r.carrying_closing) }}</td>
