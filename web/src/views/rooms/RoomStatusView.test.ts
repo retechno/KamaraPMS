@@ -59,13 +59,16 @@ describe('RoomStatusView', () => {
 
   it('says in words what each group of chips filters, and the group is named by that label', async () => {
     setLocale('id')
-    const w = mountView()
-    await flushPromises()
-    expect(w.get('[data-testid=filter-occ-label]').text()).toBe('Hunian:')
-    expect(w.get('[data-testid=filter-hk-label]').text()).toBe('Kebersihan:')
-    expect(w.get('[data-testid=filter-occ-label]').element.closest('[role=group]')?.getAttribute('aria-labelledby')).toBe('filter-occ-label')
-    expect(w.get('[data-testid=filter-hk-label]').element.closest('[role=group]')?.getAttribute('aria-labelledby')).toBe('filter-hk-label')
-    setLocale('en')
+    try {
+      const w = mountView()
+      await flushPromises()
+      expect(w.get('[data-testid=filter-occ-label]').text()).toBe('Hunian:')
+      expect(w.get('[data-testid=filter-hk-label]').text()).toBe('Kebersihan:')
+      expect(w.get('[data-testid=filter-occ-label]').element.closest('[role=group]')?.getAttribute('aria-labelledby')).toBe('filter-occ-label')
+      expect(w.get('[data-testid=filter-hk-label]').element.closest('[role=group]')?.getAttribute('aria-labelledby')).toBe('filter-hk-label')
+    } finally {
+      setLocale('en') // a failure here must not leave the next tests in Indonesian
+    }
   })
 
   it('filters the board by occupancy, housekeeping, room type and room number', async () => {
