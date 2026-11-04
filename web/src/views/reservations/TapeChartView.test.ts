@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -85,6 +85,57 @@ describe('TapeChartView', () => {
     expect(cells[1]!.attributes('title')).toBe('Sold 1, available 1, blocked 0')
     expect(cells[1]!.get('[data-part=sold]').classes()).toContain('text-[12px]') // the smaller line
     expect(cells[2]!.get('[data-part=left]').classes()).toContain('font-semibold') // nothing left
+  })
+  describe('the figures of the head by the width of a column', () => {
+    let observers: Array<() => void> = []
+    let columnWidth = 90
+    beforeEach(() => {
+      observers = []
+      vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { observers.push(cb) } observe() {} disconnect() {} })
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        return { width: this.hasAttribute('data-day-head') ? columnWidth : 0 } as DOMRect
+      })
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+    })
+    const unitClasses = (w: ReturnType<typeof mountView>) => w.findAll('[data-testid=type-head-DLX] [data-sold] [data-part] > span').map((u) => u.classes().includes('sr-only'))
+
+    it('keeps the word beside the figure on a wide column, and says nothing in the label', async () => {
+      columnWidth = 90
+      const w = mountView()
+      await flushPromises()
+      expect(unitClasses(w).length).toBeGreaterThan(0)
+      expect(unitClasses(w).every((hidden) => !hidden)).toBe(true)
+      expect(w.find('[data-testid=head-units]').exists()).toBe(false)
+    })
+
+    it('shows only the figure on a narrow column, keeps the word for a screen reader, and says it once in the label', async () => {
+      columnWidth = 43
+      const w = mountView()
+      await flushPromises()
+      expect(unitClasses(w).every((hidden) => hidden)).toBe(true)
+      const cell = w.findAll('[data-testid=type-head-DLX] [data-sold]')[1]!
+      expect(cell.get('[data-part=left]').text()).toBe('1 left') // still in the text for a screen reader
+      expect(cell.attributes('title')).toBe('Sold 1, available 1, blocked 0')
+      expect(w.get('[data-testid=head-units]').text()).toBe('leftsold')
+      expect(w.find('[data-testid=legend]').exists()).toBe(true)
+    })
+
+    it('follows the width when the column grows or shrinks', async () => {
+      columnWidth = 90
+      const w = mountView()
+      await flushPromises()
+      columnWidth = 41
+      observers.forEach((cb) => cb())
+      await flushPromises()
+      expect(w.find('[data-testid=head-units]').exists()).toBe(true)
+      columnWidth = 64
+      observers.forEach((cb) => cb())
+      await flushPromises()
+      expect(w.find('[data-testid=head-units]').exists()).toBe(false)
+    })
   })
   it('marks a room type that is oversold', async () => {
     const extra = { ...booking, reservation_id: 11, reservation_room_id: 6, arrival_date: '2026-10-03', departure_date: '2026-10-04' }
