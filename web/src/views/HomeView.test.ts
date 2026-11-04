@@ -15,62 +15,27 @@ vi.mock('@/api/client', () => ({ api: { GET: (...args: unknown[]) => GET(...args
 
 const PATH = '/api/v1/properties/{propertyId}'
 
-// ---- the system status (a card for the administrator)
-const healthOnly = async (path: string) => ({ data: { status: 'ok', path } })
-
-function mountPlain(admin = true) {
-  const pinia = createPinia()
-  setActivePinia(pinia)
-  // The status of the system is for the administrator.
-  useAuthStore().me = { user: { id: 5, email: 'a@hotel.com', is_tenant_admin: admin }, properties: [] } as never
-  return mount(HomeView, { global: { plugins: [pinia] } })
-}
-
-describe('HomeView system status', () => {
+// ---- the system status moved to the page of the administrator (SystemView): Today has no card and makes no health check
+describe('HomeView and the system status', () => {
   beforeEach(() => {
     GET = vi.fn()
     setLocale('en')
   })
 
-  it('shows no system status, and makes no health check, to staff who are not administrators', async () => {
-    GET.mockImplementation(healthOnly)
-    const wrapper = mountPlain(false)
-    await flushPromises()
-    expect(wrapper.find('[data-testid=system-status-card]').exists()).toBe(false)
+  it('shows no system status, and makes no health check, to anyone, the administrator included', async () => {
+    GET.mockImplementation(async (path: string) => ({ data: { status: 'ok', path } }))
+    for (const admin of [true, false]) {
+      const pinia = createPinia()
+      setActivePinia(pinia)
+      useAuthStore().me = { user: { id: 5, email: 'a@hotel.com', is_tenant_admin: admin }, properties: [] } as never
+      const wrapper = mount(HomeView, { global: { plugins: [pinia] } })
+      await flushPromises()
+      expect(wrapper.find('[data-testid=system-status-card]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid=api-status]').exists()).toBe(false)
+      wrapper.unmount()
+    }
     expect(GET).not.toHaveBeenCalledWith('/healthz')
-  })
-
-  it('shows API and database as operational', async () => {
-    GET.mockImplementation(healthOnly)
-    const wrapper = mountPlain()
-    await flushPromises()
-    expect(GET).toHaveBeenCalledWith('/healthz')
-    expect(GET).toHaveBeenCalledWith('/readyz')
-    expect(wrapper.get('[data-testid=api-status]').text()).toBe('Operational')
-    expect(wrapper.get('[data-testid=db-status]').text()).toBe('Operational')
-    expect(wrapper.find('[role=alert]').exists()).toBe(false)
-  })
-
-  it('reports a database outage with its error code', async () => {
-    GET.mockImplementation(async (path: string) => {
-      if (path === '/healthz') return { data: { status: 'ok' } }
-      throw new ApiError({ type: 't', title: 'Service Unavailable', status: 503, code: 'NOT_READY', detail: 'the database is not reachable', request_id: 'req-1' })
-    })
-    const wrapper = mountPlain()
-    await flushPromises()
-    expect(wrapper.get('[data-testid=api-status]').text()).toBe('Operational')
-    expect(wrapper.get('[data-testid=db-status]').text()).toBe('Unavailable')
-    expect(wrapper.get('[role=alert]').text()).toContain('NOT_READY')
-    expect(wrapper.get('[role=alert]').text()).toContain('req-1')
-  })
-
-  it('reports an unreachable API without guessing the database state', async () => {
-    GET.mockRejectedValue(new TypeError('Failed to fetch'))
-    const wrapper = mountPlain()
-    await flushPromises()
-    expect(wrapper.get('[data-testid=api-status]').text()).toBe('Unavailable')
-    expect(wrapper.get('[data-testid=db-status]').text()).toBe('Unknown')
-    expect(wrapper.get('[role=alert]').text()).toContain('NETWORK_ERROR')
+    expect(GET).not.toHaveBeenCalledWith('/readyz')
   })
 })
 

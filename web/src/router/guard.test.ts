@@ -58,6 +58,13 @@ describe('the guard of the pages of setup', () => {
     expect(await goTo('/setup/charge-codes')).toBe('/setup/charge-codes')
   })
 
+  it('keeps the system page to the tenant administrator', async () => {
+    signIn(['property.manage', 'room.manage'])
+    expect(await goTo('/setup/system')).toBe('/')
+    signIn([], true)
+    expect(await goTo('/setup/system')).toBe('/setup/system')
+  })
+
   it('leaves the pages of the corridor to everyone', async () => {
     signIn(['housekeeping.update'])
     expect(await goTo('/room-status')).toBe('/room-status')
