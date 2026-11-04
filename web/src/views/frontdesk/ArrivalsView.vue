@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from '@/composables/useToast'
 import { useRoomTypes } from '@/composables/useRoomTypes'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { type ArrivalAction, MORE_ARRIVAL_ACTIONS, PRIMARY_ARRIVAL_ACTIONS, arrivalActions, arrivalTarget, checkInVariant } from '@/utils/arrivals'
@@ -292,7 +293,7 @@ watch(checkedInCount, () => void load()) // a check-in made from the room panel
       </template>
       <template #cell-stay="{ row }">
         <div class="whitespace-nowrap">{{ $date(row.arrival_date) }} → {{ $date(row.departure_date) }}</div>
-        <div class="text-xs text-muted-foreground">{{ row.adult_count }}+{{ row.child_count }}</div>
+        <div class="text-xs text-muted-foreground">{{ partyText(row.adult_count, row.child_count) }}</div>
       </template>
       <template #cell-state="{ row }">
         <StatusBadge domain="reservation" :status="lineUiStatus(row.status)" />

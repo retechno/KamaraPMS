@@ -101,6 +101,13 @@ describe('ArrivalsView and the check-in panel', () => {
     expect(reader.w.find('[data-testid=open-4]').exists()).toBe(false)
   })
 
+  it('says the guests of an arrival in words, not as "2+0"', async () => {
+    const { w } = mountView()
+    await flushPromises()
+    expect(w.text()).toContain('2 adults')
+    expect(w.text()).not.toContain('2+0')
+  })
+
   it('offers free rooms with their status, and checks a ready room in with an Idempotency-Key', async () => {
     const { w, push } = mountView()
     await flushPromises()

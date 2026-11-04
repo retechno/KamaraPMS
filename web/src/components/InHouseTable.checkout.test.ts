@@ -54,6 +54,14 @@ describe('the check-out button of the stays', () => {
     w.unmount()
   })
 
+  it('says the guests in words, not as "2+0"', async () => {
+    const r = row(1, 'SETTLED', '0')
+    r.stay.children = 1
+    const w = await mountTable([r])
+    expect(w.text()).toContain('3 night(s) · 2 adults · 1 child')
+    expect(w.text()).not.toContain('2+1')
+  })
+
   it('says it on the card of a phone as well, and in Indonesian', async () => {
     setLocale('id')
     const w = await mountTable([row(1, 'OUTSTANDING', '465000')])

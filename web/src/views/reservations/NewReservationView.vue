@@ -22,6 +22,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { vAutofocus } from '@/directives/autofocus'
 import { focusProgrammatically } from '@/lib/focus'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { addDays } from '@/utils/dates'
@@ -329,7 +330,7 @@ async function book(approval?: Approval): Promise<void> {
         <DataTable :columns="offerColumns" :rows="offers" row-key="key" :row-test-id="offerTestId" :caption="t('newReservation.title')">
           <template #cell-type="{ row: o }">
             {{ o.type.code }} · {{ o.type.name }}
-            <small v-if="o.plan && !o.type.fits_occupancy" class="ml-1 text-destructive" data-testid="no-fit">{{ t('newReservation.noFit', { adults: search.adults, children: search.children }) }}</small>
+            <small v-if="o.plan && !o.type.fits_occupancy" class="ml-1 text-destructive" data-testid="no-fit">{{ t('newReservation.noFit', { party: partyText(search.adults, search.children) }) }}</small>
           </template>
           <template #cell-left="{ row: o }"><span :class="o.type.available_min < 1 && 'font-semibold text-destructive'">{{ o.type.available_min }}</span></template>
           <template #cell-plan="{ row: o }">
@@ -353,7 +354,7 @@ async function book(approval?: Approval): Promise<void> {
       <form ref="bookForm" novalidate data-testid="book-form" @submit.prevent="guardForm($event, searchForm) && submit()">
         <CardHeader>
           <CardTitle>{{ t('newReservation.bookTitle', { type: picked.type.code, plan: picked.plan.code }) }}</CardTitle>
-          <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: formatDate(search.arrival), departure: formatDate(search.departure), adults: search.adults, children: search.children }) }}</p>
+          <p class="m-0 text-sm text-muted-foreground">{{ t('newReservation.bookSummary', { arrival: formatDate(search.arrival), departure: formatDate(search.departure), party: partyText(search.adults, search.children) }) }}</p>
         </CardHeader>
         <CardContent class="flex flex-col gap-4">
           <div v-if="isRestricted" class="rounded-md border border-warning/60 bg-warning/10 p-3 text-sm" role="alert" data-testid="restriction-notice">

@@ -6,6 +6,7 @@ import InHouseBalance from '@/components/InHouseBalance.vue'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { Wallet } from 'lucide-vue-next'
 import { type InHouseAction, actionLabelKey, actionVariant, actionsFor, owesAtCheckOut } from '@/utils/inHouse'
 import { useAuthStore } from '@/stores/auth'
@@ -35,7 +36,7 @@ const folioLabel = (type: string) => (type === 'COMPANY' ? t('frontDesk.inHouse.
           <dt class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('frontDesk.inHouse.sectionStay') }}</dt>
           <dd class="m-0 mt-1">
             <div>{{ $date(row.stay.arrival_date) }} → {{ $date(row.stay.departure_date) }} · {{ t('frontDesk.inHouse.nights', { n: row.stay.nights }) }}</div>
-            <div class="text-muted-foreground">{{ t('frontDesk.inHouse.party', { a: row.stay.adults, c: row.stay.children }) }}</div>
+            <div class="text-muted-foreground">{{ partyText(row.stay.adults, row.stay.children) }}</div>
             <div class="text-muted-foreground">{{ t('frontDesk.inHouse.confirmation') }} {{ row.confirmation_number }}</div>
           </dd>
         </div>

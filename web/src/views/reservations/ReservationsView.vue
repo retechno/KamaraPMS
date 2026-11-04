@@ -27,6 +27,7 @@ import { toast } from '@/composables/useToast'
 import { useReservationLookups } from '@/composables/useReservationLookups'
 import { useRoomTypes } from '@/composables/useRoomTypes'
 import { t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import type { AssignFailure } from '@/utils/assignRoom'
@@ -119,12 +120,8 @@ const rateText = (r: ReservationSummary): string => {
   const hi = amounts[amounts.length - 1] as string
   return Number(lo) === Number(hi) ? formatMoney(lo) : `${formatMoney(lo)} – ${formatMoney(hi)}`
 }
-/** The party in words: "2 adults", "2 adults · 1 child" (in Indonesian "2 dewasa · 1 anak"), not "2+1". */
-const paxOf = (r: ReservationSummary): string => {
-  const adults = r.rooms.reduce((s, l) => s + l.adult_count, 0)
-  const children = r.rooms.reduce((s, l) => s + l.child_count, 0)
-  return [t('reservations.paxAdults', { n: adults }, adults), ...(children > 0 ? [t('reservations.paxChildren', { n: children }, children)] : [])].join(' · ')
-}
+/** The party in words, as everywhere (`partyText`), summed over the rooms of the reservation. */
+const paxOf = (r: ReservationSummary): string => partyText(r.rooms.reduce((s, l) => s + l.adult_count, 0), r.rooms.reduce((s, l) => s + l.child_count, 0))
 
 const actionsOf = (r: ReservationSummary): ReservationAction[] =>
   reservationActions(

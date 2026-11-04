@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { i18n, t } from '@/i18n'
+import { partyText } from '@/utils/party'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { DEPOSIT_METHODS, type DepositMethod } from '@/utils/checkin'
@@ -291,7 +292,7 @@ async function depositDone(message: string): Promise<void> {
             <Badge v-if="a.guest_is_placeholder" variant="outline" class="ml-2" :data-testid="`placeholder-${a.reservation_room_id}`">{{ t('rooming.placeholder') }}</Badge>
             <Badge v-if="identityHint(a)" variant="warning" class="ml-2" :title="t(`checkin.hint.${identityHint(a)}` as never)" :data-testid="`identity-${a.reservation_room_id}`">{{ t(`groupCheckIn.identity.${identityHint(a)}` as never) }}</Badge>
           </template>
-          <template #cell-party="{ row: a }">{{ a.adult_count }}+{{ a.child_count }}</template>
+          <template #cell-party="{ row: a }">{{ partyText(a.adult_count, a.child_count) }}</template>
           <template #cell-state="{ row: a }">
             <ReadinessBadge :readiness="a.readiness" />
             <p v-if="outcome[a.reservation_room_id]?.status === 'FAILED'" class="m-0 mt-1 text-xs text-destructive" :data-testid="`failed-${a.reservation_room_id}`">

@@ -318,7 +318,7 @@ describe('NewReservationView: the offers', () => {
     })
     expect(w.get('[data-testid=type-SUI]').text()).toContain('No active rate plan.')
     expect(w.get('[data-testid=offer-SGL-BAR]').text()).toContain('inclusive')
-    expect(w.get('[data-testid=no-fit]').text()).toContain('does not fit 2 adult(s) and 0 child(ren)')
+    expect(w.get('[data-testid=no-fit]').text()).toContain('does not fit 2 adults')
     expect(w.get('[data-testid=pick-SGL-BAR]').attributes('disabled')).toBeDefined()
     expect(w.get('[data-testid=pick-SGL-BAR]').attributes('title')).toBe('The room type is too small for this party.')
   })
