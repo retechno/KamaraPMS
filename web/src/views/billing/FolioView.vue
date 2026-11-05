@@ -6,7 +6,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { fetchAll } from '@/api/paging'
 import { ApiError } from '@/api/problem'
-import type { Approval, ChargeCode, Company, Folio, FolioItem, FolioSummary, PaymentMethod } from '@/api/types'
+import type { Approval, ChargeCode, Company, Folio, FolioItem, FolioSummary, PaymentMethod, StayDetail } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import TransferDialog from '@/components/folio/TransferDialog.vue'
 import OutletLockCard from '@/components/folio/OutletLockCard.vue'
@@ -15,6 +15,8 @@ import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import CheckOutWizard from '@/components/CheckOutWizard.vue'
+import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
@@ -443,6 +445,29 @@ const postTabs = computed(() => [
 ])
 const activeTab = computed(() => (postTabs.value.some((x) => x.value === postTab.value) ? postTab.value : (postTabs.value[0]?.value ?? '')))
 
+// Check-out from the folio: the open folio of an in-house stay (the wizard of the stay page, the same rules and the same guard of the server). A balance that is not zero says so and leads to the payment tab.
+const canCheckOut = computed(() => !!folio.value && isOpen.value && folio.value.stay_id !== null && can('frontdesk.checkout'))
+const checkOutDetail = ref<StayDetail | null>(null)
+const owes = computed(() => !!folio.value && Number(folio.value.balance) !== 0)
+async function startCheckOut(): Promise<void> {
+  const propertyId = pid.value
+  const f = folio.value
+  if (propertyId === null || !f || f.stay_id === null) return
+  error.value = null
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: f.stay_id } } })
+    checkOutDetail.value = data && data.stay.status === 'OPEN' ? data : null
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+async function checkedOut(): Promise<void> {
+  await load() // the folio is closed now; the wizard stays to say what was done
+}
+function takePaymentFirst(): void {
+  postTab.value = 'payment'
+}
+
 const canPrint = computed(() => can('reservation.read')) // the document names the reservation and the guest
 
 // What the table may show before the group chip is applied: the corrections of transfers are hidden unless asked for, and the code filter narrows it. The chips count these, so a number says how many rows it shows.
@@ -519,6 +544,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <p class="m-0 text-2xl font-semibold tabular-nums tracking-tight"><span data-testid="balance">{{ $money(folio.balance) }}</span></p>
       </div>
       <div class="ml-auto flex flex-wrap gap-2">
+        <Button v-if="canCheckOut && !checkOutDetail" size="sm" data-testid="folio-checkout-open" @click="startCheckOut">{{ t('folio.checkOut') }}</Button>
         <Button v-if="isOpen && !folio.stay_id && (folio.folio_type === 'MASTER' ? can('folio.master_close') : can('folio.post_charge'))" variant="outline" size="sm" data-testid="close" :disabled="busy || (folio.folio_type === 'MASTER' && Number(folio.balance) !== 0)" @click="closeFolio">{{ t('folio.closeFolio') }}</Button>
         <RouterLink v-if="!isOpen && can('tax.invoice')" :to="{ path: '/tax/invoices', query: { source_type: 'FOLIO', id: String(folio.id) } }" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-sm hover:bg-accent" data-testid="tax-invoice">{{ t('folio.taxInvoice') }}</RouterLink>
         <NativeSelect v-if="canPrint" v-model="printGroup" class="w-auto" name="print_group" data-testid="print-group" :aria-label="t('folio.printGroup')">
@@ -530,6 +556,14 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         </Button>
       </div>
     </Card>
+
+    <div v-if="checkOutDetail" data-testid="folio-checkout">
+      <p v-if="owes && isOpen" class="alert warning" role="status" data-testid="checkout-owes">
+        {{ t('folio.checkOutOwes', { balance: $money(folio.balance) }) }}
+        <Button v-if="can('payment.post')" type="button" variant="outline" size="sm" class="ml-2" data-testid="checkout-take-payment" @click="takePaymentFirst">{{ t('folio.tabPayment') }}</Button>
+      </p>
+      <CheckOutWizard :detail="checkOutDetail" @done="checkedOut" @cancel="checkOutDetail = null" />
+    </div>
 
     <OutletLockCard v-if="showOutletLock" :folio-id="folio.id" :until-label="folio.folio_type === 'MASTER' ? t('outletLock.untilMasterCloses') : undefined" class="mb-4" data-testid="folio-outlet-lock" />
 
@@ -753,6 +787,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                   <template #default="{ id }"><Input :id="id" v-model="payment.reference" name="reference" /></template>
                 </FormField>
               </div>
+              <ShiftRequiredNotice class="mt-4" :method="payment.method" />
               <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('folio.postPayment') }}</Button></div>
             </CardContent>
           </form>

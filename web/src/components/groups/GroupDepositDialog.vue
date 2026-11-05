@@ -4,6 +4,7 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { MasterFolio } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import MoneyInput from '@/components/app/MoneyInput.vue'
 import { Button } from '@/components/ui/button'
@@ -81,6 +82,7 @@ async function submit(): Promise<void> {
         <FormField :label="t('groupCheckIn.depositReference')">
           <template #default="{ id }"><Input :id="id" v-model="reference" name="group_deposit_reference" maxlength="100" /></template>
         </FormField>
+        <ShiftRequiredNotice class="mt-3" :method="method" />
         <p v-if="missing.length" class="m-0 mt-3 text-sm text-muted-foreground" data-testid="group-deposit-missing">{{ t('groupCheckIn.stillNeeded', { what: missing.join(', ') }) }}</p>
         <div class="mt-3 flex justify-end gap-2">
           <Button type="button" variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>

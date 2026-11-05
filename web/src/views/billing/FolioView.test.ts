@@ -537,4 +537,67 @@ describe('FolioView', () => {
       expect(openPdf).toHaveBeenLastCalledWith('/api/v1/properties/7/folios/3/invoice.pdf?group=B')
     })
   })
+  it('warns about the cashier shift before a cash payment is posted, and not for another method', async () => {
+    const w = mountView()
+    const base = GET
+    GET = vi.fn(async (path: string, init?: unknown) => {
+      if (path.endsWith('/cashier/settings')) return { data: { require_shift_for_cash: true } }
+      if (path.endsWith('/shifts/current')) return { data: { shift: null } }
+      if (path.endsWith('/suggested-float')) return { data: { opening_float: '0' } }
+      return base(path, init)
+    })
+    await flushPromises()
+    await w.get('select[name=payment_method]').setValue('CARD')
+    await flushPromises()
+    expect(w.find('[data-testid=shift-required]').exists()).toBe(false)
+    await w.get('select[name=payment_method]').setValue('CASH')
+    await flushPromises()
+    expect(w.get('[data-testid=shift-required]').text()).toContain('Cash needs an open shift.')
+  })
+  describe('check-out from the folio', () => {
+    const detail = (balance: string) => ({ stay: { id: 11, status: 'OPEN', departure_date: '2026-09-30', version: 2 }, folios: [{ id: 3, folio_number: 'FOL000001', status: 'OPEN', balance }] })
+    function withStay(balance: string, f: object = folio({ stay_id: 11, balance }), permissions = [...ALL, 'frontdesk.checkout']) {
+      const w = mountView(f, permissions)
+      const base = GET
+      GET = vi.fn(async (path: string, init?: unknown) => (path.endsWith('/stays/{id}') ? { data: detail(balance) } : base(path, init)))
+      return w
+    }
+
+    it('offers the button only on the open folio of a stay, to who may check out', async () => {
+      expect((await (async () => { const w = withStay('22100'); await flushPromises(); return w })()).find('[data-testid=folio-checkout-open]').exists()).toBe(true)
+      const noStay = mountView(folio()); await flushPromises()
+      expect(noStay.find('[data-testid=folio-checkout-open]').exists()).toBe(false)
+      const noRight = mountView(folio({ stay_id: 11 }), ALL); await flushPromises()
+      expect(noRight.find('[data-testid=folio-checkout-open]').exists()).toBe(false)
+      const closed = mountView(folio({ stay_id: 11, status: 'CLOSED' }), [...ALL, 'frontdesk.checkout']); await flushPromises()
+      expect(closed.find('[data-testid=folio-checkout-open]').exists()).toBe(false)
+    })
+
+    it('opens the wizard of the stay, says a balance is owed and leads to the payment tab', async () => {
+      const w = withStay('22100')
+      await flushPromises()
+      await w.get('[data-testid=folio-checkout-open]').trigger('click')
+      await flushPromises()
+      expect(w.find('[data-testid=checkout-wizard]').exists()).toBe(true)
+      expect(w.get('[data-testid=checkout-owes]').text()).toContain('not zero')
+      await w.get('[data-testid=checkout-take-payment]').trigger('click')
+      expect(shown(w, 'payment-form')).toBe(true)
+    })
+
+    it('checks out a settled folio, and reads the folio again', async () => {
+      const w = withStay('0')
+      await flushPromises()
+      await w.get('[data-testid=folio-checkout-open]').trigger('click')
+      await flushPromises()
+      expect(w.find('[data-testid=checkout-owes]').exists()).toBe(false)
+      POST = vi.fn().mockResolvedValue({ data: { posted_room_charges: [], room_charges: [], folios: [], housekeeping: 'DIRTY' } })
+      const reads = GET.mock.calls.length
+      await w.get('[data-testid=checkout-submit]').trigger('click')
+      await flushPromises()
+      expect(POST).toHaveBeenCalledTimes(1)
+      expect(POST.mock.calls[0]?.[0]).toBe('/api/v1/properties/{propertyId}/stays/{id}/check-out')
+      expect(GET.mock.calls.length).toBeGreaterThan(reads)
+      expect(w.find('[data-testid=checkout-done]').exists()).toBe(true)
+    })
+  })
 })

@@ -13,6 +13,7 @@ import EditRateDialog from '@/components/EditRateDialog.vue'
 import GuestEditDialog from '@/components/GuestEditDialog.vue'
 import ReservationEditDialog from '@/components/ReservationEditDialog.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import RoomLink from '@/components/app/RoomLink.vue'
@@ -643,6 +644,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             <FormField :label="t('reservation.reference')">
               <template #default="{ id }"><Input :id="id" v-model="deposit.reference" name="deposit_reference" /></template>
             </FormField>
+            <ShiftRequiredNotice class="m-0" :method="deposit.method" />
             <Button type="submit" :disabled="busy || !deposit.amount">{{ t('reservation.takeDepositButton') }}</Button>
           </CardContent>
         </form>

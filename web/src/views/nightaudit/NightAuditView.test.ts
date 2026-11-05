@@ -352,8 +352,35 @@ describe('NightAuditView', () => {
     await flushPromises()
     expect(w.get('[data-testid=readiness]').text()).toBe('3 langkah perlu ditangani')
     expect(w.get('[data-testid=mark-no-shows]').text()).toBe('Tandai 0 sebagai no-show')
-    expect(w.get('[data-testid=cannot-run]').text()).toBe('Selesaikan hal-hal di atas terlebih dahulu.')
+    expect(w.get('[data-testid=cannot-run]').text()).toContain('Hari belum bisa ditutup karena:')
+    expect(w.findAll('[data-testid=cannot-run-reasons] li').map((li) => li.text())).toEqual(['2 kedatangan belum check-in atau ditandai no-show', '1 keberangkatan masih di hotel', '2 temuan biaya kamar'])
     setLocale('en')
+  })
+
+  it('lists, above the run button, why the day cannot close, each reason a link to its step', async () => {
+    const w = mountView(blocked())
+    await flushPromises()
+    expect(w.findAll('[data-testid=cannot-run-reasons] li').map((li) => li.attributes('data-testid'))).toEqual(['reason-arrivals', 'reason-departures', 'reason-charges'])
+    expect(w.get('[data-testid=reason-departures] a').attributes('href')).toBe('/night-audit#departures')
+    expect(w.get('[data-testid=run]').text()).toContain('The day cannot close yet because of:')
+  })
+
+  it('counts the open cashier shifts as a step of their own, lists them, and names them among the reasons', async () => {
+    const p = clean()
+    const open = { ...p, can_run: false, blockers: { ...p.blockers, open_shifts: [{ id: 3, number: 'SH000003', drawer: 'MAIN', user_id: 1, user_name: 'Admin Demo', opened_at: '2026-09-30T01:00:00Z' }] } }
+    const w = mountView(open)
+    await flushPromises()
+    expect(w.get('[data-testid=readiness]').text()).toBe('1 step(s) need attention')
+    expect(w.get('#shifts').text()).toContain('Shift SH000003 of Admin Demo on drawer MAIN')
+    expect(w.get('[data-testid=open-shift-SH000003] a').attributes('href')).toBe('/cashier/shifts')
+    expect(w.findAll('[data-testid=cannot-run-reasons] li').map((li) => li.text())).toEqual(['1 cashier shift(s) still open'])
+    expect(w.get('[data-testid=charges]').text()).not.toContain('SH000003')
+  })
+
+  it('says no shift is open when none holds the day', async () => {
+    const w = mountView(clean())
+    await flushPromises()
+    expect(w.get('[data-testid=shifts-none]').text()).toBe('No cashier shift is open.')
   })
 
   it('shows the pack the run built, with the way to the archive, to who may read it; warns of an incomplete one', async () => {
