@@ -25,7 +25,7 @@ function onSelect(event: Event): void {
     <select
       :value="property.currentId ?? ''"
       :title="full"
-      class="h-9 w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-border bg-card px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="h-9 pointer-coarse:h-[44px] w-full min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-border bg-card px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
       data-testid="property-switcher"
       @change="onSelect"
     >

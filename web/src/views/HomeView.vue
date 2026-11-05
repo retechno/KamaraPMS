@@ -5,6 +5,7 @@ import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Arrival, CheckInResult, CheckOutResult, InHouseRow, StayDetail } from '@/api/types'
+import HousekeeperToday from '@/components/app/HousekeeperToday.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import NightsChart, { type NightBar } from '@/components/app/NightsChart.vue'
 import RoomLink from '@/components/app/RoomLink.vue'
@@ -220,6 +221,7 @@ const updated = computed(() => (today.updatedAt.value ? zoneTime(today.updatedAt
   </PageHeader>
 
   <template v-if="property.current">
+    <HousekeeperToday v-if="!today.canFront.value && can('housekeeping.update')" />
     <div v-if="stripCount" class="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-[repeat(var(--cards),minmax(0,1fr))]" :style="{ '--cards': stripCount }" data-testid="strip">
       <KpiCard v-if="today.canFront.value" data-testid="strip-occupancy" :label="t('today.occupancy')" :value="tonight ? formatPercent(tonight.occupancy_percent) : '–'" :icon="Percent">
         <template v-if="tonight">

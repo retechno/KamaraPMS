@@ -74,7 +74,6 @@ const LEGACY: Record<string, number> = {
   'views/reservations/ReservationDetailView.vue': 1,
   'views/rooms/BedTypesView.vue': 1,
   'views/rooms/HousekeepingMyView.vue': 1,
-  'views/rooms/HousekeepingView.vue': 2,
   'views/rooms/MaintenanceView.vue': 1,
   'views/rooms/RoomTypesView.vue': 1,
   'views/rooms/RoomsView.vue': 1,

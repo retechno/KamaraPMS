@@ -140,7 +140,11 @@ describe('navigation', () => {
       for (const id of ['accounting', 'payables', 'tax', 'bank', 'budget', 'billing']) expect(sections, id).not.toContain(id)
     })
     it('keeps the pages the housekeeper works in', () => {
-      for (const id of ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'maintenance', 'lostFound']) expect(seen, id).toContain(id)
+      for (const id of ['dashboard', 'housekeeping', 'myTasks', 'cleaningList', 'maintenance', 'lostFound']) expect(seen, id).toContain(id)
+    })
+    it('does not show the room status board, which the page itself refuses to this role (it reads it with reservation.read)', () => {
+      expect(seen).not.toContain('roomStatus')
+      expect(visibleNavigation(false, (p) => p === 'reservation.read').flatMap((s) => s.items.map((i) => i.id))).toContain('roomStatus')
     })
   })
 
@@ -151,7 +155,7 @@ describe('navigation', () => {
   })
 
   it('names the permission of the read endpoint on every page, except the ones that every member of the property may read', () => {
-    const open = ['dashboard', 'roomStatus', 'housekeeping', 'myTasks', 'cleaningList', 'roomBlocks', 'properties', 'users', 'roles']
+    const open = ['dashboard', 'housekeeping', 'myTasks', 'cleaningList', 'roomBlocks', 'properties', 'users', 'roles']
     const bare = items.filter((i) => !i.permission && !i.adminOnly).map((i) => i.id)
     expect(bare.sort()).toEqual(open.filter((id) => !['properties', 'users', 'roles', 'myTasks'].includes(id)).sort())
   })

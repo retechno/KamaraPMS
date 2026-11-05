@@ -52,7 +52,7 @@ describe('SidebarNav: pinned and recent pages', () => {
 
   it('shows only the pinned pages the person may open', async () => {
     const { w } = await mountNav({ permissions: [] })
-    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Today', 'Room status']) // the two that every member of the property may open
+    expect(texts(w, '[data-testid=section-pinned] a')).toEqual(['Today']) // the one that every member of the property may open (room status is read with reservation.read)
   })
 
   it('leaves out of the pinned and recent pages those that are not in the menu or not for this person, without an error', async () => {
@@ -63,10 +63,9 @@ describe('SidebarNav: pinned and recent pages', () => {
   })
 
   it('has no pinned section when nothing is pinned, and takes a page off with its button', async () => {
-    const { w } = await mountNav({ permissions: [] })
+    const { w } = await mountNav({ permissions: ['reservation.read', 'cashier.shift'] })
     expect(w.find('[data-testid=pinned-dashboard]').exists()).toBe(true)
-    await w.get('[data-testid=unpin-dashboard]').trigger('click')
-    await w.get('[data-testid=unpin-roomStatus]').trigger('click')
+    for (const id of ['dashboard', 'roomStatus', 'tapeChart', 'cashier']) await w.get(`[data-testid=unpin-${id}]`).trigger('click')
     expect(w.find('[data-testid=section-pinned]').exists()).toBe(false)
     expect(JSON.parse(localStorage.getItem('pms.nav.1')!).pins).toEqual([])
   })

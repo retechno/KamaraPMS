@@ -66,7 +66,7 @@ describe('useNavPins', () => {
       wrapper!.unmount()
       resetNavPins()
       const nobody = await setup({ permissions: [] })
-      expect(ids(nobody.pinned.value)).toEqual(['dashboard', 'roomStatus']) // room status is for every member of the property
+      expect(ids(nobody.pinned.value)).toEqual(['dashboard']) // room status is read with reservation.read, so nobody-in-particular gets only the dashboard
     })
 
     it('stores nothing until the person pins or unpins something', async () => {
@@ -197,18 +197,18 @@ describe('useNavPins', () => {
     it('keeps the choice until the page is closed when the storage throws, and ignores a stored value that is not ours', async () => {
       localStorage.setItem('pms.nav.1', '{ not json')
       const pins = await setup({ permissions: ['guest.read'] })
-      expect(ids(pins.pinned.value)).toEqual(['dashboard', 'roomStatus'])
+      expect(ids(pins.pinned.value)).toEqual(['dashboard'])
       vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
         throw new Error('full')
       })
       pins.togglePin('guests')
-      expect(ids(pins.pinned.value)).toEqual(['dashboard', 'roomStatus', 'guests'])
+      expect(ids(pins.pinned.value)).toEqual(['dashboard', 'guests'])
     })
 
     it('ignores a stored value of the wrong shape', async () => {
       localStorage.setItem('pms.nav.1', JSON.stringify({ pins: 'dashboard', recent: [1, 2], showRecent: 'yes' }))
       const pins = await setup({ permissions: [] })
-      expect(ids(pins.pinned.value)).toEqual(['dashboard', 'roomStatus'])
+      expect(ids(pins.pinned.value)).toEqual(['dashboard'])
       expect(ids(pins.recent.value)).toEqual([])
       expect(pins.showRecent.value).toBe(true)
     })

@@ -827,4 +827,15 @@ describe('HomeView, Today', () => {
     })
   })
   })
+  describe('the work card of a person who cleans', () => {
+    it('is shown to who may update rooms but not read reservations, and to nobody else', async () => {
+      world = defaultWorld()
+      serve()
+      await mountToday(['housekeeping.update'])
+      expect(document.body.querySelector('[data-testid=housekeeper-today]')).not.toBeNull()
+      mounted?.unmount()
+      await mountToday([...FRONT, 'housekeeping.update'])
+      expect(document.body.querySelector('[data-testid=housekeeper-today]')).toBeNull()
+    })
+  })
 })
