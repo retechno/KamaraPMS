@@ -496,7 +496,7 @@ watch(pid, () => {
     <SheetContent v-if="work?.detail" class="p-6" data-testid="departure-sheet">
       <SheetTitle class="text-lg">{{ t(work.kind === 'checkout' ? 'today.checkOutTitle' : 'nightAudit.extendTitle', { guest: work.row.guest }) }}</SheetTitle>
       <SheetDescription class="mt-1">{{ t('today.checkOutSubtitle', { stay: work.row.stay_number, room: work.row.room || '—' }) }}</SheetDescription>
-      <CheckOutWizard v-if="work.kind === 'checkout'" :detail="work.detail" class="mt-4" @done="checkedOut" @failed="reread" @cancel="work = null" />
+      <CheckOutWizard v-if="work.kind === 'checkout'" :detail="work.detail" class="mt-4" @done="checkedOut" @failed="reread" @paid="reread" @cancel="work = null" />
       <StayActions v-else :detail="work.detail" initial="extend" class="mt-4" @changed="changed" />
     </SheetContent>
   </Sheet>

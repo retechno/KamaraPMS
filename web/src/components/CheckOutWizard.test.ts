@@ -60,7 +60,8 @@ describe('CheckOutWizard', () => {
   })
 
   it('points to the folios that still have a balance and keeps the dialog open on a refusal', async () => {
-    const w = mountWizard(detail('2026-09-30', '-100000'))
+    // a company folio is not held back by the button (the server decides); a guest folio that is not at zero is, see below
+    const w = mountWizard(owing('500000', 'COMPANY'))
     expect(w.get('[data-testid=open-folio-8]').attributes('href')).toBe('/folios/8')
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'FOLIO_NOT_BALANCED', detail: 'not balanced' }))
     await w.get('[data-testid=checkout-submit]').trigger('click')
@@ -159,5 +160,50 @@ describe('CheckOutWizard', () => {
     const w = mountWizard(owing('100000'))
     useAuthStore().me = { properties: [{ id: 7, permissions: ['frontdesk.checkout'] }], user: { is_tenant_admin: false } } as never
     return w.vm.$nextTick().then(() => expect(w.find('[data-testid=checkout-pay]').exists()).toBe(false))
+  })
+  it('disables the check-out while a guest folio is not at zero, and says why by the button', async () => {
+    const w = mountWizard(owing('250000'))
+    expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid=checkout-due-reason]').text()).toBe('Pay the balance of 250,000 first.')
+    const credit = mountWizard(owing('-80000'))
+    expect(credit.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
+    expect(credit.get('[data-testid=checkout-due-reason]').text()).toBe('Refund the credit of 80,000 first.')
+    const zero = mountWizard(owing('0'))
+    expect(zero.get('[data-testid=checkout-submit]').attributes('disabled')).toBeUndefined()
+    expect(zero.find('[data-testid=checkout-due-reason]').exists()).toBe(false)
+  })
+
+  it('enables the check-out once the payment has settled the folio', async () => {
+    POST = vi.fn().mockResolvedValue({ data: { id: 1 } })
+    GET = vi.fn(async () => ({ data: owing('0') }))
+    const w = mountWizard(owing('100000'))
+    await w.get('[data-testid=checkout-pay-submit]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('forgets the check-out error and the "fix what it said" message after a payment, and tells the page to read the stay again', async () => {
+    const both = (guest: string) => ({
+      stay: { id: 5, stay_number: 'STY000001', arrival_date: '2026-09-30', departure_date: '2026-09-30', status: 'OPEN', version: 3 },
+      folios: [
+        { id: 8, folio_number: 'FOL000001', folio_type: 'GUEST', status: 'OPEN', balance: guest },
+        { id: 9, folio_number: 'FOL000002', folio_type: 'COMPANY', status: 'OPEN', balance: '500000' },
+      ],
+    }) as never
+    POST = vi.fn(async (path: string) => {
+      if (path.endsWith('/payments')) return { data: { id: 1 } }
+      throw new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'FOLIO_NOT_BALANCED', detail: 'not balanced' })
+    })
+    GET = vi.fn(async () => ({ data: both('0') }))
+    const w = mountWizard(both('0'))
+    await w.get('[data-testid=checkout-submit]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=checkout-error]').exists()).toBe(true)
+    await w.setProps({ detail: both('100000') }) // the page read the stay again: the guest owes now
+    await w.get('[data-testid=checkout-pay-submit]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid=checkout-error]').exists()).toBe(false)
+    expect(w.find('[data-testid=checkout-payment-kept]').exists()).toBe(false)
+    expect(w.emitted('paid')).toHaveLength(1)
   })
 })

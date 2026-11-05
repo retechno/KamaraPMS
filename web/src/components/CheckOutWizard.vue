@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { CheckOutResult, StayDetail } from '@/api/types'
@@ -11,10 +11,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { formatMoney } from '@/utils/format'
 import { newIdempotencyKey } from '@/utils/reservations'
 
 const props = defineProps<{ detail: StayDetail }>()
-const emit = defineEmits<{ done: [result: CheckOutResult]; cancel: []; failed: [error: ApiError] }>()
+const emit = defineEmits<{ done: [result: CheckOutResult]; cancel: []; failed: [error: ApiError]; paid: [] }>()
 const property = usePropertyStore()
 const auth = useAuthStore()
 
@@ -29,6 +30,8 @@ let key = newIdempotencyKey()
 // What the wizard shows is its own copy of the stay: a payment taken here changes the balances, and the stay is read again.
 const live = ref<StayDetail>(props.detail)
 const paidHere = ref(false)
+// A page that reads the stay again (the header with the balance) hands the new copy down.
+watch(() => props.detail, (d) => { live.value = d })
 const canPay = computed(() => property.currentId !== null && auth.can('payment.post', property.currentId))
 type Folio = StayDetail['folios'][number]
 const isCompany = (f: Folio): boolean => (f as { folio_type?: string }).folio_type === 'COMPANY'
@@ -39,6 +42,8 @@ async function reload(): Promise<void> {
   const propertyId = property.currentId
   if (propertyId === null) return
   paidHere.value = true
+  error.value = null // what the check-out said before the payment is out of date
+  emit('paid') // the page reads its own summary again (the balance in its header)
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: props.detail.stay.id } } })
     if (data) live.value = data
@@ -51,7 +56,14 @@ const businessDate = computed(() => property.clock?.business_date ?? '')
 const early = computed(() => live.value.stay.departure_date > businessDate.value)
 const unbalanced = computed(() => live.value.folios.filter((f) => f.status === 'OPEN' && Number(f.balance) !== 0))
 // The server decides what is owed after the room charge of tonight; the balance shown is the folio's today.
-const blocked = computed(() => (early.value && !confirmEarly.value) || busy.value)
+// A guest folio that is not at zero is not checked out: the reason stands by the button (the server refuses it too).
+const guestDue = computed(() => unbalanced.value.filter((f) => !isCompany(f)))
+const dueReason = computed(() => {
+  const f = guestDue.value[0]
+  if (!f) return ''
+  return Number(f.balance) > 0 ? t('checkout.payFirst', { amount: formatMoney(f.balance) }) : t('checkout.refundCreditFirst', { amount: formatMoney(String(-Number(f.balance))) })
+})
+const blocked = computed(() => (early.value && !confirmEarly.value) || busy.value || guestDue.value.length > 0)
 
 async function submit(): Promise<void> {
   const propertyId = property.currentId
@@ -120,6 +132,7 @@ async function submit(): Promise<void> {
         </ol>
         <div class="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" data-testid="checkout-cancel" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+          <span v-if="dueReason" class="mr-auto self-center text-sm text-muted-foreground" data-testid="checkout-due-reason">{{ dueReason }}</span>
           <Button type="button" :disabled="blocked" data-testid="checkout-submit" @click="submit">{{ t('checkout.submit') }}</Button>
         </div>
       </template>

@@ -110,6 +110,18 @@ describe('StayDetailView', () => {
     expect(other.find('[data-testid=checkout-master]').exists()).toBe(false)
   })
 
+  it('reads the stay again after a payment taken in the wizard, so the balance in the header is the one after it', async () => {
+    const w = mountView(detail(), ['reservation.read', 'frontdesk.checkout'])
+    await flushPromises()
+    await w.get('[data-testid=checkout]').trigger('click')
+    const before = GET.mock.calls.length
+    GET.mockResolvedValue({ data: detail({ folios: [{ id: 8, folio_number: 'FOL000001', status: 'OPEN', balance: '0' }] }) })
+    w.getComponent(CheckOutWizard).vm.$emit('paid')
+    await flushPromises()
+    expect(GET.mock.calls.length).toBeGreaterThan(before)
+    expect(w.find('[data-testid=checkout-wizard]').exists()).toBe(true)
+  })
+
   async function checkedOutWith(result: object) {
     const w = mountView(detail(), ['reservation.read', 'frontdesk.checkout'])
     await flushPromises()

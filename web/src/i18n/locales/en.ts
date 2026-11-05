@@ -4085,6 +4085,8 @@ export const en = {
     companyFolio: 'This folio is billed to a company and must be at zero before check-out: settle it with the company (a payment or a transfer on that folio).',
     refundFirst: 'Refund {amount} to the guest first.',
     openFolio: 'Open the folio',
+    payFirst: 'Pay the balance of {amount} first.',
+    refundCreditFirst: 'Refund the credit of {amount} first.',
   },
   emails: {
     title: 'E-mail',

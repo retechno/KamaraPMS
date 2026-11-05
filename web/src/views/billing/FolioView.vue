@@ -569,7 +569,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         {{ t('folio.checkOutOwes', { balance: $money(folio.balance) }) }}
         <Button v-if="can('payment.post')" type="button" variant="outline" size="sm" class="ml-2" data-testid="checkout-take-payment" @click="takePaymentFirst">{{ t('folio.tabPayment') }}</Button>
       </p>
-      <CheckOutWizard :detail="checkOutDetail" @done="checkedOut" @cancel="checkOutDetail = null" />
+      <CheckOutWizard :detail="checkOutDetail" @done="checkedOut" @paid="load" @cancel="checkOutDetail = null" />
     </div>
 
     <OutletLockCard v-if="showOutletLock" :folio-id="folio.id" :until-label="folio.folio_type === 'MASTER' ? t('outletLock.untilMasterCloses') : undefined" class="mb-4" data-testid="folio-outlet-lock" />

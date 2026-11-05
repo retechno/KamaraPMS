@@ -4083,6 +4083,8 @@ export const id: Messages = {
     companyFolio: 'Folio ini ditagihkan ke perusahaan dan harus nol sebelum check-out: selesaikan dengan perusahaan (pembayaran atau transfer di folio itu).',
     refundFirst: 'Kembalikan {amount} ke tamu dulu.',
     openFolio: 'Buka folio',
+    payFirst: 'Bayar dulu saldo {amount}.',
+    refundCreditFirst: 'Kembalikan kredit {amount} dulu.',
   },
   emails: {
     title: 'E-mail',
