@@ -10,7 +10,9 @@ import (
 
 	"kamarapms/internal/banquet"
 	"kamarapms/internal/folios"
+	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/db"
+	"kamarapms/internal/shifts"
 )
 
 // Cancellation, forfeit, transfer to the master folio of a group, the races and the close of the day (36 10.3, 4.7, 4.8, 4.9 and section 11 tests 5 to 8 and 11).
@@ -212,4 +214,22 @@ func TestTheBanquetPostsOnlyThroughTheEventEntryPoints(t *testing.T) {
 	}
 	_ = folios.SourceBanquet
 	_ = db.ForShare
+}
+
+// "Accept deposit" of an event, taken in cash by a cashier with an open shift: the folio of the event exists before the payment, and the payment takes the shift after the folio.
+func TestACashDownPaymentOnTheEventFolioWithAnOpenShiftIsTakenOnTheShift(t *testing.T) {
+	f := setup(t)
+	m := f.money(t)
+	must(t, f.Exec(t, `UPDATE property_cashier_settings SET require_shift_for_cash = true WHERE property_id = $1`, f.propID))
+	cashier := f.User(t, f.tenantID, f.propID, auth.PermBanquetRead, auth.PermBanquetManage, auth.PermCashierShift, auth.PermPaymentPost, auth.PermFolioRead)
+	sh, err := f.Shifts.Open(cashier, f.propID, shifts.OpenInput{Drawer: "FRONT"})
+	must(t, err)
+	ev, _ := m.eventOn(t, "DP in cash", "2026-11-15", 50)
+	folio, err := f.svc.OpenFolio(cashier, f.propID, ev.ID)
+	must(t, err)
+	r, err := f.Folios.PostPayment(cashier, f.propID, folio.ID, "dp-cash", folios.PaymentInput{Amount: "5000000", PaymentMethod: "CASH"})
+	must(t, err)
+	if got := f.Count(t, `SELECT count(*) FROM payments WHERE id = $1 AND shift_id = $2`, r.Payment.ID, sh.ID); got != 1 {
+		t.Fatalf("the down payment is not on the shift of the cashier")
+	}
 }

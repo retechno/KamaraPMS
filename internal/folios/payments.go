@@ -280,6 +280,10 @@ func (s *Service) DepositInBatch(ctx context.Context, propertyID, reservationID 
 				if status != "DRAFT" && status != "CONFIRMED" {
 					return apperr.Conflict("RESERVATION_NOT_OPEN", "a deposit needs a draft or confirmed reservation").WithContext("status", status)
 				}
+				in, err := s.depositShift(ctx, p, propertyID, reservationID, in)
+				if err != nil {
+					return err
+				}
 				folio, err := s.depositFolio(ctx, p, propertyID, reservationID)
 				if err != nil {
 					return err
@@ -368,6 +372,29 @@ func (s *Service) GroupDeposits(ctx context.Context, tenantID, propertyID int64,
 		}
 	}
 	return out, nil
+}
+
+// depositShift keeps the lock order (folios 42, then the cashier shift 43, then document numbers 50) when a cash deposit has to open the folio of the reservation:
+// the number of a new folio is drawn from a sequence (50), after which the shift could no longer be locked. So when there is no folio yet, the caller's shift is
+// resolved and locked here, before the number, and handed to createPayment. When the folio exists, nothing is taken here: depositFolio locks the folio (42) first and
+// createPayment takes the shift (43) after it. The reservation is locked by the caller, so no other deposit creates the folio in between.
+func (s *Service) depositShift(ctx context.Context, p auth.Principal, propertyID, reservationID int64, in PaymentInput) (PaymentInput, error) {
+	if in.PaymentMethod != methodCash || in.shiftSet || s.shifts == nil {
+		return in, nil
+	}
+	_, err := s.q(ctx).FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: &reservationID})
+	if err == nil {
+		return in, nil // depositFolio locks the folio first
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return in, err
+	}
+	shiftID, err := s.shifts.CashShift(ctx, propertyID)
+	if err != nil {
+		return in, err
+	}
+	in.shiftID, in.shiftSet = shiftID, true
+	return in, nil
 }
 
 // depositFolio returns the reservation's open folio that has no stay, locked, or creates it. A new folio is our
