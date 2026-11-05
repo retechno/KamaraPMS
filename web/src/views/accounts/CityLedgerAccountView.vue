@@ -6,6 +6,7 @@ import { ApiError } from '@/api/problem'
 import type { Approval, CityLedgerAccount, CityLedgerAdjustment, CityLedgerAging, CityLedgerCandidate, CityLedgerInvoice, CityLedgerReceipt, CityLedgerReminder, CityLedgerStatement, GlAccount } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
@@ -466,6 +467,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               <template #default="{ id }"><Input :id="id" v-model="receipt.remarks" name="remarks" /></template>
             </FormField>
           </div>
+          <ShiftRequiredNotice class="mt-4" :method="receipt.method" />
           <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('clAccount.recordReceipt') }}</Button></div>
         </CardContent>
       </form>
@@ -579,6 +581,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               <template #default="{ id }"><Input :id="id" v-model="paying.reference" name="pay_reference" /></template>
             </FormField>
           </div>
+          <ShiftRequiredNotice class="mt-4" :method="paying.method" />
           <div class="mt-4 flex justify-end gap-2">
             <Button type="button" variant="outline" @click="paying = null">{{ t('clAccount.keep') }}</Button>
             <Button type="submit" :disabled="busy || !paying.amount" data-testid="pay-submit">{{ t('clAccount.recordPayment') }}</Button>

@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"kamarapms/internal/folios"
+	"kamarapms/internal/platform/auth"
+	"kamarapms/internal/rooms/roomstest"
+	"kamarapms/internal/shifts"
 )
 
 // A cash deposit for a reservation that has no folio yet, by a cashier with an open shift (as in the demo data).
@@ -52,4 +55,23 @@ func TestNonCashDepositDoesNotNeedAShift(t *testing.T) {
 	res := f.reservationWithoutFolio(t, "DEP3")
 	_, err := f.Folios.Deposit(f.cashier, f.propID, res, "dep-1", folios.PaymentInput{Amount: "1000", PaymentMethod: "BANK_TRANSFER", ReferenceNumber: "T1"})
 	must(t, err)
+}
+
+// Opening a shift on a drawer somebody holds says who holds it and which drawer is free, so the screen can tell the cashier whom to ask.
+func TestADrawerInUseNamesItsHolderAndSuggestsAFreeOne(t *testing.T) {
+	f := setup(t)
+	first := f.open(t, f.cashier, "FRONT", "0")
+	other := f.User(t, f.tenantID, f.propID, auth.PermCashierShift)
+	// FRONT-2 is taken as well, so the suggestion is the next one
+	third := f.User(t, f.tenantID, f.propID, auth.PermCashierShift)
+	f.open(t, third, "FRONT-2", "0")
+
+	_, err := f.Shifts.Open(other, f.propID, shifts.OpenInput{Drawer: "front"})
+	e := roomstest.Code(t, err, "DRAWER_IN_USE")
+	if e.Context["drawer"] != "FRONT" || e.Context["holder_shift_number"] != first.Number || e.Context["suggested_drawer"] != "FRONT-3" || e.Context["holder_name"] == nil {
+		t.Fatalf("context: %+v", e.Context)
+	}
+	if _, err := f.Shifts.Open(other, f.propID, shifts.OpenInput{Drawer: "FRONT-3"}); err != nil {
+		t.Fatalf("the suggested drawer is free: %v", err)
+	}
 }

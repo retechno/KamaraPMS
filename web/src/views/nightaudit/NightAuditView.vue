@@ -30,7 +30,7 @@ import { useNightAuditStore } from '@/stores/nightAudit'
 import { usePropertyStore } from '@/stores/property'
 import { formatBalance } from '@/utils/format'
 import { actionLabelKey, actionVariant, owesAtCheckOut } from '@/utils/inHouse'
-import { chargeIssueCount, pendingSteps } from '@/utils/nightAuditReadiness'
+import { chargeIssueCount, pendingSteps, type AuditStep } from '@/utils/nightAuditReadiness'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
@@ -84,9 +84,21 @@ const openShifts = computed(() => blockers.value?.open_shifts ?? [])
 /** Where a stock finding is dealt with: a count in the counts, the rest in the amenities. */
 const stockLink = (code: string): string => (code === 'INVENTORY_COUNT_OPEN' ? '/inventory/counts' : code.startsWith('AMENITY') ? '/inventory/amenities' : '/inventory')
 const chargeIssues = computed(() => chargeIssueCount(preview.value))
+/** Why the day cannot close, in the order of the steps, each one a link to its step: the one list that stands above the button. */
+const reasons = computed(() => {
+  const p = preview.value
+  if (!p) return []
+  const list: { id: AuditStep; label: string }[] = []
+  if (p.time_guard_ok === false) list.push({ id: 'guard', label: t('nightAudit.reasonGuard') })
+  if (arrivals.value.length) list.push({ id: 'arrivals', label: t('nightAudit.reasonArrivals', { n: arrivals.value.length }) })
+  if (departures.value.length) list.push({ id: 'departures', label: t('nightAudit.reasonDepartures', { n: departures.value.length }) })
+  if (chargeIssues.value) list.push({ id: 'charges', label: t('nightAudit.reasonCharges', { n: chargeIssues.value }) })
+  if (openShifts.value.length) list.push({ id: 'shifts', label: t('nightAudit.reasonShifts', { n: openShifts.value.length }) })
+  return list
+})
 const allSelected = computed(() => arrivals.value.length > 0 && noShow.selected.length === arrivals.value.length)
 
-// How many steps still need someone: the clock, the arrivals, the departures and the room charges. The chip of the top bar and the Today card say the same, from the same rule.
+// How many steps still need someone: the clock, the arrivals, the departures, the room charges and the cashier shifts. The chip of the top bar and the Today card say the same, from the same rule.
 const attention = computed(() => pendingSteps(preview.value).count)
 
 const arrivalColumns = computed<Column<(typeof arrivals.value)[number]>[]>(() => [
@@ -408,12 +420,6 @@ watch(pid, () => {
             <li v-for="b in outletBlockers" :key="`${b.code}-${b.ref ?? ''}`" :data-testid="`outlet-${b.code}`">{{ findingText(b, 'blocker') }}</li>
           </ul>
         </div>
-        <div v-if="openShifts.length" class="alert mb-0 mt-3" data-testid="open-shifts">
-          <strong>{{ t('nightAudit.openShiftsBlock', { n: openShifts.length }) }}</strong>
-          <ul class="m-0 mt-1 pl-5">
-            <li v-for="sh in openShifts" :key="sh.id" :data-testid="`open-shift-${sh.number}`">{{ t('nightAudit.openShift', { number: sh.number, drawer: sh.drawer, user: sh.user_name }) }} <RouterLink to="/cashier/shifts">{{ t('nightAudit.stockOpen') }}</RouterLink></li>
-          </ul>
-        </div>
         <div v-if="stockBlockers.length" class="alert mb-0 mt-3" data-testid="stock-blockers">
           <strong>{{ t('nightAudit.stockBlock', { n: stockBlockers.length }) }}</strong>
           <ul class="m-0 mt-1 pl-5">
@@ -426,6 +432,16 @@ watch(pid, () => {
             <li v-for="b in accountingBlockers" :key="`${b.code}-${b.ref ?? ''}`"><code>{{ b.code }}</code> {{ b.message }}</li>
           </ul>
         </div>
+      </StepCard>
+
+      <StepCard :step="5" :title="t('nightAudit.stepShifts')" :state="openShifts.length ? 'blocked' : 'ok'" :summary="`(${openShifts.length})`" id="shifts" data-testid="shifts">
+        <div v-if="openShifts.length" class="alert mb-0" data-testid="open-shifts">
+          <strong>{{ t('nightAudit.openShiftsBlock', { n: openShifts.length }) }}</strong>
+          <ul class="m-0 mt-1 pl-5">
+            <li v-for="sh in openShifts" :key="sh.id" :data-testid="`open-shift-${sh.number}`">{{ t('nightAudit.openShift', { number: sh.number, drawer: sh.drawer, user: sh.user_name }) }} <RouterLink to="/cashier/shifts">{{ t('nightAudit.stockOpen') }}</RouterLink></li>
+          </ul>
+        </div>
+        <p v-else class="m-0 text-sm text-muted-foreground" data-testid="shifts-none">{{ t('nightAudit.shiftsNone') }}</p>
       </StepCard>
 
       <Card v-if="preview.warnings.stale_drafts.length || preview.warnings.open_folios_of_cancelled_reservations.length || (preview.warnings.open_group_masters ?? []).length || (preview.warnings.group_masters_closed ?? []).length || preview.warnings.blocks_ending.length || (preview.warnings.pack_incomplete ?? []).length || (preview.warnings.pack_delivery_failed ?? []).length || (preview.warnings.outlet_bills ?? []).length || (preview.warnings.stock ?? []).length" class="mb-4" data-testid="warnings">
@@ -460,8 +476,13 @@ watch(pid, () => {
         </CardContent>
       </Card>
 
-      <StepCard :step="5" :title="t('nightAudit.stepRun')" :state="preview.can_run ? 'pending' : 'blocked'" data-testid="run">
-        <p v-if="!preview.can_run" class="mb-3 mt-0 text-sm text-muted-foreground" data-testid="cannot-run">{{ t('nightAudit.resolveFirst') }}</p>
+      <StepCard :step="6" :title="t('nightAudit.stepRun')" :state="preview.can_run ? 'pending' : 'blocked'" data-testid="run">
+        <div v-if="!preview.can_run" class="mb-3" data-testid="cannot-run">
+          <p class="m-0 text-sm text-muted-foreground">{{ reasons.length ? t('nightAudit.heldBy') : t('nightAudit.resolveFirst') }}</p>
+          <ul v-if="reasons.length" class="m-0 mt-1 pl-5 text-sm" data-testid="cannot-run-reasons">
+            <li v-for="r in reasons" :key="r.id" :data-testid="`reason-${r.id}`"><RouterLink :to="{ path: '/night-audit', hash: `#${r.id}` }">{{ r.label }}</RouterLink></li>
+          </ul>
+        </div>
         <label class="flex items-center gap-2 text-sm">
           <input v-model="confirmRun" type="checkbox" name="confirm_run" :disabled="!preview.can_run" />
           <span>{{ t('nightAudit.confirmRun', { date: $date(preview.business_date) }) }}</span>

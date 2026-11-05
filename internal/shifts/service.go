@@ -3,6 +3,7 @@ package shifts
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -479,6 +480,9 @@ func (s *Service) Open(ctx context.Context, propertyID int64, in OpenInput) (Shi
 		} else if !isNoRows(err) {
 			return err
 		}
+		if err := s.refuseBusyDrawer(ctx, p.TenantID, propertyID, drawer); err != nil {
+			return err
+		}
 		float := decimal.Zero
 		if opening != nil {
 			float = *opening
@@ -505,6 +509,37 @@ func (s *Service) Open(ctx context.Context, propertyID int64, in OpenInput) (Shi
 		return Shift{}, err
 	}
 	return s.detail(ctx, p.TenantID, propertyID, id, decimals)
+}
+
+// refuseBusyDrawer answers DRAWER_IN_USE with the person who holds the drawer, the shift number and a drawer that is free, so the screen can say who to ask and what to open instead. The
+// unique index on open drawers (cs_open_drawer_uk) stays the last word for two shifts opened at the same moment.
+func (s *Service) refuseBusyDrawer(ctx context.Context, tenantID, propertyID int64, drawer string) error {
+	holder, err := s.q(ctx).OpenShiftOnDrawer(ctx, shiftsdb.OpenShiftOnDrawerParams{TenantID: tenantID, PropertyID: propertyID, Drawer: drawer})
+	if isNoRows(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	open, err := s.q(ctx).ListOpenShifts(ctx, shiftsdb.ListOpenShiftsParams{TenantID: tenantID, PropertyID: propertyID})
+	if err != nil {
+		return err
+	}
+	busy := make(map[string]bool, len(open))
+	for _, o := range open {
+		busy[o.Drawer] = true
+	}
+	free := drawer
+	for n := 2; busy[free]; n++ {
+		suffix := "-" + strconv.Itoa(n)
+		base := drawer
+		if len(base)+len(suffix) > maxDrawerLen {
+			base = base[:maxDrawerLen-len(suffix)]
+		}
+		free = base + suffix
+	}
+	return apperr.Conflict("DRAWER_IN_USE", "another shift is open on this drawer").
+		WithContext("drawer", drawer).WithContext("holder_name", holder.UserName).WithContext("holder_shift_number", holder.ShiftNumber).WithContext("suggested_drawer", free)
 }
 
 // SuggestedFloat is what the last shift of a drawer left in it (what was counted; the drops were taken out before): the float a new shift of that drawer starts with.

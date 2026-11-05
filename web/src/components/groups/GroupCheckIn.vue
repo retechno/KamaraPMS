@@ -7,6 +7,7 @@ import type { Arrival, GroupCheckInResult, GroupRouting } from '@/api/types'
 import AutoAssignDialog from '@/components/AutoAssignDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import MoneyInput from '@/components/app/MoneyInput.vue'
 import GroupDepositDialog from '@/components/groups/GroupDepositDialog.vue'
 import ReadinessBadge from '@/components/ReadinessBadge.vue'
@@ -116,6 +117,8 @@ async function fillMethod(m: string): Promise<void> {
 }
 const depositOf = (a: Arrival): string => (editable(a) ? (deposits[a.reservation_room_id] ?? '') : '')
 const withDeposit = computed(() => chosen.value.filter((a) => takesDeposit(depositOf(a), decimals.value)))
+/** CASH when any row takes its deposit in cash: the shift is asked once, before the run. */
+const anyCash = computed(() => (withDeposit.value.some((a) => methods[a.reservation_room_id] === 'CASH') ? 'CASH' : ''))
 const missingMethod = computed(() => withDeposit.value.filter((a) => !methods[a.reservation_room_id]).length)
 const depositTotal = computed(() => fromMinor(withDeposit.value.reduce((n, a) => n + toMinor(depositOf(a), decimals.value), 0n), decimals.value))
 const methodCounts = computed(() => {
@@ -243,6 +246,7 @@ async function depositDone(message: string): Promise<void> {
     <CardContent>
       <p class="m-0 mb-3 text-sm text-muted-foreground">{{ t('groupCheckIn.hint') }}</p>
       <ErrorNotice v-if="error" :error="error" inline data-testid="group-checkin-error" />
+      <ShiftRequiredNotice :method="anyCash" />
       <p v-if="notice" :class="run.failed > 0 ? 'alert warning' : 'notice'" role="status" data-testid="group-checkin-notice">{{ notice }}</p>
 
       <div class="mb-4 rounded-md border border-border p-3 text-sm" data-testid="group-payment">

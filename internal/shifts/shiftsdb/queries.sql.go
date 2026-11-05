@@ -788,6 +788,38 @@ func (q *Queries) OpenShiftOfUserDrawer(ctx context.Context, arg OpenShiftOfUser
 	return id, err
 }
 
+const openShiftOnDrawer = `-- name: OpenShiftOnDrawer :one
+SELECT s.id, s.shift_number, s.user_id, COALESCE(u.full_name, '')::text AS user_name
+FROM cashier_shifts s JOIN users u ON u.id = s.user_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.drawer = $3 AND s.status = 'OPEN'
+`
+
+type OpenShiftOnDrawerParams struct {
+	TenantID   int64
+	PropertyID int64
+	Drawer     string
+}
+
+type OpenShiftOnDrawerRow struct {
+	ID          int64
+	ShiftNumber string
+	UserID      int64
+	UserName    string
+}
+
+// The open shift on a drawer and who holds it: what "the drawer is in use" tells the person who tried to open it.
+func (q *Queries) OpenShiftOnDrawer(ctx context.Context, arg OpenShiftOnDrawerParams) (OpenShiftOnDrawerRow, error) {
+	row := q.db.QueryRow(ctx, openShiftOnDrawer, arg.TenantID, arg.PropertyID, arg.Drawer)
+	var i OpenShiftOnDrawerRow
+	err := row.Scan(
+		&i.ID,
+		&i.ShiftNumber,
+		&i.UserID,
+		&i.UserName,
+	)
+	return i, err
+}
+
 const shiftCash = `-- name: ShiftCash :one
 SELECT
     COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = $1 AND p.shift_id = $2::bigint AND p.payment_type = 'PAYMENT' AND p.payment_method = 'CASH' AND (p.status = 'POSTED' OR (p.status = 'VOIDED' AND p.voided_at >= $3::timestamptz))), 0)::numeric AS payments_in,

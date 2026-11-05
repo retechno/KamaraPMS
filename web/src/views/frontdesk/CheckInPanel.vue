@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { NativeSelect } from '@/components/ui/native-select'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
+import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { focusProgrammatically } from '@/lib/focus'
 import { t } from '@/i18n'
@@ -277,6 +278,7 @@ const lastVisit = computed(() => {
         <FormField v-if="ci.dep.method !== 'CASH'" :label="t('frontDesk.checkIn.reference')" :error="fieldError('reference_number')">
           <template #default="{ id }"><Input :id="id" v-model="ci.dep.reference" name="deposit_reference" maxlength="100" /></template>
         </FormField>
+        <ShiftRequiredNotice class="m-0" :method="ci.dep.method" />
       </template>
 
       <!-- open the folio for outlets, once the deposit is in (docs/architecture/34-pos.md 6.5): a request of its own after the check-in -->

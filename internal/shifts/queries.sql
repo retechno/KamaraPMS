@@ -25,6 +25,12 @@ SELECT id FROM cashier_shifts WHERE tenant_id = @tenant_id AND property_id = @pr
 -- name: OpenShiftOfUserDrawer :one
 SELECT id FROM cashier_shifts WHERE tenant_id = @tenant_id AND property_id = @property_id AND user_id = @user_id AND drawer = @drawer AND status = 'OPEN';
 
+-- The open shift on a drawer and who holds it: what "the drawer is in use" tells the person who tried to open it.
+-- name: OpenShiftOnDrawer :one
+SELECT s.id, s.shift_number, s.user_id, COALESCE(u.full_name, '')::text AS user_name
+FROM cashier_shifts s JOIN users u ON u.id = s.user_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.drawer = @drawer AND s.status = 'OPEN';
+
 -- name: ListShifts :many
 SELECT s.*, COALESCE(u.full_name, '')::text AS user_name
 FROM cashier_shifts s JOIN users u ON u.id = s.user_id

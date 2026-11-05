@@ -2801,7 +2801,7 @@ export interface paths {
         put?: never;
         /**
          * Open a shift for the caller (cashier.shift)
-         * @description One shift is open per cashier (409 `SHIFT_ALREADY_OPEN`) and per drawer (409 `DRAWER_IN_USE`). Without a float the shift starts with what the last shift of the drawer left.
+         * @description One shift is open per cashier (409 `SHIFT_ALREADY_OPEN`) and per drawer (409 `DRAWER_IN_USE`, whose `context` names `holder_name`, `holder_shift_number`, the `drawer` and a free `suggested_drawer`). Without a float the shift starts with what the last shift of the drawer left.
          */
         post: operations["openCashierShift"];
         delete?: never;
