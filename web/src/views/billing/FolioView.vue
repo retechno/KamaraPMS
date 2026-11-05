@@ -16,6 +16,7 @@ import type { RowAction } from '@/components/app/rowActions'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import CheckOutWizard from '@/components/CheckOutWizard.vue'
+import OverpayNotice from '@/components/folio/OverpayNotice.vue'
 import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
@@ -34,6 +35,7 @@ import { routingText } from '@/utils/routing'
 import { usePropertyStore } from '@/stores/property'
 import { useSubscriptionStore } from '@/stores/subscription'
 import { documentPath, openPdf } from '@/utils/documents'
+import { createAttemptKey } from '@/utils/attemptKey'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { folioDescription } from '@/utils/folioDescription'
 
@@ -202,11 +204,15 @@ async function run(name: string, action: () => Promise<unknown>): Promise<boolea
   try {
     await action()
     delete keys[name]
+    if (name === 'payment') paymentAttempt.answered()
     await load()
     return true
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
-    if (e instanceof ApiError) delete keys[name]
+    if (e instanceof ApiError) {
+      delete keys[name]
+      if (name === 'payment') paymentAttempt.answered()
+    }
     return false
   } finally {
     busy.value = false
@@ -224,9 +230,10 @@ const postCharge = () => run('charge', async () => {
   notice.value = t('folio.noticeCharge')
 })
 
+const paymentAttempt = createAttemptKey() // kept while the answer is lost, renewed when the server answered or the amount, method or reference changed
 const postPayment = () => run('payment', async () => {
   await api.POST('/api/v1/properties/{propertyId}/folios/{id}/payments', {
-    params: { ...base(), header: { 'Idempotency-Key': keyFor('payment') } },
+    params: { ...base(), header: { 'Idempotency-Key': paymentAttempt.keyFor([payment.amount.trim(), payment.method, payment.reference.trim()]) } },
     body: { amount: payment.amount, payment_method: payment.method, reference_number: payment.reference || undefined },
   })
   payment.amount = ''
@@ -522,7 +529,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   </PageHeader>
 
   <ErrorNotice :error="error" :inline="!folio" />
-  <p v-if="notice" class="alert warning" role="status" data-testid="notice">{{ notice }}</p>
+  <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="routeNote" class="notice" data-testid="route-note">{{ routeNote }}</p>
   <p v-if="folio && folio.folio_type === 'MASTER' && folio.status === 'OPEN' && Number(folio.balance) !== 0" class="muted" data-testid="master-close-hint">{{ t(Number(folio.balance) < 0 ? 'groupMaster.closeNeedsRefund' : 'groupMaster.closeNeedsZero', { balance: $money(folio.balance) }) }}</p>
   <p v-if="pid === null" class="muted">{{ t('folio.selectProperty') }}</p>
@@ -562,7 +569,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         {{ t('folio.checkOutOwes', { balance: $money(folio.balance) }) }}
         <Button v-if="can('payment.post')" type="button" variant="outline" size="sm" class="ml-2" data-testid="checkout-take-payment" @click="takePaymentFirst">{{ t('folio.tabPayment') }}</Button>
       </p>
-      <CheckOutWizard :detail="checkOutDetail" @done="checkedOut" @cancel="checkOutDetail = null" />
+      <CheckOutWizard :detail="checkOutDetail" @done="checkedOut" @paid="load" @cancel="checkOutDetail = null" />
     </div>
 
     <OutletLockCard v-if="showOutletLock" :folio-id="folio.id" :until-label="folio.folio_type === 'MASTER' ? t('outletLock.untilMasterCloses') : undefined" class="mb-4" data-testid="folio-outlet-lock" />
@@ -788,6 +795,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
                 </FormField>
               </div>
               <ShiftRequiredNotice class="mt-4" :method="payment.method" />
+              <OverpayNotice v-if="folio" class="mt-4" :balance="folio.balance" :amount="payment.amount" />
               <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('folio.postPayment') }}</Button></div>
             </CardContent>
           </form>

@@ -190,7 +190,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
       </CardContent>
     </Card>
 
-    <CheckOutWizard v-if="checkingOut && detail.stay.status === 'OPEN'" :detail="detail" @cancel="checkingOut = false" @done="checkedOut" />
+    <CheckOutWizard v-if="checkingOut && detail.stay.status === 'OPEN'" :detail="detail" @cancel="checkingOut = false" @done="checkedOut" @paid="load" />
     <StayActions v-if="!checkingOut" :detail="detail" :initial="initialAction === 'move' || initialAction === 'extend' ? initialAction : undefined" @changed="changed" />
     <GuestEditDialog v-if="detail.guest" v-model:open="editingGuest" :guest-id="detail.guest.id" @saved="load" />
 

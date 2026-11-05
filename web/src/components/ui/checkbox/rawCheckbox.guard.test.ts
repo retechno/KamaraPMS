@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest'
  */
 const LEGACY: Record<string, number> = {
   'components/AutoAssignDialog.vue': 1,
-  'components/CheckOutWizard.vue': 1,
   'components/StayActions.vue': 1,
   'components/banquet/BanquetCloseDialog.vue': 1,
   'components/banquet/BanquetPostDialog.vue': 1,
@@ -58,7 +57,6 @@ const LEGACY: Record<string, number> = {
   'views/inventory/reports/TopUsageView.vue': 1,
   'views/nightaudit/NightAuditArchiveView.vue': 1,
   'views/nightaudit/NightAuditRecipientsView.vue': 2,
-  'views/nightaudit/NightAuditView.vue': 2,
   'views/payables/BillsView.vue': 1,
   'views/payables/CreditNotesView.vue': 1,
   'views/payables/SuppliersView.vue': 2,

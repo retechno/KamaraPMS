@@ -139,6 +139,19 @@ describe('FolioView', () => {
     expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { amount: '50000', payment_method: 'CARD' } })
   })
 
+  it('says a payment is posted in the success colour, and warns of a credit above the balance without refusing it', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('input[name=amount]').setValue('99999999')
+    expect(w.get('[data-testid=overpay-warning]').text()).toContain('credit')
+    await w.get('form[data-testid=payment-form]').trigger('submit')
+    await flushPromises()
+    expect(POST.mock.calls[0]?.[1]).toMatchObject({ body: { amount: '99999999' } })
+    const notice = w.get('[data-testid=notice]')
+    expect(notice.classes()).toContain('notice')
+    expect(notice.classes()).not.toContain('warning')
+  })
+
   it('takes a payment by QRIS, a method of its own', async () => {
     const w = mountView()
     await flushPromises()

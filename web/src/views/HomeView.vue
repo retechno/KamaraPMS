@@ -325,7 +325,7 @@ const updated = computed(() => (today.updatedAt.value ? zoneTime(today.updatedAt
     <SheetContent v-if="checkOut?.detail" class="p-6" data-testid="checkout-sheet">
       <SheetTitle class="text-lg">{{ t('today.checkOutTitle', { guest: checkOut.row.guest.name }) }}</SheetTitle>
       <SheetDescription class="mt-1">{{ t('today.checkOutSubtitle', { stay: checkOut.row.stay_number, room: checkOut.row.room.number }) }}</SheetDescription>
-      <CheckOutWizard :detail="checkOut.detail" class="mt-4" @done="checkedOut" @cancel="checkOut = null" />
+      <CheckOutWizard :detail="checkOut.detail" class="mt-4" @done="checkedOut" @paid="today.reload()" @cancel="checkOut = null" />
     </SheetContent>
   </Sheet>
 </template>
