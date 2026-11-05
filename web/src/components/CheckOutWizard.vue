@@ -4,15 +4,19 @@ import { computed, ref } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { CheckOutResult, StayDetail } from '@/api/types'
+import CheckoutPayForm from '@/components/folio/CheckoutPayForm.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 import { newIdempotencyKey } from '@/utils/reservations'
 
 const props = defineProps<{ detail: StayDetail }>()
 const emit = defineEmits<{ done: [result: CheckOutResult]; cancel: []; failed: [error: ApiError] }>()
 const property = usePropertyStore()
+const auth = useAuthStore()
 
 type Step = 'review' | 'done'
 const step = ref<Step>('review')
@@ -22,9 +26,30 @@ const error = ref<ApiError | null>(null)
 const result = ref<CheckOutResult | null>(null)
 let key = newIdempotencyKey()
 
+// What the wizard shows is its own copy of the stay: a payment taken here changes the balances, and the stay is read again.
+const live = ref<StayDetail>(props.detail)
+const paidHere = ref(false)
+const canPay = computed(() => property.currentId !== null && auth.can('payment.post', property.currentId))
+type Folio = StayDetail['folios'][number]
+const isCompany = (f: Folio): boolean => (f as { folio_type?: string }).folio_type === 'COMPANY'
+const owesMoney = (f: Folio): boolean => Number(f.balance) > 0
+const inCredit = (f: Folio): boolean => Number(f.balance) < 0
+
+async function reload(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null) return
+  paidHere.value = true
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: props.detail.stay.id } } })
+    if (data) live.value = data
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
 const businessDate = computed(() => property.clock?.business_date ?? '')
-const early = computed(() => props.detail.stay.departure_date > businessDate.value)
-const unbalanced = computed(() => props.detail.folios.filter((f) => f.status === 'OPEN' && Number(f.balance) !== 0))
+const early = computed(() => live.value.stay.departure_date > businessDate.value)
+const unbalanced = computed(() => live.value.folios.filter((f) => f.status === 'OPEN' && Number(f.balance) !== 0))
 // The server decides what is owed after the room charge of tonight; the balance shown is the folio's today.
 const blocked = computed(() => (early.value && !confirmEarly.value) || busy.value)
 
@@ -36,7 +61,7 @@ async function submit(): Promise<void> {
   try {
     const { data } = await api.POST('/api/v1/properties/{propertyId}/stays/{id}/check-out', {
       params: { path: { propertyId, id: props.detail.stay.id }, header: { 'Idempotency-Key': key } },
-      body: { version: props.detail.stay.version, confirm_early_departure: confirmEarly.value },
+      body: { version: live.value.stay.version, confirm_early_departure: confirmEarly.value },
     })
     if (data) {
       result.value = data
@@ -63,13 +88,16 @@ async function submit(): Promise<void> {
 <template v-if="error.code === 'FOLIO_NOT_BALANCED'"> {{ t('checkout.notBalanced') }}</template>
 </ErrorNotice>
 
+      <p v-if="paidHere && error" class="alert warning" role="status" data-testid="checkout-payment-kept">{{ t('checkout.paymentKept') }}</p>
+      <p v-else-if="paidHere && step === 'review'" class="notice" role="status" data-testid="checkout-paid">{{ t('checkout.paid') }}</p>
+
       <template v-if="step === 'review'">
         <ol class="m-0 grid gap-2 pl-5">
           <li :class="{ 'marker:text-primary': !early || confirmEarly }" data-testid="step-departure">
             {{ t('checkout.departure', { date: $date(detail.stay.departure_date) }) }}
             <template v-if="early">
               {{ t('checkout.early') }}
-              <label class="ml-2 inline-flex items-center gap-1.5 text-sm"><input v-model="confirmEarly" type="checkbox" name="confirm_early" class="size-4 accent-primary" /><span>{{ t('checkout.confirmEarly') }}</span></label>
+              <Checkbox v-model="confirmEarly" name="confirm_early" label-class="ml-2 text-sm">{{ t('checkout.confirmEarly') }}</Checkbox>
             </template>
             <template v-else>{{ t('checkout.matches') }}</template>
           </li>
@@ -77,7 +105,16 @@ async function submit(): Promise<void> {
             <template v-if="!unbalanced.length">{{ t('checkout.balanced') }}</template>
             <template v-else>
               {{ t('checkout.withBalance') }}
-              <span v-for="f in unbalanced" :key="f.id"><RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ $money(f.balance) }}) </span>
+              <div v-for="f in unbalanced" :key="f.id" class="mt-2" :data-testid="`folio-due-${f.id}`">
+                <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ $money(f.balance) }})
+                <p v-if="isCompany(f)" class="m-0 mt-1 text-sm text-muted-foreground" :data-testid="`company-folio-${f.id}`">
+                  {{ t('checkout.companyFolio') }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline">{{ t('checkout.openFolio') }}</RouterLink>
+                </p>
+                <p v-else-if="inCredit(f)" class="alert warning m-0 mt-1" role="status" :data-testid="`refund-first-${f.id}`">
+                  {{ t('checkout.refundFirst', { amount: $money(String(-Number(f.balance))) }) }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline">{{ t('checkout.openFolio') }}</RouterLink>
+                </p>
+                <CheckoutPayForm v-else-if="owesMoney(f) && canPay" :folio-id="f.id" :balance="f.balance" @paid="reload" />
+              </div>
             </template>
           </li>
         </ol>

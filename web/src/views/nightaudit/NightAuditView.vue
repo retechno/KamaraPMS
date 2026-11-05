@@ -96,6 +96,7 @@ const reasons = computed(() => {
   if (openShifts.value.length) list.push({ id: 'shifts', label: t('nightAudit.reasonShifts', { n: openShifts.value.length }) })
   return list
 })
+const someSelected = computed(() => noShow.selected.length > 0 && noShow.selected.length < arrivals.value.length)
 const allSelected = computed(() => arrivals.value.length > 0 && noShow.selected.length === arrivals.value.length)
 
 // How many steps still need someone: the clock, the arrivals, the departures, the room charges and the cashier shifts. The chip of the top bar and the Today card say the same, from the same rule.
@@ -359,7 +360,7 @@ watch(pid, () => {
           </p>
           <DataTable :columns="arrivalColumns" :rows="arrivals" row-key="reservation_room_id" :row-test-id="(a) => `arrival-${a.reservation_room_id}`">
             <template #header-select>
-              <Checkbox :model-value="allSelected" :aria-label="t('nightAudit.selectAll')" data-testid="select-all" @change="toggleAll" />
+              <Checkbox :model-value="allSelected" :indeterminate="someSelected" :aria-label="t('nightAudit.selectAll')" data-testid="select-all" @change="toggleAll" />
             </template>
             <template #cell-select="{ row }">
               <Checkbox v-model="noShow.selected" :value="row.reservation_room_id" :aria-label="t('nightAudit.selectOne', { number: row.confirmation_number })" />
@@ -371,7 +372,7 @@ watch(pid, () => {
             <FormField class="min-w-56 flex-1" :label="t('nightAudit.noShowReason')">
               <template #default="{ id }"><Input :id="id" v-model="noShow.reason" name="reason" maxlength="500" /></template>
             </FormField>
-            <label class="flex items-center gap-2 pb-2 text-sm"><input v-model="noShow.confirm" type="checkbox" name="confirm" /><span>{{ t('nightAudit.noShowConfirm') }}</span></label>
+            <Checkbox v-model="noShow.confirm" name="confirm" label-class="pb-2 text-sm">{{ t('nightAudit.noShowConfirm') }}</Checkbox>
             <Button type="submit" variant="outline" :disabled="busy || !noShow.selected.length || !noShow.confirm" data-testid="mark-no-shows">
               {{ t('nightAudit.markNoShow', { n: noShow.selected.length }) }}
             </Button>
@@ -483,10 +484,7 @@ watch(pid, () => {
             <li v-for="r in reasons" :key="r.id" :data-testid="`reason-${r.id}`"><RouterLink :to="{ path: '/night-audit', hash: `#${r.id}` }">{{ r.label }}</RouterLink></li>
           </ul>
         </div>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="confirmRun" type="checkbox" name="confirm_run" :disabled="!preview.can_run" />
-          <span>{{ t('nightAudit.confirmRun', { date: $date(preview.business_date) }) }}</span>
-        </label>
+        <Checkbox v-model="confirmRun" name="confirm_run" label-class="text-sm" :disabled="!preview.can_run">{{ t('nightAudit.confirmRun', { date: $date(preview.business_date) }) }}</Checkbox>
         <div class="mt-4 flex justify-end">
           <Button :disabled="busy || !preview.can_run || !confirmRun" data-testid="run-audit" @click="run">{{ t('nightAudit.run') }}</Button>
         </div>
