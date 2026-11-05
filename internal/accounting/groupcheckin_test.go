@@ -12,6 +12,7 @@ import (
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/reservations"
 	"kamarapms/internal/rooms"
+	"kamarapms/internal/shifts"
 )
 
 // The check-in of a group (docs/architecture/30-group-folio.md 6.2, 6.4, 14): each room in its own transaction, the keys made from the line so that a repeat in a new request finds what the first did,
@@ -478,5 +479,23 @@ func TestADepositThatWasVoidedOrRefundedIsNotAnsweredAsTaken(t *testing.T) {
 		if !strings.Contains(def, "(property_id, idempotency_key)") {
 			t.Fatalf("%s: %s", idx, def)
 		}
+	}
+}
+
+// A cash deposit on a group row, by a cashier with an open shift: the first deposit opens the folio of the reservation, so the shift has to be locked before the folio number.
+func TestAGroupCashDepositWithAnOpenShiftIsTakenOnTheShift(t *testing.T) {
+	h := setupHotel(t)
+	must(t, h.Exec(t, `UPDATE property_cashier_settings SET require_shift_for_cash = true WHERE property_id = $1`, h.propID))
+	sh, err := h.Shifts.Open(h.admin, h.propID, shifts.OpenInput{Drawer: "FRONT"})
+	must(t, err)
+	group, rs := h.groupArrivals(t, h.r101)
+	row := h.gciRow(rs[0], h.r101)
+	row.Deposit = &frontdesk.GroupDepositInput{Amount: "500000", PaymentMethod: "CASH"}
+	r := rowOf(t, h.gci(t, group, "K-SHIFT", row), rs[0].Rooms[0].ID)
+	if r.Status != frontdesk.RowCheckedIn || r.Deposit == nil || r.Deposit.Status != "RECORDED" {
+		t.Fatalf("row: %+v", r)
+	}
+	if got := h.Count(t, `SELECT count(*) FROM payments p JOIN folios f ON f.id = p.folio_id WHERE f.reservation_id = $1 AND p.shift_id = $2`, rs[0].ID, sh.ID); got != 1 {
+		t.Fatalf("%d deposits on the shift, want 1", got)
 	}
 }
