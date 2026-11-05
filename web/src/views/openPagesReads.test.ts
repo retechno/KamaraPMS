@@ -24,7 +24,7 @@ describe('the pages that the menu shows to every member of the property', () => 
   const open = navigation.flatMap((s) => s.items).filter((i) => !i.permission && !i.adminOnly)
 
   it('are found (the scan looks at something)', () => {
-    expect(open.map((i) => i.id)).toEqual(expect.arrayContaining(['dashboard', 'roomStatus', 'housekeeping', 'cleaningList', 'roomBlocks']))
+    expect(open.map((i) => i.id)).toEqual(expect.arrayContaining(['dashboard', 'housekeeping', 'cleaningList', 'roomBlocks']))
     for (const i of open) expect(viewOf(i.to), i.to).not.toBeNull()
   })
 

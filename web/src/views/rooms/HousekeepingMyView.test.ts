@@ -191,6 +191,7 @@ describe('HousekeepingMyView: the housekeeper', () => {
     const w = mountView(HOUSEKEEPER, [])
     await flushPromises()
     expect(w.get('[data-testid=empty]').text()).toContain('no tasks for you today')
+    expect(w.get('[data-testid=empty-action]').attributes('href')).toBe('/housekeeping?status=DIRTY') // the way on, when no task was given
     w.unmount()
     const only = mountView(HOUSEKEEPER, [task({ id: 5, status: 'DONE' })])
     await flushPromises()

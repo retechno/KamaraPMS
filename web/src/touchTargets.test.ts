@@ -58,4 +58,16 @@ describe('touch targets (pointer: coarse)', () => {
     const css = readFileSync('src/assets/tailwind.css', 'utf8')
     expect(css).toMatch(/@layer components \{\s*:is\(td, \[data-slot='data-card'\]\) :is\(a, button\):not\(\[data-slot\]\) \{[^}]*min-height: 44px/)
   })
+
+  it('gives the rows, the small buttons and the property select of the menu a 44 px height on a coarse pointer', () => {
+    const nav = readFileSync('src/components/shell/SidebarNav.vue', 'utf8')
+    expect(nav.match(/pointer-coarse:min-h-\[44px\]/g)?.length).toBeGreaterThanOrEqual(2) // the link of an item and the title of a section
+    expect(nav.match(/pointer-coarse:size-\[44px\]/g)?.length).toBe(2) // "unpin" of a pinned item and "hide the last opened"
+    expect(readFileSync('src/components/shell/PropertySwitcher.vue', 'utf8')).toContain('pointer-coarse:h-[44px]')
+    expect(readFileSync('src/components/ui/dropdown-menu/DropdownMenuItem.vue', 'utf8')).toContain('pointer-coarse:min-h-[44px]')
+  })
+
+  it('keeps 8 px between the buttons of a row (the next step and the "...")', () => {
+    expect(readFileSync('src/components/app/TableRowActions.vue', 'utf8')).toContain('pointer-coarse:gap-2')
+  })
 })

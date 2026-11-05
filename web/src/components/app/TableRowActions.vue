@@ -19,7 +19,7 @@ const run = (key: string): void => props.actions.find((a) => a.key === key)?.onS
 </script>
 
 <template>
-  <div class="flex items-center justify-end gap-1.5" data-slot="row-actions">
+  <div class="flex items-center justify-end gap-1.5 pointer-coarse:gap-2" data-slot="row-actions">
     <template v-for="a in buttons" :key="a.key">
       <Button v-if="a.to" as-child size="sm" :variant="a.variant ?? 'outline'" :data-testid="a.testId ?? a.key">
         <RouterLink :to="a.to"><component :is="a.icon" v-if="a.icon" :class="a.iconClass" aria-hidden="true" />{{ a.label }}</RouterLink>

@@ -62,7 +62,7 @@ export const navigation: NavSection[] = [
     icon: BedDouble,
     defaultOpen: true,
     items: [
-      { id: 'roomStatus', to: '/room-status' },
+      { id: 'roomStatus', to: '/room-status', permission: 'reservation.read' },
       { id: 'housekeeping', to: '/housekeeping' },
       { id: 'myTasks', to: '/housekeeping/my', permission: 'housekeeping.update' },
       { id: 'cleaningList', to: '/housekeeping/tasks' },

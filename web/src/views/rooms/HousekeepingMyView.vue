@@ -279,6 +279,9 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
           v-if="!list.data.length"
           :title="scope === 'mine' ? t('myTasks.noTasks') : t('myTasks.noTasksAll')"
           :description="scope === 'mine' ? t('myTasks.emptyMine') : t('myTasks.emptyAll')"
+          :action-label="scope === 'mine' ? t('myTasks.seeDirty') : ''"
+          action-to="/housekeeping?status=DIRTY"
+          action-variant="outline"
           data-testid="empty"
         />
         <EmptyState
