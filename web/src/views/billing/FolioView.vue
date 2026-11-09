@@ -50,6 +50,8 @@ const companiesDenied = ref(false)
 const error = ref<ApiError | null>(null)
 const dialogError = ref<ApiError | null>(null)
 const notice = ref('')
+// No answer from the server (the network dropped): a payment may have been recorded, anything else is for the person to check on the folio.
+const lost = ref<'' | 'payment' | 'general'>('')
 const busy = ref(false)
 const open = ref<number | null>(null) // item whose components are shown
 
@@ -201,6 +203,7 @@ async function run(name: string, action: () => Promise<unknown>): Promise<boolea
   busy.value = true
   error.value = null
   notice.value = ''
+  lost.value = ''
   try {
     await action()
     delete keys[name]
@@ -212,6 +215,8 @@ async function run(name: string, action: () => Promise<unknown>): Promise<boolea
     if (e instanceof ApiError) {
       delete keys[name]
       if (name === 'payment') paymentAttempt.answered()
+    } else {
+      lost.value = name === 'payment' ? 'payment' : 'general'
     }
     return false
   } finally {
@@ -529,6 +534,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   </PageHeader>
 
   <ErrorNotice :error="error" :inline="!folio" />
+  <p v-if="lost" class="alert warning" role="alert" data-testid="connection-lost">{{ t(lost === 'payment' ? 'folio.paymentLost' : 'folio.connectionLost') }}</p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="routeNote" class="notice" data-testid="route-note">{{ routeNote }}</p>
   <p v-if="folio && folio.folio_type === 'MASTER' && folio.status === 'OPEN' && Number(folio.balance) !== 0" class="muted" data-testid="master-close-hint">{{ t(Number(folio.balance) < 0 ? 'groupMaster.closeNeedsRefund' : 'groupMaster.closeNeedsZero', { balance: $money(folio.balance) }) }}</p>

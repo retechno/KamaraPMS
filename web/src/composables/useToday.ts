@@ -44,7 +44,7 @@ export function useToday(paused: () => boolean = () => false) {
   const businessDate = computed(() => property.clock?.business_date ?? '')
   const can = (permission: string): boolean => pid.value !== null && auth.can(permission, pid.value)
   const canFront = computed(() => can('reservation.read'))
-  const canBoard = computed(() => can('housekeeping.read') || can('reservation.read'))
+  const canBoard = computed(() => can('reservation.read'))
   const canLedger = computed(() => can('cityledger.read'))
 
   // Only the latest read writes: a slow answer to an older read (another property, a button pressed twice) must not replace a newer one.

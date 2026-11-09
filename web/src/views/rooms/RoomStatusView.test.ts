@@ -53,6 +53,9 @@ describe('RoomStatusView', () => {
     const denied = mountView(['guest.read'])
     await flushPromises()
     expect(denied.find('[data-testid=no-access]').exists()).toBe(true)
+    const housekeeper = mountView(['housekeeping.update']) // who cleans does not read the board of room status
+    await flushPromises()
+    expect(housekeeper.find('[data-testid=no-access]').exists()).toBe(true)
   })
 
   const tiles = (w: ReturnType<typeof mountView>) => w.findAll('[data-testid^=tile-]').map((t) => t.attributes('data-testid')!.slice(5))

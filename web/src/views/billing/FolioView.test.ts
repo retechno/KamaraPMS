@@ -152,6 +152,31 @@ describe('FolioView', () => {
     expect(notice.classes()).not.toContain('warning')
   })
 
+  it('says the connection was lost when a payment gets no answer, with a message of its own, and clears it on the next attempt', async () => {
+    const w = mountView()
+    await flushPromises()
+    POST = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    await w.get('input[name=amount]').setValue('50000')
+    await w.get('form[data-testid=payment-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=connection-lost]').text()).toBe('Connection lost. The payment may already be recorded. Press Pay again; it will not be recorded twice.')
+    POST = vi.fn().mockResolvedValue({ data: {} })
+    await w.get('form[data-testid=payment-form]').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-testid=connection-lost]').exists()).toBe(false)
+    expect(POST.mock.calls[0]?.[1].params.header['Idempotency-Key']).toBeTruthy()
+  })
+
+  it('says to check the folio when any other action gets no answer', async () => {
+    const w = mountView()
+    await flushPromises()
+    POST = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    await w.get('input[name=quantity]').setValue('2')
+    await w.get('form[data-testid=charge-form]').trigger('submit')
+    await flushPromises()
+    expect(w.get('[data-testid=connection-lost]').text()).toBe('Connection lost. Check the folio before trying again.')
+  })
+
   it('takes a payment by QRIS, a method of its own', async () => {
     const w = mountView()
     await flushPromises()

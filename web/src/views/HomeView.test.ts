@@ -184,7 +184,7 @@ describe('HomeView, Today', () => {
       expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/dashboard'))).toBe(false) // the dashboard is for the managers
     })
 
-    it('is as wide as the columns: four equal cards on a wide screen, two by two on a phone, and as many as there are for a role that reads less', async () => {
+    it('is as wide as the columns: four equal cards on a wide screen, two by two on a phone', async () => {
       const w = await mountToday()
       const strip = w.get('[data-testid=strip]')
       expect(strip.classes()).toContain('grid-cols-2') // a phone: two by two
@@ -192,13 +192,12 @@ describe('HomeView, Today', () => {
       expect(strip.attributes('style')).toContain('--cards: 4')
       expect(strip.findAll('[data-slot=kpi-card]')).toHaveLength(4)
       mounted?.unmount()
-      const housekeeper = await mountToday(['housekeeping.read'])
-      expect(housekeeper.get('[data-testid=strip]').attributes('style')).toContain('--cards: 1')
     })
 
-    it('shows only what a person may read: a housekeeper sees the rooms and not the movements', async () => {
-      const w = await mountToday(['housekeeping.read'])
-      expect(w.find('[data-testid=strip-ready]').exists()).toBe(true)
+    it('shows only what a person may read: a housekeeper (who updates rooms and reads no reservation) has no strip and no movements, but the work card', async () => {
+      const w = await mountToday(['housekeeping.update'])
+      expect(w.find('[data-testid=strip]').exists()).toBe(false)
+      expect(w.find('[data-testid=housekeeper-today]').exists()).toBe(true)
       expect(w.find('[data-testid=strip-arrivals]').exists()).toBe(false)
       expect(w.find('[data-testid=col-arrivals]').exists()).toBe(false)
       expect(callsTo(`${PATH}/arrivals`)).toBe(0)

@@ -129,7 +129,7 @@ async function summaryOf(propertyId: number, roomId: number): Promise<RoomSummar
 
 /** Rooms by number (exact first, then numbers that start with the text), and the command "+ number". Needs the role to read the room board. */
 async function lookupRooms(q: string, propertyId: number, mine: number): Promise<void> {
-  if (!(auth.can('housekeeping.read', propertyId) || auth.can('reservation.read', propertyId))) return
+  if (!auth.can('reservation.read', propertyId)) return
   const command = COMMAND.exec(q)
   const wanted = (command?.[1] ?? q).toLowerCase()
   const all = (await roomDirectory(propertyId)).filter((r) => typeof r.room_number === 'string')

@@ -3,7 +3,7 @@ import FilterBar from '@/components/app/FilterBar.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { BellOff, ChevronsUp, Lock, RefreshCw, Sparkles, StickyNote } from 'lucide-vue-next'
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
@@ -12,13 +12,11 @@ import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import RoomNoteSheet from '@/components/app/RoomNoteSheet.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
@@ -45,10 +43,7 @@ const occupancyFilter = ref<'' | 'OCCUPIED' | 'RESERVED' | 'VACANT'>('')
 const flaggedOnly = ref(false)
 // The room whose flags are being edited.
 const flagging = ref<HousekeepingBoardRoom | null>(null)
-const flagSheet = ref<HTMLElement | null>(null)
 const lastFlagged = ref('')
-const flagForm = reactive({ priority: 'NORMAL' as 'NORMAL' | 'HIGH', dnd: false, make_up_requested: false, note: '' })
-const savingFlags = ref(false)
 
 const statuses = STATUSES
 const label = (s: HousekeepingStatus): string => t(`housekeeping.${s.toLowerCase()}` as never)
@@ -147,43 +142,15 @@ async function load(keepError = false): Promise<void> {
   }
 }
 
-// Focus goes to the note when the sheet opens, and back to the "..." of the room when it closes (the menu that chose the room has closed by then).
-function focusNote(e: Event): void {
-  e.preventDefault()
-  flagSheet.value?.querySelector<HTMLInputElement>('input[name=note]')?.focus()
-}
-function focusRoomMenu(e: Event): void {
-  e.preventDefault()
-  const number = lastFlagged.value
-  void nextTick(() => {
-    const all = [...document.querySelectorAll<HTMLElement>(`[data-testid="room-${number}"] [data-slot=row-menu-trigger]`)]
-    ;(all.find((el) => el.getClientRects().length > 0) ?? all[0])?.focus()
-  })
+// The sheet puts the focus back on the "..." of the room when it closes (the menu that chose the room has closed by then).
+function roomMenuOf(): HTMLElement | undefined {
+  const all = [...document.querySelectorAll<HTMLElement>(`[data-testid="room-${lastFlagged.value}"] [data-slot=row-menu-trigger]`)]
+  return all.find((el) => el.getClientRects().length > 0) ?? all[0]
 }
 function startFlags(room: HousekeepingBoardRoom): void {
   flagging.value = room
   lastFlagged.value = room.room_number
-  Object.assign(flagForm, { priority: room.priority, dnd: room.dnd, make_up_requested: room.make_up_requested, note: room.flag_note ?? '' })
   error.value = null
-}
-
-async function saveFlags(): Promise<void> {
-  const room = flagging.value
-  if (property.currentId === null || !room) return
-  savingFlags.value = true
-  error.value = null
-  try {
-    await api.PUT('/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/flags', {
-      params: { path: { propertyId: property.currentId, id: room.room_id } },
-      body: { ...flagForm },
-    })
-    flagging.value = null
-    await load(true)
-  } catch (e) {
-    error.value = e instanceof ApiError ? e : null
-  } finally {
-    savingFlags.value = false
-  }
 }
 
 async function change(room: HousekeepingBoardRoom, status: HousekeepingStatus): Promise<void> {
@@ -260,35 +227,7 @@ watch(() => property.currentId, () => load(), { immediate: true })
       </div>
     </FilterBar>
 
-    <Sheet :open="!!flagging" @update:open="(v: boolean) => { if (!v) flagging = null }">
-      <SheetContent v-if="flagging" class="p-6" data-testid="flag-sheet" @open-auto-focus="focusNote" @close-auto-focus="focusRoomMenu">
-        <div ref="flagSheet">
-          <SheetTitle class="text-lg">{{ t('housekeeping.flagsTitle', { number: flagging.room_number }) }}</SheetTitle>
-          <SheetDescription class="mt-1">{{ t('housekeeping.flagsHelp') }}</SheetDescription>
-          <form class="mt-4" novalidate data-testid="flag-form" @submit.prevent="saveFlags">
-            <div class="grid gap-4">
-              <FormField :label="t('housekeeping.priority')">
-                <template #default="{ id }">
-                  <NativeSelect :id="id" v-model="flagForm.priority" name="priority">
-                    <option value="NORMAL">{{ t('housekeeping.normal') }}</option>
-                    <option value="HIGH">{{ t('housekeeping.high') }}</option>
-                  </NativeSelect>
-                </template>
-              </FormField>
-              <FormField :label="t('housekeeping.note')">
-                <template #default="{ id }"><Input :id="id" v-model="flagForm.note" name="note" maxlength="500" /></template>
-              </FormField>
-              <Checkbox v-model="flagForm.dnd" name="dnd" label-class="text-sm">{{ t('housekeeping.dnd') }}</Checkbox>
-              <Checkbox v-model="flagForm.make_up_requested" name="make_up_requested" label-class="text-sm">{{ t('housekeeping.makeUp') }}</Checkbox>
-            </div>
-            <div class="mt-4 flex justify-end gap-3">
-              <Button type="button" variant="outline" @click="flagging = null">{{ t('common.cancel') }}</Button>
-              <Button type="submit" :disabled="savingFlags">{{ t('common.save') }}</Button>
-            </div>
-          </form>
-        </div>
-      </SheetContent>
-    </Sheet>
+    <RoomNoteSheet :room="flagging" :restore-focus="roomMenuOf" @close="flagging = null" @saved="load(true)" />
 
     <p class="muted mb-2 mt-0" role="status" aria-live="polite" data-testid="result-count">{{ t('housekeeping.resultCount', { n: visible.length }, visible.length) }}</p>
 

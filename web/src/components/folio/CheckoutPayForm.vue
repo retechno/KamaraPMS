@@ -27,6 +27,7 @@ const property = usePropertyStore()
 const form = reactive({ amount: props.balance, method: 'CASH' as PaymentMethod, reference: '' })
 const busy = ref(false)
 const error = ref<ApiError | null>(null)
+const lost = ref(false) // no answer from the server: the payment may be recorded
 const attempt = createAttemptKey()
 const methodLabel = (m: string): string => t(`cashier.${m}` as never)
 const canPay = computed(() => Number(form.amount) > 0)
@@ -36,6 +37,7 @@ async function pay(): Promise<void> {
   if (propertyId === null || busy.value || !canPay.value) return
   busy.value = true
   error.value = null
+  lost.value = false
   try {
     await api.POST('/api/v1/properties/{propertyId}/folios/{id}/payments', {
       params: { path: { propertyId, id: props.folioId }, header: { 'Idempotency-Key': attempt.keyFor([form.amount.trim(), form.method, form.reference.trim()]) } },
@@ -48,8 +50,9 @@ async function pay(): Promise<void> {
     if (e instanceof ApiError) {
       attempt.answered() // the server answered: another attempt is another request
       error.value = e
+    } else {
+      lost.value = true // no answer (the network dropped): the key stays, so the same content tried again is the same payment
     }
-    // no answer (the network dropped): the key stays, so the same content tried again is the same payment
   } finally {
     busy.value = false
   }
@@ -75,6 +78,7 @@ async function pay(): Promise<void> {
     </div>
     <ShiftRequiredNotice :method="form.method" />
     <OverpayNotice :balance="balance" :amount="form.amount" />
+    <p v-if="lost" class="alert warning m-0" role="alert" data-testid="payment-lost">{{ t('folio.paymentLost') }}</p>
     <ErrorNotice :error="error" inline />
     <div><Button type="button" :disabled="busy || !canPay" data-testid="checkout-pay-submit" @click="pay">{{ t('checkout.pay') }}</Button></div>
   </div>
