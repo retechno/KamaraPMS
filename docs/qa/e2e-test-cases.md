@@ -201,6 +201,10 @@ Aturan menulis test baru:
 | NA-02 | NA-01 | /night-audit/archive | Baris paket untuk hari yang ditutup |
 | NA-03 | NA-01 | Posting charge setelah night audit | Charge tercatat di tanggal bisnis baru; top bar menampilkan tanggal bisnis |
 
+## Status
+
+Run keenam (9 Nov 2026): **118 dari 118 lulus** dalam 14,7 menit (3 worker, Chromium), termasuk night audit yang menutup hari. Temuan di aplikasi dari run sebelumnya tercatat di bawah dan belum diperbaiki di kode aplikasi.
+
 ## Temuan dari run pertama (9 Nov 2026)
 
 - **Check-out di hari kedatangan selalu gagal sekali.** Wizard check-out menulis "Semua folio seimbang sejauh ini. Biaya kamar malam ini, bila belum diposting, ditambahkan sekarang dan harus dilunasi juga", tetapi formulir bayarnya hanya menawarkan saldo saat itu. Saat Check-out ditekan, biaya kamar malam ini diposting dan check-out ditolak dengan `FOLIO_NOT_BALANCED`. Resepsionis harus memposting biaya kamar dulu di halaman Biaya kamar, atau membayar lebih dari yang ditampilkan. FD-08 sekarang memposting biaya kamar dulu. Usul: wizard menambahkan biaya kamar malam ini ke jumlah yang harus dibayar.
