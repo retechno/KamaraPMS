@@ -1,6 +1,6 @@
 import { test, expect } from '../support/fixtures'
 import type { Factories } from '../support/factories'
-import type { Page } from 'playwright/test'
+import type { Locator, Page } from 'playwright/test'
 
 /** The POS of the outlets (demo of pms-seed pos): a takeaway paid by card, a charge to the room of a guest in house, and the outlet report. */
 
@@ -17,10 +17,26 @@ async function outletAndProduct(data: Factories, roomCharge = false): Promise<{ 
   throw new Error('pms-seed pos made no outlet with a product that needs no option')
 }
 
+/**
+ * Leaves the pay dialog with a single row of the method, for the whole amount. The dialog opens with a cash row for the whole bill
+ * (and cash needs the money received), so every row there is removed first.
+ */
+async function onlyMethod(pay: Locator, method: 'CARD' | 'ROOM'): Promise<void> {
+  await expect(pay.locator('[data-testid^=pay-row-]').first()).toBeVisible()
+  const removes = pay.locator('[data-testid^=remove-]')
+  for (let n = await removes.count(); n > 0; n--) {
+    await removes.first().click()
+    await expect(removes).toHaveCount(n - 1)
+  }
+  await pay.getByTestId(`add-${method}`).click()
+  await expect(pay.getByTestId(`pay-row-${method}`)).toBeVisible()
+}
+
 /** Opens a takeaway bill at the outlet from the floor and adds one product; the page is left on the bill. */
 async function takeawayWithProduct(page: Page, outlet: Outlet, product: Product, customer: string): Promise<number> {
   const select = page.getByTestId('outlet-select')
-  if (await select.isVisible()) await select.selectOption(String(outlet.id))
+  await expect(select).toBeVisible() // pms-seed pos makes four outlets, so the floor offers the choice
+  await select.selectOption(String(outlet.id))
   await page.getByTestId('new-takeaway').click()
   const dialog = page.getByTestId('takeaway-dialog')
   await dialog.locator('input[name=customer_name]').fill(customer)
@@ -40,7 +56,7 @@ test.describe('POS outlet', () => {
     const billId = await takeawayWithProduct(page, outlet, product, `Takeaway ${Date.now().toString(36)}`)
     await page.getByTestId('pay').click()
     const pay = page.getByTestId('pay-dialog')
-    if (!(await pay.getByTestId('pay-row-CARD').isVisible())) await pay.getByTestId('add-CARD').click()
+    await onlyMethod(pay, 'CARD')
     await pay.getByTestId('exact-CARD').click()
     await pay.getByTestId('pay-row-CARD').locator('input[name=reference]').fill('EDC-POS')
     await pay.getByTestId('pay-submit').click()
@@ -59,8 +75,7 @@ test.describe('POS outlet', () => {
     const billId = await takeawayWithProduct(page, outlet, product, `Kamar ${ih.room.number}`)
     await page.getByTestId('pay').click()
     const pay = page.getByTestId('pay-dialog')
-    for (const m of ['CASH', 'CARD']) if (await pay.getByTestId(`pay-row-${m}`).isVisible()) await pay.getByTestId(`remove-${m}`).click()
-    await pay.getByTestId('add-ROOM').click()
+    await onlyMethod(pay, 'ROOM')
     await pay.getByTestId('room-query').fill(ih.room.number)
     await pay.getByTestId('room-find').click()
     await pay.getByTestId(`room-${ih.stay.id}`).click()
@@ -79,15 +94,14 @@ test.describe('POS outlet', () => {
     await takeawayWithProduct(page, outlet, product, `Terkunci ${ih.room.number}`)
     await page.getByTestId('pay').click()
     const pay = page.getByTestId('pay-dialog')
-    await pay.getByTestId('add-ROOM').click()
+    await onlyMethod(pay, 'ROOM')
     await pay.getByTestId('room-query').fill(ih.room.number)
     await pay.getByTestId('room-find').click()
     await expect(pay.getByTestId(`room-${ih.stay.id}`)).toContainText(/.+/)
     const lookup = await data.api.get<{ data: { stay_id: number; open: boolean }[] }>(`${data.P}/pos/outlets/${outlet.id}/room-lookup`, { q: ih.room.number })
     expect(lookup.data.find((r) => r.stay_id === ih.stay.id)?.open).toBe(false)
     // the bill is paid by card instead, so no open bill is left to hold the night audit
-    await pay.getByTestId('remove-ROOM').click()
-    if (!(await pay.getByTestId('pay-row-CARD').isVisible())) await pay.getByTestId('add-CARD').click()
+    await onlyMethod(pay, 'CARD')
     await pay.getByTestId('exact-CARD').click()
     await pay.getByTestId('pay-submit').click()
     await expect(page.getByTestId('bill-closed')).toBeVisible()

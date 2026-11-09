@@ -3,26 +3,28 @@ import { displayDate } from './factories'
 
 type Scope = Page | Locator
 
+/** The page of a scope. A locator given to `filter({ has })` is matched inside the element it filters, so it must start from the page, not from the scope (a scope-rooted one never matches). */
+const pageOf = (scope: Scope): Page => ('page' in scope ? scope.page() : scope)
+
 /** Types a date into a DateInput (components/ui/date-input): the text field takes dd/mm/yyyy; the hidden native field holds the `name`. */
 export async function setDate(scope: Scope, name: string, iso: string): Promise<void> {
-  const field = scope.locator('[data-slot=date-input]').filter({ has: scope.locator(`input[name="${name}"]`) }).locator('[data-slot=date-input-text]')
+  const field = scope.locator('[data-slot=date-input]').filter({ has: pageOf(scope).locator(`input[name="${name}"]`) }).locator('[data-slot=date-input-text]')
   await field.fill(displayDate(iso))
   await field.blur()
 }
 
 /** Chooses an option of a Combobox (components/ui/combobox) by its label (or a part of it). The combobox mirrors its value in a hidden <select name>. */
 export async function pickCombo(scope: Scope, name: string, label: string | RegExp): Promise<void> {
-  const box = scope.locator('[data-slot=combobox]').filter({ has: scope.locator(`select[name="${name}"]`) })
+  const box = scope.locator('[data-slot=combobox]').filter({ has: pageOf(scope).locator(`select[name="${name}"]`) })
   const input = box.locator('input').first()
   await input.click()
   if (typeof label === 'string') await input.fill(label)
-  const page = 'page' in scope ? scope.page() : scope
-  await page.locator('[data-slot=combobox-content] [role=option]').filter({ hasText: label }).first().click()
+  await pageOf(scope).locator('[data-slot=combobox-content] [role=option]').filter({ hasText: label }).first().click()
 }
 
 /** Chooses the first real option of a Combobox (skips a placeholder such as "Choose an account", which has the value 0). */
 export async function pickFirstCombo(scope: Scope, name: string, skip = 0): Promise<string> {
-  const box = scope.locator('[data-slot=combobox]').filter({ has: scope.locator(`select[name="${name}"]`) })
+  const box = scope.locator('[data-slot=combobox]').filter({ has: pageOf(scope).locator(`select[name="${name}"]`) })
   const options = box.locator(`select[name="${name}"] option:not([value="0"]):not([disabled])`)
   await expect(options.nth(skip)).toBeAttached()
   const value = (await options.nth(skip).getAttribute('value')) ?? ''

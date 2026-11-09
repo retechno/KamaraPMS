@@ -14,6 +14,7 @@ test.describe('Corporate, grup, dan city ledger', () => {
     await form.locator('input[name=name]').fill(`PT Nusa Uji ${code}`)
     await form.locator('input[name=contact_name]').fill('Ibu Ratna')
     await form.locator('input[name=email]').fill(`finance.${code.toLowerCase()}@e2e.example`)
+    await form.locator('input[name=unlimited]').uncheck() // a new company starts without a limit: the field is off until this is cleared
     await form.locator('input[name=credit_limit]').fill('25000000')
     await form.locator('input[name=payment_terms_days]').fill('30')
     await form.getByRole('button', { name: tx('common.save'), exact: true }).click()

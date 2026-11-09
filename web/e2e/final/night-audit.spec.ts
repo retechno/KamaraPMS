@@ -18,24 +18,30 @@ test.describe('Night audit', () => {
     const ih = await data.inHouse({ nights: 2 }) // a guest in house tonight: the audit posts the night
     const noShow = await data.reservation({ nights: 1 }) // an arrival that never comes
 
+    // pms-seed assets leaves a stock-take open on the bar store; an open count freezes its warehouse and holds the close of the day
+    for (const c of (await data.api.get<{ data: { id: number; status: string }[] }>(`${data.P}/inventory/counts`, { status: 'OPEN' })).data) {
+      await data.api.post(`${data.P}/inventory/counts/${c.id}/cancel`)
+    }
+
     await loginAs('admin', '/night-audit')
     await expect(page.getByTestId('audit-date')).toBeVisible()
 
     // arrivals of the day that did not check in: mark them all no-show
     const arrivals = page.getByTestId('arrivals')
-    if (await arrivals.locator(`[data-testid=arrival-${noShow.rooms[0]!.id}]`).isVisible()) {
-      await arrivals.getByTestId('select-all').check()
-      await page.getByTestId('noshow-form').locator('input[name=reason]').fill('Tidak datang (E2E)')
-      await page.getByTestId('noshow-form').locator('input[name=confirm]').check()
-      await page.getByTestId('mark-no-shows').click()
-      await expect(page.getByTestId('notice')).toBeVisible()
-    }
+    await expect(arrivals.getByTestId(`arrival-${noShow.rooms[0]!.id}`)).toBeVisible()
+    await arrivals.getByTestId('select-all').check()
+    await page.getByTestId('noshow-form').locator('input[name=reason]').fill('Tidak datang (E2E)')
+    await page.getByTestId('noshow-form').locator('input[name=confirm]').check()
+    await page.getByTestId('mark-no-shows').click()
+    await expect(page.getByTestId('notice')).toBeVisible()
+    await expect(page.getByTestId('no-arrivals')).toBeVisible() // the preview is read again
     const line = await data.api.get<{ rooms: { status: string }[] }>(`${data.P}/reservations/${noShow.id}`)
     expect(line.rooms[0]?.status).toBe('NO_SHOW')
 
-    // nothing else may hold the day: if something does, the reasons are the failure message
-    const cannot = page.getByTestId('cannot-run')
-    if (await cannot.isVisible()) throw new Error(`the night audit cannot run: ${await cannot.innerText()}`)
+    // nothing else may hold the day: if something does, the reasons of the server are the failure message
+    const preview = await data.api.get<{ can_run: boolean; blockers: unknown }>(`${data.P}/night-audit/preview`).catch(() => null)
+    if (preview && !preview.can_run) throw new Error(`the night audit cannot run: ${JSON.stringify(preview.blockers).slice(0, 1500)}`)
+    await expect(page.getByTestId('cannot-run')).toHaveCount(0)
 
     await page.locator('input[name=confirm_run]').check()
     await page.getByTestId('run-audit').click()

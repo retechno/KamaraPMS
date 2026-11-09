@@ -40,8 +40,8 @@ test.describe('Inventory dan aset', () => {
     await form.locator('select[name=department_id]').selectOption({ index: 1 })
     await form.locator('select[name=warehouse_id]').selectOption({ index: 1 })
     await setDate(form, 'needed_on', addDays(await data.businessDate(), 3))
-    const line = form.getByTestId('line-0')
-    if (!(await line.isVisible())) await form.getByTestId('line-add').click()
+    await expect(form.locator('select[name=item_0]').or(form.getByTestId('line-add')).first()).toBeVisible()
+    if (!(await form.locator('select[name=item_0]').count())) await form.getByTestId('line-add').click()
     await form.locator('select[name=item_0]').selectOption({ index: 1 })
     await form.locator('input[name=qty_0]').fill('12')
     const price = form.locator('input[name=price_0]')
@@ -70,7 +70,8 @@ test.describe('Inventory dan aset', () => {
     await page.getByTestId('filter-q').fill(assets[0]!.number)
     await expect(page.getByTestId('asset-table')).toContainText(assets[0]!.number)
     await page.goto(`/assets/${assets[0]!.id}`)
-    await expect(page.getByTestId('asset-data')).toContainText(assets[0]!.name)
+    await expect(page.locator('main h1')).toContainText(assets[0]!.name) // the name is the title; the data card holds location, dates and the rest
+    await expect(page.getByTestId('asset-data')).toBeVisible()
   })
 
   test('AST-02 memindahkan aset ke lokasi lain dengan alasan', async ({ page, loginAs, data }) => {

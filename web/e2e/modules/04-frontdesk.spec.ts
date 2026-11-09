@@ -18,12 +18,17 @@ test.describe('Front office', () => {
     await expect(sheet.getByTestId('step-room')).toBeVisible()
     await expect(sheet.locator('select[name=room]')).toHaveValue(String(res.room!.id))
     await sheet.getByTestId('checkin-next').click()
+    // the deposit step proposes the estimate in cash, which needs a cashier shift: the guest pays the deposit by card
     await expect(sheet.getByTestId('step-deposit')).toBeVisible()
+    await sheet.getByTestId('deposit-method-CARD').click()
+    await sheet.locator('input[name=deposit_reference]').fill('EDC-DEP')
+    await expect(sheet.getByTestId('checkin-submit')).toBeEnabled()
     await sheet.getByTestId('checkin-submit').click()
     await expect(sheet.getByTestId('step-done')).toBeVisible()
-    const inHouse = await data.api.get<{ data: { stay: { reservation_id: number }; room: { room_number: string } }[] }>(`${data.P}/stays/in-house`, { limit: 200 })
+    const inHouse = await data.api.get<{ data: { stay: { reservation_id: number }; room: { room_number: string }; balance: { amount: string; folios: { id: number }[] } }[] }>(`${data.P}/stays/in-house`, { limit: 200 })
     const stay = inHouse.data.find((s) => s.stay.reservation_id === res.id)
     expect(stay?.room.room_number).toBe(res.room!.number)
+    expect(Number(stay?.balance.amount)).toBeLessThan(0) // the deposit is a credit on the folio
   })
 
   test('FD-02 kamar kotor tidak bisa dipakai check-in tanpa izin override', async ({ page, loginAs, data }) => {
@@ -111,12 +116,14 @@ test.describe('Front office', () => {
   test('FD-08 check-out dengan saldo: bayar di langkah check-out lalu selesai', async ({ page, loginAs, data }) => {
     const ih = await data.inHouse({ nights: 1 })
     await data.postCharge(ih.folio.id, 'FOOD_BEVERAGE', '150000', 'Minibar (E2E)')
+    // Leaving on the day of arrival: the check-out posts tonight's room charge and then needs a zero balance, so a balance paid in the
+    // wizard alone is refused (FOLIO_NOT_BALANCED). The desk posts tonight's charge first (the Room charges page does the same).
+    await data.api.post(`${data.P}/night-audit/room-charges`, { business_date: await data.businessDate(), stay_ids: [ih.stay.id] })
     await loginAs('frontdesk', `/stays/${ih.stay.id}`)
     await page.getByTestId('checkout').click()
     const wizard = page.getByTestId('checkout-wizard')
-    await expect(wizard).toBeVisible()
-    const early = wizard.locator('input[name=confirm_early]')
-    if (await early.isVisible()) await early.check() // the stay leaves before its departure date
+    await expect(wizard.getByTestId('step-departure')).toBeVisible()
+    await wizard.locator('input[name=confirm_early]').check() // the stay leaves before its departure date
     const pay = wizard.getByTestId('checkout-pay').first()
     await expect(pay).toBeVisible()
     await pay.locator('select[name=pay_method]').selectOption('CARD')

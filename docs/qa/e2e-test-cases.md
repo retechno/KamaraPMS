@@ -62,7 +62,7 @@ Aturan menulis test baru:
 | AUTH-03 | Belum login | Buka /reservations, lalu login | Diarahkan ke /login?redirect=…; setelah login kembali ke /reservations |
 | AUTH-04 | Resepsionis login | Menu user → Keluar, lalu buka /in-house | Kembali ke /login; sesi tidak berlaku |
 | AUTH-05 | Resepsionis login di /arrivals | Muat ulang halaman | Tetap di /arrivals (sesi dipulihkan lewat refresh cookie) |
-| AUTH-06 | Housekeeping login | Lihat menu, lalu ketik /accounting/journals dan /setup/users | Tidak ada menu Akuntansi atau Setup; kedua alamat dikembalikan ke / |
+| AUTH-06 | Housekeeping login | Lihat menu, lalu ketik /accounting/journals dan /setup/users | Tidak ada menu Akuntansi atau Setup; halaman jurnal menyatakan butuh `accounting.view`; /setup/users dikembalikan ke / |
 | AUTH-07 | Token resepsionis | POST night-audit/run lewat API | 403 `PERMISSION_DENIED` |
 | AUTH-08 | Resepsionis login | Lihat menu | Ada Front Office; tidak ada Setup atau Akuntansi |
 | AUTH-09 | Resepsionis login | Menu user → English | `<html lang="en">` |
@@ -96,14 +96,14 @@ Aturan menulis test baru:
 
 | ID | Prasyarat | Langkah | Hasil yang diharapkan |
 |---|---|---|---|
-| FD-01 | Reservasi tiba hari ini, kamar bersih sudah ditetapkan | /arrivals → Check-in → Tamu → Kamar (kamar yang ditetapkan diusulkan) → Deposit → Selesai | Langkah Selesai tampil; tamu in-house di kamar itu |
+| FD-01 | Reservasi tiba hari ini, kamar bersih sudah ditetapkan | /arrivals → Check-in → Tamu → Kamar (kamar yang ditetapkan diusulkan) → Deposit: metode Kartu + referensi → Terima deposit dan check-in | Langkah Selesai tampil; tamu in-house di kamar itu; deposit menjadi kredit di folio |
 | FD-02 | Kamar reservasi kotor | Check-in → langkah kamar | Peringatan "not ready"; tombol lanjut nonaktif; tidak ada opsi override untuk resepsionis |
 | FD-03 | Kamar kosong bersih | /walk-in → tipe, kamar, keberangkatan, nama tamu baru → Check-in | Pindah ke /stays/:id; nama tamu dan kamar tampil |
 | FD-04 | Tamu in-house | /in-house → klik baris tamu | Detail stay terbuka |
 | FD-05 | Tamu in-house, kamar lain bersih | Stay → Pindah kamar → pilih kamar, alasan → Pindahkan | Segmen stay berisi kamar baru |
 | FD-06 | Tamu in-house 1 malam | Stay → Perpanjang → tanggal +1 → Simpan | departure_date maju satu hari |
 | FD-07 | Tamu in-house | Admin: Stay → Batalkan check-in → alasan | Stay tidak OPEN; line reservasi kembali CONFIRMED |
-| FD-08 | Tamu in-house dengan charge minibar 150.000 | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Check-out selesai; stay CHECKED_OUT; saldo folio 0 |
+| FD-08 | Tamu in-house dengan charge minibar 150.000; biaya kamar malam ini sudah diposting (seperti di halaman Biaya kamar) | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Check-out selesai; stay CHECKED_OUT; saldo folio 0 |
 | FD-09 | Tamu pulang besok | /departures → tanggal besok | Baris `departure-<stay>` tampil |
 
 ### 05 Folio dan kasir (`05-folio-cashier.spec.ts`)
@@ -133,7 +133,7 @@ Aturan menulis test baru:
 
 | ID | Prasyarat | Langkah | Hasil yang diharapkan |
 |---|---|---|---|
-| CORP-01 | Admin | /setup/companies → Baru → kode, nama, kontak, limit 25 juta, termin 30 → Simpan | Baris `company-<kode>` tampil; limit dan termin tersimpan |
+| CORP-01 | Admin | /setup/companies → Baru → kode, nama, kontak, hapus centang "tanpa limit", limit 25 juta, termin 30 → Simpan | Baris `company-<kode>` tampil; limit dan termin tersimpan |
 | GRP-01 | Perusahaan ada | /groups → Baru → kode, nama, tanggal, perusahaan, kontak → Simpan → buka | Ringkasan grup memuat kodenya |
 | GRP-02 | Grup dan reservasi anggota | Buka detail grup | Baris `member-<konfirmasi>` tampil |
 | CL-01 | Tamu in-house dengan charge 300.000, perusahaan ada | Folio → tab Transfer → perusahaan, jumlah = saldo → Transfer; City ledger perusahaan → Catat penerimaan transfer bank | Saldo folio 0; saldo city ledger = jumlah, lalu 0 setelah penerimaan |
@@ -197,9 +197,14 @@ Aturan menulis test baru:
 
 | ID | Prasyarat | Langkah | Hasil yang diharapkan |
 |---|---|---|---|
-| NA-01 | Semua modul selesai; ada tamu in-house dan kedatangan yang tidak datang | /night-audit → pilih semua kedatangan → alasan → konfirmasi → Tandai no-show; centang konfirmasi → Jalankan | Line menjadi NO_SHOW; tidak ada blok "cannot run" (kalau ada, alasannya menjadi pesan gagal); tanggal bisnis +1; malam tamu in-house terposting di folio |
+| NA-01 | Semua modul selesai; ada tamu in-house dan kedatangan yang tidak datang; opname demo dari `pms-seed assets` dibatalkan lewat API (opname terbuka membekukan gudang dan menahan penutupan hari) | /night-audit → pilih semua kedatangan → alasan → konfirmasi → Tandai no-show; centang konfirmasi → Jalankan | Line menjadi NO_SHOW; tidak ada blok "cannot run" (kalau ada, alasannya menjadi pesan gagal); tanggal bisnis +1; malam tamu in-house terposting di folio |
 | NA-02 | NA-01 | /night-audit/archive | Baris paket untuk hari yang ditutup |
 | NA-03 | NA-01 | Charge bertanggal hari yang sudah ditutup lewat API | Ditolak (4xx, `BUSINESS_DAY_CLOSED`) |
+
+## Temuan dari run pertama (9 Nov 2026)
+
+- **Check-out di hari kedatangan selalu gagal sekali.** Wizard check-out menulis "Semua folio seimbang sejauh ini. Biaya kamar malam ini, bila belum diposting, ditambahkan sekarang dan harus dilunasi juga", tetapi formulir bayarnya hanya menawarkan saldo saat itu. Saat Check-out ditekan, biaya kamar malam ini diposting dan check-out ditolak dengan `FOLIO_NOT_BALANCED`. Resepsionis harus memposting biaya kamar dulu di halaman Biaya kamar, atau membayar lebih dari yang ditampilkan. FD-08 sekarang memposting biaya kamar dulu. Usul: wizard menambahkan biaya kamar malam ini ke jumlah yang harus dibayar.
+- **`pms-seed assets` meninggalkan opname terbuka** (CNT-000001, Gudang Bar), dan itu menahan night audit. Di DB demo, opname ini perlu disetujui atau dibatalkan sebelum menutup hari.
 
 ## CI
 

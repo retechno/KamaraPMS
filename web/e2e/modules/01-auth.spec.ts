@@ -33,7 +33,7 @@ test.describe('Auth dan hak akses', () => {
 
   test('AUTH-03 alamat yang dibuka sebelum login dibuka lagi sesudah login', async ({ page, seed }) => {
     await page.goto('/reservations')
-    await expect(page).toHaveURL(/\/login\?redirect=%2Freservations/)
+    await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)reservations/) // vue-router leaves the slash of the path unencoded
     await page.locator('input[name=tenant_code]').fill(TENANT)
     await page.locator('input[name=email]').fill(seed.users.frontdesk.email)
     await page.locator('input[name=password]').fill(seed.users.frontdesk.password)
@@ -62,8 +62,9 @@ test.describe('Auth dan hak akses', () => {
     await expect(page.getByTestId('sidebar-nav')).toBeVisible()
     await expect(page.getByTestId('section-accounting')).toHaveCount(0)
     await expect(page.getByTestId('section-setup')).toHaveCount(0)
+    // the journals page is open to every signed-in desk and says itself who may read it (it needs accounting.view)
     await page.goto('/accounting/journals')
-    await expect(page).toHaveURL((u) => u.pathname === '/')
+    await expect(page.getByTestId('no-access')).toContainText('accounting.view')
     await page.goto('/setup/users')
     await expect(page).toHaveURL((u) => u.pathname === '/')
   })

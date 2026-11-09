@@ -53,8 +53,9 @@ test.describe('Housekeeping dan kamar', () => {
     const description = `Keran bocor ${Date.now().toString(36)} (E2E)`
     await loginAs('frontdesk', '/maintenance')
     const newBtn = page.getByTestId('new-request')
-    if (await newBtn.isVisible()) await newBtn.click()
     const form = page.getByTestId('request-form')
+    await expect(newBtn.or(form).first()).toBeVisible() // the form may be open already, or behind the button
+    if (!(await form.isVisible())) await newBtn.click()
     await pickCombo(form, 'room_id', `${room.room_number} ·`)
     await form.locator('select[name=category]').selectOption('PLUMBING')
     await form.locator('select[name=priority]').selectOption('HIGH')
@@ -79,9 +80,8 @@ test.describe('Housekeeping dan kamar', () => {
   test('LF-01 mencatat barang temuan lalu menyerahkannya ke pemilik', async ({ page, loginAs, data }) => {
     const description = `Kacamata hitam ${Date.now().toString(36)} (E2E)`
     await loginAs('frontdesk', '/lost-found')
-    const newBtn = page.getByTestId('new-item')
-    if (await newBtn.isVisible()) await newBtn.click()
     const form = page.getByTestId('item-form')
+    await page.getByTestId('new-item').click()
     await form.locator('input[name=description]').fill(description)
     await form.locator('select[name=category]').selectOption({ index: 1 })
     await form.locator('input[name=storage_location]').fill('Laci FO 1')
