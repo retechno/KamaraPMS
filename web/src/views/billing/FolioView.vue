@@ -534,7 +534,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
   </PageHeader>
 
   <ErrorNotice :error="error" :inline="!folio" />
-  <p v-if="lost" class="alert warning" role="alert" data-testid="connection-lost">{{ t(lost === 'payment' ? 'folio.paymentLost' : 'folio.connectionLost') }}</p>
+  <p v-if="lost" class="alert warning" role="alert" data-testid="connection-lost">{{ t(lost === 'payment' ? 'folio.paymentLostFolio' : 'folio.connectionLost') }}</p>
   <p v-if="notice" class="notice" role="status" data-testid="notice">{{ notice }}</p>
   <p v-if="routeNote" class="notice" data-testid="route-note">{{ routeNote }}</p>
   <p v-if="folio && folio.folio_type === 'MASTER' && folio.status === 'OPEN' && Number(folio.balance) !== 0" class="muted" data-testid="master-close-hint">{{ t(Number(folio.balance) < 0 ? 'groupMaster.closeNeedsRefund' : 'groupMaster.closeNeedsZero', { balance: $money(folio.balance) }) }}</p>

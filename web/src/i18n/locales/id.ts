@@ -1018,6 +1018,7 @@ export const id: Messages = {
     adjustAmount: 'Jumlah (negatif untuk mengkredit)',
     noticeCharge: 'Biaya diposting.',
     overpay: 'Pembayaran ini melebihi saldo: folio akan berisi kredit {credit} yang perlu dikembalikan ke tamu.',
+    paymentLostFolio: 'Koneksi terputus. Pembayaran mungkin sudah tercatat. Tekan Posting pembayaran lagi, tidak akan tercatat dua kali.',
     paymentLost: 'Koneksi terputus. Pembayaran mungkin sudah tercatat. Tekan Bayar lagi, tidak akan tercatat dua kali.',
     connectionLost: 'Koneksi terputus. Periksa folio sebelum mencoba lagi.',
     noticePayment: 'Pembayaran diposting.',

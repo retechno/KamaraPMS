@@ -1019,6 +1019,7 @@ export const en = {
     adjustAmount: 'Amount (negative to credit)',
     noticeCharge: 'Charge posted.',
     overpay: 'This payment is more than the balance: the folio will hold a credit of {credit} to refund to the guest.',
+    paymentLostFolio: 'Connection lost. The payment may already be recorded. Press Post payment again; it will not be recorded twice.',
     paymentLost: 'Connection lost. The payment may already be recorded. Press Pay again; it will not be recorded twice.',
     connectionLost: 'Connection lost. Check the folio before trying again.',
     noticePayment: 'Payment posted.',
