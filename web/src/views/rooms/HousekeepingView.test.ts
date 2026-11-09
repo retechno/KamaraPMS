@@ -157,15 +157,23 @@ describe('HousekeepingView', () => {
     expect(await openMenu(w, '201')).toContain('flags-201')
     ;(document.body.querySelector('[data-testid=flags-201]') as HTMLElement).click()
     await flushPromises()
-    await w.get('select[name=priority]').setValue('HIGH')
-    await w.get('input[name=dnd]').setValue(true)
-    await w.get('input[name=note]').setValue('VIP')
-    await w.get('[data-testid=flag-form]').trigger('submit')
+    // the note is edited in a sheet, which is drawn in the body
+    const sheet = document.body.querySelector('[data-testid=flag-sheet]')!
+    const priority = sheet.querySelector('select[name=priority]') as HTMLSelectElement
+    priority.value = 'HIGH'
+    priority.dispatchEvent(new Event('change'))
+    const dnd = sheet.querySelector('input[name=dnd]') as HTMLInputElement
+    dnd.checked = true
+    dnd.dispatchEvent(new Event('change'))
+    const note = sheet.querySelector('input[name=note]') as HTMLInputElement
+    note.value = 'VIP'
+    note.dispatchEvent(new Event('input'))
+    sheet.querySelector('[data-testid=flag-form]')!.dispatchEvent(new Event('submit', { cancelable: true }))
     await flushPromises()
     expect(PUT).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/flags', {
       params: { path: { propertyId: 7, id: 1 } }, body: { priority: 'HIGH', dnd: true, make_up_requested: false, note: 'VIP' },
     })
-    expect(w.find('[data-testid=flag-form]').exists()).toBe(false)
+    expect(document.body.querySelector('[data-testid=flag-form]')).toBeNull()
   })
 
   it('offers no flag editing to read-only users', async () => {

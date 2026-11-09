@@ -18,7 +18,7 @@ const forwarded = useForwardPropsEmits(delegated, emits)
   <DropdownMenuItem
     data-slot="dropdown-menu-item"
     v-bind="forwarded"
-    :class="cn('flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-foreground no-underline outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent', props.class)"
+    :class="cn('flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 pointer-coarse:min-h-[44px] text-sm text-foreground no-underline outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent', props.class)"
   >
     <slot />
   </DropdownMenuItem>

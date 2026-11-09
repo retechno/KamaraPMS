@@ -3,7 +3,8 @@ import FilterBar from '@/components/app/FilterBar.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { BellOff, ChevronsUp, Lock, RefreshCw, Sparkles, StickyNote } from 'lucide-vue-next'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { HousekeepingBoardRoom, HousekeepingStatus } from '@/api/types'
@@ -14,30 +15,42 @@ import PageHeader from '@/components/app/PageHeader.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
+const route = useRoute()
+const router = useRouter()
 
 const rooms = ref<HousekeepingBoardRoom[]>([])
 const loading = ref(false)
 const error = ref<ApiError | null>(null)
 const busyRoom = ref<number | null>(null)
-const statusFilter = ref<HousekeepingStatus | ''>('')
-const floorFilter = ref('')
+const STATUSES: HousekeepingStatus[] = ['DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED']
+// The status and the floor are in the address (?status=DIRTY&floor=3): a link from the home page lands on the list already narrowed, and a narrowed list can be shared.
+const queryOf = (k: string): string => {
+  const v = route.query[k]
+  return typeof v === 'string' ? v : ''
+}
+const statusOf = (v: string): HousekeepingStatus | '' => ((STATUSES as string[]).includes(v) ? (v as HousekeepingStatus) : '')
+const statusFilter = ref<HousekeepingStatus | ''>(statusOf(queryOf('status')))
+const floorFilter = ref(queryOf('floor'))
 const occupancyFilter = ref<'' | 'OCCUPIED' | 'RESERVED' | 'VACANT'>('')
 const flaggedOnly = ref(false)
 // The room whose flags are being edited.
 const flagging = ref<HousekeepingBoardRoom | null>(null)
+const flagSheet = ref<HTMLElement | null>(null)
+const lastFlagged = ref('')
 const flagForm = reactive({ priority: 'NORMAL' as 'NORMAL' | 'HIGH', dnd: false, make_up_requested: false, note: '' })
 const savingFlags = ref(false)
 
-const statuses: HousekeepingStatus[] = ['DIRTY', 'CLEANING', 'CLEAN', 'INSPECTED']
+const statuses = STATUSES
 const label = (s: HousekeepingStatus): string => t(`housekeeping.${s.toLowerCase()}` as never)
 const verb = (s: HousekeepingStatus): string => t(({ DIRTY: 'housekeeping.markDirty', CLEANING: 'housekeeping.startCleaning', CLEAN: 'housekeeping.markClean', INSPECTED: 'housekeeping.inspect' } as const)[s])
 
@@ -47,17 +60,33 @@ const canReport = computed(() => auth.can('maintenance.report', property.current
 
 // The board is small by nature (one row per active room), so it is loaded whole and filtered here.
 const floors = computed(() => [...new Set(rooms.value.map((r) => r.floor ?? '').filter(Boolean))].sort())
-const counts = computed(() => Object.fromEntries(statuses.map((s) => [s, rooms.value.filter((r) => r.status === s).length])))
 const hasFlag = (r: HousekeepingBoardRoom) => r.priority === 'HIGH' || r.dnd || r.make_up_requested || !!r.flag_note
-const flaggedCount = computed(() => rooms.value.filter(hasFlag).length)
-const visible = computed(() =>
-  rooms.value.filter(
-    (r) =>
-      (!statusFilter.value || r.status === statusFilter.value) &&
-      (!floorFilter.value || r.floor === floorFilter.value) &&
-      (!occupancyFilter.value || r.occupancy === occupancyFilter.value) &&
-      (!flaggedOnly.value || hasFlag(r)),
-  ),
+// A number on a chip counts what the other filters leave: with floor 3 chosen, "Dirty 7" is the dirty rooms of floor 3 (the chips of status leave the status out, the chip of flags leaves the flags out).
+const matches = (r: HousekeepingBoardRoom, skip: 'status' | 'flagged' | '' = ''): boolean =>
+  (skip === 'status' || !statusFilter.value || r.status === statusFilter.value) &&
+  (!floorFilter.value || r.floor === floorFilter.value) &&
+  (!occupancyFilter.value || r.occupancy === occupancyFilter.value) &&
+  (skip === 'flagged' || !flaggedOnly.value || hasFlag(r))
+const statusPool = computed(() => rooms.value.filter((r) => matches(r, 'status')))
+const counts = computed(() => Object.fromEntries(statuses.map((s) => [s, statusPool.value.filter((r) => r.status === s).length])))
+const flaggedCount = computed(() => rooms.value.filter((r) => matches(r, 'flagged') && hasFlag(r)).length)
+const visible = computed(() => rooms.value.filter((r) => matches(r)))
+
+// The address follows the filters, and a link that changes the address (from the home page) moves the filters.
+watch([statusFilter, floorFilter], () => {
+  const query = { ...route.query }
+  if (statusFilter.value) query.status = statusFilter.value
+  else delete query.status
+  if (floorFilter.value) query.floor = floorFilter.value
+  else delete query.floor
+  if (query.status !== route.query.status || query.floor !== route.query.floor) void router.replace({ query })
+})
+watch(
+  () => [route.query.status, route.query.floor],
+  () => {
+    statusFilter.value = statusOf(queryOf('status'))
+    floorFilter.value = queryOf('floor')
+  },
 )
 
 const activeFilters = computed(() => (statusFilter.value ? 1 : 0) + (flaggedOnly.value ? 1 : 0) + (occupancyFilter.value ? 1 : 0) + (floorFilter.value ? 1 : 0))
@@ -118,8 +147,22 @@ async function load(keepError = false): Promise<void> {
   }
 }
 
+// Focus goes to the note when the sheet opens, and back to the "..." of the room when it closes (the menu that chose the room has closed by then).
+function focusNote(e: Event): void {
+  e.preventDefault()
+  flagSheet.value?.querySelector<HTMLInputElement>('input[name=note]')?.focus()
+}
+function focusRoomMenu(e: Event): void {
+  e.preventDefault()
+  const number = lastFlagged.value
+  void nextTick(() => {
+    const all = [...document.querySelectorAll<HTMLElement>(`[data-testid="room-${number}"] [data-slot=row-menu-trigger]`)]
+    ;(all.find((el) => el.getClientRects().length > 0) ?? all[0])?.focus()
+  })
+}
 function startFlags(room: HousekeepingBoardRoom): void {
   flagging.value = room
+  lastFlagged.value = room.room_number
   Object.assign(flagForm, { priority: room.priority, dnd: room.dnd, make_up_requested: room.make_up_requested, note: room.flag_note ?? '' })
   error.value = null
 }
@@ -176,9 +219,9 @@ watch(() => property.currentId, () => load(), { immediate: true })
 
   <template v-else>
     <FilterBar plain class="mb-4 flex flex-wrap items-end justify-between gap-3" :active="activeFilters">
-      <div class="flex flex-wrap gap-2" role="group" :aria-label="t('housekeeping.filterStatus')">
+      <div class="flex flex-wrap gap-2 pointer-coarse:gap-3" role="group" :aria-label="t('housekeeping.filterStatus')">
         <Button size="sm" :variant="statusFilter === '' ? 'default' : 'outline'" :aria-pressed="statusFilter === ''" @click="statusFilter = ''">
-          {{ t('housekeeping.all') }} <b>{{ rooms.length }}</b>
+          {{ t('housekeeping.all') }} <b>{{ statusPool.length }}</b>
         </Button>
         <Button
           v-for="s in statuses"
@@ -217,32 +260,37 @@ watch(() => property.currentId, () => load(), { immediate: true })
       </div>
     </FilterBar>
 
-    <Card v-if="flagging" class="mb-4 border-primary/50">
-      <form novalidate data-testid="flag-form" @submit.prevent="saveFlags">
-        <CardHeader><CardTitle>{{ t('housekeeping.flagsTitle', { number: flagging.room_number }) }}</CardTitle></CardHeader>
-        <CardContent>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <FormField :label="t('housekeeping.priority')">
-              <template #default="{ id }">
-                <NativeSelect :id="id" v-model="flagForm.priority" name="priority">
-                  <option value="NORMAL">{{ t('housekeeping.normal') }}</option>
-                  <option value="HIGH">{{ t('housekeeping.high') }}</option>
-                </NativeSelect>
-              </template>
-            </FormField>
-            <FormField :label="t('housekeeping.note')">
-              <template #default="{ id }"><Input :id="id" v-model="flagForm.note" name="note" maxlength="500" /></template>
-            </FormField>
-            <label class="flex items-center gap-2 text-sm"><input v-model="flagForm.dnd" name="dnd" type="checkbox" /><span>{{ t('housekeeping.dnd') }}</span></label>
-            <label class="flex items-center gap-2 text-sm"><input v-model="flagForm.make_up_requested" name="make_up_requested" type="checkbox" /><span>{{ t('housekeeping.makeUp') }}</span></label>
-          </div>
-          <div class="mt-4 flex justify-end gap-2">
-            <Button type="button" variant="outline" @click="flagging = null">{{ t('common.cancel') }}</Button>
-            <Button type="submit" :disabled="savingFlags">{{ t('common.save') }}</Button>
-          </div>
-        </CardContent>
-      </form>
-    </Card>
+    <Sheet :open="!!flagging" @update:open="(v: boolean) => { if (!v) flagging = null }">
+      <SheetContent v-if="flagging" class="p-6" data-testid="flag-sheet" @open-auto-focus="focusNote" @close-auto-focus="focusRoomMenu">
+        <div ref="flagSheet">
+          <SheetTitle class="text-lg">{{ t('housekeeping.flagsTitle', { number: flagging.room_number }) }}</SheetTitle>
+          <SheetDescription class="mt-1">{{ t('housekeeping.flagsHelp') }}</SheetDescription>
+          <form class="mt-4" novalidate data-testid="flag-form" @submit.prevent="saveFlags">
+            <div class="grid gap-4">
+              <FormField :label="t('housekeeping.priority')">
+                <template #default="{ id }">
+                  <NativeSelect :id="id" v-model="flagForm.priority" name="priority">
+                    <option value="NORMAL">{{ t('housekeeping.normal') }}</option>
+                    <option value="HIGH">{{ t('housekeeping.high') }}</option>
+                  </NativeSelect>
+                </template>
+              </FormField>
+              <FormField :label="t('housekeeping.note')">
+                <template #default="{ id }"><Input :id="id" v-model="flagForm.note" name="note" maxlength="500" /></template>
+              </FormField>
+              <Checkbox v-model="flagForm.dnd" name="dnd" label-class="text-sm">{{ t('housekeeping.dnd') }}</Checkbox>
+              <Checkbox v-model="flagForm.make_up_requested" name="make_up_requested" label-class="text-sm">{{ t('housekeeping.makeUp') }}</Checkbox>
+            </div>
+            <div class="mt-4 flex justify-end gap-3">
+              <Button type="button" variant="outline" @click="flagging = null">{{ t('common.cancel') }}</Button>
+              <Button type="submit" :disabled="savingFlags">{{ t('common.save') }}</Button>
+            </div>
+          </form>
+        </div>
+      </SheetContent>
+    </Sheet>
+
+    <p class="muted mb-2 mt-0" role="status" aria-live="polite" data-testid="result-count">{{ t('housekeeping.resultCount', { n: visible.length }, visible.length) }}</p>
 
     <DataTable :columns="columns" :rows="visible" row-key="room_id" :loading="loading && !rooms.length" cards :row-actions="roomActions" :row-test-id="(r) => `room-${r.room_number}`" :caption="t('housekeeping.title')">
       <template #cell-room_number="{ row: r }">

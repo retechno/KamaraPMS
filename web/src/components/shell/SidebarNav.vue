@@ -64,7 +64,7 @@ const isActive = (item: NavItem): boolean => active.value?.item.id === item.id
 const hasShortcuts = computed(() => pinned.value.length > 0 || recent.value.length > 0)
 
 const linkClass = (item: NavItem): string =>
-  cn('flex min-w-0 flex-1 items-center rounded-md border-l-2 border-transparent px-3 py-1.5 text-sm text-foreground no-underline hover:bg-accent', isActive(item) && 'border-primary bg-primary/10 font-medium text-primary')
+  cn('flex min-w-0 flex-1 items-center rounded-md border-l-2 border-transparent px-3 py-1.5 text-sm text-foreground no-underline hover:bg-accent pointer-coarse:min-h-[44px]', isActive(item) && 'border-primary bg-primary/10 font-medium text-primary')
 const headingClass = 'px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground'
 </script>
 
@@ -110,7 +110,7 @@ const headingClass = 'px-2 pb-1 text-xs font-semibold uppercase tracking-wide te
               type="button"
               :aria-label="t('nav.unpin', { page: label(item.item) })"
               :title="t('nav.unpin', { page: label(item.item) })"
-              class="mr-1 grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+              class="mr-1 grid size-7 shrink-0 pointer-coarse:size-[44px] cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
               :data-testid="`unpin-${item.item.id}`"
               @click="togglePin(item.item.id)"
             >
@@ -127,7 +127,7 @@ const headingClass = 'px-2 pb-1 text-xs font-semibold uppercase tracking-wide te
           type="button"
           :aria-expanded="isOpen(section.id, section.defaultOpen)"
           :data-testid="`toggle-${section.id}`"
-          class="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent"
+          class="flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent pointer-coarse:min-h-[44px]"
           @click="toggle(section.id, section.defaultOpen)"
         >
           <component :is="section.icon" class="size-4 shrink-0" aria-hidden="true" />
@@ -152,7 +152,7 @@ const headingClass = 'px-2 pb-1 text-xs font-semibold uppercase tracking-wide te
             :aria-label="showRecent ? t('nav.hideRecent') : t('nav.showRecent')"
             :title="showRecent ? t('nav.hideRecent') : t('nav.showRecent')"
             :aria-expanded="showRecent"
-            class="mr-1 grid size-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+            class="mr-1 grid size-6 pointer-coarse:size-[44px] cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
             data-testid="toggle-recent"
             @click="setShowRecent(!showRecent)"
           >
