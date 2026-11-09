@@ -51,9 +51,9 @@ test.describe('Inventory dan aset', () => {
     await page.getByTestId('request-submit').click()
     await expect(page).toHaveURL(/\/inventory\/requests\/\d+$/)
     await expect(page.getByTestId('request-status')).toBeVisible()
+    // the page opens on the saved draft first, then submits it: wait for the submission
     const id = Number(page.url().split('/').pop())
-    const req = await data.api.get<{ status: string }>(`${data.P}/inventory/requests/${id}`)
-    expect(req.status).not.toBe('DRAFT')
+    await expect.poll(async () => (await data.api.get<{ status: string }>(`${data.P}/inventory/requests/${id}`)).status).not.toBe('DRAFT')
   })
 
   test('INV-05 stock take (opname) dan gudang hasil seed tampil', async ({ page, loginAs, data }) => {

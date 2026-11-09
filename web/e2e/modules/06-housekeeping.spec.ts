@@ -6,10 +6,7 @@ import { pickCombo, setDate } from '../support/ui'
 /** Housekeeping, maintenance, lost and found and room blocks: the work of the rooms. */
 test.describe('Housekeeping dan kamar', () => {
   test('HK-01 kamar kotor dibersihkan lalu diinspeksi dari papan housekeeping', async ({ page, loginAs, data }) => {
-    const bd = await data.businessDate()
-    const typeId = await data.roomTypeWithSpace(bd, addDays(bd, 1))
-    const room = await data.freeRoom(typeId, bd, addDays(bd, 1))
-    await data.makeDirty(room.id)
+    const room = await data.isolatedRoom() // a seeded room may be checked in by a parallel test between two steps
     const status = async () => (await data.api.get<{ data: { room_id: number; status: string }[] }>(`${data.P}/housekeeping`)).data.find((r) => r.room_id === room.id)?.status
 
     await loginAs('housekeeping', '/housekeeping')
@@ -35,10 +32,7 @@ test.describe('Housekeeping dan kamar', () => {
   })
 
   test('HK-03 membuat daftar tugas pembersihan dan menyelesaikan satu tugas', async ({ page, loginAs, data }) => {
-    const bd = await data.businessDate()
-    const typeId = await data.roomTypeWithSpace(bd, addDays(bd, 1))
-    const room = await data.freeRoom(typeId, bd, addDays(bd, 1))
-    await data.makeDirty(room.id)
+    const room = await data.isolatedRoom()
     await loginAs('admin', '/housekeeping/tasks')
     await page.getByTestId('generate').click()
     await expect(page.getByTestId('tasks')).toBeVisible()

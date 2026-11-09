@@ -71,6 +71,19 @@ export class Factories {
     await this.api.post(`${this.P}/rooms/${roomId}/housekeeping`, { status: 'DIRTY' })
   }
 
+  /**
+   * A dirty room of a room type of its own, which no other test books (they pick rooms of the seeded types): for the housekeeping tests,
+   * whose room must not be checked in by a parallel test between two steps.
+   */
+  async isolatedRoom(): Promise<{ id: number; number: string }> {
+    const u = uid()
+    const type = await this.api.post<{ id: number }>(`${this.P}/room-types`, { code: `H${u}`.slice(0, 8), name: `Uji HK ${u}`, max_adult: 2, max_child: 0, max_occupancy: 2, base_occupancy: 2 })
+    const bed = (await this.api.get<{ data: { id: number }[] }>(`${this.P}/bed-types`, { active: true })).data[0]!
+    const number = `H${u.slice(-4)}`
+    const room = await this.api.post<{ id: number }>(`${this.P}/rooms`, { room_number: number, room_type_id: type.id, bed_type_id: bed.id, floor: '9', initial_housekeeping_status: 'DIRTY' })
+    return { id: room.id, number }
+  }
+
   /** The room type with the most free rooms for the nights (so a test does not fail on a full type). */
   async roomTypeWithSpace(arrival: string, departure: string): Promise<number> {
     let best = this.seed.roomTypes[0]!.id

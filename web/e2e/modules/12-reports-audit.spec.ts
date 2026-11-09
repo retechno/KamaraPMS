@@ -29,6 +29,7 @@ test.describe('Laporan dan audit', () => {
   })
 
   test('RPT-03 laporan harian (daily flash, guest ledger, deposit ledger, Z) terbuka', async ({ page, loginAs }) => {
+    test.setTimeout(150_000) // seven pages, each one settled before the next
     await loginAs('admin')
     for (const path of ['/reports/daily-flash', '/reports/guest-ledger', '/reports/deposit-ledger', '/reports/cancellations', '/reports/corrections', '/reports/z-reports']) {
       await settle(page)
