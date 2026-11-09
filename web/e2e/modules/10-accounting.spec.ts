@@ -1,4 +1,4 @@
-import { test, expect } from '../support/fixtures'
+import { test, expect, settle } from '../support/fixtures'
 import { uid } from '../support/factories'
 import { tx } from '../support/i18n'
 import { pickCombo, pickFirstCombo, setDate } from '../support/ui'
@@ -67,6 +67,7 @@ test.describe('Akuntansi dan back office', () => {
   test('ACC-04 laporan laba rugi, neraca, dan arus kas terbuka tanpa error', async ({ page, loginAs }) => {
     await loginAs('accounting')
     for (const path of ['/accounting/income-statement', '/accounting/balance-sheet', '/accounting/cash-flow', '/accounting/ledger']) {
+      await settle(page)
       await page.goto(path)
       await expect(page.locator('main h1')).toBeVisible()
       await expect(page.getByTestId('report-error')).toHaveCount(0)
@@ -148,6 +149,7 @@ test.describe('Akuntansi dan back office', () => {
   test('TAX-01 halaman pajak menampilkan status dan profil pelaporan', async ({ page, loginAs }) => {
     await loginAs('accounting')
     for (const path of ['/tax/status', '/tax/profiles', '/tax/liability', '/tax/invoices', '/tax/returns']) {
+      await settle(page)
       await page.goto(path)
       await expect(page.locator('main h1')).toBeVisible()
       await expect(page.getByTestId('no-access')).toHaveCount(0)

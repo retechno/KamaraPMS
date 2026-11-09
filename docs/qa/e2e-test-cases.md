@@ -215,6 +215,10 @@ Aturan menulis test baru:
 
 - **`RESOURCE_BUSY` (409, retryable) saat membuat reservasi paralel.** Dengan 3 worker, satu `POST /reservations` tidak mendapat lock dalam `PMS_DB_LOCK_TIMEOUT` (5 detik). Server sudah menandainya `retryable`, dan client test sekarang mengulang seperti aplikasi. Perlu dipantau kalau beberapa resepsionis memesan bersamaan di jam sibuk.
 
+## Temuan dari run keempat (9 Nov 2026)
+
+- **Memuat ulang halaman saat sesi sedang di-refresh bisa membuat user ter-logout.** Server merotasi refresh token begitu menerima `POST /auth/refresh`. Kalau jawabannya batal karena halaman dimuat ulang (F5, atau membuka alamat lain di tab yang sama dalam sepersekian detik), browser tidak pernah menerima cookie baru. Refresh berikutnya membawa token lama. Dalam masa tenggang 30 detik, `internal/iam/service.go` menjawab `REFRESH_TOKEN_ROTATED` (401) dengan anggapan "browser sudah memegang cookie baru", lalu aplikasi kembali ke /login. Di smoke test ini terjadi pada /lost-found. Usul: dalam masa tenggang, server menerbitkan ulang sesi penerus untuk token yang sama dan tidak menjawab 401. Test sekarang menunggu refresh selesai sebelum pindah halaman (`settle()` di `support/fixtures.ts`).
+
 ## CI
 
 Job `e2e` di `.github/workflows/ci.yml` berjalan setelah `backend` dan `web`. Job ini memakai service Postgres 16, menjalankan `npm run e2e:types`, menginstal Chromium, lalu `scripts/e2e.sh`. Report HTML dan trace diunggah sebagai artifact `playwright-report`.

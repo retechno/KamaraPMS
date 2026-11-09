@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { test, expect } from '../support/fixtures'
+import { test, expect, settle } from '../support/fixtures'
 
 /** The reports (every report of the Reports page runs without an error), the day reports, the dashboard and the audit trail. */
 const defs = readFileSync(new URL('../../src/views/reports/reportDefs.ts', import.meta.url), 'utf8')
@@ -31,6 +31,7 @@ test.describe('Laporan dan audit', () => {
   test('RPT-03 laporan harian (daily flash, guest ledger, deposit ledger, Z) terbuka', async ({ page, loginAs }) => {
     await loginAs('admin')
     for (const path of ['/reports/daily-flash', '/reports/guest-ledger', '/reports/deposit-ledger', '/reports/cancellations', '/reports/corrections', '/reports/z-reports']) {
+      await settle(page)
       await page.goto(path)
       await expect(page.locator('main h1')).toBeVisible()
       await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => { /* the shell polls (clock, banquet bell): never idle for long */ })

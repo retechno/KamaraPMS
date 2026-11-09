@@ -29,10 +29,17 @@ export const test = base.extend<Fixtures>({
       await signIn(page, seed, user)
       await page.goto(path)
       await expect(page.getByTestId('topbar')).toBeVisible()
+      await settle(page)
     })
   },
   pageGuard: [async ({ page }, use, testInfo) => {
     const problems: string[] = []
+    const inFlight = { refresh: 0 }
+    refreshes.set(page, inFlight)
+    const isRefresh = (url: string) => url.includes('/api/v1/auth/refresh')
+    page.on('request', (r) => { if (isRefresh(r.url())) inFlight.refresh++ })
+    page.on('requestfinished', (r) => { if (isRefresh(r.url())) inFlight.refresh-- })
+    page.on('requestfailed', (r) => { if (isRefresh(r.url())) inFlight.refresh-- })
     page.on('pageerror', (e) => problems.push(`page error: ${e.message}`))
     page.on('response', (r) => {
       if (r.status() >= 500 && r.url().includes('/api/')) problems.push(`${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`)
@@ -43,6 +50,19 @@ export const test = base.extend<Fixtures>({
     }
   }, { auto: true }],
 })
+
+const refreshes = new WeakMap<Page, { refresh: number }>()
+
+/**
+ * Waits until no session refresh is on its way. A full page load (page.goto) while the app exchanges its refresh cookie aborts the answer:
+ * the server has rotated the token, the browser never gets the new cookie, the next refresh presents the old one and the session ends
+ * (internal/iam/service.go: REFRESH_TOKEN_ROTATED within the grace). Tests call this before they leave a page; see docs/qa (finding).
+ */
+export async function settle(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => { /* the shell polls: never idle for long */ })
+  const state = refreshes.get(page)
+  if (state) await expect.poll(() => state.refresh, { timeout: 10_000 }).toBe(0)
+}
 
 /**
  * Signs in through the API from inside the browser context, so the refresh cookie belongs to this test alone.

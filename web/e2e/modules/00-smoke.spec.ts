@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { test, expect } from '../support/fixtures'
+import { test, expect, settle } from '../support/fixtures'
 
 /**
  * SMOKE-01..: every page without an id in its address opens for the administrator: the page is not sent home (no missing permission or module),
@@ -24,6 +24,7 @@ test.describe('Smoke: every page opens', () => {
       await loginAs('admin')
       for (const path of paths) {
         await test.step(path, async () => {
+          await settle(page) // never leave a page while it refreshes its session
           await page.goto(path)
           await expect(page.locator('main#main')).toBeVisible()
           await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => { /* a page that polls (KDS, night audit) never goes idle */ })

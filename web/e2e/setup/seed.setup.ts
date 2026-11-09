@@ -59,7 +59,7 @@ setup('seed: property, demo data, roles and users', async () => {
   for (const [key, def] of Object.entries(ROLES) as [RoleKey, (typeof ROLES)[RoleKey]][]) {
     let role = roles.find((r) => r.name.toLowerCase() === def.name.toLowerCase())
     if (!role) role = await admin.post('/roles', { name: def.name, description: 'E2E', permissions: def.permissions })
-    const email = `${key}@e2e.example`
+    const email = `${key.toLowerCase()}@e2e.example` // keys such as invHead: the server keeps e-mail addresses in lower case
     if (!existing.some((u) => u.email.toLowerCase() === email)) {
       try {
         await admin.post('/users', { email, full_name: def.fullName, password: USER_PASSWORD, grants: [{ property_id: propertyId, role_id: role!.id }] })
@@ -71,7 +71,8 @@ setup('seed: property, demo data, roles and users', async () => {
   }
 
   // --- the head of every department: the first level of a purchase request (a department without a head cannot be asked)
-  const head = (await admin.all<{ id: number; email: string }>('/users')).find((u) => u.email.toLowerCase() === users.invHead.email)
+  const head = (await admin.all<{ id: number; email: string }>('/users')).find((u) => u.email.toLowerCase() === users.invHead.email.toLowerCase())
+  expect(head, 'the user invHead exists').toBeTruthy()
   for (const d of (await admin.get<{ data: { id: number; head_user_id: number | null }[] }>(`${P}/departments`)).data) {
     if (head && d.head_user_id !== head.id) await admin.patch(`${P}/departments/${d.id}`, { head_user_id: head.id })
   }
