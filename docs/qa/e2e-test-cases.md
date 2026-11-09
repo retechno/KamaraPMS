@@ -100,7 +100,7 @@ Aturan menulis test baru:
 | FD-02 | Kamar reservasi kotor | Check-in → langkah kamar | Peringatan "not ready"; tombol lanjut nonaktif; tidak ada opsi override untuk resepsionis |
 | FD-03 | Kamar kosong bersih | /walk-in → tipe, kamar, keberangkatan, nama tamu baru → Check-in | Pindah ke /stays/:id; nama tamu dan kamar tampil |
 | FD-04 | Tamu in-house | /in-house → klik baris tamu | Detail stay terbuka |
-| FD-05 | Tamu in-house, kamar lain bersih | Stay → Pindah kamar → pilih kamar, alasan → Pindahkan | Segmen stay berisi kamar baru |
+| FD-05 | Tamu in-house, ada kamar bersih lain di tipenya | Stay → Pindah kamar → pilih kamar pertama yang ditawarkan, alasan → Pindahkan | Segmen stay berisi kamar baru |
 | FD-06 | Tamu in-house 1 malam | Stay → Perpanjang → tanggal +1 → Simpan | departure_date maju satu hari |
 | FD-07 | Tamu in-house | Admin: Stay → Batalkan check-in → alasan | Stay tidak OPEN; line reservasi kembali CONFIRMED |
 | FD-08 | Tamu in-house dengan charge minibar 150.000; biaya kamar malam ini sudah diposting (seperti di halaman Biaya kamar) | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Check-out selesai; stay CHECKED_OUT; saldo folio 0 |
@@ -126,7 +126,7 @@ Aturan menulis test baru:
 | HK-02 | — | /room-status → cari nomor kamar | Hitungan per status tampil; hanya satu tile tersisa |
 | HK-03 | Kamar kotor | /housekeeping/tasks → Buat tugas → Mulai → Selesai | Status kamar CLEAN atau INSPECTED |
 | MT-01 | — | Resepsionis: /maintenance → kamar, PLUMBING, HIGH, deskripsi → Laporkan; admin (maintenance.manage): detail → Mulai → Selesaikan + catatan | OPEN → IN_PROGRESS → RESOLVED |
-| LF-01 | — | /lost-found → Catat barang → tempat (bukan di kamar), deskripsi, kategori, tempat simpan, calon pemilik → Catat; detail → Serahkan → bukti | Nama penerima terisi dari calon pemilik; status RETURNED |
+| LF-01 | — | Resepsionis: /lost-found → Catat barang → tempat (bukan di kamar), deskripsi, kategori, tempat simpan, calon pemilik → Catat; admin (lostfound.manage): detail → Serahkan → bukti | Nama penerima terisi dari calon pemilik; status RETURNED |
 | BLK-01 | Kamar kosong H+25 | /room-blocks → kamar, OOO, tanggal, alasan → Buat blokir | Blokir tersimpan; kamar tidak ditawarkan untuk malam itu |
 
 ### 07 Corporate, grup, city ledger (`07-accounts.spec.ts`)
@@ -178,7 +178,7 @@ Aturan menulis test baru:
 | INV-01 | Seed inventory | /inventory | Dashboard dan nilai stok tampil |
 | INV-02 | Kategori dan satuan seed | /inventory/items/new → kode, nama, kategori, satuan, harga acuan 18.500 → Simpan | Pindah ke detail barang; harga acuan tersimpan |
 | INV-03 | Barang seed | /inventory/items → cari kode | Baris `item-<kode>` tampil |
-| INV-04 | Departemen ROOMS punya kepala departemen (diset lewat API bila belum) | /inventory/requests/new → departemen, gudang, tanggal butuh, barang, qty 12 → Ajukan | Pindah ke detail; status bukan DRAFT |
+| INV-04 | Seed: user terpisah untuk setiap tingkat persetujuan (kepala departemen, approve, cost control, final); kepala departemen diset di semua departemen | /inventory/requests/new → departemen, gudang, tanggal butuh, barang, qty 12 → Ajukan | Pindah ke detail; status bukan DRAFT |
 | INV-05 | Gudang seed | /inventory/warehouses, /inventory/counts | Gudang seed tampil; halaman opname terbuka |
 | AST-01 | Aset saldo awal seed | /assets → cari nomor aset → buka detail | Aset tampil di tabel; detail memuat nama |
 | AST-02 | Aset dengan lokasi | Detail → Pindah → centang lokasi, pilih lokasi lain, alasan → Konfirmasi | location_id berubah |
@@ -208,8 +208,12 @@ Aturan menulis test baru:
 
 ## Temuan dari run kedua (9 Nov 2026)
 
-- **Purchase request tidak bisa diajukan tanpa kepala departemen.** "Ajukan" menyimpan draf lalu menampilkan "Tidak ada yang dapat menyetujui sebuah tingkat permintaan ini". Properti baru tidak punya kepala departemen, jadi alur pembelian baru bisa dipakai setelah Setup → Departemen diisi. Perlu diputuskan apakah ini cukup dengan dokumentasi atau perlu peringatan di halaman permintaan.
-- **"Failed to fetch" sebagai error halaman** saat berpindah cepat antar laporan harian (RPT-03). Permintaan yang dibatalkan karena navigasi muncul sebagai promise yang tidak ditangkap. Test sekarang menunggu halaman selesai memuat. Di aplikasi, permintaan yang dibatalkan sebaiknya diabaikan dan tidak dilempar sebagai error.
+- **Purchase request baru bisa diajukan kalau setiap tingkat persetujuan punya orang yang berbeda.** "Ajukan" menyimpan draf lalu menolak dengan `APPROVAL_CHAIN_UNSATISFIABLE` ("Tidak ada yang dapat menyetujui sebuah tingkat permintaan ini"). Aturan di `internal/inventory/approval.go`: tingkat kepala departemen butuh kepala atau wakil departemen yang memegang `inventory.dept_approve`; tingkat lain butuh pemegang izinnya; semuanya bukan peminta dan masing-masing orang yang berbeda. Properti baru tidak punya kepala departemen. Hotel kecil dengan satu admin yang sekaligus meminta tidak akan bisa mengajukan sama sekali. Perlu diputuskan: cukup didokumentasikan, atau halaman permintaan memberi peringatan lebih awal dan menyebut tingkat mana yang belum punya penyetuju.
+- **Request detail properti yang gagal di jaringan menjadi error yang tidak ditangkap.** Di `web/src/stores/property.ts`, `select()` memanggil `GET /properties/{id}` tanpa `try/catch`, padahal `loadProperties()` dan `refreshClock()` menangkap error-nya. Saat request itu gagal (di run kedua: `ERR_CONNECTION_TIMED_OUT` di tengah beban test paralel), router guard menerima promise yang ditolak dan halaman membuang "TypeError: Failed to fetch". Perbaikannya kecil: tangkap error di `select()` dan simpan ke `error`, seperti fungsi lain di store itu.
+
+## Temuan dari run ketiga (9 Nov 2026)
+
+- **`RESOURCE_BUSY` (409, retryable) saat membuat reservasi paralel.** Dengan 3 worker, satu `POST /reservations` tidak mendapat lock dalam `PMS_DB_LOCK_TIMEOUT` (5 detik). Server sudah menandainya `retryable`, dan client test sekarang mengulang seperti aplikasi. Perlu dipantau kalau beberapa resepsionis memesan bersamaan di jam sibuk.
 
 ## CI
 

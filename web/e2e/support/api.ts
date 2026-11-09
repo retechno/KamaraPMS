@@ -29,12 +29,19 @@ export class ApiClient {
     const headers: Record<string, string> = { authorization: `Bearer ${this.token}` }
     if (body !== undefined) headers['content-type'] = 'application/json'
     if (method !== 'GET') headers['idempotency-key'] = randomUUID()
-    const r = await fetch(API + path + qs, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
-    const text = await r.text()
-    let json: unknown = text
-    try { json = text ? JSON.parse(text) : null } catch { /* not JSON (a PDF, an empty 204) */ }
-    if (!r.ok) throw new ApiCallError(method, path, r.status, (json as { code?: string })?.code ?? '', json)
-    return json as T
+    // A 409 the server marks retryable (RESOURCE_BUSY: a row lock was not had in time while parallel tests write) is tried again, as the app does.
+    for (let attempt = 1; ; attempt++) {
+      const r = await fetch(API + path + qs, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
+      const text = await r.text()
+      let json: unknown = text
+      try { json = text ? JSON.parse(text) : null } catch { /* not JSON (a PDF, an empty 204) */ }
+      if (r.ok) return json as T
+      if ((json as { retryable?: boolean })?.retryable && attempt < 4) {
+        await new Promise((done) => setTimeout(done, 500 * attempt))
+        continue
+      }
+      throw new ApiCallError(method, path, r.status, (json as { code?: string })?.code ?? '', json)
+    }
   }
 
   get<T = any>(path: string, query?: Query) { return this.call<T>('GET', path, undefined, query) }

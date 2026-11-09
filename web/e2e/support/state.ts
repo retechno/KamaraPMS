@@ -45,6 +45,12 @@ export const ROLES = {
     fullName: 'Putu Pelayan',
     permissions: ['pos.order', 'pos.cashier', 'pos.charge_room', 'pos.kds', 'pos.report'],
   },
+  // The purchasing chain (docs/architecture/35-inventory.md): every level is decided by a different person, never the requester,
+  // so a request of the administrator needs one holder per level. invHead is the head of every department (seed.setup.ts).
+  invHead: { name: 'E2E Kepala Departemen', fullName: 'Hadi Kepala', permissions: ['inventory.view', 'inventory.dept_approve'] },
+  invApprover: { name: 'E2E Penyetuju Gudang', fullName: 'Gita Gudang', permissions: ['inventory.view', 'inventory.approve'] },
+  invCost: { name: 'E2E Cost Control', fullName: 'Citra Cost', permissions: ['inventory.view', 'inventory.cost_control'] },
+  invFinal: { name: 'E2E Persetujuan Akhir', fullName: 'Fajar Final', permissions: ['inventory.view', 'inventory.final_approve', 'inventory.sr_final_approve'] },
 } as const
 
 export type RoleKey = keyof typeof ROLES

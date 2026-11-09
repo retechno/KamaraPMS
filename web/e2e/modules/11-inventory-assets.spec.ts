@@ -35,9 +35,8 @@ test.describe('Inventory dan aset', () => {
   })
 
   test('INV-04 permintaan pembelian (purchase request) dibuat dan diajukan', async ({ page, loginAs, data }) => {
-    // the first level of approval is the head of the department: without one, a request cannot be submitted (it stays a draft)
-    const rooms = (await data.api.get<{ data: { id: number; code: string; head_user_id: number | null }[] }>(`${data.P}/departments`)).data.find((d) => d.code === 'ROOMS')!
-    if (!rooms.head_user_id) await data.api.patch(`${data.P}/departments/${rooms.id}`, { head_user_id: data.api.userId })
+    // every level of the chain needs a person other than the requester: the seed made one per level and the head of each department
+    const rooms = (await data.api.get<{ data: { id: number; code: string }[] }>(`${data.P}/departments`)).data.find((d) => d.code === 'ROOMS')!
     await loginAs('admin', '/inventory/requests/new')
     const form = page.getByTestId('request-form')
     await form.locator('select[name=department_id]').selectOption(String(rooms.id))

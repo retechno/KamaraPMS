@@ -70,6 +70,12 @@ setup('seed: property, demo data, roles and users', async () => {
     users[key] = { email, password: USER_PASSWORD }
   }
 
+  // --- the head of every department: the first level of a purchase request (a department without a head cannot be asked)
+  const head = (await admin.all<{ id: number; email: string }>('/users')).find((u) => u.email.toLowerCase() === users.invHead.email)
+  for (const d of (await admin.get<{ data: { id: number; head_user_id: number | null }[] }>(`${P}/departments`)).data) {
+    if (head && d.head_user_id !== head.id) await admin.patch(`${P}/departments/${d.id}`, { head_user_id: head.id })
+  }
+
   // --- what the tests need to know
   const bd = await admin.get<{ business_date: string }>(`${P}/business-date`)
   const plans = (await admin.get<{ data: { id: number; code: string }[] }>(`${P}/rate-plans`)).data

@@ -33,6 +33,16 @@ export async function pickFirstCombo(scope: Scope, name: string, skip = 0): Prom
   return value
 }
 
+/** Like pickFirstCombo, but returns the label of the option that was chosen. */
+export async function pickFirstLabel(scope: Scope, name: string): Promise<string> {
+  const box = scope.locator('[data-slot=combobox]').filter({ has: pageOf(scope).locator(`select[name="${name}"]`) })
+  const option = box.locator(`select[name="${name}"] option:not([value="0"]):not([disabled])`).first()
+  await expect(option).toBeAttached()
+  const label = (await option.textContent())?.trim() ?? ''
+  await pickCombo(scope, name, label)
+  return label
+}
+
 /** Chooses an option of a native <select name> by its visible label (or a part of it). */
 export async function pickSelect(scope: Scope, name: string, label: string | RegExp): Promise<void> {
   const select = scope.locator(`select[name="${name}"]`)

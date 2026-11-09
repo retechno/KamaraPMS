@@ -1,7 +1,7 @@
 import { test, expect } from '../support/fixtures'
 import { addDays } from '../support/factories'
 import { tx } from '../support/i18n'
-import { pickCombo, pickSelect, setDate } from '../support/ui'
+import { pickCombo, pickFirstLabel, pickSelect, setDate } from '../support/ui'
 
 /** The front desk: today's arrivals, walk-in, in house, room move, extension, reverse check-in, and the check-out with its payment step. */
 test.describe('Front office', () => {
@@ -25,7 +25,7 @@ test.describe('Front office', () => {
     await expect(sheet.getByTestId('checkin-submit')).toBeEnabled()
     await sheet.getByTestId('checkin-submit').click()
     await expect(sheet.getByTestId('step-done')).toBeVisible()
-    await expect(sheet.getByTestId('done-summary')).toContainText(res.room!.number)
+    await expect(sheet.getByTestId('done-title')).toContainText(res.room!.number)
     const inHouse = await data.api.get<{ data: { id: number; reservation_id: number; room: { number: string } }[] }>(`${data.P}/stays/in-house`, { limit: 200 })
     const stay = inHouse.data.find((s) => s.reservation_id === res.id)
     expect(stay?.room.number).toBe(res.room!.number)
@@ -81,11 +81,13 @@ test.describe('Front office', () => {
     const ih = await data.inHouse({ nights: 2 })
     const st = await data.stay(ih.stay.id)
     const bd = await data.businessDate()
-    const target = await data.freeRoom(ih.reservation.rooms[0]!.room_type_id, bd, st.stay.departure_date)
+    await data.freeRoom(ih.reservation.rooms[0]!.room_type_id, bd, st.stay.departure_date) // at least one clean room of the type
     await loginAs('frontdesk', `/stays/${ih.stay.id}`)
     await page.getByTestId('open-move').click()
     const form = page.getByTestId('move-form')
-    await pickCombo(form, 'room', `${target.number} ·`)
+    // the first room the form offers (parallel tests take rooms too, so a room chosen beforehand may be gone): "201 · Bersih"
+    const label = await pickFirstLabel(form, 'room')
+    const target = { number: label.split(' ')[0]! }
     await form.locator('input[name=reason]').fill('AC tidak dingin (E2E)')
     await form.getByRole('button', { name: tx('stayActions.move'), exact: true }).click()
     await expect.poll(async () => (await data.stay(ih.stay.id)).segments.map((s) => s.room_number)).toContain(target.number)

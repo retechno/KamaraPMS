@@ -93,6 +93,8 @@ test.describe('Housekeeping dan kamar', () => {
     const find = async () => (await data.api.get<{ data: { item_number: string; status: string; description: string }[] }>(`${data.P}/lost-found`, { limit: 200 })).data.find((r) => r.description === description)
     await expect.poll(async () => (await find())?.status).toBeTruthy()
     const item = (await find())!
+    // handing an item back is the duty manager's (lostfound.manage): the administrator does it
+    await loginAs('admin', '/lost-found')
     await page.getByTestId(`select-${item.item_number}`).click()
     await page.getByTestId('detail').getByTestId('return').click()
     const ret = page.getByTestId('return-form')

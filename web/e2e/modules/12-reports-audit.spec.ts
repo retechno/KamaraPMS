@@ -33,8 +33,7 @@ test.describe('Laporan dan audit', () => {
     for (const path of ['/reports/daily-flash', '/reports/guest-ledger', '/reports/deposit-ledger', '/reports/cancellations', '/reports/corrections', '/reports/z-reports']) {
       await page.goto(path)
       await expect(page.locator('main h1')).toBeVisible()
-      // let the page finish its requests: leaving while they run aborts them, and that is not a fault of the page
-      await page.waitForLoadState('networkidle')
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => { /* the shell polls (clock, banquet bell): never idle for long */ })
       await expect(page.getByTestId('form-error')).toHaveCount(0)
     }
     await page.goto('/reports/daily-flash')
