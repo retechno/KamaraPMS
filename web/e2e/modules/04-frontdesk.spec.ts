@@ -143,7 +143,10 @@ test.describe('Front office', () => {
     await wizard.getByTestId('checkout-submit').click()
     const r = await answer
     expect(r.status(), `the check-out was refused: ${await r.text()}`).toBe(200) // a refusal names its reason in the report
-    await expect(wizard.getByTestId('checkout-done')).toBeVisible()
+    // On the stay page the wizard is shown only while the stay is open: once checked out the page reads the stay again, closes the
+    // wizard (its done step may show only for a moment) and says the result itself, with the room charges the check-out posted.
+    await expect(page.getByTestId('notice')).toContainText(tx('stay.checkedOut', { n: 1 }))
+    await expect(wizard).toHaveCount(0)
     expect((await data.stay(ih.stay.id)).stay.status).toBe('CHECKED_OUT')
     expect(Number((await data.folio(ih.folio.id)).balance)).toBe(0)
   })
