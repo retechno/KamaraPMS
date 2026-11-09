@@ -139,7 +139,10 @@ test.describe('Front office', () => {
     await pay.getByTestId('checkout-pay-submit').click()
     await expect(wizard.getByTestId('checkout-paid')).toBeVisible()
     await expect(wizard.getByTestId('checkout-submit')).toBeEnabled()
+    const answer = page.waitForResponse((r) => r.url().endsWith(`/stays/${ih.stay.id}/check-out`) && r.request().method() === 'POST')
     await wizard.getByTestId('checkout-submit').click()
+    const r = await answer
+    expect(r.status(), `the check-out was refused: ${await r.text()}`).toBe(200) // a refusal names its reason in the report
     await expect(wizard.getByTestId('checkout-done')).toBeVisible()
     expect((await data.stay(ih.stay.id)).stay.status).toBe('CHECKED_OUT')
     expect(Number((await data.folio(ih.folio.id)).balance)).toBe(0)
