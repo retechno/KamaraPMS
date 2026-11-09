@@ -1,5 +1,5 @@
 import { test, expect } from '../support/fixtures'
-import { TENANT } from '../support/env'
+import { API, TENANT } from '../support/env'
 import { tx } from '../support/i18n'
 
 /** Sign in, sign out, the redirect after sign-in, and what each desk may open (menus and 403s). */
@@ -82,6 +82,30 @@ test.describe('Auth dan hak akses', () => {
     await expect(page.getByTestId('section-frontDesk')).toBeVisible()
     await expect(page.getByTestId('section-setup')).toHaveCount(0)
     await expect(page.getByTestId('section-accounting')).toHaveCount(0)
+  })
+
+  test('AUTH-10 refresh token yang baru dirotasi masih diterima dalam masa tenggang (jawaban rotasi hilang saat reload)', async ({ seed, admin }) => {
+    // a user of its own: sessions that parallel tests open for the shared desks would keep the grace alive
+    const email = `grace.${Date.now().toString(36)}@e2e.example`
+    const roles = (await admin.get<{ data: { id: number; name: string }[] }>('/roles')).data
+    await admin.post('/users', { email, full_name: 'Uji Masa Tenggang', password: seed.users.frontdesk.password, grants: [{ property_id: seed.propertyId, role_id: roles.find((r) => r.name === 'E2E Resepsionis')!.id }] })
+    // The browser sends the cookie, the server rotates it, the answer is lost (the page was reloaded): the browser still holds the
+    // old cookie. Within the grace that cookie gets a session of its own instead of a 401 that signs the user out.
+    const cookieOf = (r: Response) => (r.headers.get('set-cookie') ?? '').split(';')[0]!
+    const login = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tenant_code: TENANT, email, password: seed.users.frontdesk.password }) })
+    expect(login.ok).toBe(true)
+    const old = cookieOf(login)
+    expect(old).toMatch(/=.+/)
+    const refresh = (cookie: string) => fetch(`${API}/auth/refresh`, { method: 'POST', headers: { cookie } })
+    const rotated = await refresh(old)
+    expect(rotated.status).toBe(200)
+    const again = await refresh(old) // the answer above "never arrived"
+    expect(again.status, await again.clone().text()).toBe(200)
+    expect(((await again.json()) as { access_token?: string }).access_token).toBeTruthy()
+    // a logout of the session made since then ends the grace: the old cookie is refused, without reuse detection
+    await fetch(`${API}/auth/logout`, { method: 'POST', headers: { cookie: cookieOf(again) } })
+    await fetch(`${API}/auth/logout`, { method: 'POST', headers: { cookie: cookieOf(rotated) } })
+    expect((await refresh(old)).status).toBe(401)
   })
 
   test('AUTH-09 ganti bahasa ke English dari menu pengguna', async ({ page, loginAs }) => {

@@ -66,6 +66,7 @@ Aturan menulis test baru:
 | AUTH-07 | Token resepsionis | POST night-audit/run lewat API | 403 `PERMISSION_DENIED` |
 | AUTH-08 | Resepsionis login | Lihat menu | Ada Front Office; tidak ada Setup atau Akuntansi |
 | AUTH-09 | Resepsionis login | Menu user → English | `<html lang="en">` |
+| AUTH-10 | User baru | Login → refresh (rotasi) → refresh lagi dengan cookie lama (jawaban rotasi "hilang") → logout kedua sesi → refresh cookie lama | Refresh ulang dalam masa tenggang 200 dengan sesi baru; setelah semua sesi logout ditolak 401 |
 
 ### 02 Setup properti (`02-setup.spec.ts`)
 
@@ -103,7 +104,7 @@ Aturan menulis test baru:
 | FD-05 | Tamu in-house, ada kamar bersih lain di tipenya | Stay → Pindah kamar → pilih kamar pertama yang ditawarkan, alasan → Pindahkan | Segmen stay berisi kamar baru |
 | FD-06 | Tamu in-house 1 malam | Stay → Perpanjang → tanggal +1 → Simpan | departure_date maju satu hari |
 | FD-07 | Tamu in-house | Admin: Stay → Batalkan check-in → alasan | Stay tidak OPEN; line reservasi kembali CONFIRMED |
-| FD-08 | Tamu in-house dengan charge minibar 150.000; biaya kamar malam ini sudah diposting (seperti di halaman Biaya kamar) | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Check-out selesai; stay CHECKED_OUT; saldo folio 0 |
+| FD-08 | Tamu in-house (tiba hari ini) dengan charge minibar 150.000 | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Wizard menampilkan biaya kamar malam ini dan meminta saldo + biaya itu; check-out selesai; stay CHECKED_OUT; saldo folio 0 |
 | FD-09 | Tamu pulang besok | /departures → tanggal besok | Baris `departure-<stay>` tampil |
 
 ### 05 Folio dan kasir (`05-folio-cashier.spec.ts`)
@@ -207,13 +208,13 @@ Run keenam (9 Nov 2026): **118 dari 118 lulus** dalam 14,7 menit (3 worker, Chro
 
 ## Temuan dari run pertama (9 Nov 2026)
 
-- **Check-out di hari kedatangan selalu gagal sekali.** Wizard check-out menulis "Semua folio seimbang sejauh ini. Biaya kamar malam ini, bila belum diposting, ditambahkan sekarang dan harus dilunasi juga", tetapi formulir bayarnya hanya menawarkan saldo saat itu. Saat Check-out ditekan, biaya kamar malam ini diposting dan check-out ditolak dengan `FOLIO_NOT_BALANCED`. Resepsionis harus memposting biaya kamar dulu di halaman Biaya kamar, atau membayar lebih dari yang ditampilkan. FD-08 sekarang memposting biaya kamar dulu. Usul: wizard menambahkan biaya kamar malam ini ke jumlah yang harus dibayar.
+- **[Diperbaiki di `fix-e2e-findings`: wizard menambahkan biaya kamar dari dry run posting]** **Check-out di hari kedatangan selalu gagal sekali.** Wizard check-out menulis "Semua folio seimbang sejauh ini. Biaya kamar malam ini, bila belum diposting, ditambahkan sekarang dan harus dilunasi juga", tetapi formulir bayarnya hanya menawarkan saldo saat itu. Saat Check-out ditekan, biaya kamar malam ini diposting dan check-out ditolak dengan `FOLIO_NOT_BALANCED`. Resepsionis harus memposting biaya kamar dulu di halaman Biaya kamar, atau membayar lebih dari yang ditampilkan. FD-08 sekarang memposting biaya kamar dulu. Usul: wizard menambahkan biaya kamar malam ini ke jumlah yang harus dibayar.
 - **`pms-seed assets` meninggalkan opname terbuka** (CNT-000001, Gudang Bar), dan itu menahan night audit. Di DB demo, opname ini perlu disetujui atau dibatalkan sebelum menutup hari.
 
 ## Temuan dari run kedua (9 Nov 2026)
 
 - **Purchase request baru bisa diajukan kalau setiap tingkat persetujuan punya orang yang berbeda.** "Ajukan" menyimpan draf lalu menolak dengan `APPROVAL_CHAIN_UNSATISFIABLE` ("Tidak ada yang dapat menyetujui sebuah tingkat permintaan ini"). Aturan di `internal/inventory/approval.go`: tingkat kepala departemen butuh kepala atau wakil departemen yang memegang `inventory.dept_approve`; tingkat lain butuh pemegang izinnya; semuanya bukan peminta dan masing-masing orang yang berbeda. Properti baru tidak punya kepala departemen. Hotel kecil dengan satu admin yang sekaligus meminta tidak akan bisa mengajukan sama sekali. Perlu diputuskan: cukup didokumentasikan, atau halaman permintaan memberi peringatan lebih awal dan menyebut tingkat mana yang belum punya penyetuju.
-- **Request detail properti yang gagal di jaringan menjadi error yang tidak ditangkap.** Di `web/src/stores/property.ts`, `select()` memanggil `GET /properties/{id}` tanpa `try/catch`, padahal `loadProperties()` dan `refreshClock()` menangkap error-nya. Saat request itu gagal (di run kedua: `ERR_CONNECTION_TIMED_OUT` di tengah beban test paralel), router guard menerima promise yang ditolak dan halaman membuang "TypeError: Failed to fetch". Perbaikannya kecil: tangkap error di `select()` dan simpan ke `error`, seperti fungsi lain di store itu.
+- **[Diperbaiki di `fix-e2e-findings`: `select()` menyimpan error-nya]** **Request detail properti yang gagal di jaringan menjadi error yang tidak ditangkap.** Di `web/src/stores/property.ts`, `select()` memanggil `GET /properties/{id}` tanpa `try/catch`, padahal `loadProperties()` dan `refreshClock()` menangkap error-nya. Saat request itu gagal (di run kedua: `ERR_CONNECTION_TIMED_OUT` di tengah beban test paralel), router guard menerima promise yang ditolak dan halaman membuang "TypeError: Failed to fetch". Perbaikannya kecil: tangkap error di `select()` dan simpan ke `error`, seperti fungsi lain di store itu.
 
 ## Temuan dari run ketiga (9 Nov 2026)
 
@@ -221,7 +222,7 @@ Run keenam (9 Nov 2026): **118 dari 118 lulus** dalam 14,7 menit (3 worker, Chro
 
 ## Temuan dari run keempat (9 Nov 2026)
 
-- **Memuat ulang halaman saat sesi sedang di-refresh bisa membuat user ter-logout.** Server merotasi refresh token begitu menerima `POST /auth/refresh`. Kalau jawabannya batal karena halaman dimuat ulang (F5, atau membuka alamat lain di tab yang sama dalam sepersekian detik), browser tidak pernah menerima cookie baru. Refresh berikutnya membawa token lama. Dalam masa tenggang 30 detik, `internal/iam/service.go` menjawab `REFRESH_TOKEN_ROTATED` (401) dengan anggapan "browser sudah memegang cookie baru", lalu aplikasi kembali ke /login. Di smoke test ini terjadi pada /lost-found. Usul: dalam masa tenggang, server menerbitkan ulang sesi penerus untuk token yang sama dan tidak menjawab 401. Test sekarang menunggu refresh selesai sebelum pindah halaman (`settle()` di `support/fixtures.ts`).
+- **[Diperbaiki di `fix-e2e-findings`: dalam masa tenggang server menerbitkan sesi baru selama ada sesi hidup sejak rotasi]** **Memuat ulang halaman saat sesi sedang di-refresh bisa membuat user ter-logout.** Server merotasi refresh token begitu menerima `POST /auth/refresh`. Kalau jawabannya batal karena halaman dimuat ulang (F5, atau membuka alamat lain di tab yang sama dalam sepersekian detik), browser tidak pernah menerima cookie baru. Refresh berikutnya membawa token lama. Dalam masa tenggang 30 detik, `internal/iam/service.go` menjawab `REFRESH_TOKEN_ROTATED` (401) dengan anggapan "browser sudah memegang cookie baru", lalu aplikasi kembali ke /login. Di smoke test ini terjadi pada /lost-found. Usul: dalam masa tenggang, server menerbitkan ulang sesi penerus untuk token yang sama dan tidak menjawab 401. Test sekarang menunggu refresh selesai sebelum pindah halaman (`settle()` di `support/fixtures.ts`).
 
 ## CI
 

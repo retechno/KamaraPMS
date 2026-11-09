@@ -54,9 +54,9 @@ export const test = base.extend<Fixtures>({
 const refreshes = new WeakMap<Page, { refresh: number }>()
 
 /**
- * Waits until no session refresh is on its way. A full page load (page.goto) while the app exchanges its refresh cookie aborts the answer:
- * the server has rotated the token, the browser never gets the new cookie, the next refresh presents the old one and the session ends
- * (internal/iam/service.go: REFRESH_TOKEN_ROTATED within the grace). Tests call this before they leave a page; see docs/qa (finding).
+ * Waits until no session refresh is on its way before a test leaves a page. A full page load (page.goto) during a refresh aborts its answer;
+ * the server now gives the old cookie a new session within the grace (internal/iam/service.go Refresh, AUTH-10), but a test that leaves a page
+ * only once it is done is steadier and cheaper (docs/qa: finding of run 4).
  */
 export async function settle(page: Page): Promise<void> {
   await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => { /* the shell polls: never idle for long */ })

@@ -520,6 +520,23 @@ func (q *Queries) GetUserForUpdate(ctx context.Context, arg GetUserForUpdatePara
 	return i, err
 }
 
+const hasLiveSessionSince = `-- name: HasLiveSessionSince :one
+SELECT EXISTS (SELECT 1 FROM user_sessions WHERE user_id = $1 AND revoked_at IS NULL AND created_at >= $2::timestamptz)
+`
+
+type HasLiveSessionSinceParams struct {
+	UserID int64
+	Since  time.Time
+}
+
+// A refresh token presented again within the grace of its rotation gets a new session only while a session made since then is alive (Refresh): a logout, a password reset or a deactivation after the rotation ends the grace as well.
+func (q *Queries) HasLiveSessionSince(ctx context.Context, arg HasLiveSessionSinceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasLiveSessionSince, arg.UserID, arg.Since)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertRolePermission = `-- name: InsertRolePermission :exec
 INSERT INTO role_permissions (role_id, permission_code) VALUES ($1, $2)
 `

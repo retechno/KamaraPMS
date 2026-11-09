@@ -4085,6 +4085,7 @@ export const id: Messages = {
     matches: 'sesuai dengan tanggal bisnis.',
     balanced: 'Semua folio seimbang sejauh ini. Biaya kamar malam ini, bila belum diposting, ditambahkan sekarang dan harus dilunasi juga.',
     withBalance: 'Folio dengan saldo:',
+    tonightCharge: 'Termasuk biaya kamar {amount} yang diposting saat check-out (malam ini dan malam yang belum diposting).',
     submit: 'Check-out',
     done: 'Check-out selesai. Kamar sekarang',
     roomCharge: 'Biaya kamar {date}: {total}',

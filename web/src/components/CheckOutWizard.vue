@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { CheckOutResult, StayDetail } from '@/api/types'
@@ -35,8 +35,36 @@ watch(() => props.detail, (d) => { live.value = d })
 const canPay = computed(() => property.currentId !== null && auth.can('payment.post', property.currentId))
 type Folio = StayDetail['folios'][number]
 const isCompany = (f: Folio): boolean => (f as { folio_type?: string }).folio_type === 'COMPANY'
-const owesMoney = (f: Folio): boolean => Number(f.balance) > 0
-const inCredit = (f: Folio): boolean => Number(f.balance) < 0
+
+// The check-out posts tonight's room charge (and any earlier night never posted) itself, then needs every guest folio at zero.
+// Shown only the balance of today, a desk took that payment and the check-out was refused (FOLIO_NOT_BALANCED) on the day of
+// arrival (docs/qa/e2e-test-cases.md, run 1). The dry run of the room charge posting says what will be added, per folio.
+const pending = ref<Record<number, number>>({})
+const decimals = computed(() => property.current?.currency_decimals ?? 0)
+const canPreview = computed(() => property.currentId !== null && (auth.can('folio.post_charge', property.currentId) || auth.can('nightaudit.run', property.currentId)))
+const due = (f: Folio): number => Number(f.balance) + (pending.value[f.id] ?? 0)
+const dueText = (f: Folio): string => due(f).toFixed(decimals.value)
+const owesMoney = (f: Folio): boolean => due(f) > 0
+const inCredit = (f: Folio): boolean => due(f) < 0
+
+async function loadPending(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null || !businessDate.value || !canPreview.value) return
+  try {
+    const res = await api.POST('/api/v1/properties/{propertyId}/night-audit/room-charges/preview', {
+      params: { path: { propertyId } },
+      body: { business_date: businessDate.value, stay_ids: [props.detail.stay.id] },
+    })
+    const out: Record<number, number> = {}
+    for (const it of res?.data?.items ?? []) {
+      if (it.status === 'READY' && it.folio_id) out[it.folio_id] = (out[it.folio_id] ?? 0) + Number(it.total)
+    }
+    pending.value = out
+  } catch {
+    pending.value = {} // without the dry run (a stale date, a refusal) the wizard shows the balance of today, as before
+  }
+}
+onMounted(loadPending)
 
 async function reload(): Promise<void> {
   const propertyId = property.currentId
@@ -47,6 +75,7 @@ async function reload(): Promise<void> {
   try {
     const { data } = await api.GET('/api/v1/properties/{propertyId}/stays/{id}', { params: { path: { propertyId, id: props.detail.stay.id } } })
     if (data) live.value = data
+    await loadPending()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
   }
@@ -54,14 +83,14 @@ async function reload(): Promise<void> {
 
 const businessDate = computed(() => property.clock?.business_date ?? '')
 const early = computed(() => live.value.stay.departure_date > businessDate.value)
-const unbalanced = computed(() => live.value.folios.filter((f) => f.status === 'OPEN' && Number(f.balance) !== 0))
-// The server decides what is owed after the room charge of tonight; the balance shown is the folio's today.
+const unbalanced = computed(() => live.value.folios.filter((f) => f.status === 'OPEN' && due(f) !== 0))
+// What is owed is the balance of today plus the room charges the check-out will post (`due`); the server still decides.
 // A guest folio that is not at zero is not checked out: the reason stands by the button (the server refuses it too).
 const guestDue = computed(() => unbalanced.value.filter((f) => !isCompany(f)))
 const dueReason = computed(() => {
   const f = guestDue.value[0]
   if (!f) return ''
-  return Number(f.balance) > 0 ? t('checkout.payFirst', { amount: formatMoney(f.balance) }) : t('checkout.refundCreditFirst', { amount: formatMoney(String(-Number(f.balance))) })
+  return due(f) > 0 ? t('checkout.payFirst', { amount: formatMoney(dueText(f)) }) : t('checkout.refundCreditFirst', { amount: formatMoney((-due(f)).toFixed(decimals.value)) })
 })
 const blocked = computed(() => (early.value && !confirmEarly.value) || busy.value || guestDue.value.length > 0)
 
@@ -118,14 +147,17 @@ async function submit(): Promise<void> {
             <template v-else>
               {{ t('checkout.withBalance') }}
               <div v-for="f in unbalanced" :key="f.id" class="mt-2" :data-testid="`folio-due-${f.id}`">
-                <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ $money(f.balance) }})
+                <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline" :data-testid="`open-folio-${f.id}`">{{ f.folio_number }}</RouterLink> ({{ $money(dueText(f)) }})
+                <p v-if="pending[f.id]" class="m-0 mt-1 text-sm text-muted-foreground" :data-testid="`tonight-charge-${f.id}`">
+                  {{ t('checkout.tonightCharge', { amount: $money((pending[f.id] ?? 0).toFixed(decimals)) }) }}
+                </p>
                 <p v-if="isCompany(f)" class="m-0 mt-1 text-sm text-muted-foreground" :data-testid="`company-folio-${f.id}`">
                   {{ t('checkout.companyFolio') }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline">{{ t('checkout.openFolio') }}</RouterLink>
                 </p>
                 <p v-else-if="inCredit(f)" class="alert warning m-0 mt-1" role="status" :data-testid="`refund-first-${f.id}`">
-                  {{ t('checkout.refundFirst', { amount: $money(String(-Number(f.balance))) }) }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline">{{ t('checkout.openFolio') }}</RouterLink>
+                  {{ t('checkout.refundFirst', { amount: $money((-due(f)).toFixed(decimals)) }) }} <RouterLink :to="`/folios/${f.id}`" class="text-primary hover:underline">{{ t('checkout.openFolio') }}</RouterLink>
                 </p>
-                <CheckoutPayForm v-else-if="owesMoney(f) && canPay" :folio-id="f.id" :balance="f.balance" @paid="reload" />
+                <CheckoutPayForm v-else-if="owesMoney(f) && canPay" :key="`${f.id}-${dueText(f)}`" :folio-id="f.id" :balance="dueText(f)" @paid="reload" />
               </div>
             </template>
           </li>

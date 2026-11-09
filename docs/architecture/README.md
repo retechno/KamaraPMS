@@ -20,7 +20,7 @@ Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11
 - **M1** (tenancy and business day) is complete: property setup, `BusinessDayService` (the only source of the business date, including the night-audit time guard and `CloseAndOpenNext` for M13), gapless document numbers, the audit writer, and sqlc.
   - Charge-code seeding on property creation moved to M5 (done there).
 - **M2** (identity and access) is complete. JWT access tokens (15 minutes, in memory) and rotating refresh tokens in an httpOnly `SameSite=Strict` cookie.
-  - Refresh-token reuse ends all of a user's sessions. Migration 00012 adds `user_sessions.revoked_reason`, so detection only fires for rotated tokens, not for a stale tab after logout. There is a 30-second grace window for tabs that refresh at the same moment.
+  - Refresh-token reuse ends all of a user's sessions. Migration 00012 adds `user_sessions.revoked_reason`, so detection only fires for rotated tokens, not for a stale tab after logout. There is a 30-second grace window for tabs that refresh at the same moment; within it the old token gets a new session of its own (the answer of a rotation may never reach a browser that reloaded the page), but only while a session made since the rotation is alive, so a logout, a password reset or a deactivation ends the grace too.
   - Sessions are re-checked on every request, so revocation is immediate.
   - Passwords use argon2id (OWASP parameters). Login gives one generic error, has timing equalisation and is rate-limited (in-memory per instance, Redis later).
   - Authorization is per property: 404 without access, 403 without the permission. Users, roles and property creation are for tenant administrators.

@@ -42,7 +42,7 @@
 - **Purpose:** rotate the tokens.
 - **Request:** `{ refresh_token }`
 - **Response:** a new token pair.
-- **Rules:** the session is valid and not revoked. The old session is revoked and a new one issued. Reuse of a revoked token revokes all of the user's sessions and returns 401.
+- **Rules:** the session is valid and not revoked. The old session is revoked and a new one issued. Reuse of a revoked token revokes all of the user's sessions and returns 401. Exception: a token rotated less than 30 seconds ago gets another new session (two tabs at once, or a rotation whose answer was lost to a page reload), as long as a session made since the rotation is still alive; otherwise 401 `SESSION_REVOKED`.
 - **TX:** `T[session FOR UPDATE]`
 
 **POST `/auth/logout`**

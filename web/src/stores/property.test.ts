@@ -51,6 +51,38 @@ describe('property store', () => {
     expect(store.currentId).toBe(1)
   })
 
+  it('keeps going when the property cannot be read (a network failure is kept as an error, never thrown)', async () => {
+    respond([bali])
+    const inner = GET
+    GET = vi.fn(async (path: string, opts?: object) => {
+      if (path === '/api/v1/properties/{propertyId}') throw new TypeError('Failed to fetch')
+      return inner(path, opts)
+    })
+    const store = usePropertyStore()
+    await expect(store.loadProperties()).resolves.toBeUndefined()
+    expect(store.currentId).toBe(1)
+    expect(store.current).toBeNull()
+    expect(store.error?.code).toBe('NETWORK_ERROR')
+    expect(store.clock?.business_date).toBe('2026-09-30') // the clock is still read
+  })
+
+  it('a later select that succeeds clears the error of one that failed', async () => {
+    respond([bali, jkt])
+    const inner = GET
+    let fail = true
+    GET = vi.fn(async (path: string, opts?: object) => {
+      if (path === '/api/v1/properties/{propertyId}' && fail) throw new TypeError('Failed to fetch')
+      return inner(path, opts)
+    })
+    const store = usePropertyStore()
+    await store.loadProperties()
+    expect(store.error?.code).toBe('NETWORK_ERROR')
+    fail = false
+    await store.select(2)
+    expect(store.error).toBeNull()
+    expect(store.current?.code).toBe('JKT')
+  })
+
   it('handles a tenant without properties', async () => {
     localStorage.setItem('kamarapms.currentPropertyId', '5')
     respond([])

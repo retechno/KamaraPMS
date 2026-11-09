@@ -117,23 +117,28 @@ test.describe('Front office', () => {
     expect(res.rooms[0]?.status).toBe('CONFIRMED')
   })
 
-  test('FD-08 check-out dengan saldo: bayar di langkah check-out lalu selesai', async ({ page, loginAs, data }) => {
+  test('FD-08 check-out di hari kedatangan: wizard meminta saldo plus biaya kamar malam ini, lalu selesai', async ({ page, loginAs, data }) => {
     const ih = await data.inHouse({ nights: 1 })
     await data.postCharge(ih.folio.id, 'FOOD_BEVERAGE', '150000', 'Minibar (E2E)')
-    // Leaving on the day of arrival: the check-out posts tonight's room charge and then needs a zero balance, so a balance paid in the
-    // wizard alone is refused (FOLIO_NOT_BALANCED). The desk posts tonight's charge first (the Room charges page does the same).
-    await data.api.post(`${data.P}/night-audit/room-charges`, { business_date: await data.businessDate(), stay_ids: [ih.stay.id] })
+    // the check-out posts tonight's room charge itself; the wizard asks for it with the balance (docs/qa: finding of run 1, fixed)
+    const preview = await data.api.post<{ items: { folio_id: number | null; status: string; total: string }[] }>(`${data.P}/night-audit/room-charges/preview`, { business_date: await data.businessDate(), stay_ids: [ih.stay.id] })
+    const tonight = preview.items.filter((i) => i.status === 'READY' && i.folio_id === ih.folio.id).reduce((n, i) => n + Number(i.total), 0)
+    expect(tonight).toBeGreaterThan(0)
+    const due = Number((await data.folio(ih.folio.id)).balance) + tonight
+
     await loginAs('frontdesk', `/stays/${ih.stay.id}`)
     await page.getByTestId('checkout').click()
     const wizard = page.getByTestId('checkout-wizard')
     await expect(wizard.getByTestId('step-departure')).toBeVisible()
     await wizard.locator('input[name=confirm_early]').check() // the stay leaves before its departure date
+    await expect(wizard.getByTestId(`tonight-charge-${ih.folio.id}`)).toBeVisible()
     const pay = wizard.getByTestId('checkout-pay').first()
-    await expect(pay).toBeVisible()
+    await expect(pay.locator('input[name=pay_amount]')).toHaveValue(String(due))
     await pay.locator('select[name=pay_method]').selectOption('CARD')
     await pay.locator('input[name=pay_reference]').fill('EDC-E2E')
     await pay.getByTestId('checkout-pay-submit').click()
     await expect(wizard.getByTestId('checkout-paid')).toBeVisible()
+    await expect(wizard.getByTestId('checkout-submit')).toBeEnabled()
     await wizard.getByTestId('checkout-submit').click()
     await expect(wizard.getByTestId('checkout-done')).toBeVisible()
     expect((await data.stay(ih.stay.id)).stay.status).toBe('CHECKED_OUT')
