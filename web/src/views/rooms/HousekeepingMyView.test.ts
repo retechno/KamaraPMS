@@ -9,7 +9,8 @@ import HousekeepingMyView from './HousekeepingMyView.vue'
 
 let GET = vi.fn()
 let POST = vi.fn()
-vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a) } }))
+let PUT = vi.fn()
+vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PUT: (...a: unknown[]) => PUT(...a) } }))
 
 const task = (over: Record<string, unknown>) => ({
   id: 1, room_id: 11, room_number: '101', floor: '1', room_type_code: 'DLX', task_date: '2026-09-30', task_type: 'CHECKOUT', status: 'PENDING',
@@ -48,6 +49,7 @@ function mountView(permissions: string[] = HOUSEKEEPER, data: object[] = TASKS) 
     return { data: { date: '2026-09-30', data: rows, workload: mine === undefined ? WORKLOAD : WORKLOAD.slice(0, 1) } }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
+  PUT = vi.fn().mockResolvedValue({ data: {} })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
   return mount(HousekeepingMyView, { attachTo: document.body, global: { plugins: [pinia, router] } })
 }
@@ -55,6 +57,13 @@ type Wrapper = ReturnType<typeof mountView>
 const rooms = (w: Wrapper) => w.findAll('[data-testid^=card-]').map((c) => c.attributes('data-testid')!.slice(5))
 const body = (testid: string) => document.body.querySelector(`[data-testid=${testid}]`) as HTMLElement | null
 const tasksCalls = () => GET.mock.calls.filter((c) => (c[0] as string).endsWith('/tasks'))
+/** Opens the "..." of the card of a room and clicks the item (the menu is drawn in the body). */
+async function fromMenu(w: Wrapper, room: string, item: 'skip' | 'note'): Promise<void> {
+  await w.get(`[data-testid=card-${room}] [data-slot=row-menu-trigger]`).trigger('click')
+  await flushPromises()
+  ;(document.body.querySelector(`[data-slot=row-menu] [data-testid=${item}-${room}]`) as HTMLElement).click()
+  await flushPromises()
+}
 
 describe('HousekeepingMyView: the housekeeper', () => {
   beforeEach(() => {
@@ -94,15 +103,17 @@ describe('HousekeepingMyView: the housekeeper', () => {
     w.unmount()
   })
 
-  it('has Start on a pending task and Finish on a task in progress, and Skip on both', async () => {
+  it('has Start on a pending task and Finish on a task in progress, and Skip and Add note in the menu of both', async () => {
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-testid=start-305]').exists()).toBe(true)
     expect(w.find('[data-testid=finish-305]').exists()).toBe(false)
     expect(w.find('[data-testid=start-304]').exists()).toBe(false)
     expect(w.get('[data-testid=finish-304]').text()).toBe('Finish: ready to inspect')
-    expect(w.find('[data-testid=skip-305]').exists()).toBe(true)
-    expect(w.find('[data-testid=skip-304]').exists()).toBe(true)
+    expect(w.find('[data-testid=skip-305]').exists()).toBe(false) // not beside the main button: skipping is final for the day
+    await w.get('[data-testid=card-304] [data-slot=row-menu-trigger]').trigger('click')
+    await flushPromises()
+    expect(Array.from(document.body.querySelectorAll('[data-slot=row-menu] [data-testid]')).map((e) => e.getAttribute('data-testid'))).toEqual(['note-304', 'skip-304'])
     w.unmount()
   })
 
@@ -126,8 +137,8 @@ describe('HousekeepingMyView: the housekeeper', () => {
   it('skips only with a reason; a room that does not want to be disturbed has it filled in', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('[data-testid=skip-305]').trigger('click')
-    await flushPromises()
+    await fromMenu(w, '305', 'skip')
+    expect(body('skip-final')!.textContent).toBe('This room is skipped for today and you cannot open it again. If needed, a supervisor can add a new task for this room.')
     const confirmButton = () => body('skip-confirm') as HTMLButtonElement
     expect(body('skip-sheet')!.textContent).toContain('Skip room 305')
     expect(confirmButton().disabled).toBe(true) // no reason, no skip
@@ -142,10 +153,29 @@ describe('HousekeepingMyView: the housekeeper', () => {
     expect(POST.mock.calls[0]![1]).toMatchObject({ params: { path: { propertyId: 7, taskId: 1 } }, body: { reason: 'Guest asked to come back later' } })
     expect(body('skip-sheet')).toBeNull() // closed
 
-    await w.get('[data-testid=skip-206]').trigger('click') // do not disturb
-    await flushPromises()
+    await fromMenu(w, '206', 'skip') // do not disturb
     expect((document.body.querySelector('[name=skip_reason]') as HTMLInputElement).value).toBe('Do not disturb')
     expect((body('skip-confirm') as HTMLButtonElement).disabled).toBe(false)
+    w.unmount()
+  })
+
+  it('adds a note to a room from the card: the sheet of the room, the flags of the task, and the focus back to the "..." of the card', async () => {
+    const w = mountView()
+    await flushPromises()
+    await fromMenu(w, '305', 'note')
+    const sheet = body('flag-sheet')!
+    expect(sheet.textContent).toContain('305')
+    const note = sheet.querySelector('input[name=note]') as HTMLInputElement
+    expect(document.activeElement).toBe(note)
+    note.value = 'allergic to feathers'
+    note.dispatchEvent(new Event('input'))
+    sheet.querySelector('[data-testid=flag-form]')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await flushPromises()
+    expect(PUT.mock.calls[0]![0]).toBe('/api/v1/properties/{propertyId}/rooms/{id}/housekeeping/flags')
+    expect(PUT.mock.calls[0]![1]).toMatchObject({ params: { path: { propertyId: 7 } }, body: { note: 'allergic to feathers' } })
+    expect(body('flag-sheet')).toBeNull()
+    await flushPromises()
+    expect(document.activeElement).toBe(w.get('[data-testid=card-305] [data-slot=row-menu-trigger]').element)
     w.unmount()
   })
 
@@ -154,8 +184,7 @@ describe('HousekeepingMyView: the housekeeper', () => {
     await flushPromises()
     const { ApiError } = await import('@/api/problem')
     POST = vi.fn().mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'TASK_ALREADY_CLOSED', detail: 'the task is already finished' }))
-    await w.get('[data-testid=skip-206]').trigger('click')
-    await flushPromises()
+    await fromMenu(w, '206', 'skip')
     ;(body('skip-confirm') as HTMLButtonElement).click()
     await flushPromises()
     expect(body('skip-sheet')).not.toBeNull()
@@ -253,8 +282,7 @@ describe('HousekeepingMyView: reading again by itself', () => {
   it('does not read again while the skip sheet is open', async () => {
     const w = mountView()
     await flushPromises()
-    await w.get('[data-testid=skip-305]').trigger('click')
-    await flushPromises()
+    await fromMenu(w, '305', 'skip')
     const before = tasksCalls().length
     await vi.advanceTimersByTimeAsync(180_000)
     expect(tasksCalls()).toHaveLength(before)

@@ -15,7 +15,7 @@ const room = (id: number, number: string, floor: string, status: string, extra: 
   room_id: id, room_number: number, floor, room_type_id: 10, room_type_code: 'DLX', room_type_name: 'Deluxe', status, status_updated_at: '2026-09-30T08:00:00Z', occupancy: 'VACANT', allowed_next: [], priority: 'NORMAL', dnd: false, make_up_requested: false, ...extra,
 })
 const BOARD = [room(1, '101', '1', 'DIRTY'), room(2, '102', '1', 'DIRTY'), room(3, '201', '2', 'CLEAN'), room(4, '202', '2', 'INSPECTED'), room(5, '203', '2', 'CLEANING')]
-const MAID = ['housekeeping.read', 'housekeeping.update']
+const MAID = ['reservation.read', 'housekeeping.update']
 const SUPERVISOR = [...MAID, 'housekeeping.inspect']
 
 function mountView(permissions: string[], board: object[] = BOARD) {
@@ -44,7 +44,7 @@ describe('RoomStatusView: the bulk change', () => {
   })
 
   it('has no checkboxes and no bar for someone who cannot change housekeeping', async () => {
-    const w = mountView(['housekeeping.read'])
+    const w = mountView(['reservation.read'])
     await flushPromises()
     expect(w.find('[data-testid=pick-101]').exists()).toBe(false)
     expect(w.find('[data-testid=pick-all]').exists()).toBe(false)

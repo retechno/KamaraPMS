@@ -35,7 +35,7 @@ const typeFilter = ref<string>('')
 const search = ref('')
 const selected = ref<HousekeepingBoardRoom | null>(null)
 
-const canRead = computed(() => auth.can('housekeeping.read', property.currentId) || auth.can('reservation.read', property.currentId))
+const canRead = computed(() => auth.can('reservation.read', property.currentId))
 
 // Changing the cleaning of many rooms at once: housekeeping.update; "Inspected" also needs housekeeping.inspect (the same rule as the single change).
 const canChange = computed(() => auth.can('housekeeping.update', property.currentId))

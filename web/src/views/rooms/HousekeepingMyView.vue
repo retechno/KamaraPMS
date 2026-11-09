@@ -8,6 +8,8 @@ import type { HousekeepingStaffMember, HousekeepingTask, HousekeepingTaskList } 
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
+import RoomNoteSheet from '@/components/app/RoomNoteSheet.vue'
+import RowMenu from '@/components/app/RowMenu.vue'
 import StatusBadge from '@/components/app/StatusBadge.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -115,6 +117,29 @@ async function skip(): Promise<void> {
   if (!s) return
   await run(() => api.POST('/api/v1/properties/{propertyId}/housekeeping/tasks/{taskId}/skip', { params: taskPath(s.task), body: { reason: s.reason } }))
   if (!error.value) skipping.value = null
+}
+// "Add note" on a task: the sheet of the room, and the focus back to the "..." of the card that opened it.
+const noting = ref<HousekeepingTask | null>(null)
+const noteRoom = computed(() =>
+  noting.value
+    ? { room_id: noting.value.room_id, room_number: noting.value.room_number, priority: noting.value.priority, dnd: noting.value.dnd, make_up_requested: noting.value.make_up_requested, flag_note: noting.value.flag_note }
+    : null,
+)
+const lastNoted = ref('')
+const menuOf = (): HTMLElement | undefined => {
+  const all = [...document.querySelectorAll<HTMLElement>(`[data-testid="card-${lastNoted.value}"] [data-slot=row-menu-trigger]`)]
+  return all.find((el) => el.getClientRects().length > 0) ?? all[0]
+}
+const taskMenu = (task: HousekeepingTask) => [
+  { key: 'note', label: t('myTasks.noteAction'), testId: `note-${task.room_number}` },
+  { key: 'skip', label: t('myTasks.skipAction'), testId: `skip-${task.room_number}` },
+]
+function chooseFromMenu(task: HousekeepingTask, key: string): void {
+  if (key === 'skip') askSkip(task)
+  else {
+    lastNoted.value = task.room_number
+    noting.value = task
+  }
 }
 const skipOpen = computed({
   get: () => skipping.value !== null,
@@ -328,7 +353,7 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
             <div v-if="mayWork(task)" class="flex gap-2">
               <Button v-if="task.status === 'PENDING'" class="min-h-[52px] flex-1 text-base font-bold" :disabled="busy" :data-testid="`start-${task.room_number}`" @click="start(task)">{{ t('myTasks.startAction') }}</Button>
               <Button v-else class="min-h-[52px] flex-1 text-base font-bold" :disabled="busy" :data-testid="`finish-${task.room_number}`" @click="finish(task)">{{ t('myTasks.finishAction') }}</Button>
-              <Button variant="outline" class="min-h-[52px] px-4" :disabled="busy" :data-testid="`skip-${task.room_number}`" @click="askSkip(task)">{{ t('myTasks.skipAction') }}</Button>
+              <RowMenu :items="taskMenu(task)" @select="(key: string) => chooseFromMenu(task, key)" />
             </div>
             <label v-if="mayPick(task)" class="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
               <input type="checkbox" class="size-5 accent-primary" :checked="isPicked(task)" :data-testid="`pick-${task.room_number}`" :aria-label="t('cleaning.tickRoom', { number: task.room_number })" @change="togglePick(task)" />
@@ -355,7 +380,7 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
   <Sheet v-model:open="skipOpen">
     <SheetContent v-if="skipping" side="bottom" class="p-5" data-testid="skip-sheet">
       <SheetTitle class="text-lg">{{ t('cleaning.skipTitle', { number: skipping.task.room_number }) }}</SheetTitle>
-      <SheetDescription class="sr-only">{{ t('cleaning.reason') }}</SheetDescription>
+      <SheetDescription class="mt-1" data-testid="skip-final">{{ t('myTasks.skipFinal') }}</SheetDescription>
       <form class="mt-3 flex flex-col gap-3" novalidate data-testid="skip-form" @submit.prevent="skip">
         <label class="flex flex-col gap-1.5 text-sm font-medium">
           {{ t('cleaning.reason') }}
@@ -367,6 +392,8 @@ useAutoRefresh(() => void load(), { everyMs: REFRESH_MS, paused: () => skipping.
       </form>
     </SheetContent>
   </Sheet>
+
+  <RoomNoteSheet :room="noteRoom" :restore-focus="menuOf" @close="noting = null" @saved="load()" />
 
   <Sheet v-model:open="assigning">
     <SheetContent side="bottom" class="max-h-[80vh] overflow-y-auto p-5" data-testid="assign-sheet">

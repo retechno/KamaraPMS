@@ -110,6 +110,8 @@ describe('CheckOutWizard', () => {
       await flushPromises()
     }
     await press()
+    expect(w.get('[data-testid=payment-lost]').text()).toBe('Connection lost. The payment may already be recorded. Press Pay again; it will not be recorded twice.')
+    expect(w.get('[data-testid=checkout-pay-submit]').attributes('disabled')).toBeUndefined() // pressing again is what the message asks for
     await press()
     const keyOf = (i: number) => paymentCalls()[i]?.[1].params.header['Idempotency-Key']
     expect(keyOf(1)).toBe(keyOf(0))
@@ -125,6 +127,7 @@ describe('CheckOutWizard', () => {
       await w.get('[data-testid=checkout-pay-submit]').trigger('click')
       await flushPromises()
     }
+    expect(w.find('[data-testid=payment-lost]').exists()).toBe(false) // a refusal is an answer: it is shown as the server worded it
     expect(paymentCalls()[1]?.[1].params.header['Idempotency-Key']).not.toBe(paymentCalls()[0]?.[1].params.header['Idempotency-Key'])
   })
 
