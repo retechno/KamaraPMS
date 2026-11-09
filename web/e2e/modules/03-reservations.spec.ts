@@ -20,7 +20,8 @@ test.describe('Reservasi', () => {
     await page.getByTestId(`pick-${type.code}-RO`).click()
 
     const book = page.getByTestId('book-form')
-    await book.locator('input[name=guest_q]').fill(guest.last_name)
+    // the search matches the start of a name, the e-mail or the guest code (internal/guests/queries.sql SearchGuests)
+    await book.locator('input[name=guest_q]').fill(guest.code)
     await book.getByTestId('find-guest').click()
     await book.getByTestId(`guest-${guest.code}`).click()
     await expect(book.getByTestId('chosen-guest')).toContainText(guest.code)

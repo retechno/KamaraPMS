@@ -25,10 +25,12 @@ test.describe('Front office', () => {
     await expect(sheet.getByTestId('checkin-submit')).toBeEnabled()
     await sheet.getByTestId('checkin-submit').click()
     await expect(sheet.getByTestId('step-done')).toBeVisible()
-    const inHouse = await data.api.get<{ data: { stay: { reservation_id: number }; room: { room_number: string }; balance: { amount: string; folios: { id: number }[] } }[] }>(`${data.P}/stays/in-house`, { limit: 200 })
-    const stay = inHouse.data.find((s) => s.stay.reservation_id === res.id)
-    expect(stay?.room.room_number).toBe(res.room!.number)
-    expect(Number(stay?.balance.amount)).toBeLessThan(0) // the deposit is a credit on the folio
+    await expect(sheet.getByTestId('done-summary')).toContainText(res.room!.number)
+    const inHouse = await data.api.get<{ data: { id: number; reservation_id: number; room: { number: string } }[] }>(`${data.P}/stays/in-house`, { limit: 200 })
+    const stay = inHouse.data.find((s) => s.reservation_id === res.id)
+    expect(stay?.room.number).toBe(res.room!.number)
+    const detail = await data.stay(stay!.id)
+    expect(Number((await data.folio(detail.folios[0]!.id)).balance)).toBeLessThan(0) // the deposit is a credit on the folio
   })
 
   test('FD-02 kamar kotor tidak bisa dipakai check-in tanpa izin override', async ({ page, loginAs, data }) => {
@@ -142,6 +144,6 @@ test.describe('Front office', () => {
     await loginAs('frontdesk', '/departures')
     const filters = page.getByTestId('departure-filters')
     await setDate(filters, 'departure_date', addDays(bd, 1))
-    await expect(page.getByTestId(`departure-${ih.stay.id}`)).toBeVisible()
+    await expect(page.getByRole('row').filter({ hasText: ih.stay.stay_number })).toBeVisible()
   })
 })

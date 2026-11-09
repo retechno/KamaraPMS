@@ -60,11 +60,13 @@ test.describe('Night audit', () => {
     await expect(page.getByTestId(`pack-row-${closed}`)).toBeVisible({ timeout: 60_000 })
   })
 
-  test('NA-03 transaksi bertanggal hari yang sudah ditutup ditolak (BUSINESS_DAY_CLOSED)', async ({ data }) => {
+  test('NA-03 transaksi setelah night audit tercatat di tanggal bisnis baru, bukan hari yang sudah ditutup', async ({ page, loginAs, data }) => {
+    const bd = await data.businessDate()
     const ih = await data.inHouse({ nights: 1 })
-    const cc = await data.chargeCode('FOOD_BEVERAGE')
-    const closed = addDays(await data.businessDate(), -1)
-    const err = await data.api.post(`${data.P}/folios/${ih.folio.id}/charges`, { charge_code_id: cc.id, quantity: '1', unit_price: '10000', service_date: closed }).catch((e) => e)
-    expect(err.status).toBeGreaterThanOrEqual(400)
+    const { item } = await data.postCharge(ih.folio.id, 'FOOD_BEVERAGE', '10000', 'Kopi pagi (E2E)')
+    const folio = await data.api.get<{ items: { id: number; business_date: string }[] }>(`${data.P}/folios/${ih.folio.id}`)
+    expect(folio.items.find((i) => i.id === item.id)?.business_date).toBe(bd)
+    await loginAs('admin', '/')
+    await expect(page.getByTestId('business-date')).toBeVisible()
   })
 })

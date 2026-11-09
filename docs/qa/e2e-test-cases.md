@@ -83,7 +83,7 @@ Aturan menulis test baru:
 
 | ID | Prasyarat | Langkah | Hasil yang diharapkan |
 |---|---|---|---|
-| RES-01 | Tamu ada | /reservations/new → tanggal (H+7, 2 malam) → Cari → Pesan tipe RO → cari tamu → sumber PHONE → Pesan dan konfirmasi | Pindah ke detail reservasi; API: CONFIRMED, tamu, tanggal, dan tipe sesuai |
+| RES-01 | Tamu ada | /reservations/new → tanggal (H+7, 2 malam) → Cari → Pesan tipe RO → cari tamu (kode tamu) → sumber PHONE → Pesan dan konfirmasi | Pindah ke detail reservasi; API: CONFIRMED, tamu, tanggal, dan tipe sesuai |
 | RES-02 | Reservasi draf | Detail → Konfirmasi | Status CONFIRMED; tombol konfirmasi hilang |
 | RES-03 | Reservasi ada | /reservations → cari nomor konfirmasi → klik | Baris `res-<nomor>` tampil; membuka detail |
 | RES-04 | Reservasi confirmed | Batalkan → isi alasan → Batal; lalu Pulihkan | Tombol Pulihkan muncul; alasan tersimpan; setelah dipulihkan status bukan CANCELLED |
@@ -125,8 +125,8 @@ Aturan menulis test baru:
 | HK-01 | Kamar kosong kotor | Housekeeping: /housekeeping → filter Kotor → Mulai bersihkan → Bersih → Inspeksi | Status DIRTY → CLEANING → CLEAN → INSPECTED |
 | HK-02 | — | /room-status → cari nomor kamar | Hitungan per status tampil; hanya satu tile tersisa |
 | HK-03 | Kamar kotor | /housekeeping/tasks → Buat tugas → Mulai → Selesai | Status kamar CLEAN atau INSPECTED |
-| MT-01 | — | /maintenance → kamar, PLUMBING, HIGH, deskripsi → Laporkan; detail → Mulai → Selesaikan + catatan | OPEN → IN_PROGRESS → RESOLVED |
-| LF-01 | — | /lost-found → deskripsi, kategori, tempat simpan, calon pemilik → Catat; detail → Serahkan → bukti | Nama penerima terisi dari calon pemilik; status RETURNED |
+| MT-01 | — | Resepsionis: /maintenance → kamar, PLUMBING, HIGH, deskripsi → Laporkan; admin (maintenance.manage): detail → Mulai → Selesaikan + catatan | OPEN → IN_PROGRESS → RESOLVED |
+| LF-01 | — | /lost-found → Catat barang → tempat (bukan di kamar), deskripsi, kategori, tempat simpan, calon pemilik → Catat; detail → Serahkan → bukti | Nama penerima terisi dari calon pemilik; status RETURNED |
 | BLK-01 | Kamar kosong H+25 | /room-blocks → kamar, OOO, tanggal, alasan → Buat blokir | Blokir tersimpan; kamar tidak ditawarkan untuk malam itu |
 
 ### 07 Corporate, grup, city ledger (`07-accounts.spec.ts`)
@@ -166,9 +166,9 @@ Aturan menulis test baru:
 | ACC-04 | — | Laba rugi, neraca, arus kas, buku besar | Semua terbuka tanpa error |
 | ACC-05 | Token resepsionis | GET accounting/journals | 403 |
 | AP-01 | — | /payables/suppliers → Baru → kode, nama, kontak, termin 14 → Simpan | Baris `supplier-<kode>` tampil |
-| AP-02 | Supplier ada | /payables/bills → Baru → supplier, nomor faktur, tanggal, akun beban 500.000 → Posting; /payables/payments → Baru → supplier → Bayar semua → Posting | Tagihan UNPAID lalu PAID |
+| AP-02 | Supplier ada | /payables/bills → Baru → supplier, nomor faktur, tanggal, akun beban 500.000 → Posting; /payables/payments → Baru → supplier, tanggal bayar → Bayar semua → Posting | Tagihan UNPAID lalu PAID |
 | BNK-01 | — | /bank/accounts → Baru → akun GL, nama, nomor rekening → Simpan | Rekening tampil di daftar |
-| BUD-01 | — | /budget → Baru → nama, deskripsi → Buat | Anggaran tersimpan |
+| BUD-01 | — | /budget → Baru → tahun buku berjalan, nama, deskripsi → Buat draf | Anggaran tersimpan |
 | TAX-01 | — | Halaman status, profil, kewajiban, faktur, SPT | Terbuka tanpa "no access" |
 
 ### 11 Inventory dan aset (`11-inventory-assets.spec.ts`)
@@ -178,7 +178,7 @@ Aturan menulis test baru:
 | INV-01 | Seed inventory | /inventory | Dashboard dan nilai stok tampil |
 | INV-02 | Kategori dan satuan seed | /inventory/items/new → kode, nama, kategori, satuan, harga acuan 18.500 → Simpan | Pindah ke detail barang; harga acuan tersimpan |
 | INV-03 | Barang seed | /inventory/items → cari kode | Baris `item-<kode>` tampil |
-| INV-04 | Departemen dan gudang seed | /inventory/requests/new → departemen, gudang, tanggal butuh, barang, qty 12 → Ajukan | Pindah ke detail; status bukan DRAFT |
+| INV-04 | Departemen ROOMS punya kepala departemen (diset lewat API bila belum) | /inventory/requests/new → departemen, gudang, tanggal butuh, barang, qty 12 → Ajukan | Pindah ke detail; status bukan DRAFT |
 | INV-05 | Gudang seed | /inventory/warehouses, /inventory/counts | Gudang seed tampil; halaman opname terbuka |
 | AST-01 | Aset saldo awal seed | /assets → cari nomor aset → buka detail | Aset tampil di tabel; detail memuat nama |
 | AST-02 | Aset dengan lokasi | Detail → Pindah → centang lokasi, pilih lokasi lain, alasan → Konfirmasi | location_id berubah |
@@ -199,12 +199,17 @@ Aturan menulis test baru:
 |---|---|---|---|
 | NA-01 | Semua modul selesai; ada tamu in-house dan kedatangan yang tidak datang; opname demo dari `pms-seed assets` dibatalkan lewat API (opname terbuka membekukan gudang dan menahan penutupan hari) | /night-audit → pilih semua kedatangan → alasan → konfirmasi → Tandai no-show; centang konfirmasi → Jalankan | Line menjadi NO_SHOW; tidak ada blok "cannot run" (kalau ada, alasannya menjadi pesan gagal); tanggal bisnis +1; malam tamu in-house terposting di folio |
 | NA-02 | NA-01 | /night-audit/archive | Baris paket untuk hari yang ditutup |
-| NA-03 | NA-01 | Charge bertanggal hari yang sudah ditutup lewat API | Ditolak (4xx, `BUSINESS_DAY_CLOSED`) |
+| NA-03 | NA-01 | Posting charge setelah night audit | Charge tercatat di tanggal bisnis baru; top bar menampilkan tanggal bisnis |
 
 ## Temuan dari run pertama (9 Nov 2026)
 
 - **Check-out di hari kedatangan selalu gagal sekali.** Wizard check-out menulis "Semua folio seimbang sejauh ini. Biaya kamar malam ini, bila belum diposting, ditambahkan sekarang dan harus dilunasi juga", tetapi formulir bayarnya hanya menawarkan saldo saat itu. Saat Check-out ditekan, biaya kamar malam ini diposting dan check-out ditolak dengan `FOLIO_NOT_BALANCED`. Resepsionis harus memposting biaya kamar dulu di halaman Biaya kamar, atau membayar lebih dari yang ditampilkan. FD-08 sekarang memposting biaya kamar dulu. Usul: wizard menambahkan biaya kamar malam ini ke jumlah yang harus dibayar.
 - **`pms-seed assets` meninggalkan opname terbuka** (CNT-000001, Gudang Bar), dan itu menahan night audit. Di DB demo, opname ini perlu disetujui atau dibatalkan sebelum menutup hari.
+
+## Temuan dari run kedua (9 Nov 2026)
+
+- **Purchase request tidak bisa diajukan tanpa kepala departemen.** "Ajukan" menyimpan draf lalu menampilkan "Tidak ada yang dapat menyetujui sebuah tingkat permintaan ini". Properti baru tidak punya kepala departemen, jadi alur pembelian baru bisa dipakai setelah Setup → Departemen diisi. Perlu diputuskan apakah ini cukup dengan dokumentasi atau perlu peringatan di halaman permintaan.
+- **"Failed to fetch" sebagai error halaman** saat berpindah cepat antar laporan harian (RPT-03). Permintaan yang dibatalkan karena navigasi muncul sebagai promise yang tidak ditangkap. Test sekarang menunggu halaman selesai memuat. Di aplikasi, permintaan yang dibatalkan sebaiknya diabaikan dan tidak dilempar sebagai error.
 
 ## CI
 

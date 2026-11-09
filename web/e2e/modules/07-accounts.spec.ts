@@ -40,7 +40,8 @@ test.describe('Corporate, grup, dan city ledger', () => {
     await form.getByRole('button', { name: tx('common.save'), exact: true }).click()
     await expect(page.getByTestId(`group-${code}`)).toBeVisible()
     await page.getByTestId(`group-${code}`).getByRole('link').first().click()
-    await expect(page.getByTestId('group-summary')).toContainText(code)
+    await expect(page.locator('main')).toContainText(code)
+    await expect(page.getByTestId('group-summary')).toContainText(company.name)
   })
 
   test('GRP-02 reservasi yang terhubung ke grup tampil di detail grup', async ({ page, loginAs, data }) => {

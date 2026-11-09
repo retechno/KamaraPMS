@@ -113,6 +113,7 @@ test.describe('Akuntansi dan back office', () => {
     await page.getByTestId('new-payment').click()
     const pay = page.getByTestId('payment-form')
     await pickCombo(pay, 'supplier_id', supplier.code)
+    await setDate(pay, 'payment_date', bd)
     await expect(pay.getByTestId('open-bills')).toContainText((await findBill())!.bill_number)
     await pay.getByTestId('pay-all').click()
     await pay.getByTestId('payment-post').click()
@@ -137,6 +138,7 @@ test.describe('Akuntansi dan back office', () => {
     await loginAs('accounting', '/budget')
     await page.getByTestId('new-budget').click()
     const form = page.getByTestId('new-form')
+    await form.locator('select[name=year_start]').selectOption(`${(await data.businessDate()).slice(0, 4)}-01-01`) // the fiscal year of the business date
     await form.locator('input[name=name]').fill(name)
     await form.locator('input[name=description]').fill('Dibuat oleh E2E')
     await form.getByTestId('create').click()

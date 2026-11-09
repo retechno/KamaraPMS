@@ -66,7 +66,8 @@ test.describe('Housekeeping dan kamar', () => {
     await expect.poll(async () => (await find())?.status).toBe('OPEN')
     const req = (await find())!
 
-    await page.goto('/maintenance')
+    // starting and resolving the work is the engineering desk's (maintenance.manage): the administrator does it
+    await loginAs('admin', '/maintenance')
     await page.getByTestId(`select-${req.request_number}`).click()
     const detail = page.getByTestId('detail')
     await detail.getByTestId('start').click()
@@ -82,6 +83,7 @@ test.describe('Housekeeping dan kamar', () => {
     await loginAs('frontdesk', '/lost-found')
     const form = page.getByTestId('item-form')
     await page.getByTestId('new-item').click()
+    await form.locator('input[name=location]').fill('Lobi') // found outside a room: the place is required
     await form.locator('input[name=description]').fill(description)
     await form.locator('select[name=category]').selectOption({ index: 1 })
     await form.locator('input[name=storage_location]').fill('Laci FO 1')
