@@ -58,6 +58,9 @@ go test -short ./...          # skip database tests
 scripts/db-test.sh            # migrations up/down/up + 80 schema integrity tests (PG_IMAGE=postgres:18-alpine to change version)
 
 cd web && npm test && npm run type-check && npm run build
+
+scripts/e2e.sh                # end-to-end tests in Chromium (Playwright) on their own database pms_e2e: every module, then the night audit
+                              # test cases: docs/qa/e2e-test-cases.md; report: cd web && npx playwright show-report
 ```
 
 Lint (pinned golangci-lint v2.14.0; Docker, local binary or `go run`):

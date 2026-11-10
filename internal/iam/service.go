@@ -200,7 +200,9 @@ func (s *Service) openSession(ctx context.Context, u iamdb.User, userAgent strin
 
 func sessionError(code, msg string) error { return apperr.Unauthorized(code, msg) }
 
-// rotationGrace tolerates concurrent refreshes with the same token (several tabs).
+// rotationGrace tolerates a refresh token presented again shortly after its rotation: two tabs refreshing at the same
+// moment, or a rotation whose answer never reached the browser (the page was reloaded while the refresh was on its way,
+// so the browser still holds the old cookie). Within it the token gets a new session; after it, a replay is theft.
 const rotationGrace = 30 * time.Second
 
 // Why a session ended (user_sessions.revoked_reason).
@@ -237,13 +239,24 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent string) (
 		if err != nil {
 			return err
 		}
+		// Rotated a moment ago: the answer of that rotation may never have reached the browser (the page was reloaded while it
+		// was on its way), and a 401 here signed the user out (docs/qa/e2e-test-cases.md, run 4). Another session is issued
+		// instead, while the session the rotation made (or any newer one) is alive: the user did not log out or lose access since.
+		graceReplay := row.RevokedAt != nil && row.RevokedReason != nil && *row.RevokedReason == reasonRotated &&
+			now.Sub(*row.RevokedAt) < rotationGrace
+		if graceReplay {
+			alive, err := q.HasLiveSessionSince(ctx, iamdb.HasLiveSessionSinceParams{UserID: row.UserID, Since: *row.RevokedAt})
+			if err != nil {
+				return err
+			}
+			if !alive {
+				failureCode = "SESSION_REVOKED"
+				return nil
+			}
+		}
 		switch {
-		case row.RevokedAt != nil && row.RevokedReason != nil && *row.RevokedReason == reasonRotated &&
-			now.Sub(*row.RevokedAt) < rotationGrace:
-			// Two tabs refreshed with the same cookie at the same moment. Benign: the
-			// browser already holds the new cookie from the request that won.
-			failureCode = "REFRESH_TOKEN_ROTATED"
-			return nil
+		case graceReplay:
+			// checked below like a live session; it is revoked already
 		case row.RevokedAt != nil && row.RevokedReason != nil && *row.RevokedReason == reasonRotated:
 			// A token exchanged earlier is presented again: it was copied.
 			reuse = true
@@ -255,16 +268,23 @@ func (s *Service) Refresh(ctx context.Context, refreshToken, userAgent string) (
 		case row.RevokedAt != nil:
 			failureCode = "SESSION_REVOKED" // ended by logout, password change, ...: not an attack
 			return nil
+		}
+		switch {
 		case !now.Before(row.ExpiresAt):
 			failureCode = "SESSION_EXPIRED"
 			return nil
 		case !row.IsActive || row.TenantStatus != "ACTIVE":
 			failureCode = "ACCOUNT_DISABLED"
+			if graceReplay {
+				return nil // revoked already by its rotation
+			}
 			return q.RevokeSession(ctx, iamdb.RevokeSessionParams{ID: row.ID, At: now, Reason: reasonAccountDisabled})
 		}
 
-		if err := q.RevokeSession(ctx, iamdb.RevokeSessionParams{ID: row.ID, At: now, Reason: reasonRotated}); err != nil {
-			return err
+		if !graceReplay {
+			if err := q.RevokeSession(ctx, iamdb.RevokeSessionParams{ID: row.ID, At: now, Reason: reasonRotated}); err != nil {
+				return err
+			}
 		}
 		u, err := q.GetUser(ctx, iamdb.GetUserParams{TenantID: row.TenantID, ID: row.UserID})
 		if err != nil {

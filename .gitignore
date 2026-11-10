@@ -38,3 +38,8 @@ screenshots/
 # Screenshots of the screens made while building are never committed: the comparison with the mockups is text in the design documents
 docs/screenshots/
 .playwright-mcp/
+
+# End-to-end tests (scripts/e2e.sh)
+/web/e2e/.state/
+/web/playwright-report/
+/web/test-results/

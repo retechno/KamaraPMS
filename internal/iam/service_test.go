@@ -166,11 +166,15 @@ func TestRefreshRotationAndReuseDetection(t *testing.T) {
 	if err != nil || second.RefreshToken == first.RefreshToken || second.AccessToken == first.AccessToken {
 		t.Fatalf("rotation: %v", err)
 	}
-	// Another tab refreshing with the same cookie a moment later is a race, not theft.
+	// Another tab refreshing with the same cookie a moment later, or a browser that never got the answer of the rotation
+	// (the page was reloaded while it was on its way), is a race, not theft: it gets a session of its own.
 	e.clock.Advance(5 * time.Second)
-	_, err = e.iam.Refresh(context.Background(), first.RefreshToken, "")
-	wantCode(t, err, "REFRESH_TOKEN_ROTATED")
-	e.as(t, second)
+	third, err := e.iam.Refresh(context.Background(), first.RefreshToken, "")
+	if err != nil || third.RefreshToken == second.RefreshToken || third.RefreshToken == first.RefreshToken {
+		t.Fatalf("a replay within the grace gets a new session: %v", err)
+	}
+	e.as(t, third)
+	e.as(t, second) // the session of the rotation stays: another tab may hold it
 	e.as(t, other)
 	e.clock.Advance(time.Minute) // outside the grace window a replay is treated as theft
 	// The rotated-out session is over immediately, even though its access token has not expired.
@@ -181,7 +185,7 @@ func TestRefreshRotationAndReuseDetection(t *testing.T) {
 	// Replaying the old refresh token means it was copied: every session of the user ends.
 	_, err = e.iam.Refresh(context.Background(), first.RefreshToken, "")
 	wantCode(t, err, "REFRESH_TOKEN_REUSED")
-	for name, s := range map[string]iam.Session{"rotated session": second, "other device": other} {
+	for name, s := range map[string]iam.Session{"rotated session": second, "re-issued in the grace": third, "other device": other} {
 		if _, err := e.iam.Authenticate(context.Background(), s.AccessToken); !apperr.IsCode(err, "SESSION_REVOKED") {
 			t.Errorf("%s still valid after reuse detection: %v", name, err)
 		}
@@ -189,6 +193,32 @@ func TestRefreshRotationAndReuseDetection(t *testing.T) {
 	var n int
 	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action = 'auth.refresh_token_reused'`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("reuse must be audited: %v %d", err, n)
+	}
+}
+
+// The grace re-issues a session only while the user still has one made since the rotation: a logout of that session
+// (or a password reset, a deactivation, which revoke them all) ends the grace too.
+func TestRefreshGraceEndsWithTheSessionOfTheRotation(t *testing.T) {
+	e := setup(t)
+	e.tenantWithAdmin(t, "ABC", "admin@hotel.com")
+	first := e.login(t, "ABC", "admin@hotel.com", pw)
+	second, err := e.iam.Refresh(context.Background(), first.RefreshToken, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.iam.Logout(context.Background(), second.RefreshToken); err != nil {
+		t.Fatal(err)
+	}
+	e.clock.Advance(5 * time.Second)
+	_, err = e.iam.Refresh(context.Background(), first.RefreshToken, "")
+	wantCode(t, err, "SESSION_REVOKED")
+	var n int
+	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM user_sessions WHERE revoked_at IS NULL`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("no session may be left after the logout: %v %d", err, n)
+	}
+	// and no reuse detection either: within the grace it is not theft
+	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action = 'auth.refresh_token_reused'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("not reuse: %v %d", err, n)
 	}
 }
 

@@ -4087,6 +4087,7 @@ export const en = {
     matches: 'matches the business date.',
     balanced: 'Every folio is balanced so far. Tonight\'s room charge, if not yet posted, is added now and must be settled too.',
     withBalance: 'Folios with a balance:',
+    tonightCharge: 'Includes {amount} of room charges the check-out posts (tonight and any night not posted yet).',
     submit: 'Check out',
     done: 'Checked out. The room is now',
     roomCharge: 'Room charge {date}: {total}',

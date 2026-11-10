@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api } from '@/api/client'
-import { ApiError } from '@/api/problem'
+import { ApiError, toApiError } from '@/api/problem'
 import type { DayClock, Property, PropertyWithDay } from '@/api/types'
 import { setDisplayTimeZone } from '@/utils/format'
 
@@ -56,11 +56,19 @@ export const usePropertyStore = defineStore('property', () => {
     }
   }
 
+  // Never throws: it runs inside the router guard (loadProperties), where a rejection became an uncaught "Failed to fetch"
+  // on the page when the request timed out (docs/qa/e2e-test-cases.md, run 2). The failure is kept in `error` like the others.
   async function select(id: number): Promise<void> {
     currentId.value = id
     storeId(id)
-    const { data } = await api.GET('/api/v1/properties/{propertyId}', { params: { path: { propertyId: id } } })
-    current.value = data ?? null
+    error.value = null
+    try {
+      const { data } = await api.GET('/api/v1/properties/{propertyId}', { params: { path: { propertyId: id } } })
+      current.value = data ?? null
+    } catch (e) {
+      current.value = null
+      error.value = e instanceof ApiError ? e : toApiError(null, 0)
+    }
     await refreshClock()
   }
 

@@ -79,6 +79,10 @@ WHERE id = @id AND revoked_at IS NULL;
 UPDATE user_sessions SET revoked_at = @at::timestamptz, revoked_reason = @reason::varchar
 WHERE user_id = @user_id AND revoked_at IS NULL;
 
+-- A refresh token presented again within the grace of its rotation gets a new session only while a session made since then is alive (Refresh): a logout, a password reset or a deactivation after the rotation ends the grace as well.
+-- name: HasLiveSessionSince :one
+SELECT EXISTS (SELECT 1 FROM user_sessions WHERE user_id = @user_id AND revoked_at IS NULL AND created_at >= @since::timestamptz);
+
 -- Roles ----------------------------------------------------------------------
 
 -- name: ListRoles :many
