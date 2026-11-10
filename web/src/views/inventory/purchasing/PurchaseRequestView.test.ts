@@ -12,7 +12,7 @@ let GET = vi.fn()
 let POST = vi.fn()
 vi.mock('@/api/client', () => ({ api: { GET: (...a: unknown[]) => GET(...a), POST: (...a: unknown[]) => POST(...a), PUT: vi.fn(), PATCH: vi.fn() } }))
 
-const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/inventory/requests/:id(\\d+)', component: { template: '<div />' } }, { path: '/:p(.*)*', component: { template: '<div />' } }] })
 const mounted: VueWrapper[] = []
 const item = {
   id: 1, code: 'BERAS', name: 'Beras', stock_unit_id: 10, stock_unit_code: 'kg', is_active: true, default_supplier_id: null,
