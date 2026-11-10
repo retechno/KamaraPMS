@@ -432,22 +432,22 @@ const (
 	SkipRequesterIsHead = "REQUESTER_IS_HEAD"
 )
 
-// Approver is a person who may decide a level.
-type Approver struct {
+// ChainApprover is a person who may decide a level of a chain.
+type ChainApprover struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
 // LevelCheck is a level of the chain as a submission would read it now.
 type LevelCheck struct {
-	LevelNo      int        `json:"level_no"`
-	Name         string     `json:"name"`
-	ApproverKind string     `json:"approver_kind"`
-	Permission   *string    `json:"permission"`
-	Applies      bool       `json:"applies"`
-	SkipReason   *string    `json:"skip_reason"`
-	Approvers    []Approver `json:"approvers"`
-	Problem      *string    `json:"problem"`
+	LevelNo      int             `json:"level_no"`
+	Name         string          `json:"name"`
+	ApproverKind string          `json:"approver_kind"`
+	Permission   *string         `json:"permission"`
+	Applies      bool            `json:"applies"`
+	SkipReason   *string         `json:"skip_reason"`
+	Approvers    []ChainApprover `json:"approvers"`
+	Problem      *string         `json:"problem"`
 }
 
 // ApprovalCheck says whether a submission of a document would be taken now, and which level keeps it back: the very rule of the submission (checkChain), read without writing anything.
@@ -475,7 +475,7 @@ func (s *Service) checkChain(ctx context.Context, tenantID, propertyID int64, ch
 	}
 	var needed [][]person
 	for _, l := range chain.Levels {
-		lc := LevelCheck{LevelNo: l.LevelNo, Name: l.Name, ApproverKind: l.ApproverKind, Permission: l.Permission, Approvers: []Approver{}}
+		lc := LevelCheck{LevelNo: l.LevelNo, Name: l.Name, ApproverKind: l.ApproverKind, Permission: l.Permission, Approvers: []ChainApprover{}}
 		switch {
 		case l.ConditionKind == CondTotalAbove && l.Threshold != nil && !total.GreaterThan(*l.Threshold):
 			lc.SkipReason = text(SkipCondition)
@@ -488,7 +488,7 @@ func (s *Service) checkChain(ctx context.Context, tenantID, propertyID int64, ch
 				return out, err
 			}
 			for _, p := range who {
-				lc.Approvers = append(lc.Approvers, Approver(p))
+				lc.Approvers = append(lc.Approvers, ChainApprover(p))
 			}
 			if len(who) == 0 {
 				lc.Problem = text(ProblemNoApprover)
