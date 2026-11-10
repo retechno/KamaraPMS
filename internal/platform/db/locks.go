@@ -181,6 +181,7 @@ func EnterLockLevel(ctx context.Context, level LockLevel) error {
 		return fmt.Errorf("%w: level %d requested after level %d", ErrLockOrder, level, st.level)
 	}
 	traceLock(ctx, "", level)
+	st.lastTable, st.lastMode = levelTable(level), ""
 	if level > st.level {
 		st.stockRank = 0 // a new level: the order inside LevelStock starts again if it is entered again
 		st.eventRank = 0
@@ -204,6 +205,7 @@ func NoteStockTable(ctx context.Context, table LockTable) error {
 		st.stockRank = rank
 	}
 	traceLock(ctx, table.name, table.level)
+	stateFrom(ctx).lastTable = table.name
 	return nil
 }
 
@@ -240,6 +242,8 @@ func LockRows(ctx context.Context, table LockTable, mode LockMode, propertyID in
 		st.assetRank = rank
 	}
 	traceLock(ctx, table.name, table.level)
+	st := stateFrom(ctx)
+	st.lastTable, st.lastMode = table.name, mode
 	ids = slices.Clone(ids)
 	slices.Sort(ids)
 	ids = slices.Compact(ids)

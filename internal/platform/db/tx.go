@@ -35,6 +35,9 @@ type txState struct {
 	eventRank int
 	// assetRank is the highest table of the assets group of LevelAssets taken so far (suppliers, register settings, assets, stock-takes: see LockTable.assetRank)
 	assetRank int
+	// lastTable and lastMode are the lock the transaction asked for last (LockRows, NoteStockTable, or the level of EnterLockLevel): the one a lock wait timed out on, most likely (lockWait)
+	lastTable string
+	lastMode  LockMode
 }
 
 func stateFrom(ctx context.Context) *txState {
@@ -95,9 +98,10 @@ func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context) e
 	}
 
 	traceBegin(ctx)
-	if err := fn(context.WithValue(ctx, txKey{}, &txState{tx: tx})); err != nil {
+	st := &txState{tx: tx}
+	if err := fn(context.WithValue(ctx, txKey{}, st)); err != nil {
 		rollback()
-		return MapError(err)
+		return m.lockWait(ctx, st, MapError(err))
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return MapError(fmt.Errorf("db: commit: %w", err))
