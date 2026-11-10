@@ -54,10 +54,10 @@ func (m *TxManager) lockWait(ctx context.Context, st *txState, err error) error 
 	}
 	if e, ok := apperr.As(err); ok {
 		if st.lastTable != "" {
-			e.WithContext("lock_table", st.lastTable)
+			_ = e.WithContext("lock_table", st.lastTable)
 		}
 		if st.lastMode != "" {
-			e.WithContext("lock_mode", string(st.lastMode))
+			_ = e.WithContext("lock_mode", string(st.lastMode))
 		}
 	}
 	holders, qerr := m.lockHolders(ctx, st.lastTable)
