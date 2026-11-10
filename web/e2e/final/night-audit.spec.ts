@@ -18,10 +18,9 @@ test.describe('Night audit', () => {
     const ih = await data.inHouse({ nights: 2 }) // a guest in house tonight: the audit posts the night
     const noShow = await data.reservation({ nights: 1 }) // an arrival that never comes
 
-    // pms-seed assets leaves a stock-take open on the bar store; an open count freezes its warehouse and holds the close of the day
-    for (const c of (await data.api.get<{ data: { id: number; status: string }[] }>(`${data.P}/inventory/counts`, { status: 'OPEN' })).data) {
-      await data.api.post(`${data.P}/inventory/counts/${c.id}/cancel`)
-    }
+    // an open count freezes its warehouse and holds the close of the day: setup runs pms-seed inventory with -no-open-count, and no module leaves one
+    const open = (await data.api.get<{ data: { cnt_number: string }[] }>(`${data.P}/inventory/counts`, { status: 'OPEN' })).data
+    expect(open, 'open counts that would hold the night audit').toEqual([])
 
     await loginAs('admin', '/night-audit')
     await expect(page.getByTestId('audit-date')).toBeVisible()
