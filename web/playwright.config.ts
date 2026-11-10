@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from 'playwright/test'
 import { API_ORIGIN, WEB_ORIGIN, E2E_API_ADDR } from './e2e/support/env'
@@ -14,6 +16,9 @@ import { API_ORIGIN, WEB_ORIGIN, E2E_API_ADDR } from './e2e/support/env'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const bin = process.env.E2E_BIN
 const exe = process.env.E2E_EXE ?? (process.platform === 'win32' ? '.exe' : '')
+// The log of the API (its stdout) is kept in e2e/.state/api.log: a RESOURCE_BUSY there says which lock timed out and who held it ("lock wait timed out"); scripts/e2e.sh counts them at the end.
+const apiLog = join(root, 'web', 'e2e', '.state', 'api.log')
+mkdirSync(join(root, 'web', 'e2e', '.state'), { recursive: true })
 
 export default defineConfig({
   testDir: './e2e',
@@ -43,7 +48,7 @@ export default defineConfig({
   webServer: [
     {
       // The API on its own port and its own database (scripts/e2e.sh exports PMS_DATABASE_URL=pms_e2e and the rest).
-      command: bin ? `"${bin}/api${exe}"` : 'go run ./cmd/api',
+      command: `${bin ? `"${bin}/api${exe}"` : 'go run ./cmd/api'} > "${apiLog}"`,
       cwd: root,
       url: `${API_ORIGIN}/readyz`,
       reuseExistingServer: !process.env.CI,

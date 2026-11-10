@@ -74,4 +74,16 @@ fi
 
 cd web
 log "playwright test $*"
-exec npx playwright test "$@"
+status=0
+npx playwright test "$@" || status=$?
+
+# The API log: a RESOURCE_BUSY of a lock wait is logged there with the lock and the transactions that held it (docs/architecture/05-transactions-locking.md, section 1).
+api_log=e2e/.state/api.log
+if [ -f "$api_log" ]; then
+  waits=$(grep -c 'lock wait timed out' "$api_log" || true)
+  log "API log: web/$api_log, $waits lock wait(s) timed out"
+  if [ "${waits:-0}" -gt 0 ]; then
+    grep 'lock wait timed out' "$api_log" | head -20
+  fi
+fi
+exit "$status"

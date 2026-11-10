@@ -10,6 +10,7 @@
   - `23505` (unique) on the idempotency key → return the original result
   - `23505` on the open-segment index → `ROOM_OCCUPIED`
 - Lock waits are short. Every transaction sets `SET LOCAL lock_timeout = '5s'`, and a timeout returns 409 `RESOURCE_BUSY`, which is retriable.
+- A timeout says which lock ran out and who held it. The error carries the lock the transaction asked for last (`context.lock_table`, `context.lock_mode`: the table of `LockRows`, or `business_days` for the business day), and the server logs a warning `lock wait timed out` with the open transactions that held that table at that moment, oldest first: pid, state, age in seconds and their last statement (`db.TxManager.lockWait`). It runs only on the failure, on a connection of its own, for two seconds at most. A wait on a row that a plain `UPDATE` or a foreign key took is named by the lock asked for before it, so it is a hint, not a proof.
 
 ### 1.1 Global lock order (prevents deadlocks)
 | # | Lock | Mode | Taken by |
