@@ -555,29 +555,12 @@ func (s *Service) SubmitRequisition(ctx context.Context, propertyID, id int64) (
 		if err != nil {
 			return err
 		}
-		var needed [][]person
-		for _, l := range chain.Levels {
-			if l.ConditionKind == CondTotalAbove && !total.GreaterThan(*l.Threshold) {
-				continue
-			}
-			if l.LevelNo == 1 && l.ApproverKind == ApproverDeptHead && chain.SkipLevel1IfHead && leader {
-				continue
-			}
-			who, err := s.eligible(ctx, p.TenantID, propertyID, cur.DepartmentID, p.UserID, l.ApproverKind, l.Permission, nil)
-			if err != nil {
-				return err
-			}
-			if len(who) == 0 {
-				dept := ""
-				if cur.DepartmentName != nil {
-					dept = *cur.DepartmentName
-				}
-				return errChainUnsatisfiable(l.Name, dept)
-			}
-			needed = append(needed, who)
+		check, err := s.checkChain(ctx, p.TenantID, propertyID, chain, cur.DepartmentID, cur.DepartmentName, p.UserID, total)
+		if err != nil {
+			return err
 		}
-		if !satisfiable(needed) {
-			return errChainUnsatisfiable("one person for each level", "")
+		if err := chainError(check); err != nil {
+			return err
 		}
 		now := s.clock.Now()
 		for _, l := range chain.Levels {

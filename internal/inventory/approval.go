@@ -417,6 +417,125 @@ func errChainUnsatisfiable(level, dept string) *apperr.Error {
 		WithContext("level", level).WithContext("department", dept)
 }
 
+// ------------------------------------------------------------------------------------------------ the check before a submission
+
+// What keeps a document from being submitted, on the check and on each level.
+const (
+	ProblemNoDepartment = "NO_DEPARTMENT" // the document names no department, so no head can decide
+	ProblemNoApprover   = "NO_APPROVER"   // a level that applies has nobody who may decide it (never the requester)
+	ProblemNotDistinct  = "NOT_DISTINCT"  // every level has someone, but not a different person for each level (R1)
+)
+
+// Why a level does not apply to a submission now (the same words as the skip reasons of the steps).
+const (
+	SkipCondition       = "CONDITION"
+	SkipRequesterIsHead = "REQUESTER_IS_HEAD"
+)
+
+// ChainApprover is a person who may decide a level of a chain.
+type ChainApprover struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// LevelCheck is a level of the chain as a submission would read it now.
+type LevelCheck struct {
+	LevelNo      int             `json:"level_no"`
+	Name         string          `json:"name"`
+	ApproverKind string          `json:"approver_kind"`
+	Permission   *string         `json:"permission"`
+	Applies      bool            `json:"applies"`
+	SkipReason   *string         `json:"skip_reason"`
+	Approvers    []ChainApprover `json:"approvers"`
+	Problem      *string         `json:"problem"`
+}
+
+// ApprovalCheck says whether a submission of a document would be taken now, and which level keeps it back: the very rule of the submission (checkChain), read without writing anything.
+type ApprovalCheck struct {
+	CanSubmit      bool            `json:"can_submit"`
+	Problem        *string         `json:"problem"`
+	DepartmentID   *int64          `json:"department_id"`
+	DepartmentName *string         `json:"department_name"`
+	EstTotal       decimal.Decimal `json:"est_total"`
+	Levels         []LevelCheck    `json:"levels"`
+}
+
+// checkChain reads which levels of the chain apply to a document of the department and total written by the requester, who may decide each, and whether each level can be given to a different person.
+// A submission refuses what it reports (chainError); the page of the document shows it before the submission.
+func (s *Service) checkChain(ctx context.Context, tenantID, propertyID int64, chain ApprovalChain, departmentID *int64, departmentName *string, requesterID int64, total decimal.Decimal) (ApprovalCheck, error) {
+	out := ApprovalCheck{DepartmentID: departmentID, DepartmentName: departmentName, EstTotal: total, Levels: make([]LevelCheck, 0, len(chain.Levels))}
+	text := func(code string) *string { return &code }
+	if departmentID == nil {
+		out.Problem = text(ProblemNoDepartment)
+		return out, nil
+	}
+	leader, err := s.leaderOf(ctx, tenantID, propertyID, departmentID, requesterID)
+	if err != nil {
+		return out, err
+	}
+	var needed [][]person
+	for _, l := range chain.Levels {
+		lc := LevelCheck{LevelNo: l.LevelNo, Name: l.Name, ApproverKind: l.ApproverKind, Permission: l.Permission, Approvers: []ChainApprover{}}
+		switch {
+		case l.ConditionKind == CondTotalAbove && l.Threshold != nil && !total.GreaterThan(*l.Threshold):
+			lc.SkipReason = text(SkipCondition)
+		case l.LevelNo == 1 && l.ApproverKind == ApproverDeptHead && chain.SkipLevel1IfHead && leader:
+			lc.SkipReason = text(SkipRequesterIsHead)
+		default:
+			lc.Applies = true
+			who, err := s.eligible(ctx, tenantID, propertyID, departmentID, requesterID, l.ApproverKind, l.Permission, nil)
+			if err != nil {
+				return out, err
+			}
+			for _, p := range who {
+				lc.Approvers = append(lc.Approvers, ChainApprover(p))
+			}
+			if len(who) == 0 {
+				lc.Problem = text(ProblemNoApprover)
+				out.Problem = lc.Problem
+			}
+			needed = append(needed, who)
+		}
+		out.Levels = append(out.Levels, lc)
+	}
+	if out.Problem == nil && !satisfiable(needed) {
+		out.Problem = text(ProblemNotDistinct)
+	}
+	out.CanSubmit = out.Problem == nil
+	return out, nil
+}
+
+// chainError is the refusal of a submission whose check found a problem (nil when there is none).
+func chainError(c ApprovalCheck) error {
+	if c.Problem == nil {
+		return nil
+	}
+	dept := ""
+	if c.DepartmentName != nil {
+		dept = *c.DepartmentName
+	}
+	switch *c.Problem {
+	case ProblemNoApprover:
+		for _, l := range c.Levels {
+			if l.Problem != nil {
+				return errChainUnsatisfiable(l.Name, dept)
+			}
+		}
+	case ProblemNotDistinct:
+		return errChainUnsatisfiable("one person for each level", "")
+	}
+	return invalid("request", fieldErr("department_id", "REQUIRED", "the department whose head approves the request"))
+}
+
+// chainOrDefault reads the chain of a document for a check; a property that has none yet reads the default it would be given (ensureChain), without writing it.
+func (s *Service) chainOrDefault(ctx context.Context, tenantID, propertyID int64, doc string) (ApprovalChain, error) {
+	c, err := s.loadChain(ctx, tenantID, propertyID, doc)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ApprovalChain{DocType: doc, SkipLevel1IfHead: true, ApproverMayEdit: true, Levels: defaultLevels(doc)}, nil
+	}
+	return c, err
+}
+
 // ------------------------------------------------------------------------------------------------ notices
 
 // Kinds of a notice.

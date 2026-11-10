@@ -11027,6 +11027,22 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/inventory/requests/{id}/approval-check:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: checkInventoryRequestApproval
+      summary: "Before a submission: whether the chain could take the saved request now, which levels apply, who may decide each (never the requester) and which level nobody can decide (a reader of the requests). It writes nothing; the submission makes the same check"
+      tags: [inventory]
+      responses:
+        "200":
+          description: The check.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryApprovalCheck" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/inventory/requests/{id}/submit:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -25549,6 +25565,35 @@ components:
         approver_may_edit: { type: boolean }
         version: { type: integer }
         levels: { type: array, items: { $ref: "#/components/schemas/InventoryApprovalLevel" } }
+    InventoryApprovalCheck:
+      type: object
+      required: [can_submit, problem, department_id, department_name, est_total, levels]
+      properties:
+        can_submit: { type: boolean }
+        problem: { type: [string, "null"], enum: [NO_DEPARTMENT, NO_APPROVER, NOT_DISTINCT, null], description: "NO_DEPARTMENT: the request names no department; NO_APPROVER: a level that applies has nobody who may decide it; NOT_DISTINCT: each level has someone, but not a different person for each level" }
+        department_id: { type: [integer, "null"], format: int64 }
+        department_name: { type: [string, "null"] }
+        est_total: { type: string }
+        levels: { type: array, items: { $ref: "#/components/schemas/InventoryApprovalLevelCheck" } }
+    InventoryApprovalLevelCheck:
+      type: object
+      required: [level_no, name, approver_kind, permission, applies, skip_reason, approvers, problem]
+      properties:
+        level_no: { type: integer }
+        name: { type: string }
+        approver_kind: { type: string, enum: [DEPT_HEAD, PERMISSION] }
+        permission: { type: [string, "null"] }
+        applies: { type: boolean }
+        skip_reason: { type: [string, "null"], enum: [CONDITION, REQUESTER_IS_HEAD, null], description: "CONDITION: the total does not reach the amount of the level; REQUESTER_IS_HEAD: the requester leads the department and the chain skips level 1" }
+        approvers:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: { type: integer, format: int64 }
+              name: { type: string }
+        problem: { type: [string, "null"], enum: [NO_APPROVER, null] }
     InventoryApprovalChainInput:
       type: object
       required: [skip_level1_if_head, approver_may_edit, version, levels]

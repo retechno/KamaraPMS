@@ -6108,6 +6108,15 @@ export const en = {
       ordersMade: '{n} order(s) were made.',
       order: 'Order',
       orderPrice: 'Order price',
+      check: {
+        title: 'This draft cannot be submitted yet: the approval chain is incomplete.',
+        noHead: 'Level {level} · {name}: the department {department} has no head or deputy (other than you) who holds the department approval permission.',
+        noPermission: 'Level {level} · {name}: no user other than you holds the permission "{permission}".',
+        notDistinct: 'Each level must be approved by a different person, but levels {levels} do not have enough different approvers.',
+        ask: 'Ask the administrator to set the head of the department or to give that permission to the role of another user, then open this request again.',
+        departments: 'Set up departments',
+        roles: 'Set up roles',
+      },
     },
     chain: {
       title: 'Approval chain ({n} levels)',

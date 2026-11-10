@@ -711,30 +711,13 @@ func (s *Service) SubmitRequest(ctx context.Context, propertyID, id int64) (Requ
 		if err != nil {
 			return err
 		}
-		// which levels apply now, and can each be given to a different person?
-		var needed [][]person
-		for _, l := range chain.Levels {
-			if l.ConditionKind == CondTotalAbove && !total.GreaterThan(*l.Threshold) {
-				continue
-			}
-			if l.LevelNo == 1 && l.ApproverKind == ApproverDeptHead && chain.SkipLevel1IfHead && leader {
-				continue
-			}
-			who, err := s.eligible(ctx, p.TenantID, propertyID, cur.DepartmentID, p.UserID, l.ApproverKind, l.Permission, nil)
-			if err != nil {
-				return err
-			}
-			if len(who) == 0 {
-				dept := ""
-				if cur.DepartmentName != nil {
-					dept = *cur.DepartmentName
-				}
-				return errChainUnsatisfiable(l.Name, dept)
-			}
-			needed = append(needed, who)
+		// which levels apply now, and can each be given to a different person? (the same check the page reads before, ApprovalCheckOfRequest)
+		check, err := s.checkChain(ctx, p.TenantID, propertyID, chain, cur.DepartmentID, cur.DepartmentName, p.UserID, total)
+		if err != nil {
+			return err
 		}
-		if !satisfiable(needed) {
-			return errChainUnsatisfiable("one person for each level", "")
+		if err := chainError(check); err != nil {
+			return err
 		}
 		now := s.clock.Now()
 		for _, l := range chain.Levels {
@@ -763,6 +746,24 @@ func (s *Service) SubmitRequest(ctx context.Context, propertyID, id int64) (Requ
 		return Request{}, err
 	}
 	return s.request(ctx, p, propertyID, id)
+}
+
+// ApprovalCheckOfRequest says, before the requester submits, whether the chain could take the request now and which level nobody can decide (a reader of the requests). It reads the request as it is saved:
+// its department, its total and its requester; it writes nothing, and a property with no chain yet reads the default. The submission makes the same check (SubmitRequest), so the answer may only go stale.
+func (s *Service) ApprovalCheckOfRequest(ctx context.Context, propertyID, id int64) (ApprovalCheck, error) {
+	p, err := s.canReadRequests(ctx, propertyID)
+	if err != nil {
+		return ApprovalCheck{}, err
+	}
+	cur, err := s.q(ctx).GetRequest(ctx, inventorydb.GetRequestParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id})
+	if err != nil {
+		return ApprovalCheck{}, orNotFound(err, notFound("REQUEST_NOT_FOUND", "request"))
+	}
+	chain, err := s.chainOrDefault(ctx, p.TenantID, propertyID, DocPR)
+	if err != nil {
+		return ApprovalCheck{}, err
+	}
+	return s.checkChain(ctx, p.TenantID, propertyID, chain, cur.DepartmentID, cur.DepartmentName, cur.RequesterID, cur.EstTotal)
 }
 
 // advance gives the request to its next level: each waiting level is read in order, a conditional level the total does not reach is skipped, the first that applies becomes active and its people are told.

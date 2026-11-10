@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Department, InventoryItem, InventoryRequest, InventoryRequestLineInput, InventorySupplier, InventorySupplierItem, InventoryWarehouse } from '@/api/types'
+import type { Department, InventoryApprovalCheck, InventoryApprovalLevelCheck, InventoryItem, InventoryRequest, InventoryRequestLineInput, InventorySupplier, InventorySupplierItem, InventoryWarehouse } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import MoneyInput from '@/components/app/MoneyInput.vue'
@@ -228,6 +228,33 @@ async function act(path: 'recall' | 'cancel', message: string): Promise<void> {
   await run(async () => (await api.POST(`/api/v1/properties/{propertyId}/inventory/requests/{id}/${path}` as '/api/v1/properties/{propertyId}/inventory/requests/{id}/recall', { params: { path: { propertyId, id } } })).data, message)
 }
 
+// ------------------------------------------------------------------------------------------ the check before a submission
+// Which level of the chain nobody could decide, read on the saved draft (GET approval-check): the requester sees it before pressing "submit", with what to ask the administrator. It is advice: the
+// submission makes the same check and stays the one that refuses.
+const check = ref<InventoryApprovalCheck | null>(null)
+const checkable = computed(() => !!request.value && editable.value && (request.value.status === 'DRAFT' || request.value.status === 'RETURNED'))
+async function loadCheck(): Promise<void> {
+  const propertyId = pid.value
+  const r = request.value
+  check.value = null
+  if (propertyId === null || !r || !checkable.value) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/inventory/requests/{id}/approval-check', { params: { path: { propertyId, id: r.id } } })
+    if (request.value?.id === r.id) check.value = data ?? null
+  } catch {
+    check.value = null
+  }
+}
+watch(() => [pid.value, request.value?.id, request.value?.version, request.value?.status, checkable.value], () => void loadCheck())
+// shown while the department on the form is the saved one (another department is read again once it is saved)
+const chainBlocked = computed(() => !!check.value && !check.value.can_submit && check.value.problem !== 'NO_DEPARTMENT' && form.department_id === (request.value?.department_id ?? 0))
+const blockedLevels = computed(() => (check.value?.levels ?? []).filter((l) => l.problem === 'NO_APPROVER'))
+const applyingLevels = computed(() => (check.value?.levels ?? []).filter((l) => l.applies).map((l) => l.level_no).join(', '))
+function levelProblem(l: InventoryApprovalLevelCheck): string {
+  if (l.approver_kind === 'DEPT_HEAD') return t('inventory.request.check.noHead', { level: l.level_no, name: l.name, department: check.value?.department_name ?? '' })
+  return t('inventory.request.check.noPermission', { level: l.level_no, name: l.name, permission: t(`inventory.chain.permission.${l.permission ?? 'none'}`) })
+}
+
 // ------------------------------------------------------------------------------------------ the decision of the signed-in approver
 const edit = reactive<{ on: boolean; note: string; qty: Record<number, string>; price: Record<number, string> }>({ on: false, note: '', qty: {}, price: {} })
 const edits = computed(() => {
@@ -416,6 +443,20 @@ async function makeOrders(): Promise<void> {
               </tr>
             </tfoot>
           </table>
+        </div>
+        <div v-if="chainBlocked" class="alert warning" role="alert" data-testid="chain-blocked">
+          <strong>{{ t('inventory.request.check.title') }}</strong>
+          <ul class="m-0 mt-1 pl-5">
+            <li v-for="l in blockedLevels" :key="l.level_no" :data-testid="`chain-blocked-${l.level_no}`">{{ levelProblem(l) }}</li>
+            <li v-if="check?.problem === 'NOT_DISTINCT'" data-testid="chain-blocked-distinct">{{ t('inventory.request.check.notDistinct', { levels: applyingLevels }) }}</li>
+          </ul>
+          <p class="m-0 mt-1">
+            {{ t('inventory.request.check.ask') }}
+            <span class="ml-1 inline-flex flex-wrap gap-3">
+              <RouterLink v-if="can('accounting.view')" to="/accounting/departments" data-testid="chain-blocked-departments">{{ t('inventory.request.check.departments') }}</RouterLink>
+              <RouterLink v-if="auth.isAdmin" to="/setup/roles" data-testid="chain-blocked-roles">{{ t('inventory.request.check.roles') }}</RouterLink>
+            </span>
+          </p>
         </div>
         <div class="flex flex-wrap items-center justify-between gap-2">
           <Button type="button" variant="outline" size="sm" data-testid="line-add" :disabled="freeItems(0).length === 0" @click="addLine">{{ t('inventory.request.addLine') }}</Button>

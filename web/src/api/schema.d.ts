@@ -9612,6 +9612,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/inventory/requests/{id}/approval-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Before a submission: whether the chain could take the saved request now, which levels apply, who may decide each (never the requester) and which level nobody can decide (a reader of the requests). It writes nothing; the submission makes the same check */
+        get: operations["checkInventoryRequestApproval"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/inventory/requests/{id}/submit": {
         parameters: {
             query?: never;
@@ -23686,6 +23706,39 @@ export interface components {
             approver_may_edit: boolean;
             version: number;
             levels: components["schemas"]["InventoryApprovalLevel"][];
+        };
+        InventoryApprovalCheck: {
+            can_submit: boolean;
+            /**
+             * @description NO_DEPARTMENT: the request names no department; NO_APPROVER: a level that applies has nobody who may decide it; NOT_DISTINCT: each level has someone, but not a different person for each level
+             * @enum {string|null}
+             */
+            problem: "NO_DEPARTMENT" | "NO_APPROVER" | "NOT_DISTINCT" | null;
+            /** Format: int64 */
+            department_id: number | null;
+            department_name: string | null;
+            est_total: string;
+            levels: components["schemas"]["InventoryApprovalLevelCheck"][];
+        };
+        InventoryApprovalLevelCheck: {
+            level_no: number;
+            name: string;
+            /** @enum {string} */
+            approver_kind: "DEPT_HEAD" | "PERMISSION";
+            permission: string | null;
+            applies: boolean;
+            /**
+             * @description CONDITION: the total does not reach the amount of the level; REQUESTER_IS_HEAD: the requester leads the department and the chain skips level 1
+             * @enum {string|null}
+             */
+            skip_reason: "CONDITION" | "REQUESTER_IS_HEAD" | null;
+            approvers: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+            }[];
+            /** @enum {string|null} */
+            problem: "NO_APPROVER" | null;
         };
         InventoryApprovalChainInput: {
             skip_level1_if_head: boolean;
@@ -43298,6 +43351,31 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    checkInventoryRequestApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryApprovalCheck"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     submitInventoryRequest: {
