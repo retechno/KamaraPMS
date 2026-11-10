@@ -6106,6 +6106,15 @@ export const id: Messages = {
       ordersMade: '{n} pesanan dibuat.',
       order: 'Pesanan',
       orderPrice: 'Harga pesanan',
+      check: {
+        title: 'Draf ini belum bisa diajukan: rantai persetujuan tidak lengkap.',
+        noHead: 'Tingkat {level} · {name}: departemen {department} belum punya kepala atau wakil (selain Anda) yang memegang izin persetujuan departemen.',
+        noPermission: 'Tingkat {level} · {name}: belum ada pengguna selain Anda yang memegang izin "{permission}".',
+        notDistinct: 'Setiap tingkat harus disetujui orang yang berbeda, tetapi tingkat {levels} tidak punya cukup penyetuju yang berbeda.',
+        ask: 'Minta administrator menetapkan kepala departemen atau memberi izin itu pada peran pengguna lain, lalu buka lagi permintaan ini.',
+        departments: 'Atur departemen',
+        roles: 'Atur peran',
+      },
     },
     chain: {
       title: 'Rantai persetujuan ({n} tingkat)',

@@ -56,6 +56,30 @@ test.describe('Inventory dan aset', () => {
     await expect.poll(async () => (await data.api.get<{ status: string }>(`${data.P}/inventory/requests/${id}`)).status).not.toBe('DRAFT')
   })
 
+  test('INV-06 draf permintaan pembelian untuk departemen tanpa kepala menampilkan peringatan sebelum diajukan', async ({ page, loginAs, data }) => {
+    // a department nobody heads: level 1 of the chain (the head of the department) has nobody, and the requester (the administrator) never approves
+    const code = `NOHEAD${uid()}`
+    const dept = await data.api.post<{ id: number; name: string }>(`${data.P}/departments`, { code, name: `Tanpa kepala ${code}` })
+    const item = (await data.api.get<{ items: { id: number; stock_unit_id: number }[] }>(`${data.P}/inventory/items`, { limit: 1, active: true })).items[0]!
+    const pr = await data.api.post<{ id: number }>(`${data.P}/inventory/requests`, {
+      client_uuid: crypto.randomUUID(), department_id: dept.id, lines: [{ item_id: item.id, unit_id: item.stock_unit_id, qty: '2', est_unit_price: '10000' }],
+    })
+    const check = await data.api.get<{ can_submit: boolean; problem: string | null }>(`${data.P}/inventory/requests/${pr.id}/approval-check`)
+    expect(check).toMatchObject({ can_submit: false, problem: 'NO_APPROVER' })
+
+    await loginAs('admin', `/inventory/requests/${pr.id}`)
+    const warn = page.getByTestId('chain-blocked')
+    await expect(warn).toBeVisible()
+    await expect(page.getByTestId('chain-blocked-1')).toContainText(dept.name)
+    await expect(warn.getByTestId('chain-blocked-departments')).toBeVisible()
+    await expect(warn.getByTestId('chain-blocked-roles')).toBeVisible()
+    // the server still decides: the submission is refused with the same reason, and the draft stays a draft
+    await page.getByTestId('request-submit').click()
+    await expect(page.getByTestId('request-error')).toBeVisible()
+    expect((await data.api.get<{ status: string }>(`${data.P}/inventory/requests/${pr.id}`)).status).toBe('DRAFT')
+    await data.api.post(`${data.P}/inventory/requests/${pr.id}/cancel`, {})
+  })
+
   test('INV-05 stock take (opname) dan gudang hasil seed tampil', async ({ page, loginAs, data }) => {
     const wh = (await data.api.get<{ data?: { code: string }[]; warehouses?: { code: string }[] }>(`${data.P}/inventory/warehouses`))
     const list = wh.data ?? wh.warehouses ?? []

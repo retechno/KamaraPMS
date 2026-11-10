@@ -20,6 +20,7 @@ func (h *Handler) registerPurchasing(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/requests", httpx.HandlerFunc(h.createRequest))
 	mux.Handle("GET "+p+"/requests/{id}", httpx.HandlerFunc(h.getRequest))
 	mux.Handle("PUT "+p+"/requests/{id}", httpx.HandlerFunc(h.updateRequest))
+	mux.Handle("GET "+p+"/requests/{id}/approval-check", httpx.HandlerFunc(h.requestApprovalCheck))
 	mux.Handle("POST "+p+"/requests/{id}/submit", httpx.HandlerFunc(h.submitRequest))
 	mux.Handle("POST "+p+"/requests/{id}/recall", httpx.HandlerFunc(h.recallRequest))
 	mux.Handle("POST "+p+"/requests/{id}/cancel", httpx.HandlerFunc(h.cancelRequest))
@@ -181,6 +182,10 @@ func (h *Handler) updateRequest(w http.ResponseWriter, r *http.Request) error {
 
 func (h *Handler) submitRequest(w http.ResponseWriter, r *http.Request) error {
 	return withID(w, r, http.StatusOK, func(pid, id int64) (Request, error) { return h.svc.SubmitRequest(r.Context(), pid, id) })
+}
+
+func (h *Handler) requestApprovalCheck(w http.ResponseWriter, r *http.Request) error {
+	return withID(w, r, http.StatusOK, func(pid, id int64) (ApprovalCheck, error) { return h.svc.ApprovalCheckOfRequest(r.Context(), pid, id) })
 }
 
 func (h *Handler) recallRequest(w http.ResponseWriter, r *http.Request) error {

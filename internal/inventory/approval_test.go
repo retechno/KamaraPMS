@@ -785,3 +785,86 @@ func TestAReceiptThatNobodyBilledForThirtyDaysIsAWarningOfTheNightAudit(t *testi
 		t.Fatalf("warnings: %+v", warnings)
 	}
 }
+
+// The check before a submission reads the very rule of the submission: which levels apply to the saved request, who may decide each (never the requester), and why a submission would be refused. It writes
+// nothing, not even the default chain of a property that has none yet.
+func TestTheApprovalCheckOfARequestTellsWhatTheSubmissionWouldRefuse(t *testing.T) {
+	c := newChain(t)
+	r := c.request(t, c.req, c.line("BERAS", "karung", "8", "485000")) // 3,880,000: level 3 does not apply
+	settings := func() int {
+		return c.Count(t, `SELECT count(*) FROM inv_approval_settings WHERE property_id = $1 AND doc_type = 'PR'`, c.propID)
+	}
+	before := settings()
+	check, err := c.svc.ApprovalCheckOfRequest(c.req, c.propID, r.ID)
+	must(t, err)
+	if settings() != before {
+		t.Fatal("the check wrote the chain")
+	}
+	if !check.CanSubmit || check.Problem != nil || len(check.Levels) != 3 {
+		t.Fatalf("check %+v", check)
+	}
+	approvers := func(l inventory.LevelCheck) map[int64]bool {
+		out := map[int64]bool{}
+		for _, a := range l.Approvers {
+			out[a.ID] = true
+		}
+		return out
+	}
+	l1, l2, l3 := check.Levels[0], check.Levels[1], check.Levels[2]
+	if !l1.Applies || len(l1.Approvers) != 2 || !approvers(l1)[c.headID] || !approvers(l1)[c.deputyID] {
+		t.Fatalf("level 1 %+v", l1)
+	}
+	if !l2.Applies || !approvers(l2)[c.ccID] || l2.Problem != nil {
+		t.Fatalf("level 2 %+v", l2)
+	}
+	if l3.Applies || l3.SkipReason == nil || *l3.SkipReason != "CONDITION" {
+		t.Fatalf("level 3 %+v", l3)
+	}
+
+	// a department with no head: level 1 has nobody, and the submission says the same
+	c.setHeads(t, 0, 0)
+	check, err = c.svc.ApprovalCheckOfRequest(c.head, c.propID, r.ID) // any reader of the requests may ask; the requester is the one of the request
+	must(t, err)
+	if check.CanSubmit || check.Problem == nil || *check.Problem != "NO_APPROVER" || check.Levels[0].Problem == nil || check.Levels[1].Problem != nil {
+		t.Fatalf("no head %+v", check)
+	}
+	_, err = c.svc.SubmitRequest(c.req, c.propID, r.ID)
+	wantCode(t, err, "APPROVAL_CHAIN_UNSATISFIABLE")
+
+	// the requester alone heads the department: the requester never approves, so nobody is left for level 1 (the option to skip it is off)
+	chain, err := c.svc.GetApprovalChain(c.admin, c.propID, "PR")
+	must(t, err)
+	_, err = c.svc.SetApprovalChain(c.admin, c.propID, "PR", inventory.ApprovalChainInput{SkipLevel1IfHead: false, ApproverMayEdit: chain.ApproverMayEdit, Version: chain.Version, Levels: chain.Levels})
+	must(t, err)
+	must(t, c.Exec(t, `INSERT INTO role_permissions (role_id, permission_code) SELECT up.role_id, 'inventory.dept_approve' FROM user_properties up WHERE up.user_id = $1 ON CONFLICT DO NOTHING`, c.reqID))
+	c.setHeads(t, c.reqID, 0)
+	check, err = c.svc.ApprovalCheckOfRequest(c.req, c.propID, r.ID)
+	must(t, err)
+	if check.CanSubmit || *check.Problem != "NO_APPROVER" || len(check.Levels[0].Approvers) != 0 {
+		t.Fatalf("requester heads %+v", check)
+	}
+
+	// cost control alone heads the department: each level has someone, but not a different person for each (R1)
+	must(t, c.Exec(t, `INSERT INTO role_permissions (role_id, permission_code) SELECT up.role_id, 'inventory.dept_approve' FROM user_properties up WHERE up.user_id = $1 ON CONFLICT DO NOTHING`, c.ccID))
+	c.setHeads(t, c.ccID, 0)
+	check, err = c.svc.ApprovalCheckOfRequest(c.req, c.propID, r.ID)
+	must(t, err)
+	if check.CanSubmit || check.Problem == nil || *check.Problem != "NOT_DISTINCT" || check.Levels[0].Problem != nil || check.Levels[1].Problem != nil {
+		t.Fatalf("one person %+v", check)
+	}
+	_, err = c.svc.SubmitRequest(c.req, c.propID, r.ID)
+	wantCode(t, err, "APPROVAL_CHAIN_UNSATISFIABLE")
+
+	// with a head again the check and the submission both take it
+	c.setHeads(t, c.headID, 0)
+	check, err = c.svc.ApprovalCheckOfRequest(c.req, c.propID, r.ID)
+	must(t, err)
+	if !check.CanSubmit {
+		t.Fatalf("head again %+v", check)
+	}
+	c.submit(t, c.req, r)
+
+	// an unknown request is not found
+	_, err = c.svc.ApprovalCheckOfRequest(c.req, c.propID, r.ID+100000)
+	wantCode(t, err, "REQUEST_NOT_FOUND")
+}
