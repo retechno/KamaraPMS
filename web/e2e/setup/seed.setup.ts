@@ -50,7 +50,8 @@ setup('seed: property, demo data, roles and users', async () => {
   const base = ['-tenant', TENANT, '-property', PROPERTY_CODE]
   pmsSeed(['rooms', ...base, '-floors', '5', '-per-floor', '10'])
   pmsSeed(['rates', ...base, '-days', '60'])
-  for (const demo of ['pos', 'inventory', 'banquet', 'assets', 'nightaudit']) pmsSeed([demo, ...base])
+  // -no-open-count: the demo count of the bar would freeze the bar and hold the night audit of the final project
+  for (const demo of ['pos', 'inventory', 'banquet', 'assets', 'nightaudit']) pmsSeed(demo === 'inventory' ? [demo, ...base, '-no-open-count'] : [demo, ...base])
 
   // --- roles and users
   const roles = (await admin.get<{ data: { id: number; name: string }[] }>('/roles')).data

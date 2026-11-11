@@ -199,7 +199,7 @@ Aturan menulis test baru:
 
 | ID | Prasyarat | Langkah | Hasil yang diharapkan |
 |---|---|---|---|
-| NA-01 | Semua modul selesai; ada tamu in-house dan kedatangan yang tidak datang; opname demo dari `pms-seed assets` dibatalkan lewat API (opname terbuka membekukan gudang dan menahan penutupan hari) | /night-audit → pilih semua kedatangan → alasan → konfirmasi → Tandai no-show; centang konfirmasi → Jalankan | Line menjadi NO_SHOW; tidak ada blok "cannot run" (kalau ada, alasannya menjadi pesan gagal); tanggal bisnis +1; malam tamu in-house terposting di folio |
+| NA-01 | Semua modul selesai; ada tamu in-house dan kedatangan yang tidak datang; tidak ada opname terbuka (setup menjalankan `pms-seed inventory -no-open-count`; opname terbuka membekukan gudang dan menahan penutupan hari) | /night-audit → pilih semua kedatangan → alasan → konfirmasi → Tandai no-show; centang konfirmasi → Jalankan | Line menjadi NO_SHOW; tidak ada blok "cannot run" (kalau ada, alasannya menjadi pesan gagal); tanggal bisnis +1; malam tamu in-house terposting di folio |
 | NA-02 | NA-01 | /night-audit/archive | Baris paket untuk hari yang ditutup |
 | NA-03 | NA-01 | Posting charge setelah night audit | Charge tercatat di tanggal bisnis baru; top bar menampilkan tanggal bisnis |
 
@@ -210,7 +210,7 @@ Run keenam (9 Nov 2026): **118 dari 118 lulus** dalam 14,7 menit (3 worker, Chro
 ## Temuan dari run pertama (9 Nov 2026)
 
 - **[Diperbaiki di `fix-e2e-findings`: wizard menambahkan biaya kamar dari dry run posting]** **Check-out di hari kedatangan selalu gagal sekali.** Wizard check-out menulis "Semua folio seimbang sejauh ini. Biaya kamar malam ini, bila belum diposting, ditambahkan sekarang dan harus dilunasi juga", tetapi formulir bayarnya hanya menawarkan saldo saat itu. Saat Check-out ditekan, biaya kamar malam ini diposting dan check-out ditolak dengan `FOLIO_NOT_BALANCED`. Resepsionis harus memposting biaya kamar dulu di halaman Biaya kamar, atau membayar lebih dari yang ditampilkan. FD-08 sekarang memposting biaya kamar dulu. Usul: wizard menambahkan biaya kamar malam ini ke jumlah yang harus dibayar.
-- **`pms-seed assets` meninggalkan opname terbuka** (CNT-000001, Gudang Bar), dan itu menahan night audit. Di DB demo, opname ini perlu disetujui atau dibatalkan sebelum menutup hari.
+- **[Ditangani di `seed-no-open-count`: koreksi, opname itu dibuat oleh `pms-seed inventory`, bukan `pms-seed assets`. Seed sekarang menyebut bahwa opname itu menahan night audit dan cara melepasnya; flag `-no-open-count` melewatinya, dan setup E2E memakainya]** **`pms-seed inventory` meninggalkan opname terbuka** (CNT-000001, Gudang Bar), dan itu menahan night audit. Di DB demo, opname ini perlu disetujui atau dibatalkan sebelum menutup hari.
 
 ## Temuan dari run kedua (9 Nov 2026)
 

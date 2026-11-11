@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"kamarapms/internal/departments"
@@ -36,7 +38,10 @@ var (
 	demoCountItems = []string{"TEHCL", "KOPI", "SODA"}
 )
 
-func seedMovements(e *env, svc *inventory.Service, deptSvc *departments.Service, unit, item, warehouse, deptID map[string]int64) error {
+// countHolds is what the open count of the demo does, said by the seed each time it makes or finds it.
+const countHolds = "the bar is frozen and the night audit is held (count_blocks_night_audit) until the count is approved or cancelled (Inventory -> Counts)"
+
+func seedMovements(e *env, svc *inventory.Service, deptSvc *departments.Service, unit, item, warehouse, deptID map[string]int64, openCount bool) error {
 	ctx, pid := e.ctx, e.propertyID
 	exists := func(table, uuid string) (bool, error) {
 		var n int
@@ -151,11 +156,21 @@ func seedMovements(e *env, svc *inventory.Service, deptSvc *departments.Service,
 		fmt.Printf("amenities: plan version %d, %d lines per room\n", p.VersionNo, len(p.Lines))
 	}
 
-	// 5. a count of three items of the bar, open (the bar is frozen until it is approved or cancelled)
-	if ok, err := exists("inv_counts", demoCountUUID); err != nil {
+	// 5. a count of three items of the bar, open (the bar is frozen, and the night audit held, until it is approved or cancelled)
+	var number, status string
+	switch err := e.txm.DB(ctx).QueryRow(ctx, `SELECT cnt_number, status FROM inv_counts WHERE property_id = $1 AND client_uuid = $2`, pid, demoCountUUID).Scan(&number, &status); {
+	case err == nil:
+		if status == "OPEN" {
+			fmt.Printf("count %s exists and is open: %s\n", number, countHolds)
+		} else {
+			fmt.Printf("count %s exists (%s)\n", number, status)
+		}
+		return nil
+	case !errors.Is(err, pgx.ErrNoRows):
 		return err
-	} else if ok {
-		fmt.Println("count: the demo exists")
+	}
+	if !openCount {
+		fmt.Println("count: none (-no-open-count)")
 		return nil
 	}
 	in := inventory.CountInput{ClientUUID: demoCountUUID, WarehouseID: warehouse["BAR"], Scope: inventory.ScopeList}
@@ -174,7 +189,7 @@ func seedMovements(e *env, svc *inventory.Service, deptSvc *departments.Service,
 	if err != nil {
 		return fmt.Errorf("count: %w", err)
 	}
-	fmt.Printf("count %s: the bar is frozen until it is approved\n", c.Number)
+	fmt.Printf("count %s: open, %s\n", c.Number, countHolds)
 	return nil
 }
 

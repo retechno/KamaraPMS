@@ -4,7 +4,7 @@
 //	pms-seed rooms -tenant DEMO -property BALI [-floors 10] [-per-floor 10] [-dry-run]
 //	pms-seed rates -tenant DEMO -property BALI [-days 90] [-plan RO] [-dry-run]
 //	pms-seed pos   -tenant DEMO -property BALI [-dry-run]
-//	pms-seed inventory -tenant DEMO -property BALI [-dry-run]
+//	pms-seed inventory -tenant DEMO -property BALI [-no-open-count] [-dry-run]
 //	pms-seed inventory-days -tenant DEMO -property BALI [-days 10] [-dry-run]
 //	pms-seed banquet -tenant DEMO -property BALI [-dry-run]
 //	pms-seed assets -tenant DEMO -property BALI [-dry-run]
@@ -22,7 +22,8 @@
 // printers, food and drinks for the restaurant and room service, and laundry services in a price list of the laundry alone, and floor plans.
 //
 // inventory: the demo of the inventory (docs/architecture/35-inventory.md): the units, four categories with their accounts, four warehouses (those of the restaurant and the bar tied to
-// the outlets of `pms-seed pos`), about forty items in Indonesian with their conversions, and the opening stock of each warehouse.
+// the outlets of `pms-seed pos`), about forty items in Indonesian with their conversions, and the opening stock of each warehouse. It also leaves a count of the bar OPEN, which freezes the bar and, by the
+// default setting count_blocks_night_audit, holds the night audit until the count is approved or cancelled (Inventory -> Counts); -no-open-count leaves it out (the E2E run does).
 //
 // inventory-days: ten business days of activity for the reports of the inventory (docs/architecture/35-inventory.md, PR 5): POS sales of the restaurant and the bar, waste, staff meals, entertainment and a use by engineering
 // and by the office, each day closed by the night audit through the running API of the development stack (password in PMS_SEED_PASSWORD). It moves the business date of the property forward; run again, it does
@@ -75,7 +76,7 @@ const usage = `usage:
   pms-seed rooms -tenant CODE -property CODE [-floors N] [-per-floor N] [-dry-run]
   pms-seed rates -tenant CODE -property CODE [-days N] [-plan CODE] [-dry-run]
   pms-seed pos   -tenant CODE -property CODE [-dry-run]
-  pms-seed inventory -tenant CODE -property CODE [-dry-run]
+  pms-seed inventory -tenant CODE -property CODE [-no-open-count] [-dry-run]
   pms-seed banquet -tenant CODE -property CODE [-dry-run]
   pms-seed assets -tenant CODE -property CODE [-dry-run]
   pms-seed nightaudit -tenant CODE -property CODE [-dry-run]
@@ -132,11 +133,15 @@ func run(args []string) error {
 	days := fs.Int("days", 90, "rates: nights to price from the business date (1 to 365)")
 	plan := fs.String("plan", "RO", "rates: the rate plan code")
 	dryRun := fs.Bool("dry-run", false, "show what would be created, create nothing")
+	noOpenCount := fs.Bool("no-open-count", false, "inventory: make no open count of the bar (an open count holds the night audit)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if *tenantCode == "" || *propertyCode == "" {
 		return fmt.Errorf("-tenant and -property are required\n%s", usage)
+	}
+	if *noOpenCount && cmd != "inventory" {
+		return fmt.Errorf("-no-open-count is a flag of pms-seed inventory")
 	}
 	if cmd == "rooms" && (*floors < 1 || *floors > 30 || *perFloor != 10) {
 		return fmt.Errorf("-floors must be 1 to 30 and -per-floor 10")
@@ -154,7 +159,7 @@ func run(args []string) error {
 		return seedPos(e, *dryRun)
 	}
 	if cmd == "inventory" {
-		return seedInventory(e, *dryRun)
+		return seedInventory(e, *dryRun, !*noOpenCount)
 	}
 	if cmd == "banquet" {
 		return seedBanquet(e, *dryRun)

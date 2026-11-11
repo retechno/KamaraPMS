@@ -104,7 +104,8 @@ var invItems = []invItem{
 	{code: "BATERAI", name: "Baterai AA", category: "LAINNYA", unit: "pcs", open: []invOpen{{"UTAMA", "60", "6500"}}},
 }
 
-func seedInventory(e *env, dryRun bool) error {
+// seedInventory makes the demo; openCount leaves the count of the bar open at the end (it holds the night audit until it is approved or cancelled).
+func seedInventory(e *env, dryRun, openCount bool) error {
 	ctx, pid := e.ctx, e.propertyID
 	deptSvc := departments.NewService(e.txm, e.clk, e.aw, e.authz, e.ten)
 	svc := inventory.NewService(e.txm, e.clk, e.aw, e.authz, e.ten, deptSvc)
@@ -323,14 +324,18 @@ func seedInventory(e *env, dryRun bool) error {
 	}
 	if dryRun {
 		fmt.Println("purchasing: a supplier, a request that waits at level 2, and a request that was ordered and received in part (made once)")
-		fmt.Println("movements: a requisition at level 2, a transfer, a use of the housekeeping, a waste, the plan of the amenities and an open count of the bar (made once)")
+		if openCount {
+			fmt.Println("movements: a requisition at level 2, a transfer, a use of the housekeeping, a waste, the plan of the amenities and an open count of the bar (made once; it holds the night audit until it is approved or cancelled)")
+		} else {
+			fmt.Println("movements: a requisition at level 2, a transfer, a use of the housekeeping, a waste and the plan of the amenities (made once; no open count: -no-open-count)")
+		}
 		fmt.Println("recipes: the outlets of the POS demo sell from their warehouses, and Nasi Goreng Kampung (variant Jumbo, add-on Telur ceplok), the iced tea and Kopi Bali get a recipe (made once)")
 		return nil
 	}
 	if err := seedPurchasing(e, svc, deptSvc, unit, item, warehouse, deptID); err != nil {
 		return err
 	}
-	if err := seedMovements(e, svc, deptSvc, unit, item, warehouse, deptID); err != nil {
+	if err := seedMovements(e, svc, deptSvc, unit, item, warehouse, deptID, openCount); err != nil {
 		return err
 	}
 	return seedRecipes(e, svc, unit, item, warehouse)

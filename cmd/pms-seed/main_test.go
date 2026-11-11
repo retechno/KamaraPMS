@@ -294,3 +294,13 @@ func TestInventoryDaysRefusesAnAPIThatIsNotThisMachineAndNeedsAPassword(t *testi
 		t.Fatal("no password")
 	}
 }
+
+// -no-open-count belongs to the demo of the inventory: another command refuses it before it opens the database.
+func TestNoOpenCountIsAFlagOfTheInventoryAlone(t *testing.T) {
+	for _, cmd := range []string{"rooms", "rates", "pos", "banquet", "assets", "nightaudit"} {
+		err := run([]string{cmd, "-tenant", "DEMO", "-property", "BALI", "-no-open-count"})
+		if err == nil || err.Error() != "-no-open-count is a flag of pms-seed inventory" {
+			t.Fatalf("%s: %v", cmd, err)
+		}
+	}
+}
