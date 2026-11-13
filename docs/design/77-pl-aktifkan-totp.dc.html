@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Aktifkan authenticator</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<main style="min-height: 980px; box-sizing: border-box; display: grid; place-items: center; padding: 40px 16px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128">
+  <div style="width: 100%; max-width: 760px; background: #ffffff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 28px; box-sizing: border-box; display: flex; flex-direction: column; gap: 22px">
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 8px; background: #1c2128; color: #3fa98d; display: grid; place-items: center; font-weight: 700">K</span>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <h1 style="margin: 0; font-size: 18px; font-weight: 600">Aktifkan aplikasi authenticator</h1>
+        <span style="font-size: 13px; color: #626b77">Wajib sebelum console bisa dipakai. Hanya diminta sekali per akun.</span>
+      </div>
+      <span style="margin-left: auto; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #ffffff; background: #1c2128; padding: 3px 8px; border-radius: 999px">Platform</span>
+    </div>
+
+    <ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px">
+      <li style="display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid #e3e6ea; border-radius: 10px">
+        <span style="font-size: 13px; font-weight: 600; color: #1f6f5c">Langkah 1</span>
+        <strong style="font-size: 15px">Pindai kode QR</strong>
+        <div role="img" aria-label="Kode QR untuk aplikasi authenticator" style="width: 176px; height: 176px; align-self: center; border-radius: 8px; border: 1px solid #e3e6ea; background-color: #ffffff; background-image: linear-gradient(90deg, #1c2128 50%, transparent 50%), linear-gradient(#1c2128 50%, transparent 50%); background-size: 16px 16px; background-blend-mode: difference; opacity: 0.9"></div>
+        <span style="font-size: 13px; color: #626b77; line-height: 1.5">Google Authenticator, Microsoft Authenticator, 1Password, atau aplikasi TOTP lain.</span>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 13px; font-weight: 500">Tidak bisa memindai? Masukkan kunci ini</span>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <code style="flex: 1; font-family: ui-monospace, monospace; font-size: 13px; letter-spacing: 0.06em; padding: 9px 10px; background: #f6f7f9; border: 1px solid #e3e6ea; border-radius: 8px">JBSW Y3DP EHPK 3PXP</code>
+            <button type="button" style="height: 40px; padding: 0 12px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; font: inherit; font-size: 13px; cursor: pointer; color: #1c2128">Salin</button>
+          </div>
+        </div>
+      </li>
+      <li style="display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid #e3e6ea; border-radius: 10px">
+        <span style="font-size: 13px; font-weight: 600; color: #1f6f5c">Langkah 2</span>
+        <strong style="font-size: 15px">Konfirmasi dengan kode</strong>
+        <label for="s-totp" style="font-size: 14px; font-weight: 500">Kode 6 digit dari aplikasi</label>
+        <input id="s-totp" name="totp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000 000" style="height: 52px; box-sizing: border-box; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 24px; font-weight: 600; letter-spacing: 0.3em; text-align: center; color: #1c2128">
+        <button type="button" style="height: 44px; border: 0; border-radius: 8px; background: #1f6f5c; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer">Aktifkan</button>
+        <span style="font-size: 13px; color: #626b77; line-height: 1.5">Setelah aktif, setiap login meminta password dan kode ini.</span>
+      </li>
+    </ol>
+
+    <section aria-labelledby="rc-title" style="display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid #c98a10; border-radius: 10px; background: #fbf1dd">
+      <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap">
+        <h2 id="rc-title" style="margin: 0; font-size: 15px; font-weight: 600">Kode pemulihan</h2>
+        <span style="font-size: 13px; color: #8a5300">Muncul sekali setelah aktivasi. Simpan di tempat aman.</span>
+      </div>
+      <ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; font-family: ui-monospace, monospace; font-size: 14px">
+        <sc-for list="{{codes}}" as="c" hint-placeholder-count="10">
+          <li style="padding: 8px 10px; background: #ffffff; border: 1px solid #e8d4a8; border-radius: 6px; text-align: center">{{c}}</li>
+        </sc-for>
+      </ul>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #c98a10; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer; color: #1c2128">Unduh .txt</button>
+        <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #c98a10; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer; color: #1c2128">Salin semua</button>
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-left: auto; min-height: 40px">
+          <input type="checkbox" style="width: 18px; height: 18px; accent-color: #1f6f5c">
+          Sudah saya simpan
+        </label>
+        <button type="button" disabled style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #e4e7ec; color: #4b5360; font: inherit; font-size: 14px; font-weight: 600">Masuk ke console</button>
+      </div>
+    </section>
+  </div>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      codes: ['7F3K-Q9WM-2D', 'P4XN-8LRT-6C', 'H2VB-M7QE-9A', 'K8DS-3NWP-4F', 'R6TY-1JCX-8M', 'Z9EH-5UKQ-2B', 'W3LM-7GDV-6N', 'B5QP-4XRA-1H', 'C7NJ-2TFS-9K', 'M1VG-6HZE-3P']
+    };
+  }
+}
+</script>
+</body>
+</html>

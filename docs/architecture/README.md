@@ -12,6 +12,7 @@
 | 17 | [07-milestones.md](07-milestones.md) | MVP milestones M0–M15 |
 | – | [16-bed-variants.md](16-bed-variants.md) | Design (approved, step 1 of 6 built): a bed type as a sellable variant of a room type, with its own stock and a price supplement |
 | – | [26-subscriptions.md](26-subscriptions.md) | SaaS subscriptions: plans, modules per plan, quotas (properties, rooms, users), paid period, grace and read-only state, manual invoices (backend built; screens wait for the UI uplift) |
+| – | [39-platform-console.md](39-platform-console.md) | Design (draft): operator accounts with password + TOTP, the platform console under `/platform` (tenants, plans, subscriptions, invoices, suspend), the hotel's Subscription page and the GRACE / READ_ONLY banner; three PRs |
 | – | [13-feature-map.md](13-feature-map.md) | Trace table: every module and feature, with its migration, package, API area, screens, design and commit |
 
 Status: **approved**. The DDL is in [`/migrations`](../../migrations) (goose, 11 files, 34 tables). `scripts/db-test.sh` checks it with 80 schema tests (`db/tests/schema_test.sql`) plus an up/down/up cycle, and passes on PostgreSQL 16 and 18.

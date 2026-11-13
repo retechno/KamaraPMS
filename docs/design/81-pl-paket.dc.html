@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Paket · Console platform</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<div style="min-height: 940px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128">
+  <header style="background: #1c2128; color: #e6e9ee">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; min-height: 56px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; text-decoration: none; font-weight: 600">
+        <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 7px; background: #3fa98d; color: #0c1512; display: grid; place-items: center; font-weight: 700; font-size: 14px">K</span>
+        KamaraPMS
+        <span style="font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #0c1512; background: #e0a93a; padding: 2px 7px; border-radius: 999px">Platform</span>
+      </a>
+      <nav aria-label="Console platform" style="display: flex; gap: 4px; flex-wrap: wrap">
+        <a href="78-pl-penyewa.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Penyewa</a>
+        <a href="81-pl-paket.dc.html" aria-current="page" style="color: #ffffff; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid #3fa98d; font-size: 14px; font-weight: 600">Paket</a>
+        <a href="83-pl-invoice.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Invoice</a>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px">
+        <span style="color: #b8c0cb">Rina Wijaya · operator</span>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #3a414b; border-radius: 6px; background: transparent; color: #e6e9ee; font: inherit; font-size: 13px; cursor: pointer">Keluar</button>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1200px; margin: 0 auto; padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600">Paket</h1>
+        <p style="margin: 0; font-size: 14px; color: #626b77">Yang dijual ke penyewa: modul, kuota, harga, dan trial. Paket bawaan dipakai oleh setiap penyewa baru.</p>
+      </div>
+      <a href="82-pl-form-paket.dc.html" style="margin-left: auto; display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 8px; background: #1f6f5c; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600">+ Paket baru</a>
+    </div>
+
+    <ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px">
+      <sc-for list="{{plans}}" as="p" hint-placeholder-count="5">
+        <li style="background: #ffffff; border: 1px solid {{p.border}}; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; opacity: {{p.opacity}}">
+          <div style="display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap">
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-family: ui-monospace, monospace; font-size: 12px; color: #626b77">{{p.code}}</span>
+              <h2 style="margin: 0; font-size: 18px; font-weight: 600">{{p.name}}</h2>
+            </div>
+            <div style="margin-left: auto; display: flex; gap: 6px">
+              <sc-if value="{{p.isDefault}}" hint-placeholder-val="{{ false }}">
+                <span style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: #1f6f5c; color: #ffffff">Bawaan</span>
+              </sc-if>
+              <sc-if value="{{p.inactive}}" hint-placeholder-val="{{ false }}">
+                <span style="font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid #9aa3ae; color: #626b77">Tidak dijual</span>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 6px">
+            <span style="font-size: 22px; font-weight: 700">{{p.price}}</span>
+            <span style="font-size: 13px; color: #626b77">{{p.period}}</span>
+          </div>
+          <dl style="margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 13px">
+            <div style="padding: 8px 10px; background: #f6f7f9; border-radius: 8px"><dt style="color: #626b77">Properti</dt><dd style="margin: 2px 0 0; font-weight: 600">{{p.props}}</dd></div>
+            <div style="padding: 8px 10px; background: #f6f7f9; border-radius: 8px"><dt style="color: #626b77">Kamar</dt><dd style="margin: 2px 0 0; font-weight: 600">{{p.rooms}}</dd></div>
+            <div style="padding: 8px 10px; background: #f6f7f9; border-radius: 8px"><dt style="color: #626b77">User</dt><dd style="margin: 2px 0 0; font-weight: 600">{{p.users}}</dd></div>
+          </dl>
+          <ul aria-label="Modul" style="margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{p.modules}}" as="m" hint-placeholder-count="3">
+              <li style="font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #e6f0ed; color: #164f42">{{m}}</li>
+            </sc-for>
+          </ul>
+          <div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid #eceef2; padding-top: 12px; font-size: 13px; color: #626b77; flex-wrap: wrap">
+            <span>{{p.trial}}</span>
+            <span aria-hidden="true">·</span>
+            <a href="78-pl-penyewa.dc.html">{{p.tenants}}</a>
+            <a href="82-pl-form-paket.dc.html" style="margin-left: auto; display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid #e3e6ea; border-radius: 6px; text-decoration: none; color: #1c2128">Ubah</a>
+          </div>
+        </li>
+      </sc-for>
+    </ul>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const P = (o) => ({ border: '#e3e6ea', opacity: '1', isDefault: false, inactive: false, ...o });
+    return {
+      plans: [
+        P({ code: 'BASIC', name: 'Basic', price: 'Rp 1.500.000', period: '/ bulan', props: '1', rooms: '30', users: '5', modules: ['Inti', 'Housekeeping'], trial: 'Trial 14 hari', tenants: '3 penyewa', isDefault: true, border: '#1f6f5c' }),
+        P({ code: 'PRO', name: 'Pro', price: 'Rp 7.500.000', period: '/ 3 bulan', props: '3', rooms: '120', users: '30', modules: ['Inti', 'Housekeeping', 'Accounting', 'POS'], trial: 'Tanpa trial', tenants: '2 penyewa' }),
+        P({ code: 'ENTERPRISE', name: 'Enterprise', price: 'Rp 24.000.000', period: '/ 12 bulan', props: 'Tanpa batas', rooms: 'Tanpa batas', users: 'Tanpa batas', modules: ['Inti', 'Housekeeping', 'Accounting', 'POS', 'Inventory & aset', 'Banquet'], trial: 'Tanpa trial', tenants: '1 penyewa' }),
+        P({ code: 'TRIAL', name: 'Trial (semua modul)', price: 'Rp 0', period: '/ bulan', props: 'Tanpa batas', rooms: 'Tanpa batas', users: 'Tanpa batas', modules: ['Semua modul'], trial: 'Trial 30 hari', tenants: '0 penyewa' }),
+        P({ code: 'LEGACY', name: 'Legacy (semua modul, tanpa batas)', price: 'Rp 0', period: '/ bulan', props: 'Tanpa batas', rooms: 'Tanpa batas', users: 'Tanpa batas', modules: ['Semua modul'], trial: 'Penyewa sebelum langganan', tenants: '1 penyewa', inactive: true, opacity: '0.85' })
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Langganan · KamaraPMS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<div style="min-height: 1240px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128; display: flex; flex-wrap: wrap; align-items: stretch">
+  <aside style="flex: 1 1 220px; max-width: 260px; background: #ffffff; border-right: 1px solid #e3e6ea; padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px; font-weight: 600">
+      <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 7px; background: #1f6f5c; color: #ffffff; display: grid; place-items: center; font-weight: 700; font-size: 14px">K</span>
+      KamaraPMS
+    </div>
+    <nav aria-label="Menu utama" style="display: flex; flex-direction: column; gap: 2px; font-size: 14px">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="6">
+        <a href="#" style="display: flex; align-items: center; min-height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; color: #1c2128">{{n}}</a>
+      </sc-for>
+      <p style="margin: 12px 0 4px; padding: 0 10px; font-size: 12px; font-weight: 600; color: #626b77; text-transform: uppercase; letter-spacing: 0.04em">Setup</p>
+      <sc-for list="{{setup}}" as="s" hint-placeholder-count="5">
+        <a href="#" aria-current="{{s.current}}" style="display: flex; align-items: center; min-height: 36px; padding: 0 10px; border-radius: 8px; text-decoration: none; color: {{s.color}}; background: {{s.bg}}; font-weight: {{s.weight}}">{{s.label}}</a>
+      </sc-for>
+    </nav>
+  </aside>
+
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="min-height: 56px; background: #ffffff; border-bottom: 1px solid #e3e6ea; display: flex; align-items: center; gap: 12px; padding: 0 20px; flex-wrap: wrap; font-size: 14px">
+      <label style="display: flex; align-items: center; gap: 8px">Properti
+        <select style="height: 36px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 8px; background: #ffffff; color: #1c2128"><option>Segara Kuta</option><option>Segara Ubud</option><option>Segara Lovina</option></select>
+      </label>
+      <span style="color: #626b77">Tanggal bisnis <strong style="color: #1c2128">14 Nov 2026</strong></span>
+      <span style="margin-left: auto; color: #626b77">Made Arsana · Admin</span>
+    </header>
+
+    <main style="padding: 24px; display: flex; flex-direction: column; gap: 18px; max-width: 1040px; box-sizing: border-box; width: 100%">
+      <p role="status" style="margin: 0; padding: 10px 14px; border: 1px solid #c98a10; border-radius: 8px; background: #fbf1dd; font-size: 14px; line-height: 1.5">Langganan berakhir 8 Nov 2026. Masa tenggang tersisa <strong>8 hari</strong> (sampai 22 Nov 2026); setelah itu data hanya bisa dibaca. <a href="#">Lihat langganan</a></p>
+
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600">Langganan</h1>
+        <p style="margin: 0; font-size: 14px; color: #626b77">Paket KamaraPMS perusahaan Anda, pemakaian, dan invoice. Hanya admin penyewa yang bisa membuka halaman ini.</p>
+      </div>
+
+      <div style="display: flex; gap: 18px; flex-wrap: wrap; align-items: stretch">
+        <section aria-labelledby="ts-plan" style="flex: 1 1 340px; background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <h2 id="ts-plan" style="margin: 0; font-size: 16px; font-weight: 600">Paket Pro</h2>
+            <span style="display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #fbf1dd; color: #8a5300">Masa tenggang</span>
+          </div>
+          <dl style="margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; font-size: 14px">
+            <dt style="color: #626b77">Dibayar sampai</dt><dd style="margin: 0; font-weight: 500">8 Nov 2026</dd>
+            <dt style="color: #626b77">Masa tenggang sampai</dt><dd style="margin: 0; font-weight: 500">22 Nov 2026 · sisa 8 hari</dd>
+            <dt style="color: #626b77">Berlangganan sejak</dt><dd style="margin: 0; font-weight: 500">2 Mar 2026</dd>
+          </dl>
+          <p style="margin: 0; padding: 10px 12px; border-radius: 8px; background: #f6f7f9; font-size: 13px; line-height: 1.5">Perpanjangan, ganti paket, dan tambahan kuota diurus oleh tim KamaraPMS: [KONTAK BILLING].</p>
+        </section>
+
+        <section aria-labelledby="ts-usage" style="flex: 1 1 340px; background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+          <h2 id="ts-usage" style="margin: 0; font-size: 16px; font-weight: 600">Pemakaian</h2>
+          <sc-for list="{{usage}}" as="u" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; font-size: 14px"><span>{{u.label}}</span><span style="margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; color: {{u.textColor}}">{{u.used}} / {{u.limit}}</span></div>
+              <div role="meter" aria-label="{{u.label}}" aria-valuemin="0" aria-valuemax="{{u.limit}}" aria-valuenow="{{u.used}}" style="height: 8px; border-radius: 4px; background: #eceef2; overflow: hidden"><div style="height: 8px; width: {{u.pct}}; background: {{u.barColor}}; border-radius: 4px"></div></div>
+              <sc-if value="{{u.note}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: {{u.textColor}}">{{u.note}}</span></sc-if>
+            </div>
+          </sc-for>
+        </section>
+      </div>
+
+      <section aria-labelledby="ts-mod" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 id="ts-mod" style="margin: 0; font-size: 16px; font-weight: 600">Modul</h2>
+        <ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px">
+          <sc-for list="{{modules}}" as="m" hint-placeholder-count="6">
+            <li style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid {{m.border}}; border-radius: 8px; font-size: 14px; color: {{m.color}}; background: {{m.bg}}">
+              <span aria-hidden="true" style="font-weight: 700">{{m.mark}}</span>{{m.name}}<span style="margin-left: auto; font-size: 12px">{{m.state}}</span>
+            </li>
+          </sc-for>
+        </ul>
+      </section>
+
+      <section aria-labelledby="ts-inv" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; overflow: hidden">
+        <h2 id="ts-inv" style="margin: 0; padding: 16px 20px 10px; font-size: 16px; font-weight: 600">Invoice</h2>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px">
+            <thead>
+              <tr style="text-align: left; color: #626b77; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em">
+                <th scope="col" style="padding: 8px 20px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Nomor</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Periode</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #e3e6ea; text-align: right">Jumlah</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Status</th>
+                <th scope="col" style="padding: 8px 20px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Jatuh tempo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{invoices}}" as="i" hint-placeholder-count="3">
+                <tr>
+                  <td style="padding: 11px 20px; border-bottom: 1px solid #eceef2; font-family: ui-monospace, monospace; font-size: 13px">{{i.number}}</td>
+                  <td style="padding: 11px 10px; border-bottom: 1px solid #eceef2">{{i.period}}</td>
+                  <td style="padding: 11px 10px; border-bottom: 1px solid #eceef2; text-align: right; font-variant-numeric: tabular-nums">{{i.amount}}</td>
+                  <td style="padding: 11px 10px; border-bottom: 1px solid #eceef2"><span style="{{i.badge}}">{{i.status}}</span></td>
+                  <td style="padding: 11px 20px; border-bottom: 1px solid #eceef2">{{i.due}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1240}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const u = (label, used, limit, note) => {
+      const pct = Math.min(100, Math.round((used / limit) * 100));
+      return { label, used, limit, note, pct: pct + '%', barColor: pct >= 100 ? '#b4332c' : pct >= 85 ? '#c98a10' : '#1f6f5c', textColor: pct >= 100 ? '#b4332c' : pct >= 85 ? '#8a5300' : '#1c2128' };
+    };
+    const S = (label, current) => ({ label, current: current ? 'page' : 'false', color: current ? '#1f6f5c' : '#1c2128', bg: current ? '#e6f0ed' : 'transparent', weight: current ? '600' : '400' });
+    const on = { mark: '✓', state: 'aktif', color: '#1b7a4b', border: '#b9dcc8', bg: '#f1f8f4' };
+    const off = { mark: '–', state: 'tidak termasuk', color: '#626b77', border: '#e3e6ea', bg: '#f6f7f9' };
+    const badge = {
+      overdue: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#f8eceb;color:#b4332c',
+      paid: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#e6f4ec;color:#1b7a4b'
+    };
+    return {
+      nav: ['Beranda', 'Front office', 'Reservasi', 'Housekeeping', 'Billing', 'Accounting', 'POS'],
+      setup: [S('Properti'), S('User'), S('Role'), S('Sistem'), S('Langganan', true), S('Tipe kamar')],
+      usage: [
+        u('Properti aktif', 3, 3, 'Penuh: properti baru tidak bisa ditambahkan.'),
+        u('Kamar aktif', 140, 150, 'Hampir penuh: sisa 10 kamar.'),
+        u('User aktif', 25, 30, '')
+      ],
+      modules: [
+        { ...on, name: 'Inti (front office)', state: 'selalu' },
+        { ...on, name: 'Housekeeping' },
+        { ...on, name: 'Accounting' },
+        { ...on, name: 'POS' },
+        { ...off, name: 'Inventory & aset' },
+        { ...off, name: 'Banquet' }
+      ],
+      invoices: [
+        { number: 'SUB-2026-00041', period: '9 Nov 2026 – 8 Feb 2027', amount: 'Rp 7.500.000', status: 'Belum dibayar', badge: badge.overdue, due: '9 Nov 2026' },
+        { number: 'SUB-2026-00027', period: '9 Agu – 8 Nov 2026', amount: 'Rp 7.500.000', status: 'Dibayar', badge: badge.paid, due: '9 Agu 2026' },
+        { number: 'SUB-2026-00019', period: '9 Mei – 8 Agu 2026', amount: 'Rp 7.500.000', status: 'Dibayar', badge: badge.paid, due: '9 Mei 2026' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

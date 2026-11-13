@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Kode authenticator</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<main style="min-height: 800px; box-sizing: border-box; display: grid; place-items: center; padding: 32px 16px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128">
+  <div style="width: 100%; max-width: 400px; background: #ffffff; border: 1px solid #e3e6ea; border-radius: 12px; padding: 28px 28px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 8px; background: #1c2128; color: #3fa98d; display: grid; place-items: center; font-weight: 700">K</span>
+      <h1 style="margin: 0; font-size: 18px; font-weight: 600">Kode authenticator</h1>
+      <span style="margin-left: auto; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #ffffff; background: #1c2128; padding: 3px 8px; border-radius: 999px">Platform</span>
+    </div>
+    <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #1c2128">Buka aplikasi authenticator di ponsel Anda dan masukkan kode 6 digit untuk <strong>rina@kamarapms.example</strong>.</p>
+
+    <form style="display: flex; flex-direction: column; gap: 14px; margin: 0">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="p-totp" style="font-size: 14px; font-weight: 500">Kode 6 digit</label>
+        <input id="p-totp" name="totp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" value="482 913" style="height: 52px; box-sizing: border-box; padding: 0 14px; border: 1px solid #1f6f5c; outline: 3px solid rgba(31,111,92,0.18); border-radius: 8px; font: inherit; font-size: 24px; font-weight: 600; letter-spacing: 0.3em; text-align: center; color: #1c2128; background: #ffffff">
+        <span style="font-size: 13px; color: #626b77">Kode berganti setiap 30 detik.</span>
+      </div>
+      <button type="submit" style="height: 44px; border: 0; border-radius: 8px; background: #1f6f5c; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer">Masuk</button>
+    </form>
+
+    <details style="border-top: 1px solid #e3e6ea; padding-top: 14px; font-size: 14px">
+      <summary style="cursor: pointer; color: #1f6f5c; font-weight: 500; min-height: 24px">Pakai kode pemulihan</summary>
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px">
+        <label for="p-recovery" style="font-size: 14px; font-weight: 500">Kode pemulihan</label>
+        <input id="p-recovery" name="recovery_code" autocomplete="off" placeholder="XXXX-XXXX-XX" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; font-family: ui-monospace, monospace">
+        <span style="font-size: 13px; color: #626b77">Setiap kode hanya berlaku sekali.</span>
+      </div>
+    </details>
+
+    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #626b77">
+      <a href="75-pl-masuk.dc.html">Kembali</a>
+      <span>Sisa percobaan: 4</span>
+    </div>
+  </div>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
