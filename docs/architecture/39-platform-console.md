@@ -1,10 +1,9 @@
 # 39. Platform console: operator accounts with TOTP, tenant and plan management, the tenant's Subscription page and banner
 
-Status: **DRAFT, waiting for the owner's approval.** Three decisions were already made by the owner on 2026-11-14: the console lives under
-`/platform` in the same web app (not a second app), an operator signs in with **password + TOTP, mandatory**, and this work also delivers the
-hotel-side Subscription page and the GRACE / READ_ONLY banner (step 2 of `26-subscriptions.md` §9). The questions of §15 still need an answer;
-each carries a recommendation, and the text below is written as if the recommendation is taken. **Nothing is built; this document has no code
-and no migration.**
+Status: **APPROVED by the owner (2026-11-14).** The owner decided that the console lives under `/platform` in the same web app (not a second
+app), that an operator signs in with **password + TOTP, mandatory**, and that this work also delivers the hotel-side Subscription page and the
+GRACE / READ_ONLY banner (step 2 of `26-subscriptions.md` §9). The questions Q1 to Q6 (§15) were answered **as recommended** on the same day; the
+text below already follows those answers. **Nothing is built; this document has no code and no migration.**
 
 UI design (approved together with this document): the canvas "KamaraPMS Platform Console" (11 screens, P1 to P9 and T1, T2), linked in the PR
 that adds this file. The `.dc.html` source of every screen is in `docs/design/` (files 75 to 85, listed in its README) so the copy, the layout and
@@ -401,7 +400,7 @@ web tests, type-check, build) and updates `docs/architecture/README.md` and §16
 
 ## 15. Questions for the owner
 
-| # | Question | Recommendation |
+| # | Question | Answer of the owner (2026-11-14): the recommendation |
 |---|---|---|
 | Q1 | One operator role, or also a read-only role (e.g. for support staff who may look but not change)? | One role in v1; a `role` column can come later without breaking anything. |
 | Q2 | Refresh lifetime of an operator: 12 h absolute (TOTP every working day) or longer? | 12 h. |
