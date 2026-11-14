@@ -71,6 +71,7 @@ const columns = computed<Column<SubscriptionInvoice>[]>(() => [
   <ErrorNotice v-else-if="!s" :error="subscription.error" inline />
 
   <div v-else class="grid grid-cols-1 gap-4">
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
     <Card aria-labelledby="sub-plan-title" data-testid="subscription-plan">
       <CardHeader class="flex-row items-center justify-between gap-3">
         <CardTitle id="sub-plan-title">{{ t('subscription.plan', { name: s.plan_name }) }}</CardTitle>
@@ -95,16 +96,17 @@ const columns = computed<Column<SubscriptionInvoice>[]>(() => [
             <dd class="m-0 font-medium">{{ formatDate(s.started_on) }}</dd>
           </div>
         </dl>
-        <p v-if="subscription.billingContact" class="m-0 mt-4 text-sm" data-testid="billing-contact">{{ t('subscription.billingContact', { contact: subscription.billingContact }) }}</p>
+        <p v-if="subscription.billingContact" class="m-0 mt-4 rounded-md bg-muted p-3 text-sm" data-testid="billing-contact">{{ t('subscription.billingContact', { contact: subscription.billingContact }) }}</p>
       </CardContent>
     </Card>
 
     <Card aria-labelledby="sub-usage-title" data-testid="subscription-usage">
       <CardHeader><CardTitle id="sub-usage-title">{{ t('subscription.usage') }}</CardTitle></CardHeader>
-      <CardContent class="grid gap-4 sm:grid-cols-3">
+      <CardContent class="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
         <QuotaMeter v-for="m in meters" :key="m.what" :what="m.what" :label="t(`subscription.resource.${m.what}` as never)" :used="m.used" :limit="m.limit" />
       </CardContent>
     </Card>
+    </div>
 
     <Card aria-labelledby="sub-modules-title" data-testid="subscription-modules">
       <CardHeader><CardTitle id="sub-modules-title">{{ t('subscription.modules') }}</CardTitle></CardHeader>
@@ -127,6 +129,7 @@ const columns = computed<Column<SubscriptionInvoice>[]>(() => [
       <CardContent>
         <ErrorNotice v-if="invoiceError" :error="invoiceError" inline />
         <DataTable v-else :columns="columns" :rows="invoices ?? []" row-key="id" :loading="invoices === null" :caption="t('subscription.invoices')" :empty-title="t('subscription.noInvoices')">
+          <template #cell-number="{ row }"><span class="whitespace-nowrap">{{ row.number }}</span></template>
           <template #cell-period="{ row }">{{ formatDate(row.period_start) }} – {{ formatDate(row.period_end) }}</template>
           <template #cell-amount="{ row }">{{ row.currency_code }} {{ formatMoney(row.amount) }}</template>
           <template #cell-status="{ row }">
