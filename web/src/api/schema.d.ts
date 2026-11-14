@@ -18707,6 +18707,10 @@ export interface components {
                 rooms: number;
                 users: number;
             };
+            /** @description True while the status is TRIAL, the access is FULL and at most 7 days of writing are left (docs/architecture/39-platform-console.md §8). */
+            is_trial_ending: boolean;
+            /** @description Free text of PMS_BILLING_CONTACT: who to ask about renewing; null when the server has none. */
+            billing_contact: string | null;
         };
         SubscriptionInvoice: {
             /** Format: int64 */
@@ -18729,6 +18733,8 @@ export interface components {
             payment_reference?: string;
             void_reason?: string;
             notes?: string;
+            /** @description True for an ISSUED invoice whose due day is before today in the tenant's time zone. */
+            is_overdue: boolean;
         };
         EmailEntry: {
             /** Format: int64 */

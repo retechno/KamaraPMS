@@ -65,6 +65,9 @@ func TestSubscriptionAPI(t *testing.T) {
 		s.body["paid_through"] != "2026-10-29" || s.body["grace_ends_on"] != "2026-11-12" || s.body["days_left"] != float64(30) {
 		t.Fatalf("trial summary: %d %v", s.status, s.body)
 	}
+	if s.body["is_trial_ending"] != false || s.body["billing_contact"] != nil {
+		t.Fatalf("a trial of 30 days is not ending and no billing contact is set: %v", s.body)
+	}
 	if u := s.body["usage"].(map[string]any); u["properties"] != float64(1) || u["users"] != float64(1) || u["rooms"] != float64(0) {
 		t.Fatalf("usage: %v", u)
 	}

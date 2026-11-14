@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { api } from '@/api/client'
 import type { components } from '@/api/schema'
 import { refreshSession, setAccessToken } from '@/api/session'
+import { useSubscriptionStore } from '@/stores/subscription'
 
 export type Me = components['schemas']['Me']
 
@@ -72,6 +73,7 @@ export const useAuthStore = defineStore('auth', () => {
     setAccessToken(null)
     me.value = null
     status.value = 'anonymous'
+    useSubscriptionStore().reset() // the next person to sign in on this browser must not see the banner of the last tenant
   }
 
   async function loadMe(): Promise<void> {

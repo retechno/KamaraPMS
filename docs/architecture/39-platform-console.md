@@ -411,7 +411,14 @@ web tests, type-check, build) and updates `docs/architecture/README.md` and §16
 
 ## 16. What is built
 
-Nothing yet. Each PR adds its line here: what was built, the migration, deviations from this document and why.
+Each PR adds its line here: what was built, the migration, deviations from this document and why.
+
+- **PR 1 (hotel side), built.** No migration. `GET /api/v1/subscription` has `billing_contact` (`PMS_BILLING_CONTACT`, at most 200 characters, checked at start-up) and `is_trial_ending`
+  (TRIAL, access FULL, 7 days or fewer left). The store keeps the whole summary and reloads it (debounced 1 s) when a response's `X-Subscription-Access` differs or a write is refused with
+  `SUBSCRIPTION_READ_ONLY` (`api/subscriptionEvents.ts`, because the client cannot import a store); `auth.signedOut()` resets it (it did not before). `SubscriptionBanner` (§10.3), `.alert.info`,
+  Setup → Subscription (`SubscriptionView`, admin only) with `AccessBadge` and `QuotaMeter` in `components/app/`, the `PLAN_LIMIT_REACHED` text, en and id.
+  Deviation: the invoice list of the tenant (and `TenantInvoices`) now carries `is_overdue` (ISSUED and due before today in the tenant's time zone), so "Unpaid" is decided by the server and not
+  counted in the browser. The dismissal key of the trial warning holds the days left instead of a date, so it comes back the next day without the browser reading the server clock.
 
 ## 17. Not in this work
 

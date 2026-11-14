@@ -123,3 +123,25 @@ func TestModuleOf(t *testing.T) {
 		}
 	}
 }
+
+func TestTrialEnding(t *testing.T) {
+	n := func(v int) *int { return &v }
+	for name, c := range map[string]struct {
+		status string
+		access AccessState
+		left   *int
+		want   bool
+	}{
+		"trial, 7 days left":      {StatusTrial, AccessFull, n(7), true},
+		"trial, last day":         {StatusTrial, AccessFull, n(1), true},
+		"trial, 8 days left":      {StatusTrial, AccessFull, n(8), false},
+		"trial without an end":    {StatusTrial, AccessFull, nil, false},
+		"trial in its grace":      {StatusTrial, AccessGrace, n(3), false},
+		"paid, 5 days left":       {StatusActive, AccessFull, n(5), false},
+		"trial already read only": {StatusTrial, AccessReadOnly, n(0), false},
+	} {
+		if got := trialEnding(c.status, c.access, c.left); got != c.want {
+			t.Errorf("%s: %v, want %v", name, got, c.want)
+		}
+	}
+}

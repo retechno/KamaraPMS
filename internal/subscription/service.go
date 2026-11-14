@@ -102,10 +102,12 @@ func (s *Service) summary(ctx context.Context, tenantID int64) (Summary, error) 
 		return Summary{}, err
 	}
 	today := s.today(row.Timezone)
+	access, left := sub.Access(today), daysLeft(sub, today)
 	return Summary{
-		PlanCode: plan.Code, PlanName: plan.Name, Modules: append([]Module{Core}, plan.Modules...),
-		Status: sub.Status, Access: sub.Access(today), StartedOn: sub.StartedOn, PaidThrough: sub.PaidThrough,
-		GraceEndsOn: sub.GraceEndsOn(), DaysLeft: daysLeft(sub, today),
+		IsTrialEnding: trialEnding(sub.Status, access, left),
+		PlanCode:      plan.Code, PlanName: plan.Name, Modules: append([]Module{Core}, plan.Modules...),
+		Status: sub.Status, Access: access, StartedOn: sub.StartedOn, PaidThrough: sub.PaidThrough,
+		GraceEndsOn: sub.GraceEndsOn(), DaysLeft: left,
 		Limits: sub.Overrides.Over(plan.Limits),
 		Usage:  Usage{Properties: int(u.Properties), Rooms: int(u.Rooms), Users: int(u.Users)},
 	}, nil
@@ -125,6 +127,11 @@ func (s *Service) invoices(ctx context.Context, tenantID int64) ([]Invoice, erro
 	if err != nil {
 		return nil, err
 	}
+	sub, err := s.q(ctx).GetSubscription(ctx, tenantID)
+	if err != nil {
+		return nil, notFound(err, errNoSubscription())
+	}
+	today := s.today(sub.Timezone)
 	out := make([]Invoice, 0, len(rows))
 	for _, r := range rows {
 		inv := toInvoice(subscriptiondb.SubscriptionInvoice{
@@ -133,6 +140,7 @@ func (s *Service) invoices(ctx context.Context, tenantID int64) ([]Invoice, erro
 			PaidAt: r.PaidAt, PaymentReference: r.PaymentReference, VoidedAt: r.VoidedAt, VoidReason: r.VoidReason, Notes: r.Notes,
 		})
 		inv.PlanCode = r.PlanCode
+		inv.IsOverdue = inv.Status == "ISSUED" && inv.DueOn.Before(today)
 		out = append(out, inv)
 	}
 	return out, nil
