@@ -135,3 +135,27 @@ func TestSearchAccess(t *testing.T) {
 	_, err = f.reader.Search(roomstest.Admin(other.ID), auditlog.Filter{PropertyID: &pid}, 0, 10)
 	wantCode(t, err, "PROPERTY_NOT_FOUND")
 }
+
+// The hotel sees who made a change by kind: a change of an operator of the platform is "operator" and carries no user and no name.
+func TestSearchTellsTheKindOfActor(t *testing.T) {
+	f := setup(t)
+	var uid, opid int64
+	must(t, f.Pool.QueryRow(context.Background(), `SELECT id FROM users WHERE tenant_id = $1 LIMIT 1`, f.tenantID).Scan(&uid))
+	must(t, f.Pool.QueryRow(context.Background(), `INSERT INTO operator_accounts (email, full_name, password_hash) VALUES ('kind@example.test', 'Secret Name', 'x') RETURNING id`).Scan(&opid))
+	must(t, f.Exec(t, `INSERT INTO audit_logs (tenant_id, property_id, user_id, operator_id, action, entity_type, entity_id) VALUES
+		($1, $2, $3, NULL, 'k.user', 'k', 1), ($1, $2, NULL, $4, 'k.operator', 'k', 2), ($1, $2, NULL, NULL, 'k.system', 'k', 3)`, f.tenantID, f.propID, uid, opid))
+	pid := f.propID
+	got, err := f.reader.Search(f.admin, auditlog.Filter{PropertyID: &pid, EntityType: "k", Oldest: true}, 0, 10)
+	must(t, err)
+	if len(got) != 3 {
+		t.Fatalf("entries: %d", len(got))
+	}
+	for i, want := range []string{auditlog.ActorUser, auditlog.ActorOperator, auditlog.ActorSystem} {
+		if got[i].ActorKind != want {
+			t.Errorf("entry %d: %q, want %q", i, got[i].ActorKind, want)
+		}
+	}
+	if got[1].User != nil {
+		t.Errorf("an operator's entry names a user: %+v", got[1].User)
+	}
+}

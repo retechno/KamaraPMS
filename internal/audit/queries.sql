@@ -15,7 +15,7 @@ LIMIT @row_limit;
 
 -- The audit trail of a property, newest first, with the user's name. Keyset paging on the id (ids grow with time).
 -- name: SearchAuditLogs :many
-SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id, a.entity_label,
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.operator_id, a.action, a.entity_type, a.entity_id, a.entity_label,
        a.old_data, a.new_data, a.request_id, a.ip_address
 FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
 WHERE a.tenant_id = @tenant_id
@@ -36,7 +36,7 @@ LIMIT @row_limit;
 
 -- The same, oldest first: the order is by id (ids grow with time), so the keyset is the id and the position is the id after which the page goes on.
 -- name: SearchAuditLogsAsc :many
-SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id, a.entity_label,
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.operator_id, a.action, a.entity_type, a.entity_id, a.entity_label,
        a.old_data, a.new_data, a.request_id, a.ip_address
 FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
 WHERE a.tenant_id = @tenant_id

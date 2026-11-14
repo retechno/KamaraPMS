@@ -134,3 +134,98 @@ VALUES (sqlc.narg(operator_id), @action, @entity_type, @entity_id, sqlc.narg(ent
 -- Every open challenge of an operator ends (the account was disabled, or its password or its authenticator was reset).
 -- name: KillChallengesOf :exec
 UPDATE operator_login_challenges SET used_at = @at::timestamptz, pending_secret_enc = NULL WHERE operator_id = @operator_id AND used_at IS NULL;
+
+-- The console's reads of every tenant (docs/architecture/39-platform-console.md 7). They have no tenant filter by design: the operator belongs to the platform, not to a hotel.
+-- The only queries outside migrations and pms-admin that read across tenants.
+
+-- name: ConsoleListTenants :many
+-- One row per tenant with its plan, its usage and its open invoices. The access state and the days left are computed in Go with the tenant's time zone; only "overdue" is decided here, with the instant that is passed in.
+SELECT t.id, t.code, t.name, t.timezone, t.status AS tenant_status, t.status_reason, t.created_at,
+       s.status AS sub_status, s.started_on, s.paid_through, s.grace_days,
+       s.max_properties_override, s.max_rooms_override, s.max_users_override,
+       p.code AS plan_code, p.name AS plan_name, p.max_properties AS plan_max_properties, p.max_rooms AS plan_max_rooms, p.max_users AS plan_max_users,
+       (SELECT count(*) FROM properties pr WHERE pr.tenant_id = t.id AND pr.status = 'ACTIVE')::int AS properties,
+       (SELECT count(*) FROM rooms r WHERE r.tenant_id = t.id AND r.is_active)::int                 AS rooms,
+       (SELECT count(*) FROM users u WHERE u.tenant_id = t.id AND u.is_active)::int                 AS users,
+       COALESCE(oi.cnt, 0)::int AS open_invoice_count, COALESCE(oi.overdue, 0)::int AS overdue_invoice_count
+FROM tenants t
+JOIN tenant_subscriptions s ON s.tenant_id = t.id
+JOIN subscription_plans p ON p.id = s.plan_id
+LEFT JOIN LATERAL (
+    SELECT count(*) AS cnt, count(*) FILTER (WHERE i.due_on < timezone(t.timezone, @now::timestamptz)::date) AS overdue
+    FROM subscription_invoices i WHERE i.tenant_id = t.id AND i.status = 'ISSUED'
+) oi ON true
+WHERE (@q::text = '' OR t.code ILIKE '%' || @q::text || '%' OR t.name ILIKE '%' || @q::text || '%')
+  AND (@plan::text = '' OR p.code = @plan::text)
+ORDER BY t.name, t.code;
+
+-- name: ConsoleOpenInvoiceTotals :many
+-- What is owed, per currency (a plan may be billed in another currency than another plan).
+SELECT i.currency_code, count(*)::int AS invoice_count, COALESCE(sum(i.amount), 0)::numeric(18,3) AS total
+FROM subscription_invoices i WHERE i.status = 'ISSUED'
+GROUP BY i.currency_code ORDER BY i.currency_code;
+
+-- name: ConsoleGetTenant :one
+SELECT id, code, name, status, status_reason, status_changed_at, timezone, created_at FROM tenants WHERE code = @code::text;
+
+-- name: ConsoleTenantAdmins :many
+SELECT full_name, email, is_active, last_login_at FROM users WHERE tenant_id = @tenant_id AND is_tenant_admin ORDER BY full_name, id;
+
+-- name: ConsoleTenantActivity :many
+SELECT a.id, a.action, a.entity_type, a.entity_id, a.created_at, a.user_id, u.full_name AS user_name, a.operator_id, o.full_name AS operator_name
+FROM audit_logs a
+LEFT JOIN users u ON u.tenant_id = a.tenant_id AND u.id = a.user_id
+LEFT JOIN operator_accounts o ON o.id = a.operator_id
+WHERE a.tenant_id = @tenant_id
+  AND (a.action LIKE 'subscription.%' OR a.action LIKE 'subscription\_invoice.%' OR a.action LIKE 'tenant.%')
+ORDER BY a.id DESC
+LIMIT @lim;
+
+-- name: ConsolePlanTenantCounts :many
+SELECT plan_id, count(*)::int AS tenants FROM tenant_subscriptions GROUP BY plan_id;
+
+-- name: ConsolePlanTenants :many
+-- The tenants on a plan, with the overrides and the usage that decide whether a lower limit of the plan puts them over it.
+SELECT t.code, s.max_properties_override, s.max_rooms_override, s.max_users_override,
+       (SELECT count(*) FROM properties pr WHERE pr.tenant_id = t.id AND pr.status = 'ACTIVE')::int AS properties,
+       (SELECT count(*) FROM rooms r WHERE r.tenant_id = t.id AND r.is_active)::int                 AS rooms,
+       (SELECT count(*) FROM users u WHERE u.tenant_id = t.id AND u.is_active)::int                 AS users
+FROM tenant_subscriptions s JOIN tenants t ON t.id = s.tenant_id
+WHERE s.plan_id = @plan_id
+ORDER BY t.code;
+
+-- name: ConsoleListInvoices :many
+-- Every tenant's invoices. overdue_days is today in the tenant's time zone minus the due date, for an ISSUED invoice past its due date, else 0.
+SELECT i.number, i.plan_id, p.code AS plan_code, i.period_start, i.period_end, i.amount, i.currency_code, i.status, i.issued_at, i.due_on,
+       i.paid_on, i.payment_reference, i.void_reason, i.notes, t.code AS tenant_code, t.name AS tenant_name,
+       CASE WHEN i.status = 'ISSUED' THEN GREATEST((timezone(t.timezone, @now::timestamptz)::date - i.due_on), 0) ELSE 0 END::int AS overdue_days
+FROM subscription_invoices i
+JOIN tenants t ON t.id = i.tenant_id
+JOIN subscription_plans p ON p.id = i.plan_id
+WHERE (@tenant::text = '' OR t.code = @tenant::text)
+  AND CASE @status::text
+        WHEN 'open'    THEN i.status = 'ISSUED'
+        WHEN 'overdue' THEN i.status = 'ISSUED' AND i.due_on < timezone(t.timezone, @now::timestamptz)::date
+        WHEN 'paid'    THEN i.status = 'PAID'
+        WHEN 'void'    THEN i.status = 'VOID'
+        ELSE true END
+ORDER BY i.issued_at DESC, i.id DESC
+LIMIT @lim;
+
+-- name: ConsoleLockTenantSubscription :one
+-- The row the quota and every change of the subscription lock (db.LevelSubscription).
+SELECT id FROM tenant_subscriptions WHERE tenant_id = @tenant_id FOR UPDATE;
+
+-- name: ConsoleSetTenantStatus :one
+UPDATE tenants SET status = @status::text, status_reason = NULLIF(@reason::text, ''), status_changed_at = @at::timestamptz
+WHERE id = @id
+RETURNING id, code, status;
+
+-- name: ConsoleRevokeTenantSessions :execrows
+-- A suspended hotel is signed out at once: every live session of its users ends with the reason ACCOUNT_DISABLED.
+UPDATE user_sessions SET revoked_at = @at::timestamptz, revoked_reason = 'ACCOUNT_DISABLED'
+WHERE revoked_at IS NULL AND user_id IN (SELECT id FROM users WHERE tenant_id = @tenant_id);
+
+-- name: ConsoleNextInvoiceNumber :one
+-- The number the next invoice of the year would get, read without taking it (a hint for the preview).
+SELECT (COALESCE((SELECT last_value FROM subscription_invoice_sequences WHERE year = @year::smallint), 0) + 1)::int;

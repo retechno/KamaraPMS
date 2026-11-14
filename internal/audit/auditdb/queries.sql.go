@@ -116,7 +116,7 @@ func (q *Queries) ListAuditLogsForEntity(ctx context.Context, arg ListAuditLogsF
 }
 
 const searchAuditLogs = `-- name: SearchAuditLogs :many
-SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id, a.entity_label,
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.operator_id, a.action, a.entity_type, a.entity_id, a.entity_label,
        a.old_data, a.new_data, a.request_id, a.ip_address
 FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
 WHERE a.tenant_id = $1
@@ -157,6 +157,7 @@ type SearchAuditLogsRow struct {
 	BusinessDate *civil.Date
 	UserID       *int64
 	UserName     *string
+	OperatorID   *int64
 	Action       string
 	EntityType   string
 	EntityID     int64
@@ -196,6 +197,7 @@ func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams
 			&i.BusinessDate,
 			&i.UserID,
 			&i.UserName,
+			&i.OperatorID,
 			&i.Action,
 			&i.EntityType,
 			&i.EntityID,
@@ -216,7 +218,7 @@ func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams
 }
 
 const searchAuditLogsAsc = `-- name: SearchAuditLogsAsc :many
-SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.action, a.entity_type, a.entity_id, a.entity_label,
+SELECT a.id, a.created_at, a.business_date, a.user_id, u.full_name AS user_name, a.operator_id, a.action, a.entity_type, a.entity_id, a.entity_label,
        a.old_data, a.new_data, a.request_id, a.ip_address
 FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
 WHERE a.tenant_id = $1
@@ -257,6 +259,7 @@ type SearchAuditLogsAscRow struct {
 	BusinessDate *civil.Date
 	UserID       *int64
 	UserName     *string
+	OperatorID   *int64
 	Action       string
 	EntityType   string
 	EntityID     int64
@@ -296,6 +299,7 @@ func (q *Queries) SearchAuditLogsAsc(ctx context.Context, arg SearchAuditLogsAsc
 			&i.BusinessDate,
 			&i.UserID,
 			&i.UserName,
+			&i.OperatorID,
 			&i.Action,
 			&i.EntityType,
 			&i.EntityID,

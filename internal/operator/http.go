@@ -23,12 +23,13 @@ const Prefix = "/api/v1/platform/"
 // Handler exposes the console API: sign-in, enrolment and sessions (doc 39 section 5), and the tenants, plans and invoices (section 7).
 type Handler struct {
 	svc          *Service
+	console      *Console
 	cookieSecure bool
 }
 
 // NewHandler returns the handler.
-func NewHandler(svc *Service, cookieSecure bool) *Handler {
-	return &Handler{svc: svc, cookieSecure: cookieSecure}
+func NewHandler(svc *Service, console *Console, cookieSecure bool) *Handler {
+	return &Handler{svc: svc, console: console, cookieSecure: cookieSecure}
 }
 
 // Handler is the whole console under /api/v1/platform/: the six public routes of sign-in and, behind the operator's authentication, everything else. It is mounted on the outer mux so none of the hotel's
@@ -93,6 +94,9 @@ func (h *Handler) registerPublic(mux *http.ServeMux) {
 // registerProtected mounts what needs an operator.
 func (h *Handler) registerProtected(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/platform/auth/me", httpx.HandlerFunc(h.me))
+	if h.console != nil {
+		h.console.Register(mux)
+	}
 }
 
 func (h *Handler) setRefreshCookie(w http.ResponseWriter, s Session) {

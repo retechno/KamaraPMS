@@ -273,7 +273,8 @@ func New(d Deps) *App {
 	iamHTTP.RegisterPublic(mux) // login, refresh, logout: no access token required
 	// The platform console: its own authentication (an operator token, never a hotel token), outside the hotel's middleware and the subscription gate.
 	if len(d.Operator.Key) > 0 {
-		mux.Handle(operator.Prefix, operator.NewHandler(operator.NewService(d.TxManager, d.Clock, auditWriter, d.Operator), d.Operator.CookieSecure).Handler())
+		console := operator.NewConsole(d.TxManager, d.Clock, auditWriter, subscriptionSvc, tenancySvc, iamSvc)
+		mux.Handle(operator.Prefix, operator.NewHandler(operator.NewService(d.TxManager, d.Clock, auditWriter, d.Operator), console, d.Operator.CookieSecure).Handler())
 	} else {
 		mux.Handle(operator.Prefix, operator.Disabled())
 	}

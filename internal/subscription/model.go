@@ -335,3 +335,6 @@ func AddMonths(d civil.Date, months int) civil.Date {
 
 // InvoiceNumber formats a subscription invoice number.
 func InvoiceNumber(year, n int) string { return fmt.Sprintf("SUB-%04d-%05d", year, n) }
+
+// DaysLeft is what Summary.DaysLeft says for this subscription on this day: the days of access that remain (nil when there is no end).
+func (s Subscription) DaysLeft(today civil.Date) *int { return daysLeft(s, today) }

@@ -9,6 +9,10 @@ import (
 	"context"
 	"net/netip"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
+	"kamarapms/internal/platform/civil"
 )
 
 const advanceOperatorTotpStep = `-- name: AdvanceOperatorTotpStep :execrows
@@ -37,6 +41,508 @@ UPDATE operator_accounts SET totp_secret_enc = NULL, totp_enrolled_at = NULL, to
 func (q *Queries) ClearOperatorTotp(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, clearOperatorTotp, id)
 	return err
+}
+
+const consoleGetTenant = `-- name: ConsoleGetTenant :one
+SELECT id, code, name, status, status_reason, status_changed_at, timezone, created_at FROM tenants WHERE code = $1::text
+`
+
+type ConsoleGetTenantRow struct {
+	ID              int64
+	Code            string
+	Name            string
+	Status          string
+	StatusReason    *string
+	StatusChangedAt *time.Time
+	Timezone        string
+	CreatedAt       time.Time
+}
+
+func (q *Queries) ConsoleGetTenant(ctx context.Context, code string) (ConsoleGetTenantRow, error) {
+	row := q.db.QueryRow(ctx, consoleGetTenant, code)
+	var i ConsoleGetTenantRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Status,
+		&i.StatusReason,
+		&i.StatusChangedAt,
+		&i.Timezone,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const consoleListInvoices = `-- name: ConsoleListInvoices :many
+SELECT i.number, i.plan_id, p.code AS plan_code, i.period_start, i.period_end, i.amount, i.currency_code, i.status, i.issued_at, i.due_on,
+       i.paid_on, i.payment_reference, i.void_reason, i.notes, t.code AS tenant_code, t.name AS tenant_name,
+       CASE WHEN i.status = 'ISSUED' THEN GREATEST((timezone(t.timezone, $1::timestamptz)::date - i.due_on), 0) ELSE 0 END::int AS overdue_days
+FROM subscription_invoices i
+JOIN tenants t ON t.id = i.tenant_id
+JOIN subscription_plans p ON p.id = i.plan_id
+WHERE ($2::text = '' OR t.code = $2::text)
+  AND CASE $3::text
+        WHEN 'open'    THEN i.status = 'ISSUED'
+        WHEN 'overdue' THEN i.status = 'ISSUED' AND i.due_on < timezone(t.timezone, $1::timestamptz)::date
+        WHEN 'paid'    THEN i.status = 'PAID'
+        WHEN 'void'    THEN i.status = 'VOID'
+        ELSE true END
+ORDER BY i.issued_at DESC, i.id DESC
+LIMIT $4
+`
+
+type ConsoleListInvoicesParams struct {
+	Now    time.Time
+	Tenant string
+	Status string
+	Lim    int32
+}
+
+type ConsoleListInvoicesRow struct {
+	Number           string
+	PlanID           int64
+	PlanCode         string
+	PeriodStart      civil.Date
+	PeriodEnd        civil.Date
+	Amount           decimal.Decimal
+	CurrencyCode     string
+	Status           string
+	IssuedAt         time.Time
+	DueOn            civil.Date
+	PaidOn           *civil.Date
+	PaymentReference *string
+	VoidReason       *string
+	Notes            *string
+	TenantCode       string
+	TenantName       string
+	OverdueDays      int32
+}
+
+// Every tenant's invoices. overdue_days is today in the tenant's time zone minus the due date, for an ISSUED invoice past its due date, else 0.
+func (q *Queries) ConsoleListInvoices(ctx context.Context, arg ConsoleListInvoicesParams) ([]ConsoleListInvoicesRow, error) {
+	rows, err := q.db.Query(ctx, consoleListInvoices,
+		arg.Now,
+		arg.Tenant,
+		arg.Status,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsoleListInvoicesRow{}
+	for rows.Next() {
+		var i ConsoleListInvoicesRow
+		if err := rows.Scan(
+			&i.Number,
+			&i.PlanID,
+			&i.PlanCode,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.Amount,
+			&i.CurrencyCode,
+			&i.Status,
+			&i.IssuedAt,
+			&i.DueOn,
+			&i.PaidOn,
+			&i.PaymentReference,
+			&i.VoidReason,
+			&i.Notes,
+			&i.TenantCode,
+			&i.TenantName,
+			&i.OverdueDays,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const consoleListTenants = `-- name: ConsoleListTenants :many
+
+SELECT t.id, t.code, t.name, t.timezone, t.status AS tenant_status, t.status_reason, t.created_at,
+       s.status AS sub_status, s.started_on, s.paid_through, s.grace_days,
+       s.max_properties_override, s.max_rooms_override, s.max_users_override,
+       p.code AS plan_code, p.name AS plan_name, p.max_properties AS plan_max_properties, p.max_rooms AS plan_max_rooms, p.max_users AS plan_max_users,
+       (SELECT count(*) FROM properties pr WHERE pr.tenant_id = t.id AND pr.status = 'ACTIVE')::int AS properties,
+       (SELECT count(*) FROM rooms r WHERE r.tenant_id = t.id AND r.is_active)::int                 AS rooms,
+       (SELECT count(*) FROM users u WHERE u.tenant_id = t.id AND u.is_active)::int                 AS users,
+       COALESCE(oi.cnt, 0)::int AS open_invoice_count, COALESCE(oi.overdue, 0)::int AS overdue_invoice_count
+FROM tenants t
+JOIN tenant_subscriptions s ON s.tenant_id = t.id
+JOIN subscription_plans p ON p.id = s.plan_id
+LEFT JOIN LATERAL (
+    SELECT count(*) AS cnt, count(*) FILTER (WHERE i.due_on < timezone(t.timezone, $1::timestamptz)::date) AS overdue
+    FROM subscription_invoices i WHERE i.tenant_id = t.id AND i.status = 'ISSUED'
+) oi ON true
+WHERE ($2::text = '' OR t.code ILIKE '%' || $2::text || '%' OR t.name ILIKE '%' || $2::text || '%')
+  AND ($3::text = '' OR p.code = $3::text)
+ORDER BY t.name, t.code
+`
+
+type ConsoleListTenantsParams struct {
+	Now  time.Time
+	Q    string
+	Plan string
+}
+
+type ConsoleListTenantsRow struct {
+	ID                    int64
+	Code                  string
+	Name                  string
+	Timezone              string
+	TenantStatus          string
+	StatusReason          *string
+	CreatedAt             time.Time
+	SubStatus             string
+	StartedOn             civil.Date
+	PaidThrough           *civil.Date
+	GraceDays             int16
+	MaxPropertiesOverride pgtype.Int4
+	MaxRoomsOverride      pgtype.Int4
+	MaxUsersOverride      pgtype.Int4
+	PlanCode              string
+	PlanName              string
+	PlanMaxProperties     pgtype.Int4
+	PlanMaxRooms          pgtype.Int4
+	PlanMaxUsers          pgtype.Int4
+	Properties            int32
+	Rooms                 int32
+	Users                 int32
+	OpenInvoiceCount      int32
+	OverdueInvoiceCount   int32
+}
+
+// The console's reads of every tenant (docs/architecture/39-platform-console.md 7). They have no tenant filter by design: the operator belongs to the platform, not to a hotel.
+// The only queries outside migrations and pms-admin that read across tenants.
+// One row per tenant with its plan, its usage and its open invoices. The access state and the days left are computed in Go with the tenant's time zone; only "overdue" is decided here, with the instant that is passed in.
+func (q *Queries) ConsoleListTenants(ctx context.Context, arg ConsoleListTenantsParams) ([]ConsoleListTenantsRow, error) {
+	rows, err := q.db.Query(ctx, consoleListTenants, arg.Now, arg.Q, arg.Plan)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsoleListTenantsRow{}
+	for rows.Next() {
+		var i ConsoleListTenantsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Timezone,
+			&i.TenantStatus,
+			&i.StatusReason,
+			&i.CreatedAt,
+			&i.SubStatus,
+			&i.StartedOn,
+			&i.PaidThrough,
+			&i.GraceDays,
+			&i.MaxPropertiesOverride,
+			&i.MaxRoomsOverride,
+			&i.MaxUsersOverride,
+			&i.PlanCode,
+			&i.PlanName,
+			&i.PlanMaxProperties,
+			&i.PlanMaxRooms,
+			&i.PlanMaxUsers,
+			&i.Properties,
+			&i.Rooms,
+			&i.Users,
+			&i.OpenInvoiceCount,
+			&i.OverdueInvoiceCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const consoleLockTenantSubscription = `-- name: ConsoleLockTenantSubscription :one
+SELECT id FROM tenant_subscriptions WHERE tenant_id = $1 FOR UPDATE
+`
+
+// The row the quota and every change of the subscription lock (db.LevelSubscription).
+func (q *Queries) ConsoleLockTenantSubscription(ctx context.Context, tenantID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, consoleLockTenantSubscription, tenantID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const consoleNextInvoiceNumber = `-- name: ConsoleNextInvoiceNumber :one
+SELECT (COALESCE((SELECT last_value FROM subscription_invoice_sequences WHERE year = $1::smallint), 0) + 1)::int
+`
+
+// The number the next invoice of the year would get, read without taking it (a hint for the preview).
+func (q *Queries) ConsoleNextInvoiceNumber(ctx context.Context, year int16) (int32, error) {
+	row := q.db.QueryRow(ctx, consoleNextInvoiceNumber, year)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const consoleOpenInvoiceTotals = `-- name: ConsoleOpenInvoiceTotals :many
+SELECT i.currency_code, count(*)::int AS invoice_count, COALESCE(sum(i.amount), 0)::numeric(18,3) AS total
+FROM subscription_invoices i WHERE i.status = 'ISSUED'
+GROUP BY i.currency_code ORDER BY i.currency_code
+`
+
+type ConsoleOpenInvoiceTotalsRow struct {
+	CurrencyCode string
+	InvoiceCount int32
+	Total        decimal.Decimal
+}
+
+// What is owed, per currency (a plan may be billed in another currency than another plan).
+func (q *Queries) ConsoleOpenInvoiceTotals(ctx context.Context) ([]ConsoleOpenInvoiceTotalsRow, error) {
+	rows, err := q.db.Query(ctx, consoleOpenInvoiceTotals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsoleOpenInvoiceTotalsRow{}
+	for rows.Next() {
+		var i ConsoleOpenInvoiceTotalsRow
+		if err := rows.Scan(&i.CurrencyCode, &i.InvoiceCount, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const consolePlanTenantCounts = `-- name: ConsolePlanTenantCounts :many
+SELECT plan_id, count(*)::int AS tenants FROM tenant_subscriptions GROUP BY plan_id
+`
+
+type ConsolePlanTenantCountsRow struct {
+	PlanID  int64
+	Tenants int32
+}
+
+func (q *Queries) ConsolePlanTenantCounts(ctx context.Context) ([]ConsolePlanTenantCountsRow, error) {
+	rows, err := q.db.Query(ctx, consolePlanTenantCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsolePlanTenantCountsRow{}
+	for rows.Next() {
+		var i ConsolePlanTenantCountsRow
+		if err := rows.Scan(&i.PlanID, &i.Tenants); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const consolePlanTenants = `-- name: ConsolePlanTenants :many
+SELECT t.code, s.max_properties_override, s.max_rooms_override, s.max_users_override,
+       (SELECT count(*) FROM properties pr WHERE pr.tenant_id = t.id AND pr.status = 'ACTIVE')::int AS properties,
+       (SELECT count(*) FROM rooms r WHERE r.tenant_id = t.id AND r.is_active)::int                 AS rooms,
+       (SELECT count(*) FROM users u WHERE u.tenant_id = t.id AND u.is_active)::int                 AS users
+FROM tenant_subscriptions s JOIN tenants t ON t.id = s.tenant_id
+WHERE s.plan_id = $1
+ORDER BY t.code
+`
+
+type ConsolePlanTenantsRow struct {
+	Code                  string
+	MaxPropertiesOverride pgtype.Int4
+	MaxRoomsOverride      pgtype.Int4
+	MaxUsersOverride      pgtype.Int4
+	Properties            int32
+	Rooms                 int32
+	Users                 int32
+}
+
+// The tenants on a plan, with the overrides and the usage that decide whether a lower limit of the plan puts them over it.
+func (q *Queries) ConsolePlanTenants(ctx context.Context, planID int64) ([]ConsolePlanTenantsRow, error) {
+	rows, err := q.db.Query(ctx, consolePlanTenants, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsolePlanTenantsRow{}
+	for rows.Next() {
+		var i ConsolePlanTenantsRow
+		if err := rows.Scan(
+			&i.Code,
+			&i.MaxPropertiesOverride,
+			&i.MaxRoomsOverride,
+			&i.MaxUsersOverride,
+			&i.Properties,
+			&i.Rooms,
+			&i.Users,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const consoleRevokeTenantSessions = `-- name: ConsoleRevokeTenantSessions :execrows
+UPDATE user_sessions SET revoked_at = $1::timestamptz, revoked_reason = 'ACCOUNT_DISABLED'
+WHERE revoked_at IS NULL AND user_id IN (SELECT id FROM users WHERE tenant_id = $2)
+`
+
+type ConsoleRevokeTenantSessionsParams struct {
+	At       time.Time
+	TenantID int64
+}
+
+// A suspended hotel is signed out at once: every live session of its users ends with the reason ACCOUNT_DISABLED.
+func (q *Queries) ConsoleRevokeTenantSessions(ctx context.Context, arg ConsoleRevokeTenantSessionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, consoleRevokeTenantSessions, arg.At, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const consoleSetTenantStatus = `-- name: ConsoleSetTenantStatus :one
+UPDATE tenants SET status = $1::text, status_reason = NULLIF($2::text, ''), status_changed_at = $3::timestamptz
+WHERE id = $4
+RETURNING id, code, status
+`
+
+type ConsoleSetTenantStatusParams struct {
+	Status string
+	Reason string
+	At     time.Time
+	ID     int64
+}
+
+type ConsoleSetTenantStatusRow struct {
+	ID     int64
+	Code   string
+	Status string
+}
+
+func (q *Queries) ConsoleSetTenantStatus(ctx context.Context, arg ConsoleSetTenantStatusParams) (ConsoleSetTenantStatusRow, error) {
+	row := q.db.QueryRow(ctx, consoleSetTenantStatus,
+		arg.Status,
+		arg.Reason,
+		arg.At,
+		arg.ID,
+	)
+	var i ConsoleSetTenantStatusRow
+	err := row.Scan(&i.ID, &i.Code, &i.Status)
+	return i, err
+}
+
+const consoleTenantActivity = `-- name: ConsoleTenantActivity :many
+SELECT a.id, a.action, a.entity_type, a.entity_id, a.created_at, a.user_id, u.full_name AS user_name, a.operator_id, o.full_name AS operator_name
+FROM audit_logs a
+LEFT JOIN users u ON u.tenant_id = a.tenant_id AND u.id = a.user_id
+LEFT JOIN operator_accounts o ON o.id = a.operator_id
+WHERE a.tenant_id = $1
+  AND (a.action LIKE 'subscription.%' OR a.action LIKE 'subscription\_invoice.%' OR a.action LIKE 'tenant.%')
+ORDER BY a.id DESC
+LIMIT $2
+`
+
+type ConsoleTenantActivityParams struct {
+	TenantID int64
+	Lim      int32
+}
+
+type ConsoleTenantActivityRow struct {
+	ID           int64
+	Action       string
+	EntityType   string
+	EntityID     int64
+	CreatedAt    time.Time
+	UserID       *int64
+	UserName     *string
+	OperatorID   *int64
+	OperatorName *string
+}
+
+func (q *Queries) ConsoleTenantActivity(ctx context.Context, arg ConsoleTenantActivityParams) ([]ConsoleTenantActivityRow, error) {
+	rows, err := q.db.Query(ctx, consoleTenantActivity, arg.TenantID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsoleTenantActivityRow{}
+	for rows.Next() {
+		var i ConsoleTenantActivityRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Action,
+			&i.EntityType,
+			&i.EntityID,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.UserName,
+			&i.OperatorID,
+			&i.OperatorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const consoleTenantAdmins = `-- name: ConsoleTenantAdmins :many
+SELECT full_name, email, is_active, last_login_at FROM users WHERE tenant_id = $1 AND is_tenant_admin ORDER BY full_name, id
+`
+
+type ConsoleTenantAdminsRow struct {
+	FullName    string
+	Email       string
+	IsActive    bool
+	LastLoginAt *time.Time
+}
+
+func (q *Queries) ConsoleTenantAdmins(ctx context.Context, tenantID int64) ([]ConsoleTenantAdminsRow, error) {
+	rows, err := q.db.Query(ctx, consoleTenantAdmins, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsoleTenantAdminsRow{}
+	for rows.Next() {
+		var i ConsoleTenantAdminsRow
+		if err := rows.Scan(
+			&i.FullName,
+			&i.Email,
+			&i.IsActive,
+			&i.LastLoginAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countChallengeAttempt = `-- name: CountChallengeAttempt :one
