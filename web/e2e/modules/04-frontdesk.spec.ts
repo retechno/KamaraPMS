@@ -1,7 +1,7 @@
 import { test, expect } from '../support/fixtures'
 import { addDays } from '../support/factories'
 import { tx } from '../support/i18n'
-import { pickCombo, pickFirstLabel, pickSelect, setDate } from '../support/ui'
+import { pickCombo, pickSelect, setDate } from '../support/ui'
 
 /** The front desk: today's arrivals, walk-in, in house, room move, extension, reverse check-in, and the check-out with its payment step. */
 test.describe('Front office', () => {
@@ -85,8 +85,23 @@ test.describe('Front office', () => {
     await loginAs('frontdesk', `/stays/${ih.stay.id}`)
     await page.getByTestId('open-move').click()
     const form = page.getByTestId('move-form')
-    // the first room the form offers (parallel tests take rooms too, so a room chosen beforehand may be gone): "201 · Bersih"
-    const label = await pickFirstLabel(form, 'room')
+    // a room of the guest's own type (the form opens on the first type), and the first one the form offers READY: parallel tests take rooms too,
+    // so a room chosen beforehand may be gone, and a room the form marks "(belum siap)" is refused without the override (ROOM_NOT_READY;
+    // pms-seed makes 103 dirty, and it is the first room offered whenever 101 and 102 are taken)
+    const typeId = String(ih.reservation.rooms[0]!.room_type_id)
+    const typeSelect = form.locator('select[name=room_type]')
+    await expect(typeSelect.locator(`option[value="${typeId}"]`)).toBeAttached()
+    if ((await typeSelect.inputValue()) !== typeId) {
+      const loaded = page.waitForResponse((r) => r.url().includes('/availability/rooms') && r.url().includes(`room_type_id=${typeId}`))
+      await typeSelect.selectOption(typeId)
+      await loaded
+    }
+    const notReady = tx('stayActions.notReadyTag').trim()
+    const options = form.locator('select[name="room"] option:not([value="0"]):not([disabled])')
+    let label = ''
+    await expect.poll(async () => (label = (await options.allTextContents()).map((l) => l.trim()).find((l) => !l.includes(notReady)) ?? ''),
+      { message: `a ready room of type ${typeId} is offered (freeRoom made one clean)` }).not.toBe('')
+    await pickCombo(form, 'room', label)
     const target = { number: label.split(' ')[0]! }
     await form.locator('input[name=reason]').fill('AC tidak dingin (E2E)')
     const moved = page.waitForResponse((r) => r.url().endsWith(`/stays/${ih.stay.id}/move`) && r.request().method() === 'POST')

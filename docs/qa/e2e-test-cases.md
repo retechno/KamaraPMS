@@ -101,7 +101,7 @@ Aturan menulis test baru:
 | FD-02 | Kamar reservasi kotor | Check-in → langkah kamar | Peringatan "not ready"; tombol lanjut nonaktif; tidak ada opsi override untuk resepsionis |
 | FD-03 | Kamar kosong bersih | /walk-in → tipe, kamar, keberangkatan, nama tamu baru → Check-in | Pindah ke /stays/:id; nama tamu dan kamar tampil |
 | FD-04 | Tamu in-house | /in-house → klik baris tamu | Detail stay terbuka |
-| FD-05 | Tamu in-house, ada kamar bersih lain di tipenya | Stay → Pindah kamar → pilih kamar pertama yang ditawarkan, alasan → Pindahkan | Segmen stay berisi kamar baru |
+| FD-05 | Tamu in-house, ada kamar bersih lain di tipenya | Stay → Pindah kamar → pilih tipe kamar tamu, lalu kamar pertama yang ditawarkan **siap** (tanpa tanda "belum siap"), alasan → Pindahkan | Respons pindah 200 (kalau ditolak, pesan server jadi pesan gagal); segmen stay berisi kamar baru |
 | FD-06 | Tamu in-house 1 malam | Stay → Perpanjang → tanggal +1 → Simpan | departure_date maju satu hari |
 | FD-07 | Tamu in-house | Admin: Stay → Batalkan check-in → alasan | Stay tidak OPEN; line reservasi kembali CONFIRMED |
 | FD-08 | Tamu in-house (tiba hari ini) dengan charge minibar 150.000 | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Wizard menampilkan biaya kamar malam ini dan meminta saldo + biaya itu; check-out selesai; stay CHECKED_OUT; saldo folio 0 |
@@ -219,11 +219,15 @@ Run keenam (9 Nov 2026): **118 dari 118 lulus** dalam 14,7 menit (3 worker, Chro
 
 ## Temuan dari run ketiga (9 Nov 2026)
 
-- **`RESOURCE_BUSY` (409, retryable) saat membuat reservasi paralel.** Dengan 3 worker, satu `POST /reservations` tidak mendapat lock dalam `PMS_DB_LOCK_TIMEOUT` (5 detik). Server sudah menandainya `retryable`, dan client test sekarang mengulang seperti aplikasi. Perlu dipantau kalau beberapa resepsionis memesan bersamaan di jam sibuk.
+- **[Ditutup: sejak PR #97 setiap kunci yang kehabisan waktu dicatat di log API; run lengkap di CI dan di mesin pemilik mencatat 0]** **`RESOURCE_BUSY` (409, retryable) saat membuat reservasi paralel.** Dengan 3 worker, satu `POST /reservations` tidak mendapat lock dalam `PMS_DB_LOCK_TIMEOUT` (5 detik). Server sudah menandainya `retryable`, dan client test sekarang mengulang seperti aplikasi. Perlu dipantau kalau beberapa resepsionis memesan bersamaan di jam sibuk.
 
 ## Temuan dari run keempat (9 Nov 2026)
 
 - **[Diperbaiki di `fix-e2e-findings`: dalam masa tenggang server menerbitkan sesi baru selama ada sesi hidup sejak rotasi]** **Memuat ulang halaman saat sesi sedang di-refresh bisa membuat user ter-logout.** Server merotasi refresh token begitu menerima `POST /auth/refresh`. Kalau jawabannya batal karena halaman dimuat ulang (F5, atau membuka alamat lain di tab yang sama dalam sepersekian detik), browser tidak pernah menerima cookie baru. Refresh berikutnya membawa token lama. Dalam masa tenggang 30 detik, `internal/iam/service.go` menjawab `REFRESH_TOKEN_ROTATED` (401) dengan anggapan "browser sudah memegang cookie baru", lalu aplikasi kembali ke /login. Di smoke test ini terjadi pada /lost-found. Usul: dalam masa tenggang, server menerbitkan ulang sesi penerus untuk token yang sama dan tidak menjawab 401. Test sekarang menunggu refresh selesai sebelum pindah halaman (`settle()` di `support/fixtures.ts`).
+
+## Temuan dari run CI 13 Nov 2026 (PR #99)
+
+- **Masalah tes, bukan aplikasi: FD-05 gagal empat kali berturut-turut dengan target kamar 103.** Form pindah kamar dibuka dengan tipe kamar pertama (Standard), dan test memilih kamar pertama yang ditawarkan. `pms-seed rooms` membuat kamar 103 berstatus DIRTY (`states[(f*7+n)%7]`), dan kamar itu jadi pilihan pertama setiap kali 101 dan 102 sedang dipakai test lain. Form menandainya "(belum siap)", dan server menolak tanpa override (`ROOM_NOT_READY`). Test tidak membaca alasan penolakan itu, jadi yang terlihat hanya segmen stay tidak berubah. [Diperbaiki di `fd05-move-diagnosis`: test memilih tipe kamar tamu dan kamar pertama yang siap, dan kalau pemindahan ditolak, status serta pesan server jadi pesan gagal.]
 
 ## CI
 
