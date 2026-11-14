@@ -163,3 +163,70 @@ func TestPlansAndInvoiceRules(t *testing.T) {
 		t.Fatalf("paid: %+v %v", sub, err)
 	}
 }
+
+// is_overdue: an ISSUED invoice is late the day after its due day, in the tenant's own time zone; a paid or void invoice is never late.
+func TestInvoiceOverdue(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	if _, err := e.subs.CreatePlan(ctx, subscription.PlanInput{Code: "PRO", Name: "Pro", Price: decimal.RequireFromString("100000"), CurrencyCode: "IDR",
+		BillingPeriodMonths: 1, TrialDays: 14, IsActive: true, IsDefault: true}); err != nil {
+		t.Fatal(err)
+	}
+	for code, zone := range map[string]string{"JKT": "Asia/Jakarta", "HNL": "Pacific/Honolulu"} {
+		if _, err := e.ten.CreateTenant(ctx, code, code+" Hotels", zone); err != nil {
+			t.Fatal(err)
+		}
+	}
+	issue := func(code, dueOn string) subscription.Invoice {
+		t.Helper()
+		inv, err := e.subs.IssueInvoice(ctx, subscription.IssueInput{TenantCode: code, DueOn: new(civil.MustParseDate(dueOn))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return inv
+	}
+	overdue := func(code, number string) bool {
+		t.Helper()
+		list, err := e.subs.TenantInvoices(ctx, code)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, inv := range list {
+			if inv.Number == number {
+				return inv.IsOverdue
+			}
+		}
+		t.Fatalf("invoice %s not listed for %s", number, code)
+		return false
+	}
+
+	// Same instant, two zones: 2026-10-14 20:00 UTC is already the 15th in Jakarta (UTC+7) and still the 14th in Honolulu (UTC-10).
+	e.c.Set(time.Date(2026, 10, 14, 20, 0, 0, 0, time.UTC))
+	jktYesterday, hnlToday := issue("JKT", "2026-10-14"), issue("HNL", "2026-10-14")
+	if !overdue("JKT", jktYesterday.Number) {
+		t.Error("Jakarta: due on the 14th and today is the 15th: late")
+	}
+	if overdue("HNL", hnlToday.Number) {
+		t.Error("Honolulu: due on the 14th and today is the 14th: not late (a due day itself is not late)")
+	}
+
+	// The same Honolulu invoice the moment Honolulu's day turns (2026-10-15 00:00 there = 10:00 UTC): now it is late.
+	e.c.Set(time.Date(2026, 10, 15, 10, 0, 0, 0, time.UTC))
+	if !overdue("HNL", hnlToday.Number) {
+		t.Error("Honolulu: the day after its due day: late")
+	}
+
+	// A paid and a void invoice are never late, however old their due day.
+	if _, _, err := e.subs.PayInvoice(ctx, hnlToday.Number, civil.MustParseDate("2026-10-15"), "TRF-1"); err != nil {
+		t.Fatal(err)
+	}
+	if overdue("HNL", hnlToday.Number) {
+		t.Error("a PAID invoice is never late")
+	}
+	if _, err := e.subs.VoidInvoice(ctx, jktYesterday.Number, "issued by mistake"); err != nil {
+		t.Fatal(err)
+	}
+	if overdue("JKT", jktYesterday.Number) {
+		t.Error("a VOID invoice is never late")
+	}
+}
