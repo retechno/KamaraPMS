@@ -179,7 +179,7 @@ const createTenant = `-- name: CreateTenant :one
 
 INSERT INTO tenants (code, name, timezone)
 VALUES ($1, $2, $3)
-RETURNING id, code, name, status, timezone, created_at, updated_at
+RETURNING id, code, name, status, timezone, created_at, updated_at, status_reason, status_changed_at
 `
 
 type CreateTenantParams struct {
@@ -200,6 +200,8 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.Timezone,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StatusReason,
+		&i.StatusChangedAt,
 	)
 	return i, err
 }
@@ -321,7 +323,7 @@ func (q *Queries) GetPropertyForUpdate(ctx context.Context, arg GetPropertyForUp
 }
 
 const getTenantByCode = `-- name: GetTenantByCode :one
-SELECT id, code, name, status, timezone, created_at, updated_at FROM tenants WHERE code = $1
+SELECT id, code, name, status, timezone, created_at, updated_at, status_reason, status_changed_at FROM tenants WHERE code = $1
 `
 
 func (q *Queries) GetTenantByCode(ctx context.Context, code string) (Tenant, error) {
@@ -335,6 +337,8 @@ func (q *Queries) GetTenantByCode(ctx context.Context, code string) (Tenant, err
 		&i.Timezone,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StatusReason,
+		&i.StatusChangedAt,
 	)
 	return i, err
 }

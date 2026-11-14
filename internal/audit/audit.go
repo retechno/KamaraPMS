@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"kamarapms/internal/audit/auditdb"
+	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
@@ -28,9 +29,12 @@ type Entry struct {
 	PropertyID   *int64
 	BusinessDate *civil.Date
 	UserID       *int64
-	Action       string // e.g. property.created, business_day.closed
-	EntityType   string // e.g. property
-	EntityID     int64
+	// OperatorID is set when an operator of the platform console made the change (the hotel then sees "KamaraPMS (operator)"). It is filled from the context when the caller leaves it empty and
+	// the context holds an operator; a change that has a user never has an operator (audit_logs_actor_ck).
+	OperatorID *int64
+	Action     string // e.g. property.created, business_day.closed
+	EntityType string // e.g. property
+	EntityID   int64
 	// EntityLabel is what the entry is about as a person reads it: the identifier alone ("305", "RES000012", "FOL000026", a code, a name), never the kind of thing (that is
 	// EntityType, said in the language of the screen). Empty when the thing has no readable number (the column is then NULL). It must not hold the name of a guest: an
 	// entry cannot be erased, so a guest is named by the code. A label longer than MaxLabelLength is cut at a character.
@@ -66,6 +70,7 @@ func (w *Writer) Write(ctx context.Context, e Entry) error {
 		PropertyID:   e.PropertyID,
 		BusinessDate: e.BusinessDate,
 		UserID:       e.UserID,
+		OperatorID:   e.operatorFrom(ctx),
 		Action:       e.Action,
 		EntityType:   e.EntityType,
 		EntityID:     e.EntityID,
@@ -81,6 +86,21 @@ func (w *Writer) Write(ctx context.Context, e Entry) error {
 	}
 	p.EntityLabel = clipLabel(e.EntityLabel)
 	return auditdb.New(tx).InsertAuditLog(ctx, p)
+}
+
+// operatorFrom is the operator of the entry: the one named, or the one that makes the call (nil for a user's own change, pms-admin and the system).
+func (e Entry) operatorFrom(ctx context.Context) *int64 {
+	if e.UserID != nil {
+		return nil
+	}
+	if e.OperatorID != nil {
+		return e.OperatorID
+	}
+	if op, ok := auth.OperatorFrom(ctx); ok {
+		id := op.OperatorID
+		return &id
+	}
+	return nil
 }
 
 // clipLabel is the label as it is stored: trimmed, at most MaxLabelLength characters (cut between two characters, never inside one), and nil when nothing is left.

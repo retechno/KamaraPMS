@@ -59,11 +59,13 @@ type Property struct {
 }
 
 type Tenant struct {
-	ID        int64
-	Code      string
-	Name      string
-	Status    string
-	Timezone  string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID              int64
+	Code            string
+	Name            string
+	Status          string
+	Timezone        string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	StatusReason    *string
+	StatusChangedAt *time.Time
 }

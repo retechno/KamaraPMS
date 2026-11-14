@@ -411,6 +411,18 @@ var constraintErrors = map[string]mapped{
 	"subscription_invoices_overlap_ex": {apperr.KindConflict, "INVOICE_PERIOD_OVERLAP", "an open invoice already covers part of this period: pay or void it first"},
 	"subscription_invoice_final":       {apperr.KindConflict, "INVOICE_FINAL", "a paid or void subscription invoice cannot change"},
 
+	// Platform operators (docs/architecture/39-platform-console.md 4)
+	"operator_accounts_email_uk":           {apperr.KindConflict, "EMAIL_TAKEN", "an operator with this email already exists"},
+	"operator_accounts_totp_ck":            {apperr.KindInternal, "OPERATOR_INCONSISTENT", "the operator's second factor is inconsistent"},
+	"operator_recovery_codes_uk":           {apperr.KindConflict, "RECOVERY_CODE_TAKEN", "the recovery code exists already"},
+	"operator_login_challenges_token_uk":   {apperr.KindConflict, "CHALLENGE_TAKEN", "the sign-in challenge exists already"},
+	"operator_login_challenges_purpose_ck": {apperr.KindInternal, "OPERATOR_INCONSISTENT", "the sign-in challenge is inconsistent"},
+	"operator_sessions_token_uk":           {apperr.KindConflict, "SESSION_TAKEN", "the session exists already"},
+	"operator_sessions_revoked_ck":         {apperr.KindInternal, "OPERATOR_INCONSISTENT", "the session is inconsistent"},
+	"operator_sessions_revoked_reason_ck":  {apperr.KindInternal, "OPERATOR_INCONSISTENT", "the session is inconsistent"},
+	"audit_logs_actor_ck":                  {apperr.KindInternal, "AUDIT_INCONSISTENT", "an audit entry has a user or an operator, not both"},
+	"tenants_suspended_reason_ck":          {apperr.KindInvalid, "VALIDATION_FAILED", "a suspended tenant needs a reason"},
+
 	// Inventory (docs/architecture/35-inventory.md)
 	"inv_units_code_uk":                   {apperr.KindConflict, "CODE_TAKEN", "the unit code is already in use"},
 	"inv_categories_code_uk":              {apperr.KindConflict, "CODE_TAKEN", "the category code is already in use"},

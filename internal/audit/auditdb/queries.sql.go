@@ -15,11 +15,11 @@ import (
 
 const insertAuditLog = `-- name: InsertAuditLog :exec
 INSERT INTO audit_logs (
-    tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, entity_label,
+    tenant_id, property_id, business_date, user_id, operator_id, action, entity_type, entity_id, entity_label,
     old_data, new_data, request_id, ip_address, created_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+    $10, $11, $12, $13, $14
 )
 `
 
@@ -28,6 +28,7 @@ type InsertAuditLogParams struct {
 	PropertyID   *int64
 	BusinessDate *civil.Date
 	UserID       *int64
+	OperatorID   *int64
 	Action       string
 	EntityType   string
 	EntityID     int64
@@ -45,6 +46,7 @@ func (q *Queries) InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) 
 		arg.PropertyID,
 		arg.BusinessDate,
 		arg.UserID,
+		arg.OperatorID,
 		arg.Action,
 		arg.EntityType,
 		arg.EntityID,
@@ -59,7 +61,7 @@ func (q *Queries) InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) 
 }
 
 const listAuditLogsForEntity = `-- name: ListAuditLogsForEntity :many
-SELECT id, tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, old_data, new_data, request_id, ip_address, created_at, entity_label FROM audit_logs
+SELECT id, tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, old_data, new_data, request_id, ip_address, created_at, entity_label, operator_id FROM audit_logs
 WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3
 ORDER BY created_at DESC, id DESC
 LIMIT $4
@@ -101,6 +103,7 @@ func (q *Queries) ListAuditLogsForEntity(ctx context.Context, arg ListAuditLogsF
 			&i.IpAddress,
 			&i.CreatedAt,
 			&i.EntityLabel,
+			&i.OperatorID,
 		); err != nil {
 			return nil, err
 		}

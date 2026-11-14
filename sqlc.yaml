@@ -399,6 +399,17 @@ sql:
 
   - engine: postgresql
     schema: migrations
+    queries: internal/operator/queries.sql
+    gen:
+      go:
+        package: operatordb
+        out: internal/operator/operatordb
+        sql_package: pgx/v5
+        omit_unused_structs: true
+        emit_empty_slices: true
+
+  - engine: postgresql
+    schema: migrations
     queries: internal/pos/queries.sql
     gen:
       go:

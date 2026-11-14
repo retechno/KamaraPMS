@@ -1,9 +1,9 @@
 -- name: InsertAuditLog :exec
 INSERT INTO audit_logs (
-    tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, entity_label,
+    tenant_id, property_id, business_date, user_id, operator_id, action, entity_type, entity_id, entity_label,
     old_data, new_data, request_id, ip_address, created_at
 ) VALUES (
-    @tenant_id, sqlc.narg(property_id), sqlc.narg(business_date), sqlc.narg(user_id), @action, @entity_type, @entity_id, sqlc.narg(entity_label),
+    @tenant_id, sqlc.narg(property_id), sqlc.narg(business_date), sqlc.narg(user_id), sqlc.narg(operator_id), @action, @entity_type, @entity_id, sqlc.narg(entity_label),
     @old_data, @new_data, sqlc.narg(request_id), sqlc.narg(ip_address), @created_at
 );
 
