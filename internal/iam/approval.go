@@ -14,6 +14,7 @@ import (
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/httpx"
 	"kamarapms/internal/platform/logging"
+	"kamarapms/internal/platform/loginlimit"
 )
 
 // Approval is a verified approval: the user who entered valid credentials and holds the permission of the kind at the
@@ -149,21 +150,21 @@ func (s *Service) Verify(ctx context.Context, req ApprovalRequest) (Approval, er
 		sourceKey = ip.String()
 	}
 	for _, l := range []struct {
-		lim *limiter
+		lim *loginlimit.Limiter
 		key string
 	}{{s.accounts, accountKey}, {s.sources, sourceKey}} {
 		if l.key == "" {
 			continue
 		}
-		if ok, until := l.lim.allowed(l.key); !ok {
+		if ok, until := l.lim.Allowed(l.key); !ok {
 			return Approval{}, apperr.New(apperr.KindRateLimited, "TOO_MANY_ATTEMPTS", "too many failed attempts; try again later").
 				WithContext("retry_after", until.UTC())
 		}
 	}
 	fail := func() {
-		s.accounts.fail(accountKey)
+		s.accounts.Fail(accountKey)
 		if sourceKey != "" {
-			s.sources.fail(sourceKey)
+			s.sources.Fail(sourceKey)
 		}
 	}
 
@@ -204,7 +205,7 @@ func (s *Service) Verify(ctx context.Context, req ApprovalRequest) (Approval, er
 		return Approval{}, apperr.Forbidden("APPROVAL_NOT_PERMITTED", "the approver may not approve this at this property").
 			WithContext("permission", string(perm))
 	}
-	s.accounts.reset(accountKey) // the credentials were right: what follows is the rule, not a failed attempt
+	s.accounts.Reset(accountKey) // the credentials were right: what follows is the rule, not a failed attempt
 	if distinct && user.ID == p.UserID {
 		if user.IsTenantAdmin {
 			return Approval{userID: user.ID, selfAdmin: true}, nil
