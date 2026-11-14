@@ -89,7 +89,11 @@ test.describe('Front office', () => {
     const label = await pickFirstLabel(form, 'room')
     const target = { number: label.split(' ')[0]! }
     await form.locator('input[name=reason]').fill('AC tidak dingin (E2E)')
+    const moved = page.waitForResponse((r) => r.url().endsWith(`/stays/${ih.stay.id}/move`) && r.request().method() === 'POST')
     await form.getByRole('button', { name: tx('stayActions.move'), exact: true }).click()
+    const res = await moved
+    // a refused move says why (the server's code and message), not only that the room stayed the same
+    expect(res.status(), `move of stay ${ih.stay.id} (room ${st.segments.at(-1)?.room_number}, type ${ih.reservation.rooms[0]!.room_type_id}) to ${label}: ${await res.text()}`).toBe(200)
     await expect.poll(async () => (await data.stay(ih.stay.id)).segments.map((s) => s.room_number)).toContain(target.number)
     await expect(page.getByTestId('segments')).toContainText(target.number)
   })
