@@ -130,3 +130,19 @@ Cara membaca:
 - Data (nama tamu, angka) hanya contoh. Di aplikasi ambil dari API.
 - Teks berbahasa Indonesia; di aplikasi semua teks lewat i18n (en + id).
 - Font final: Plus Jakarta Sans. Di mockup dimuat dari Google Fonts; di aplikasi pakai `@fontsource-variable/plus-jakarta-sans` (self-host).
+
+## Console platform & langganan (`docs/architecture/39-platform-console.md`)
+
+| File | Isi | PR |
+|---|---|---|
+| `75-pl-masuk.dc.html` | P1 Masuk operator: email + password, bilah "Platform", tautan ke login staf hotel | 3 |
+| `76-pl-kode-totp.dc.html` | P2 Kode authenticator 6 digit, kode pemulihan, sisa percobaan | 3 |
+| `77-pl-aktifkan-totp.dc.html` | P3 Aktifkan TOTP di login pertama: QR + kunci, konfirmasi kode, 10 kode pemulihan | 3 |
+| `78-pl-penyewa.dc.html` | P4 Daftar penyewa: KPI, filter status/paket, tabel paket, status akses, aktif sampai, kuota kamar, invoice terbuka | 3 |
+| `79-pl-detail-penyewa.dc.html` | P5 Detail penyewa: callout masa tenggang, langganan, kuota & pemakaian (override), modul, invoice, admin penyewa, aktivitas | 3 |
+| `80-pl-dialog.dc.html` | P6 Dialog: ubah langganan, terbitkan invoice (pratinjau periode, konflik), catat pembayaran, tangguhkan penyewa | 3 |
+| `81-pl-paket.dc.html` | P7 Paket: kartu per paket (harga, kuota, modul, bawaan/tidak dijual, jumlah penyewa) | 3 |
+| `82-pl-form-paket.dc.html` | P8 Form paket: identitas & harga, modul, kuota & trial, penjualan, peringatan penyewa terdampak | 3 |
+| `83-pl-invoice.dc.html` | P9 Semua invoice: tab status, telat N hari, total terbuka | 3 |
+| `84-langganan-hotel.dc.html` | T1 Setup → Langganan untuk admin hotel: paket, pemakaian vs kuota, modul, invoice | 1 |
+| `85-banner-langganan.dc.html` | T2 Banner trial / GRACE / READ_ONLY, toast SUBSCRIPTION_READ_ONLY, pesan PLAN_LIMIT_REACHED | 1 |

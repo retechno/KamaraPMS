@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Penyewa · Console platform</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<div style="min-height: 1040px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128">
+  <header style="background: #1c2128; color: #e6e9ee">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; min-height: 56px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; text-decoration: none; font-weight: 600">
+        <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 7px; background: #3fa98d; color: #0c1512; display: grid; place-items: center; font-weight: 700; font-size: 14px">K</span>
+        KamaraPMS
+        <span style="font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #0c1512; background: #e0a93a; padding: 2px 7px; border-radius: 999px">Platform</span>
+      </a>
+      <nav aria-label="Console platform" style="display: flex; gap: 4px; flex-wrap: wrap">
+        <a href="78-pl-penyewa.dc.html" aria-current="page" style="color: #ffffff; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid #3fa98d; font-size: 14px; font-weight: 600">Penyewa</a>
+        <a href="81-pl-paket.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Paket</a>
+        <a href="83-pl-invoice.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Invoice</a>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px">
+        <span style="color: #b8c0cb">Rina Wijaya · operator</span>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #3a414b; border-radius: 6px; background: transparent; color: #e6e9ee; font: inherit; font-size: 13px; cursor: pointer">Keluar</button>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1200px; margin: 0 auto; padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600">Penyewa</h1>
+        <p style="margin: 0; font-size: 14px; color: #626b77">Semua perusahaan hotel yang memakai KamaraPMS, dengan paket, masa aktif, dan pemakaiannya.</p>
+      </div>
+      <div style="margin-left: auto; display: flex; gap: 8px">
+        <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer; color: #1c2128">Ekspor CSV</button>
+        <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #1f6f5c; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">+ Penyewa baru</button>
+      </div>
+    </div>
+
+    <ul aria-label="Ringkasan" style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px">
+      <sc-for list="{{kpis}}" as="k" hint-placeholder-count="5">
+        <li style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+          <span style="font-size: 13px; color: #626b77">{{k.label}}</span>
+          <span style="font-size: 24px; font-weight: 600; color: {{k.color}}">{{k.value}}</span>
+          <span style="font-size: 12px; color: #626b77">{{k.hint}}</span>
+        </li>
+      </sc-for>
+    </ul>
+
+    <section style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; display: flex; flex-direction: column">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; padding: 14px 16px; border-bottom: 1px solid #e3e6ea; align-items: center">
+        <label for="t-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Cari penyewa</label>
+        <input id="t-search" type="search" placeholder="Cari kode atau nama…" style="flex: 1 1 240px; height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #626b77">Status
+          <select style="height: 40px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 8px; color: #1c2128; background: #ffffff">
+            <option>Semua</option><option>Aktif</option><option>Trial</option><option>Masa tenggang</option><option>Hanya baca</option><option>Ditangguhkan</option>
+          </select>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #626b77">Paket
+          <select style="height: 40px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 8px; color: #1c2128; background: #ffffff">
+            <option>Semua</option><option>BASIC</option><option>PRO</option><option>ENTERPRISE</option><option>LEGACY</option><option>TRIAL</option>
+          </select>
+        </label>
+      </div>
+      <div style="overflow-x: auto">
+        <table style="width: 100%; min-width: 980px; border-collapse: collapse; font-size: 14px">
+          <caption style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Penyewa</caption>
+          <thead>
+            <tr style="text-align: left; color: #626b77; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em">
+              <th scope="col" style="padding: 10px 16px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Penyewa</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Paket</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Status</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Aktif sampai</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Kamar</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">User</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea; text-align: right">Invoice terbuka</th>
+              <th scope="col" style="padding: 10px 16px; font-weight: 600; border-bottom: 1px solid #e3e6ea"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Aksi</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{tenants}}" as="r" hint-placeholder-count="7">
+              <tr>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #eceef2">
+                  <div style="display: flex; flex-direction: column; gap: 2px">
+                    <a href="79-pl-detail-penyewa.dc.html" style="font-weight: 600; color: #1c2128; text-decoration: none">{{r.name}}</a>
+                    <span style="font-size: 12px; color: #626b77; font-family: ui-monospace, monospace">{{r.code}}</span>
+                  </div>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2; font-family: ui-monospace, monospace; font-size: 13px">{{r.plan}}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2">
+                  <span style="{{r.badgeStyle}}">{{r.status}}</span>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2">
+                  <div style="display: flex; flex-direction: column; gap: 2px">
+                    <span>{{r.until}}</span>
+                    <span style="font-size: 12px; color: {{r.untilColor}}">{{r.untilHint}}</span>
+                  </div>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2; min-width: 120px">
+                  <div style="display: flex; flex-direction: column; gap: 4px">
+                    <span style="font-variant-numeric: tabular-nums">{{r.rooms}}</span>
+                    <span aria-hidden="true" style="height: 4px; border-radius: 2px; background: #eceef2; overflow: hidden; display: block"><span style="display: block; height: 4px; width: {{r.roomsPct}}; background: {{r.roomsColor}}"></span></span>
+                  </div>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2; font-variant-numeric: tabular-nums">{{r.users}}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2; text-align: right; font-variant-numeric: tabular-nums; color: {{r.openColor}}">{{r.open}}</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #eceef2; text-align: right">
+                  <a href="79-pl-detail-penyewa.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border: 1px solid #e3e6ea; border-radius: 6px; text-decoration: none; color: #1c2128; font-size: 13px">Buka</a>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: 13px; color: #626b77; flex-wrap: wrap; gap: 8px">
+        <span>7 penyewa</span>
+        <span>Urut: status yang butuh tindakan dulu (hanya baca, masa tenggang, trial hampir habis)</span>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const badge = {
+      ok: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#e6f4ec;color:#1b7a4b',
+      warn: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#fbf1dd;color:#8a5300',
+      danger: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#f8eceb;color:#b4332c',
+      trial: 'display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid #1f6f5c;color:#1f6f5c',
+      off: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#1c2128;color:#ffffff'
+    };
+    const meter = (used, max) => {
+      if (!max) return { pct: '30%', color: '#9aa3ae' };
+      const p = Math.min(100, Math.round((used / max) * 100));
+      return { pct: p + '%', color: p >= 100 ? '#b4332c' : p >= 85 ? '#c98a10' : '#1f6f5c' };
+    };
+    const rows = [
+      { name: 'Taman Ria Hostel', code: 'TMR', plan: 'BASIC', status: 'Hanya baca', kind: 'danger', until: '15 Okt 2026', untilHint: 'tenggang habis 29 Okt', untilColor: '#b4332c', ru: 30, rm: 30, users: '5 / 5', open: 'Rp 1.500.000', openColor: '#b4332c' },
+      { name: 'Segara Resort Group', code: 'SGR', plan: 'PRO', status: 'Masa tenggang', kind: 'warn', until: '8 Nov 2026', untilHint: 'sisa tenggang 8 hari', untilColor: '#8a5300', ru: 140, rm: 150, users: '25 / 30', open: 'Rp 7.500.000', openColor: '#8a5300' },
+      { name: 'Lembah Kopi Inn', code: 'LBK', plan: 'BASIC', status: 'Trial', kind: 'trial', until: '28 Nov 2026', untilHint: 'trial, sisa 14 hari', untilColor: '#626b77', ru: 18, rm: 30, users: '4 / 5', open: 'Rp 1.500.000', openColor: '#626b77' },
+      { name: 'Kirana Hotels', code: 'KRN', plan: 'PRO', status: 'Aktif', kind: 'ok', until: '31 Des 2026', untilHint: 'sisa 47 hari', untilColor: '#626b77', ru: 86, rm: 120, users: '18 / 30', open: '–', openColor: '#626b77' },
+      { name: 'Nusa Asri Hotels', code: 'NSA', plan: 'ENTERPRISE', status: 'Aktif', kind: 'ok', until: '30 Jun 2027', untilHint: 'sisa 228 hari', untilColor: '#626b77', ru: 410, rm: 0, users: '64 / ∞', open: '–', openColor: '#626b77' },
+      { name: 'Demo Hotels', code: 'DEMO', plan: 'LEGACY', status: 'Aktif', kind: 'ok', until: 'Tanpa batas', untilHint: 'paket lama', untilColor: '#626b77', ru: 100, rm: 0, users: '12 / ∞', open: '–', openColor: '#626b77' },
+      { name: 'Bukit Hijau Lodge', code: 'BKT', plan: 'BASIC', status: 'Ditangguhkan', kind: 'off', until: '30 Sep 2026', untilHint: 'login diblokir', untilColor: '#626b77', ru: 22, rm: 30, users: '3 / 5', open: '–', openColor: '#626b77' }
+    ];
+    const tenants = rows.map((r) => {
+      const m = meter(r.ru, r.rm);
+      return { ...r, badgeStyle: badge[r.kind], rooms: r.ru + ' / ' + (r.rm || '∞'), roomsPct: m.pct, roomsColor: m.color };
+    });
+    return {
+      tenants,
+      kpis: [
+        { label: 'Aktif', value: '3', hint: 'termasuk paket lama', color: '#1c2128' },
+        { label: 'Trial', value: '1', hint: '1 berakhir ≤ 14 hari', color: '#1c2128' },
+        { label: 'Masa tenggang', value: '1', hint: 'masih bisa menulis', color: '#8a5300' },
+        { label: 'Hanya baca', value: '1', hint: 'perlu ditagih', color: '#b4332c' },
+        { label: 'Invoice terbuka', value: 'Rp 10.500.000', hint: '3 invoice, 2 lewat jatuh tempo', color: '#1c2128' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

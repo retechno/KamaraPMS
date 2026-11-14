@@ -118,6 +118,8 @@ issue-invoice / pay-invoice / void-invoice / list-invoices -tenant T
 
 ## 9. Step 2 (after the UI uplift)
 
+Designed in `39-platform-console.md` (PR 1 there: the page, the banner and the store below; the operator console is its PR 2 and PR 3).
+
 - The navigation hides the routes of modules that are off (from `GET /api/v1/subscription`).
 - A banner in the shell for GRACE ("paid through …, N days of grace left") and READ_ONLY.
 - A "Subscription" page under Setup for tenant administrators: plan, usage against limits, invoices.

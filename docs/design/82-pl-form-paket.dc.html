@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Ubah paket PRO · Console platform</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<div style="min-height: 1180px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128">
+  <header style="background: #1c2128; color: #e6e9ee">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; min-height: 56px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; text-decoration: none; font-weight: 600">
+        <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 7px; background: #3fa98d; color: #0c1512; display: grid; place-items: center; font-weight: 700; font-size: 14px">K</span>
+        KamaraPMS
+        <span style="font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #0c1512; background: #e0a93a; padding: 2px 7px; border-radius: 999px">Platform</span>
+      </a>
+      <nav aria-label="Console platform" style="display: flex; gap: 4px; flex-wrap: wrap">
+        <a href="78-pl-penyewa.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Penyewa</a>
+        <a href="81-pl-paket.dc.html" aria-current="page" style="color: #ffffff; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid #3fa98d; font-size: 14px; font-weight: 600">Paket</a>
+        <a href="83-pl-invoice.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Invoice</a>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px">
+        <span style="color: #b8c0cb">Rina Wijaya · operator</span>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #3a414b; border-radius: 6px; background: transparent; color: #e6e9ee; font: inherit; font-size: 13px; cursor: pointer">Keluar</button>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 800px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 18px">
+    <nav aria-label="Jejak" style="font-size: 13px; color: #626b77"><a href="81-pl-paket.dc.html">Paket</a> <span aria-hidden="true">/</span> PRO</nav>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600">Ubah paket PRO</h1>
+      <p style="margin: 0; font-size: 14px; color: #626b77">Dipakai 2 penyewa. Perubahan berlaku untuk mereka pada request berikutnya.</p>
+    </div>
+
+    <p role="status" style="margin: 0; padding: 10px 14px; border: 1px solid #c98a10; border-radius: 8px; background: #fbf1dd; font-size: 14px; line-height: 1.5">Batas kamar turun ke 120. Segara Resort Group memakai 140 kamar tetapi punya batas khusus 150, jadi tidak terdampak. Menurunkan kuota tidak pernah menonaktifkan apa pun; penyewa hanya tidak bisa menambah lagi.</p>
+
+    <form style="display: flex; flex-direction: column; gap: 18px; margin: 0">
+      <section aria-labelledby="f1" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+        <h2 id="f1" style="margin: 0; font-size: 16px; font-weight: 600">Identitas &amp; harga</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label for="pf-code" style="font-size: 14px; font-weight: 500">Kode</label>
+            <input id="pf-code" name="code" value="PRO" readonly style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px; background: #f6f7f9; font-family: ui-monospace, monospace">
+            <span style="font-size: 12px; color: #626b77">Tidak bisa diubah setelah dibuat</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label for="pf-name" style="font-size: 14px; font-weight: 500">Nama</label>
+            <input id="pf-name" name="name" value="Pro" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label for="pf-price" style="font-size: 14px; font-weight: 500">Harga per periode</label>
+            <div style="display: flex">
+              <span style="height: 40px; box-sizing: border-box; display: grid; place-items: center; padding: 0 10px; border: 1px solid #e3e6ea; border-right: 0; border-radius: 8px 0 0 8px; background: #f6f7f9; font-size: 14px; color: #626b77">IDR</span>
+              <input id="pf-price" name="price" inputmode="decimal" value="7.500.000" style="flex: 1; min-width: 0; height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 0 8px 8px 0; font: inherit; font-size: 14px; padding: 0 10px; text-align: right; font-variant-numeric: tabular-nums">
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label for="pf-period" style="font-size: 14px; font-weight: 500">Periode tagihan</label>
+            <select id="pf-period" name="billing_period_months" style="height: 40px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 8px; background: #ffffff; color: #1c2128"><option>1 bulan</option><option selected>3 bulan</option><option>6 bulan</option><option>12 bulan</option></select>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="f2" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 id="f2" style="margin: 0; font-size: 16px; font-weight: 600">Modul</h2>
+        <ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px">
+          <sc-for list="{{modules}}" as="m" hint-placeholder-count="6">
+            <li>
+              <label style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid {{m.border}}; border-radius: 8px; background: {{m.bg}}; min-height: 44px; box-sizing: border-box">
+                <input type="checkbox" checked="{{m.checked}}" disabled="{{m.locked}}" style="width: 18px; height: 18px; margin-top: 2px; accent-color: #1f6f5c">
+                <span style="display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-size: 14px; font-weight: 500">{{m.name}}</span>
+                  <span style="font-size: 12px; color: #626b77">{{m.desc}}</span>
+                </span>
+              </label>
+            </li>
+          </sc-for>
+        </ul>
+      </section>
+
+      <section aria-labelledby="f3" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 id="f3" style="margin: 0; font-size: 16px; font-weight: 600">Kuota &amp; trial</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px">
+          <sc-for list="{{limits}}" as="l" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="{{l.id}}" style="font-size: 14px; font-weight: 500">{{l.label}}</label>
+              <input id="{{l.id}}" type="number" min="1" value="{{l.value}}" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #626b77"><input type="checkbox" style="width: 16px; height: 16px; accent-color: #1f6f5c"> {{l.none}}</label>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section aria-labelledby="f4" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 id="f4" style="margin: 0; font-size: 16px; font-weight: 600">Penjualan</h2>
+        <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px; min-height: 44px">
+          <input type="checkbox" checked style="width: 18px; height: 18px; margin-top: 2px; accent-color: #1f6f5c">
+          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Dijual</span><span style="font-size: 12px; color: #626b77">Paket yang tidak dijual tetap berlaku bagi penyewanya, tetapi tidak bisa diberikan ke penyewa lain.</span></span>
+        </label>
+        <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px; min-height: 44px">
+          <input type="checkbox" style="width: 18px; height: 18px; margin-top: 2px; accent-color: #1f6f5c">
+          <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Paket bawaan untuk penyewa baru</span><span style="font-size: 12px; color: #626b77">Saat ini: BASIC. Hanya satu paket yang bisa menjadi bawaan.</span></span>
+        </label>
+      </section>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px">
+        <a href="81-pl-paket.dc.html" style="display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; text-decoration: none; font-size: 14px; color: #1c2128">Batal</a>
+        <button type="submit" style="height: 40px; padding: 0 18px; border: 0; border-radius: 8px; background: #1f6f5c; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Simpan paket</button>
+      </div>
+    </form>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const on = { border: '#b9dcc8', bg: '#f1f8f4', checked: true, locked: false };
+    const off = { border: '#e3e6ea', bg: '#ffffff', checked: false, locked: false };
+    return {
+      modules: [
+        { ...on, name: 'Inti (front office)', desc: 'Reservasi, front desk, folio, night audit. Selalu termasuk.', locked: true, bg: '#f6f7f9', border: '#e3e6ea' },
+        { ...on, name: 'Housekeeping', desc: 'Tugas, maintenance, lost & found, laporan HK' },
+        { ...on, name: 'Accounting', desc: 'Jurnal, hutang, bank, pajak, anggaran' },
+        { ...on, name: 'POS', desc: 'Outlet, bill, dapur, perangkat cetak' },
+        { ...off, name: 'Inventory & aset', desc: 'Stok, pembelian, resep, aset tetap' },
+        { ...off, name: 'Banquet', desc: 'Ruang meeting, event, sesi' }
+      ],
+      limits: [
+        { id: 'pf-props', label: 'Properti aktif', value: '3', none: 'Tanpa batas' },
+        { id: 'pf-rooms', label: 'Kamar aktif', value: '120', none: 'Tanpa batas' },
+        { id: 'pf-users', label: 'User aktif', value: '30', none: 'Tanpa batas' },
+        { id: 'pf-trial', label: 'Hari trial', value: '0', none: 'Tanpa trial' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

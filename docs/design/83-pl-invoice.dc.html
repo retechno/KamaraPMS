@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Invoice · Console platform</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<div style="min-height: 940px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128">
+  <header style="background: #1c2128; color: #e6e9ee">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; min-height: 56px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; text-decoration: none; font-weight: 600">
+        <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 7px; background: #3fa98d; color: #0c1512; display: grid; place-items: center; font-weight: 700; font-size: 14px">K</span>
+        KamaraPMS
+        <span style="font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #0c1512; background: #e0a93a; padding: 2px 7px; border-radius: 999px">Platform</span>
+      </a>
+      <nav aria-label="Console platform" style="display: flex; gap: 4px; flex-wrap: wrap">
+        <a href="78-pl-penyewa.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Penyewa</a>
+        <a href="81-pl-paket.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Paket</a>
+        <a href="83-pl-invoice.dc.html" aria-current="page" style="color: #ffffff; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid #3fa98d; font-size: 14px; font-weight: 600">Invoice</a>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px">
+        <span style="color: #b8c0cb">Rina Wijaya · operator</span>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #3a414b; border-radius: 6px; background: transparent; color: #e6e9ee; font: inherit; font-size: 13px; cursor: pointer">Keluar</button>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1200px; margin: 0 auto; padding: 28px 24px 48px; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600">Invoice</h1>
+      <p style="margin: 0; font-size: 14px; color: #626b77">Invoice langganan semua penyewa. Diterbitkan dan dibayar dari halaman penyewa atau dari sini.</p>
+    </div>
+
+    <div role="tablist" aria-label="Status invoice" style="display: flex; gap: 6px; flex-wrap: wrap">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+        <button type="button" role="tab" aria-selected="{{t.selected}}" style="height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid {{t.border}}; background: {{t.bg}}; color: {{t.color}}; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer">{{t.label}} <span style="opacity: 0.8">{{t.count}}</span></button>
+      </sc-for>
+    </div>
+
+    <section style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; overflow: hidden">
+      <div style="overflow-x: auto">
+        <table style="width: 100%; min-width: 900px; border-collapse: collapse; font-size: 14px">
+          <caption style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Invoice terbuka</caption>
+          <thead>
+            <tr style="text-align: left; color: #626b77; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em">
+              <th scope="col" style="padding: 10px 16px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Nomor</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Penyewa</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Paket</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Periode</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea; text-align: right">Jumlah</th>
+              <th scope="col" style="padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Jatuh tempo</th>
+              <th scope="col" style="padding: 10px 16px; font-weight: 600; border-bottom: 1px solid #e3e6ea"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Aksi</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+              <tr>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #eceef2; font-family: ui-monospace, monospace; font-size: 13px">{{r.number}}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2"><a href="79-pl-detail-penyewa.dc.html" style="color: #1c2128; font-weight: 500; text-decoration: none">{{r.tenant}}</a> <span style="font-size: 12px; color: #626b77; font-family: ui-monospace, monospace">{{r.code}}</span></td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2; font-family: ui-monospace, monospace; font-size: 13px">{{r.plan}}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2">{{r.period}}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2; text-align: right; font-variant-numeric: tabular-nums">{{r.amount}}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #eceef2">
+                  <div style="display: flex; flex-direction: column; gap: 2px"><span>{{r.due}}</span><span style="font-size: 12px; font-weight: 600; color: {{r.dueColor}}">{{r.dueHint}}</span></div>
+                </td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #eceef2; text-align: right; white-space: nowrap">
+                  <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border-radius: 6px; background: #1f6f5c; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 600">Catat bayar</a>
+                  <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 10px; margin-left: 6px; border: 1px solid #e3e6ea; border-radius: 6px; color: #1c2128; text-decoration: none; font-size: 13px">Void</a>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 12px 16px; font-size: 14px; flex-wrap: wrap; gap: 8px">
+        <span style="color: #626b77">3 invoice terbuka</span>
+        <span>Total terbuka <strong style="font-variant-numeric: tabular-nums">Rp 10.500.000</strong></span>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const tab = (label, count, selected) => ({ label, count, selected: selected ? 'true' : 'false', bg: selected ? '#1c2128' : '#ffffff', color: selected ? '#ffffff' : '#1c2128', border: selected ? '#1c2128' : '#e3e6ea' });
+    return {
+      tabs: [tab('Terbuka', '3', true), tab('Lewat jatuh tempo', '2', false), tab('Dibayar', '41', false), tab('Di-void', '4', false)],
+      rows: [
+        { number: 'SUB-2026-00033', tenant: 'Taman Ria Hostel', code: 'TMR', plan: 'BASIC', period: '16 Okt – 15 Nov 2026', amount: 'Rp 1.500.000', due: '16 Okt 2026', dueHint: 'telat 29 hari', dueColor: '#b4332c' },
+        { number: 'SUB-2026-00041', tenant: 'Segara Resort Group', code: 'SGR', plan: 'PRO', period: '9 Nov 2026 – 8 Feb 2027', amount: 'Rp 7.500.000', due: '9 Nov 2026', dueHint: 'telat 5 hari', dueColor: '#b4332c' },
+        { number: 'SUB-2026-00056', tenant: 'Lembah Kopi Inn', code: 'LBK', plan: 'BASIC', period: '29 Nov – 28 Des 2026', amount: 'Rp 1.500.000', due: '29 Nov 2026', dueHint: '15 hari lagi', dueColor: '#626b77' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

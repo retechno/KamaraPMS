@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Dialog console platform</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1180px; box-sizing: border-box; padding: 40px; background: rgba(28,33,40,0.55); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; align-content: start">
+
+  <section role="dialog" aria-labelledby="d1" style="background: #ffffff; border-radius: 12px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18)">
+    <div style="display: flex; align-items: center">
+      <h2 id="d1" style="margin: 0; font-size: 17px; font-weight: 600">Ubah langganan · SGR</h2>
+      <button type="button" aria-label="Tutup" style="margin-left: auto; width: 36px; height: 36px; border: 0; background: transparent; border-radius: 6px; font-size: 20px; color: #626b77; cursor: pointer">×</button>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="c-plan" style="font-size: 14px; font-weight: 500">Paket</label>
+        <select id="c-plan" style="height: 40px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 8px; background: #ffffff; color: #1c2128"><option>PRO · Pro</option><option>BASIC · Basic</option><option>ENTERPRISE · Enterprise</option></select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="c-status" style="font-size: 14px; font-weight: 500">Status</label>
+        <select id="c-status" style="height: 40px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 8px; background: #ffffff; color: #1c2128"><option>Aktif</option><option>Trial</option></select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="c-through" style="font-size: 14px; font-weight: 500">Dibayar sampai</label>
+        <input id="c-through" type="date" value="2026-11-08" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #626b77"><input type="checkbox" style="width: 16px; height: 16px; accent-color: #1f6f5c"> Tanpa tanggal berakhir</label>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="c-grace" style="font-size: 14px; font-weight: 500">Hari tenggang</label>
+        <input id="c-grace" type="number" min="0" max="90" value="14" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+        <span style="font-size: 12px; color: #626b77">0 sampai 90</span>
+      </div>
+    </div>
+    <fieldset style="border: 1px solid #e3e6ea; border-radius: 8px; padding: 12px 14px; margin: 0; display: flex; flex-direction: column; gap: 10px">
+      <legend style="font-size: 14px; font-weight: 500; padding: 0 4px">Kuota khusus penyewa</legend>
+      <sc-for list="{{overrides}}" as="o" hint-placeholder-count="3">
+        <div style="display: grid; grid-template-columns: 120px 110px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px">
+          <span>{{o.label}}</span>
+          <input aria-label="{{o.label}}" type="number" value="{{o.value}}" placeholder="{{o.plan}}" style="height: 36px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+          <span style="font-size: 12px; color: #626b77">{{o.note}}</span>
+        </div>
+      </sc-for>
+    </fieldset>
+    <p style="margin: 0; padding: 10px 12px; border-radius: 8px; background: #f6f7f9; font-size: 13px; line-height: 1.5">Tanpa invoice: perubahan langsung berlaku. Untuk upgrade berbayar, terbitkan invoice dengan paket baru; paket berganti saat invoice dibayar.</p>
+    <div style="display: flex; justify-content: flex-end; gap: 8px">
+      <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer; color: #1c2128">Batal</button>
+      <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #1f6f5c; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Simpan</button>
+    </div>
+  </section>
+
+  <section role="dialog" aria-labelledby="d2" style="background: #ffffff; border-radius: 12px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18)">
+    <div style="display: flex; align-items: center">
+      <h2 id="d2" style="margin: 0; font-size: 17px; font-weight: 600">Terbitkan invoice · SGR</h2>
+      <button type="button" aria-label="Tutup" style="margin-left: auto; width: 36px; height: 36px; border: 0; background: transparent; border-radius: 6px; font-size: 20px; color: #626b77; cursor: pointer">×</button>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="i-plan" style="font-size: 14px; font-weight: 500">Paket ditagih</label>
+        <select id="i-plan" style="height: 40px; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 8px; background: #ffffff; color: #1c2128"><option>PRO · Rp 7.500.000 / 3 bln</option><option>ENTERPRISE · Rp 24.000.000 / 12 bln</option></select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="i-periods" style="font-size: 14px; font-weight: 500">Jumlah periode</label>
+        <input id="i-periods" type="number" min="1" max="36" value="1" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #e3e6ea; border: 1px solid #e3e6ea; border-radius: 8px; overflow: hidden; font-size: 14px">
+      <div style="background: #f6f7f9; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #626b77">Periode (otomatis)</span><strong>9 Feb – 8 Mei 2027</strong></div>
+      <div style="background: #f6f7f9; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #626b77">Nomor berikutnya</span><strong style="font-family: ui-monospace, monospace; font-weight: 600">SUB-2026-00058</strong></div>
+    </div>
+    <p style="margin: 0; padding: 10px 12px; border: 1px solid #b4332c; border-radius: 8px; background: #f8eceb; color: #b4332c; font-size: 13px; line-height: 1.5">SUB-2026-00041 masih terbuka untuk 9 Nov 2026 – 8 Feb 2027. Periode baru dimulai sesudahnya. Bayar atau void invoice itu dulu bila ingin menagih ulang periode yang sama.</p>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="i-amount" style="font-size: 14px; font-weight: 500">Jumlah</label>
+        <input id="i-amount" inputmode="decimal" value="7.500.000" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px; text-align: right; font-variant-numeric: tabular-nums">
+        <span style="font-size: 12px; color: #626b77">Default: periode × harga. Ubah untuk diskon.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="i-due" style="font-size: 14px; font-weight: 500">Jatuh tempo</label>
+        <input id="i-due" type="date" value="2027-02-09" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <label for="i-notes" style="font-size: 14px; font-weight: 500">Catatan <span style="font-weight: 400; color: #626b77">(opsional)</span></label>
+      <textarea id="i-notes" rows="2" style="box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 8px 10px; resize: vertical"></textarea>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 8px">
+      <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer; color: #1c2128">Batal</button>
+      <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #1f6f5c; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Terbitkan</button>
+    </div>
+  </section>
+
+  <section role="dialog" aria-labelledby="d3" style="background: #ffffff; border-radius: 12px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18)">
+    <div style="display: flex; align-items: center">
+      <h2 id="d3" style="margin: 0; font-size: 17px; font-weight: 600">Catat pembayaran</h2>
+      <button type="button" aria-label="Tutup" style="margin-left: auto; width: 36px; height: 36px; border: 0; background: transparent; border-radius: 6px; font-size: 20px; color: #626b77; cursor: pointer">×</button>
+    </div>
+    <dl style="margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; font-size: 14px; padding: 12px 14px; border-radius: 8px; background: #f6f7f9">
+      <dt style="color: #626b77">Invoice</dt><dd style="margin: 0; font-family: ui-monospace, monospace">SUB-2026-00041</dd>
+      <dt style="color: #626b77">Penyewa</dt><dd style="margin: 0">Segara Resort Group (SGR)</dd>
+      <dt style="color: #626b77">Periode</dt><dd style="margin: 0">9 Nov 2026 – 8 Feb 2027 · PRO</dd>
+      <dt style="color: #626b77">Jumlah</dt><dd style="margin: 0; font-weight: 600">Rp 7.500.000</dd>
+    </dl>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="p-paid" style="font-size: 14px; font-weight: 500">Tanggal bayar</label>
+        <input id="p-paid" type="date" value="2026-11-14" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <label for="p-ref" style="font-size: 14px; font-weight: 500">Referensi</label>
+        <input id="p-ref" placeholder="No. transfer / bukti" value="TRF-90412" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px">
+      </div>
+    </div>
+    <div style="padding: 12px 14px; border: 1px solid #2e9d6a; border-radius: 8px; background: #e6f4ec; font-size: 14px; line-height: 1.55">
+      <strong style="display: block; margin-bottom: 4px">Setelah disimpan</strong>
+      Langganan aktif sampai <strong>8 Feb 2027</strong> dengan paket <strong>PRO</strong>. Status hotel kembali <strong>Aktif</strong>, dan banner masa tenggang hilang pada request berikutnya.
+    </div>
+    <p style="margin: 0; font-size: 12px; color: #626b77">Invoice yang sudah dibayar tidak bisa diubah atau di-void.</p>
+    <div style="display: flex; justify-content: flex-end; gap: 8px">
+      <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer; color: #1c2128">Batal</button>
+      <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #1f6f5c; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Catat pembayaran</button>
+    </div>
+  </section>
+
+  <section role="alertdialog" aria-labelledby="d4" style="background: #ffffff; border-radius: 12px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); border-top: 4px solid #b4332c">
+    <div style="display: flex; align-items: center">
+      <h2 id="d4" style="margin: 0; font-size: 17px; font-weight: 600">Tangguhkan Segara Resort Group?</h2>
+      <button type="button" aria-label="Tutup" style="margin-left: auto; width: 36px; height: 36px; border: 0; background: transparent; border-radius: 6px; font-size: 20px; color: #626b77; cursor: pointer">×</button>
+    </div>
+    <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6">
+      <li>Semua user penyewa ini langsung keluar dan tidak bisa login.</li>
+      <li>Data tidak dihapus. Pengaktifan kembali memulihkan akses.</li>
+      <li>Untuk keterlambatan bayar, cukup biarkan masa tenggang habis (hanya baca). Tangguhkan hanya untuk penyalahgunaan atau permintaan penyewa.</li>
+    </ul>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <label for="s-reason" style="font-size: 14px; font-weight: 500">Alasan</label>
+      <textarea id="s-reason" rows="2" style="box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 8px 10px; resize: vertical">Permintaan penyewa: berhenti sementara selama renovasi.</textarea>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <label for="s-confirm" style="font-size: 14px; font-weight: 500">Ketik <span style="font-family: ui-monospace, monospace">SGR</span> untuk konfirmasi</label>
+      <input id="s-confirm" value="SGR" style="height: 40px; box-sizing: border-box; border: 1px solid #e3e6ea; border-radius: 8px; font: inherit; font-size: 14px; padding: 0 10px; font-family: ui-monospace, monospace">
+    </div>
+    <p style="margin: 0; font-size: 13px; color: #626b77">Membatalkan invoice memakai dialog yang sama: alasan wajib, tanpa ketik kode.</p>
+    <div style="display: flex; justify-content: flex-end; gap: 8px">
+      <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; font: inherit; font-size: 14px; cursor: pointer; color: #1c2128">Batal</button>
+      <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: #b4332c; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer">Tangguhkan</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      overrides: [
+        { label: 'Properti', value: '', plan: '3', note: 'Kosong = ikuti paket (3)' },
+        { label: 'Kamar', value: '150', plan: '120', note: 'Paket: 120. Dipakai: 140' },
+        { label: 'User', value: '', plan: '30', note: 'Kosong = ikuti paket (30)' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

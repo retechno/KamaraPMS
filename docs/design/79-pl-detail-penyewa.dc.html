@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Segara Resort Group · Console platform</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#1c2128;background:#f6f7f9}
+a{color:#1f6f5c}a:hover{color:#164f42}
+</style>
+</helmet>
+<div style="min-height: 1640px; background: #f6f7f9; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1c2128">
+  <header style="background: #1c2128; color: #e6e9ee">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; min-height: 56px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
+      <a href="#" style="display: flex; align-items: center; gap: 10px; color: #ffffff; text-decoration: none; font-weight: 600">
+        <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 7px; background: #3fa98d; color: #0c1512; display: grid; place-items: center; font-weight: 700; font-size: 14px">K</span>
+        KamaraPMS
+        <span style="font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #0c1512; background: #e0a93a; padding: 2px 7px; border-radius: 999px">Platform</span>
+      </a>
+      <nav aria-label="Console platform" style="display: flex; gap: 4px; flex-wrap: wrap">
+        <a href="78-pl-penyewa.dc.html" aria-current="page" style="color: #ffffff; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid #3fa98d; font-size: 14px; font-weight: 600">Penyewa</a>
+        <a href="81-pl-paket.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Paket</a>
+        <a href="83-pl-invoice.dc.html" style="color: #b8c0cb; text-decoration: none; padding: 16px 10px 14px; border-bottom: 2px solid transparent; font-size: 14px">Invoice</a>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px">
+        <span style="color: #b8c0cb">Rina Wijaya · operator</span>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #3a414b; border-radius: 6px; background: transparent; color: #e6e9ee; font: inherit; font-size: 13px; cursor: pointer">Keluar</button>
+      </div>
+    </div>
+  </header>
+
+  <main style="max-width: 1200px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 20px">
+    <nav aria-label="Jejak" style="font-size: 13px; color: #626b77"><a href="78-pl-penyewa.dc.html">Penyewa</a> <span aria-hidden="true">/</span> SGR</nav>
+
+    <div style="display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap">
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600">Segara Resort Group</h1>
+          <span style="display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #fbf1dd; color: #8a5300">Masa tenggang</span>
+        </div>
+        <p style="margin: 0; font-size: 14px; color: #626b77">Kode <span style="font-family: ui-monospace, monospace; color: #1c2128">SGR</span> · Asia/Makassar · penyewa sejak 2 Mar 2026 · 3 properti</p>
+      </div>
+      <div style="margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap">
+        <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; text-decoration: none; font-size: 14px; color: #1c2128">Ubah langganan</a>
+        <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border: 1px solid #e3e6ea; border-radius: 8px; background: #ffffff; text-decoration: none; font-size: 14px; color: #1c2128">Terbitkan invoice</a>
+        <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border: 1px solid #b4332c; border-radius: 8px; background: #ffffff; text-decoration: none; font-size: 14px; color: #b4332c">Tangguhkan</a>
+      </div>
+    </div>
+
+    <div role="status" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border: 1px solid #c98a10; border-radius: 8px; background: #fbf1dd; font-size: 14px; line-height: 1.5">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8a5300" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+      <span style="flex: 1 1 420px">Dibayar sampai <strong>8 Nov 2026</strong>. Masa tenggang berakhir <strong>22 Nov 2026</strong> (8 hari lagi), setelah itu hotel hanya bisa membaca data. Invoice <strong>SUB-2026-00041</strong> sebesar Rp 7.500.000 belum dibayar.</span>
+      <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 8px; background: #1f6f5c; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600">Catat pembayaran</a>
+    </div>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start">
+      <div style="flex: 999 1 620px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+
+        <section aria-labelledby="sub-h" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <h2 id="sub-h" style="margin: 0; font-size: 16px; font-weight: 600">Langganan</h2>
+            <a href="80-pl-dialog.dc.html" style="margin-left: auto; font-size: 14px">Ubah</a>
+          </div>
+          <dl style="margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px 20px; font-size: 14px">
+            <sc-for list="{{facts}}" as="f" hint-placeholder-count="6">
+              <div style="display: flex; flex-direction: column; gap: 3px">
+                <dt style="font-size: 12px; color: #626b77">{{f.k}}</dt>
+                <dd style="margin: 0; font-weight: 500">{{f.v}}</dd>
+              </div>
+            </sc-for>
+          </dl>
+        </section>
+
+        <section aria-labelledby="quota-h" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <h2 id="quota-h" style="margin: 0; font-size: 16px; font-weight: 600">Kuota &amp; pemakaian</h2>
+            <a href="80-pl-dialog.dc.html" style="margin-left: auto; font-size: 14px">Atur kuota</a>
+          </div>
+          <sc-for list="{{quotas}}" as="q" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 14px">
+                <span style="font-weight: 500">{{q.label}}</span>
+                <sc-if value="{{q.override}}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; border: 1px solid #1f6f5c; color: #1f6f5c">Khusus penyewa (paket: {{q.planLimit}})</span>
+                </sc-if>
+                <span style="margin-left: auto; font-variant-numeric: tabular-nums; color: {{q.textColor}}; font-weight: 600">{{q.used}} / {{q.limit}}</span>
+              </div>
+              <div role="meter" aria-label="{{q.label}}" aria-valuemin="0" aria-valuemax="{{q.limit}}" aria-valuenow="{{q.used}}" style="height: 8px; border-radius: 4px; background: #eceef2; overflow: hidden">
+                <div style="height: 8px; width: {{q.pct}}; background: {{q.barColor}}; border-radius: 4px"></div>
+              </div>
+              <span style="font-size: 12px; color: #626b77">{{q.hint}}</span>
+            </div>
+          </sc-for>
+        </section>
+
+        <section aria-labelledby="mod-h" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <h2 id="mod-h" style="margin: 0; font-size: 16px; font-weight: 600">Modul dalam paket</h2>
+          <ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px">
+            <sc-for list="{{modules}}" as="m" hint-placeholder-count="6">
+              <li style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid {{m.border}}; border-radius: 8px; font-size: 14px; color: {{m.color}}; background: {{m.bg}}">
+                <span aria-hidden="true" style="font-weight: 700">{{m.mark}}</span>
+                <span>{{m.name}}</span>
+                <span style="margin-left: auto; font-size: 12px">{{m.state}}</span>
+              </li>
+            </sc-for>
+          </ul>
+        </section>
+
+        <section aria-labelledby="inv-h" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; display: flex; flex-direction: column">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 16px 20px 12px">
+            <h2 id="inv-h" style="margin: 0; font-size: 16px; font-weight: 600">Invoice</h2>
+            <a href="80-pl-dialog.dc.html" style="margin-left: auto; font-size: 14px">+ Terbitkan</a>
+          </div>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14px">
+              <thead>
+                <tr style="text-align: left; color: #626b77; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em">
+                  <th scope="col" style="padding: 8px 20px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Nomor</th>
+                  <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Periode</th>
+                  <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #e3e6ea; text-align: right">Jumlah</th>
+                  <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Status</th>
+                  <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #e3e6ea">Jatuh tempo</th>
+                  <th scope="col" style="padding: 8px 20px; font-weight: 600; border-bottom: 1px solid #e3e6ea"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Aksi</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{invoices}}" as="i" hint-placeholder-count="4">
+                  <tr>
+                    <td style="padding: 11px 20px; border-bottom: 1px solid #eceef2; font-family: ui-monospace, monospace; font-size: 13px">{{i.number}}</td>
+                    <td style="padding: 11px 10px; border-bottom: 1px solid #eceef2">{{i.period}}</td>
+                    <td style="padding: 11px 10px; border-bottom: 1px solid #eceef2; text-align: right; font-variant-numeric: tabular-nums">{{i.amount}}</td>
+                    <td style="padding: 11px 10px; border-bottom: 1px solid #eceef2"><span style="{{i.badge}}">{{i.status}}</span></td>
+                    <td style="padding: 11px 10px; border-bottom: 1px solid #eceef2">{{i.due}}</td>
+                    <td style="padding: 11px 20px; border-bottom: 1px solid #eceef2; text-align: right; white-space: nowrap">
+                      <sc-if value="{{i.open}}" hint-placeholder-val="{{ false }}">
+                        <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border-radius: 6px; background: #1f6f5c; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 600">Catat bayar</a>
+                        <a href="80-pl-dialog.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 10px; margin-left: 6px; border: 1px solid #e3e6ea; border-radius: 6px; color: #1c2128; text-decoration: none; font-size: 13px">Void</a>
+                      </sc-if>
+                      <sc-if value="{{i.closedNote}}" hint-placeholder-val="{{ true }}">
+                        <span style="font-size: 13px; color: #626b77">{{i.closedNote}}</span>
+                      </sc-if>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+        <section aria-labelledby="adm-h" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <h2 id="adm-h" style="margin: 0; font-size: 16px; font-weight: 600">Admin penyewa</h2>
+          <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+            <li style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Made Arsana</span><a href="#">made@segara.example</a><span style="font-size: 12px; color: #626b77">Login terakhir 13 Nov 2026, 21.40</span></li>
+            <li style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">Dewi Lestari</span><a href="#">dewi@segara.example</a><span style="font-size: 12px; color: #626b77">Login terakhir 12 Nov 2026, 08.15</span></li>
+          </ul>
+          <p style="margin: 0; font-size: 12px; color: #626b77; line-height: 1.5">Console hanya menampilkan kontak. Operator tidak bisa masuk ke data hotel.</p>
+        </section>
+
+        <section aria-labelledby="act-h" style="background: #ffffff; border: 1px solid #e3e6ea; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <h2 id="act-h" style="margin: 0; font-size: 16px; font-weight: 600">Aktivitas langganan</h2>
+          <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px">
+            <sc-for list="{{activity}}" as="a" hint-placeholder-count="5">
+              <li style="display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 10px; font-size: 14px">
+                <span aria-hidden="true" style="width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: {{a.dot}}"></span>
+                <div style="display: flex; flex-direction: column; gap: 2px">
+                  <span>{{a.what}}</span>
+                  <span style="font-size: 12px; color: #626b77">{{a.who}} · {{a.when}}</span>
+                </div>
+              </li>
+            </sc-for>
+          </ol>
+          <a href="#" style="font-size: 14px">Lihat semua</a>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const b = {
+      paid: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#e6f4ec;color:#1b7a4b',
+      issued: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#fbf1dd;color:#8a5300',
+      overdue: 'display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#f8eceb;color:#b4332c',
+      void: 'display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid #9aa3ae;color:#626b77'
+    };
+    const q = (label, used, limit, planLimit, hint) => {
+      const pct = Math.min(100, Math.round((used / limit) * 100));
+      const color = pct >= 100 ? '#b4332c' : pct >= 85 ? '#c98a10' : '#1f6f5c';
+      return { label, used, limit, planLimit, override: planLimit !== limit, pct: pct + '%', barColor: color, textColor: pct >= 100 ? '#b4332c' : pct >= 85 ? '#8a5300' : '#1c2128', hint };
+    };
+    return {
+      facts: [
+        { k: 'Paket', v: 'PRO · Pro' },
+        { k: 'Status', v: 'Aktif (dibayar)' },
+        { k: 'Mulai', v: '2 Mar 2026' },
+        { k: 'Dibayar sampai', v: '8 Nov 2026' },
+        { k: 'Hari tenggang', v: '14 hari' },
+        { k: 'Tagihan', v: 'Rp 7.500.000 / 3 bulan' }
+      ],
+      quotas: [
+        q('Properti aktif', 3, 3, 3, 'Penuh: properti baru ditolak (PLAN_LIMIT_REACHED).'),
+        q('Kamar aktif', 140, 150, 120, 'Batas dinaikkan khusus untuk penyewa ini.'),
+        q('User aktif', 25, 30, 30, 'Termasuk admin penyewa.')
+      ],
+      modules: [
+        { name: 'Inti (front office)', mark: '✓', state: 'selalu', color: '#1c2128', border: '#e3e6ea', bg: '#ffffff' },
+        { name: 'Housekeeping', mark: '✓', state: 'aktif', color: '#1b7a4b', border: '#b9dcc8', bg: '#f1f8f4' },
+        { name: 'Accounting', mark: '✓', state: 'aktif', color: '#1b7a4b', border: '#b9dcc8', bg: '#f1f8f4' },
+        { name: 'POS', mark: '✓', state: 'aktif', color: '#1b7a4b', border: '#b9dcc8', bg: '#f1f8f4' },
+        { name: 'Inventory & aset', mark: '–', state: 'tidak', color: '#626b77', border: '#e3e6ea', bg: '#f6f7f9' },
+        { name: 'Banquet', mark: '–', state: 'tidak', color: '#626b77', border: '#e3e6ea', bg: '#f6f7f9' }
+      ],
+      invoices: [
+        { number: 'SUB-2026-00041', period: '9 Nov 2026 – 8 Feb 2027', amount: 'Rp 7.500.000', status: 'Lewat jatuh tempo', badge: b.overdue, due: '9 Nov 2026', open: true, closedNote: '' },
+        { number: 'SUB-2026-00027', period: '9 Agu – 8 Nov 2026', amount: 'Rp 7.500.000', status: 'Dibayar', badge: b.paid, due: '9 Agu 2026', open: false, closedNote: 'Dibayar 7 Agu · TRF-88213' },
+        { number: 'SUB-2026-00019', period: '9 Mei – 8 Agu 2026', amount: 'Rp 7.500.000', status: 'Dibayar', badge: b.paid, due: '9 Mei 2026', open: false, closedNote: 'Dibayar 6 Mei · TRF-71540' },
+        { number: 'SUB-2026-00011', period: '9 Mei – 8 Agu 2026', amount: 'Rp 8.250.000', status: 'Di-void', badge: b.void, due: '9 Mei 2026', open: false, closedNote: 'Harga salah' }
+      ],
+      activity: [
+        { what: 'Invoice SUB-2026-00041 diterbitkan', who: 'Rina Wijaya', when: '2 Nov 2026', dot: '#c98a10' },
+        { what: 'Batas kamar diubah 120 → 150', who: 'Rina Wijaya', when: '15 Sep 2026', dot: '#1f6f5c' },
+        { what: 'Langganan diperpanjang sampai 8 Nov 2026', who: 'Andi Saputra', when: '7 Agu 2026', dot: '#2e9d6a' },
+        { what: 'Paket diubah BASIC → PRO', who: 'Andi Saputra', when: '6 Mei 2026', dot: '#1f6f5c' },
+        { what: 'Langganan dimulai (trial)', who: 'sistem', when: '2 Mar 2026', dot: '#9aa3ae' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
