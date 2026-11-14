@@ -179,6 +179,8 @@ type Invoice struct {
 	PaymentReference string          `json:"payment_reference,omitempty"`
 	VoidReason       string          `json:"void_reason,omitempty"`
 	Notes            string          `json:"notes,omitempty"`
+	// IsOverdue is true for an ISSUED invoice whose due day is before today in the tenant's time zone (filled by the lists, false elsewhere).
+	IsOverdue bool `json:"is_overdue"`
 }
 
 // Summary is what a tenant sees of its subscription (GET /api/v1/subscription).
@@ -195,6 +197,16 @@ type Summary struct {
 	DaysLeft *int   `json:"days_left"`
 	Limits   Limits `json:"limits"`
 	Usage    Usage  `json:"usage"`
+	// IsTrialEnding is true while the status is TRIAL and at most TrialEndingDays days of writing are left: the shell warns before the trial runs out.
+	IsTrialEnding bool `json:"is_trial_ending"`
+}
+
+// TrialEndingDays is how many days before the end of a trial the hotel's screens start to say so.
+const TrialEndingDays = 7
+
+// trialEnding fills Summary.IsTrialEnding.
+func trialEnding(status string, access AccessState, left *int) bool {
+	return status == "TRIAL" && access == AccessFull && left != nil && *left <= TrialEndingDays
 }
 
 // daysLeft fills Summary.DaysLeft.

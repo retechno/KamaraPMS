@@ -8,6 +8,7 @@ import PropertySwitcher from '@/components/shell/PropertySwitcher.vue'
 import CheckInHost from '@/components/shell/CheckInHost.vue'
 import RoomPanelHost from '@/components/shell/RoomPanelHost.vue'
 import SidebarNav from '@/components/shell/SidebarNav.vue'
+import SubscriptionBanner from '@/components/shell/SubscriptionBanner.vue'
 import TopBar from '@/components/shell/TopBar.vue'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useLayoutMode } from '@/composables/useLayoutMode'
@@ -29,6 +30,8 @@ const { mode, collapsed, canCollapse, toggleCollapsed } = useLayoutMode()
 const pins = useNavPins()
 const subscription = useSubscriptionStore()
 void subscription.load() // the modules of the plan: the menu leaves out the pages of a module that is off
+const stopWatching = subscription.watchAccess() // and the banner follows the access state that the responses report
+onUnmounted(stopWatching)
 
 const drawer = ref(false)
 const palette = ref(false)
@@ -77,6 +80,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <p v-if="property.clock?.night_audit_overdue" class="alert warning" role="status" data-testid="overdue-banner">
           {{ t('shell.nightAuditBanner', { date: formatBusinessDate(property.clock.business_date) }) }}
         </p>
+        <SubscriptionBanner />
         <slot />
       </main>
     </div>

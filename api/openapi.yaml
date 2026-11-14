@@ -20858,7 +20858,7 @@ components:
         max_users: { type: [integer, "null"], description: "Active users, administrators included; null is unlimited." }
     SubscriptionSummary:
       type: object
-      required: [plan_code, plan_name, modules, status, access, started_on, paid_through, grace_ends_on, days_left, limits, usage]
+      required: [plan_code, plan_name, modules, status, access, started_on, paid_through, grace_ends_on, days_left, limits, usage, is_trial_ending, billing_contact]
       properties:
         plan_code: { type: string }
         plan_name: { type: string }
@@ -20879,9 +20879,11 @@ components:
             properties: { type: integer }
             rooms: { type: integer }
             users: { type: integer }
+        is_trial_ending: { type: boolean, description: "True while the status is TRIAL, the access is FULL and at most 7 days of writing are left (docs/architecture/39-platform-console.md §8)." }
+        billing_contact: { type: [string, "null"], description: "Free text of PMS_BILLING_CONTACT: who to ask about renewing; null when the server has none." }
     SubscriptionInvoice:
       type: object
-      required: [id, number, plan_id, plan_code, period_start, period_end, amount, currency_code, status, issued_at, due_on]
+      required: [id, number, plan_id, plan_code, period_start, period_end, amount, currency_code, status, issued_at, due_on, is_overdue]
       properties:
         id: { type: integer, format: int64 }
         number: { type: string, examples: ["SUB-2026-00001"] }
@@ -20898,6 +20900,7 @@ components:
         payment_reference: { type: string }
         void_reason: { type: string }
         notes: { type: string }
+        is_overdue: { type: boolean, description: "True for an ISSUED invoice whose due day is before today in the tenant's time zone." }
     EmailEntry:
       type: object
       required: [id, kind, to, status, attempts, sent_at, created_at]
