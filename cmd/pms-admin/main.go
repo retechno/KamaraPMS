@@ -5,6 +5,7 @@
 //	pms-admin show-tenant -code ABC
 //	pms-admin create-admin -tenant ABC -email admin@hotel.com -name "Admin"   (prints a generated password)
 //
+// The commands on the operators of the platform console and on suspending a tenant are in operator.go.
 // The subscription commands (plans, a tenant's subscription, its invoices) are in subscription.go; run
 // pms-admin without arguments for the list (docs/architecture/26-subscriptions.md §8).
 //
@@ -42,7 +43,7 @@ const usage = `usage:
   pms-admin create-tenant -code CODE -name NAME -timezone ZONE
   pms-admin show-tenant -code CODE
   pms-admin create-admin -tenant CODE -email EMAIL -name NAME [-password-env VAR]
-` + subscriptionUsage
+` + subscriptionUsage + operatorUsage
 
 func run(args []string) error {
 	if len(args) == 0 {
@@ -51,6 +52,9 @@ func run(args []string) error {
 	cmd, rest := args[0], args[1:]
 	if _, ok := subscriptionCommands[cmd]; ok {
 		return runSubscription(cmd, rest)
+	}
+	if operatorCommands[cmd] {
+		return runOperator(cmd, rest)
 	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	code := fs.String("code", "", "tenant code (A-Z, 0-9, - or _), used at login")

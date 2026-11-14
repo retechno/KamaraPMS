@@ -420,6 +420,26 @@ Each PR adds its line here: what was built, the migration, deviations from this 
   Deviation: the invoice list of the tenant (and `TenantInvoices`) now carries `is_overdue` (ISSUED and due before today in the tenant's time zone), so "Unpaid" is decided by the server and not
   counted in the browser. The dismissal key of the trial warning holds the days left instead of a date, so it comes back the next day without the browser reading the server clock.
 
+**PR 2 (operator backend), migration 00100.** Five tables (`operator_accounts`, `operator_recovery_codes`, `operator_login_challenges`, `operator_sessions`, `operator_audit_logs`, the last one append-only),
+`audit_logs.operator_id` with `audit_logs_actor_ck`, `tenants.status_reason` and `status_changed_at`. `internal/operator` has the sign-in (password, then a challenge, then TOTP or a recovery code, or the enrolment
+at the first sign-in), the sessions (rotation, reuse detection with a 30 s grace, an absolute 12 h), the AES-256-GCM sealing of the secrets, the commands of `pms-admin` (`cmd/pms-admin/operator.go`, which also has
+`suspend-tenant` and `reactivate-tenant`) and the console API of section 7 (`console.go`, `console_http.go`), all under `/api/v1/platform/`, outside the hotel's middleware and the subscription gate, with
+`Cache-Control: no-store`. Without `PMS_OPERATOR_TOTP_KEY` the whole tree answers 404 `ROUTE_NOT_FOUND`. `iam` refuses a token that names another audience than `hotel` (the hotel's own tokens name none); the
+operator's has issuer `kamarapms-platform`, audience `platform`, and a hotel token on a console route (and the other way round) is 401, proved over the route lists in `platform_api_test.go`. The login limiter moved
+to `internal/platform/loginlimit` and is shared. The hotel's audit reader returns `actor_kind` (`user`, `operator`, `system`); the label "KamaraPMS (operator)" on the hotel's screens is for PR 3 (web).
+
+Deviations and what the document did not say:
+
+- `ParseOperatorKey` is in `internal/platform/config` (config cannot import `operator`).
+- The summary of the tenant list has `open_invoice_totals`, one line per currency, instead of a single `open_invoice_total`; so has `total_open` of the invoice list. Plans may be billed in different currencies and one sum of them would be wrong.
+- The summary counts every tenant selected by `q` and `plan`, whatever `status` says, so the tabs keep their numbers. The states (`active`, `trial`, `grace`, `read_only`, `suspended`) are decided in Go with the tenant's time zone; SQL only decides "overdue", with the instant passed in.
+- Suspending and reactivating is `operator.Console.SetSuspended` (with its own queries), not a method of `tenancy`: it needs the operator's reads of `tenants`, `user_sessions` and the subscription row in one place. It takes the same lock level and row as the quota. `tenants.status_reason` is cleared on reactivation (the reason of both steps stays in the audit trails).
+- The double audit trail (P12) is done inside `audit.Writer.Write`: when the context holds an operator, the same call also writes `operator_audit_logs`. The services needed no change. A plan has no tenant, so a plan change is in the operator's trail only. A failed sign-in for an e-mail that does not exist is written with `entity_id` 0 and the e-mail as the label.
+- The counters of failed passwords per e-mail and per address, and of wrong codes per operator, are in memory like the hotel's login limiter: a restart of the API resets them (one API instance for the pilot). The five wrong codes of a challenge are counted in the database.
+- `GET .../tenants/{code}/admins`, `.../activity` and `.../invoices` answer `{items: [...]}`.
+- The hotel's access-token audience is checked only when the token has one (tokens issued before this change have none and stay valid until they expire).
+- `scripts/db-test.sh` was run here on PostgreSQL 16 only; the CI runs the version of production.
+
 ## 17. Not in this work
 
 A payment gateway, proration, e-mail reminders before `paid_through`, PDF of subscription invoices, operator self-service password change in the
