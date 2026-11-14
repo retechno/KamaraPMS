@@ -8558,7 +8558,7 @@ export const id: Messages = {
     always: 'Selalu termasuk',
     included: 'Termasuk',
     notIncluded: 'Tidak termasuk',
-    module: { CORE: 'Inti', HOUSEKEEPING: 'Tata graha', ACCOUNTING: 'Akuntansi', INVENTORY: 'Persediaan', BANQUET: 'Banquet', POS: 'POS' },
+    module: { CORE: 'Inti', HOUSEKEEPING: 'Housekeeping', ACCOUNTING: 'Akuntansi', INVENTORY: 'Persediaan', BANQUET: 'Banquet', POS: 'POS' },
     state: { TRIAL: 'Percobaan', FULL: 'Aktif', GRACE: 'Masa tenggang', READ_ONLY: 'Hanya baca' },
     invoices: 'Invoice',
     noInvoices: 'Belum ada invoice',

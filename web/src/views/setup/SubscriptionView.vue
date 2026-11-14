@@ -54,9 +54,9 @@ const statusOf = (inv: SubscriptionInvoice): 'unpaid' | 'issued' | 'paid' | 'voi
 
 const columns = computed<Column<SubscriptionInvoice>[]>(() => [
   { key: 'number', label: t('subscription.invoice.number') },
-  { key: 'period', label: t('subscription.invoice.period') },
-  { key: 'amount', label: t('subscription.invoice.amount'), align: 'right' },
   { key: 'status', label: t('subscription.invoice.status') },
+  { key: 'amount', label: t('subscription.invoice.amount'), align: 'right' },
+  { key: 'period', label: t('subscription.invoice.period') },
   { key: 'due_on', label: t('subscription.invoice.due') },
 ])
 </script>
