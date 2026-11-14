@@ -22,6 +22,31 @@ export async function pickCombo(scope: Scope, name: string, label: string | RegE
   await pageOf(scope).locator('[data-slot=combobox-content] [role=option]').filter({ hasText: label }).first().click()
 }
 
+/** Sets a room type <select name> by its id and, when that changes it, waits for the page to load the rooms of the type (GET availability/rooms). */
+export async function chooseRoomType(scope: Scope, name: string, typeId: number): Promise<void> {
+  const select = scope.locator(`select[name="${name}"]`)
+  await expect(select.locator(`option[value="${typeId}"]`)).toBeAttached()
+  if ((await select.inputValue()) === String(typeId)) return
+  const loaded = pageOf(scope).waitForResponse((r) => r.url().includes('/availability/rooms') && r.url().includes(`room_type_id=${typeId}`))
+  await select.selectOption(String(typeId))
+  await loaded
+}
+
+/**
+ * Chooses the first room a room Combobox offers READY (its label has no "not ready" tag) and returns its label ("204 · Bersih · Queen").
+ * Parallel tests take rooms too, so a room picked beforehand may be gone from the list, and a room offered unready is refused without
+ * the override (ROOM_NOT_READY): pms-seed makes some rooms dirty, such as 103.
+ */
+export async function pickFirstReadyRoom(scope: Scope, name: string, notReadyTag: string): Promise<string> {
+  const tag = notReadyTag.trim()
+  const options = scope.locator(`select[name="${name}"] option:not([value="0"]):not([disabled])`)
+  let label = ''
+  await expect.poll(async () => (label = (await options.allTextContents()).map((l) => l.trim()).find((l) => !l.includes(tag)) ?? ''),
+    { message: `a ready room is offered in ${name}` }).not.toBe('')
+  await pickCombo(scope, name, label)
+  return label
+}
+
 /** Chooses the first real option of a Combobox (skips a placeholder such as "Choose an account", which has the value 0). */
 export async function pickFirstCombo(scope: Scope, name: string, skip = 0): Promise<string> {
   const box = scope.locator('[data-slot=combobox]').filter({ has: pageOf(scope).locator(`select[name="${name}"]`) })

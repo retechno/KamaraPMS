@@ -99,7 +99,7 @@ Aturan menulis test baru:
 |---|---|---|---|
 | FD-01 | Reservasi tiba hari ini, kamar bersih sudah ditetapkan | /arrivals → Check-in → Tamu → Kamar (kamar yang ditetapkan diusulkan) → Deposit: metode Kartu + referensi → Terima deposit dan check-in | Langkah Selesai tampil; tamu in-house di kamar itu; deposit menjadi kredit di folio |
 | FD-02 | Kamar reservasi kotor | Check-in → langkah kamar | Peringatan "not ready"; tombol lanjut nonaktif; tidak ada opsi override untuk resepsionis |
-| FD-03 | Kamar kosong bersih | /walk-in → tipe, kamar, keberangkatan, nama tamu baru → Check-in | Pindah ke /stays/:id; nama tamu dan kamar tampil |
+| FD-03 | Kamar kosong bersih | /walk-in → keberangkatan, tipe, kamar pertama yang ditawarkan **siap**, nama tamu baru → Check-in | Pindah ke /stays/:id; nama tamu dan kamar tampil |
 | FD-04 | Tamu in-house | /in-house → klik baris tamu | Detail stay terbuka |
 | FD-05 | Tamu in-house, ada kamar bersih lain di tipenya | Stay → Pindah kamar → pilih tipe kamar tamu, lalu kamar pertama yang ditawarkan **siap** (tanpa tanda "belum siap"), alasan → Pindahkan | Respons pindah 200 (kalau ditolak, pesan server jadi pesan gagal); segmen stay berisi kamar baru |
 | FD-06 | Tamu in-house 1 malam | Stay → Perpanjang → tanggal +1 → Simpan | departure_date maju satu hari |
@@ -228,6 +228,7 @@ Run keenam (9 Nov 2026): **118 dari 118 lulus** dalam 14,7 menit (3 worker, Chro
 ## Temuan dari run CI 13 Nov 2026 (PR #99)
 
 - **Masalah tes, bukan aplikasi: FD-05 gagal empat kali berturut-turut dengan target kamar 103.** Form pindah kamar dibuka dengan tipe kamar pertama (Standard), dan test memilih kamar pertama yang ditawarkan. `pms-seed rooms` membuat kamar 103 berstatus DIRTY (`states[(f*7+n)%7]`), dan kamar itu jadi pilihan pertama setiap kali 101 dan 102 sedang dipakai test lain. Form menandainya "(belum siap)", dan server menolak tanpa override (`ROOM_NOT_READY`). Test tidak membaca alasan penolakan itu, jadi yang terlihat hanya segmen stay tidak berubah. [Diperbaiki di `fd05-move-diagnosis`: test memilih tipe kamar tamu dan kamar pertama yang siap, dan kalau pemindahan ditolak, status serta pesan server jadi pesan gagal.]
+- **Masalah tes yang sama di FD-03 (flaky di run PR #100):** walk-in memilih kamar yang sudah dibebaskan sebelumnya (204), dan kamar itu diambil test paralel sebelum form memuat daftarnya. Sekarang FD-03 dan FD-05 memakai `chooseRoomType` dan `pickFirstReadyRoom` (`support/ui.ts`): menunggu daftar kamar tipe itu dimuat, lalu memilih kamar pertama yang ditawarkan siap.
 
 ## CI
 

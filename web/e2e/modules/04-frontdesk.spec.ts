@@ -1,7 +1,7 @@
 import { test, expect } from '../support/fixtures'
 import { addDays } from '../support/factories'
 import { tx } from '../support/i18n'
-import { pickCombo, pickSelect, setDate } from '../support/ui'
+import { chooseRoomType, pickFirstReadyRoom, setDate } from '../support/ui'
 
 /** The front desk: today's arrivals, walk-in, in house, room move, extension, reverse check-in, and the check-out with its payment step. */
 test.describe('Front office', () => {
@@ -48,17 +48,17 @@ test.describe('Front office', () => {
     await expect(sheet.locator('input[name=override]')).toHaveCount(0) // the desk has no frontdesk.checkin_unready_room
   })
 
-  test('FD-03 walk-in tamu baru tanpa reservasi', async ({ page, loginAs, data, seed }) => {
+  test('FD-03 walk-in tamu baru tanpa reservasi', async ({ page, loginAs, data }) => {
     const bd = await data.businessDate()
     const typeId = await data.roomTypeWithSpace(bd, addDays(bd, 1))
-    const type = seed.roomTypes.find((t) => t.id === typeId)!
-    const room = await data.freeRoom(typeId, bd, addDays(bd, 1))
+    await data.freeRoom(typeId, bd, addDays(bd, 1)) // at least one clean room of the type
     const lastName = `Walkin ${Date.now().toString(36)}`
     await loginAs('frontdesk', '/walk-in')
     const form = page.getByTestId('walkin-form')
-    await pickSelect(form, 'room_type', type.code)
-    await pickCombo(form, 'room', `${room.number} ·`)
     await setDate(form, 'departure', addDays(bd, 1))
+    await chooseRoomType(form, 'room_type', typeId)
+    // the first ready room the form offers: a room chosen beforehand may be taken by a parallel test before the form lists it
+    const room = { number: (await pickFirstReadyRoom(form, 'room', tx('walkIn.notReadyTag'))).split(' ')[0]! }
     await form.locator('input[name=first_name]').fill('Wayan')
     await form.locator('input[name=last_name]').fill(lastName)
     await form.getByTestId('walkin-submit').click()
@@ -88,20 +88,8 @@ test.describe('Front office', () => {
     // a room of the guest's own type (the form opens on the first type), and the first one the form offers READY: parallel tests take rooms too,
     // so a room chosen beforehand may be gone, and a room the form marks "(belum siap)" is refused without the override (ROOM_NOT_READY;
     // pms-seed makes 103 dirty, and it is the first room offered whenever 101 and 102 are taken)
-    const typeId = String(ih.reservation.rooms[0]!.room_type_id)
-    const typeSelect = form.locator('select[name=room_type]')
-    await expect(typeSelect.locator(`option[value="${typeId}"]`)).toBeAttached()
-    if ((await typeSelect.inputValue()) !== typeId) {
-      const loaded = page.waitForResponse((r) => r.url().includes('/availability/rooms') && r.url().includes(`room_type_id=${typeId}`))
-      await typeSelect.selectOption(typeId)
-      await loaded
-    }
-    const notReady = tx('stayActions.notReadyTag').trim()
-    const options = form.locator('select[name="room"] option:not([value="0"]):not([disabled])')
-    let label = ''
-    await expect.poll(async () => (label = (await options.allTextContents()).map((l) => l.trim()).find((l) => !l.includes(notReady)) ?? ''),
-      { message: `a ready room of type ${typeId} is offered (freeRoom made one clean)` }).not.toBe('')
-    await pickCombo(form, 'room', label)
+    await chooseRoomType(form, 'room_type', ih.reservation.rooms[0]!.room_type_id)
+    const label = await pickFirstReadyRoom(form, 'room', tx('stayActions.notReadyTag'))
     const target = { number: label.split(' ')[0]! }
     await form.locator('input[name=reason]').fill('AC tidak dingin (E2E)')
     const moved = page.waitForResponse((r) => r.url().endsWith(`/stays/${ih.stay.id}/move`) && r.request().method() === 'POST')
