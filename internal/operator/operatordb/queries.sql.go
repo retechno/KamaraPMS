@@ -12,12 +12,12 @@ import (
 )
 
 const advanceOperatorTotpStep = `-- name: AdvanceOperatorTotpStep :execrows
-UPDATE operator_accounts SET totp_last_step = $1
-WHERE id = $2 AND (totp_last_step IS NULL OR totp_last_step < $1)
+UPDATE operator_accounts SET totp_last_step = $1::bigint
+WHERE id = $2 AND (totp_last_step IS NULL OR totp_last_step < $1::bigint)
 `
 
 type AdvanceOperatorTotpStepParams struct {
-	Step *int64
+	Step int64
 	ID   int64
 }
 
@@ -64,7 +64,7 @@ func (q *Queries) CountRecoveryCodesLeft(ctx context.Context, operatorID int64) 
 const createChallenge = `-- name: CreateChallenge :one
 
 INSERT INTO operator_login_challenges (operator_id, token_hash, purpose, expires_at, created_at)
-VALUES ($1, $2, $3, $4, $5)
+VALUES ($1, $2, $3, $4, $5::timestamptz)
 RETURNING id
 `
 
@@ -92,7 +92,7 @@ func (q *Queries) CreateChallenge(ctx context.Context, arg CreateChallengeParams
 
 const createOperator = `-- name: CreateOperator :one
 INSERT INTO operator_accounts (email, full_name, password_hash, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $4)
+VALUES ($1, $2, $3, $4::timestamptz, $4::timestamptz)
 RETURNING id, email, full_name, password_hash, totp_secret_enc, totp_enrolled_at, totp_last_step, is_active, last_login_at, created_at, updated_at
 `
 
@@ -389,7 +389,7 @@ func (q *Queries) InsertOperatorAudit(ctx context.Context, arg InsertOperatorAud
 
 const insertRecoveryCode = `-- name: InsertRecoveryCode :exec
 
-INSERT INTO operator_recovery_codes (operator_id, code_hash, created_at) VALUES ($1, $2, $3)
+INSERT INTO operator_recovery_codes (operator_id, code_hash, created_at) VALUES ($1, $2, $3::timestamptz)
 `
 
 type InsertRecoveryCodeParams struct {
@@ -405,17 +405,32 @@ func (q *Queries) InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCode
 }
 
 const killChallenge = `-- name: KillChallenge :exec
-UPDATE operator_login_challenges SET used_at = $1, pending_secret_enc = NULL WHERE id = $2 AND used_at IS NULL
+UPDATE operator_login_challenges SET used_at = $1::timestamptz, pending_secret_enc = NULL WHERE id = $2 AND used_at IS NULL
 `
 
 type KillChallengeParams struct {
-	At *time.Time
+	At time.Time
 	ID int64
 }
 
 // A dead challenge cannot be tried again: it is used up now, whatever the reason.
 func (q *Queries) KillChallenge(ctx context.Context, arg KillChallengeParams) error {
 	_, err := q.db.Exec(ctx, killChallenge, arg.At, arg.ID)
+	return err
+}
+
+const killChallengesOf = `-- name: KillChallengesOf :exec
+UPDATE operator_login_challenges SET used_at = $1::timestamptz, pending_secret_enc = NULL WHERE operator_id = $2 AND used_at IS NULL
+`
+
+type KillChallengesOfParams struct {
+	At         time.Time
+	OperatorID int64
+}
+
+// Every open challenge of an operator ends (the account was disabled, or its password or its authenticator was reset).
+func (q *Queries) KillChallengesOf(ctx context.Context, arg KillChallengesOfParams) error {
+	_, err := q.db.Exec(ctx, killChallengesOf, arg.At, arg.OperatorID)
 	return err
 }
 
@@ -532,11 +547,11 @@ func (q *Queries) ListPendingSecretsForUpdate(ctx context.Context) ([]ListPendin
 }
 
 const revokeAllOperatorSessions = `-- name: RevokeAllOperatorSessions :exec
-UPDATE operator_sessions SET revoked_at = $1, revoked_reason = $2 WHERE operator_id = $3 AND revoked_at IS NULL
+UPDATE operator_sessions SET revoked_at = $1::timestamptz, revoked_reason = $2 WHERE operator_id = $3 AND revoked_at IS NULL
 `
 
 type RevokeAllOperatorSessionsParams struct {
-	At         *time.Time
+	At         time.Time
 	Reason     *string
 	OperatorID int64
 }
@@ -547,11 +562,11 @@ func (q *Queries) RevokeAllOperatorSessions(ctx context.Context, arg RevokeAllOp
 }
 
 const revokeSession = `-- name: RevokeSession :exec
-UPDATE operator_sessions SET revoked_at = $1, revoked_reason = $2 WHERE id = $3 AND revoked_at IS NULL
+UPDATE operator_sessions SET revoked_at = $1::timestamptz, revoked_reason = $2 WHERE id = $3 AND revoked_at IS NULL
 `
 
 type RevokeSessionParams struct {
-	At     *time.Time
+	At     time.Time
 	Reason *string
 	ID     int64
 }
@@ -632,13 +647,13 @@ func (q *Queries) SetOperatorSecretEnc(ctx context.Context, arg SetOperatorSecre
 }
 
 const setOperatorTotp = `-- name: SetOperatorTotp :exec
-UPDATE operator_accounts SET totp_secret_enc = $1, totp_enrolled_at = $2, totp_last_step = $3 WHERE id = $4
+UPDATE operator_accounts SET totp_secret_enc = $1, totp_enrolled_at = $2::timestamptz, totp_last_step = $3::bigint WHERE id = $4
 `
 
 type SetOperatorTotpParams struct {
 	SecretEnc []byte
-	At        *time.Time
-	Step      *int64
+	At        time.Time
+	Step      int64
 	ID        int64
 }
 
@@ -654,11 +669,11 @@ func (q *Queries) SetOperatorTotp(ctx context.Context, arg SetOperatorTotpParams
 }
 
 const touchOperatorLastLogin = `-- name: TouchOperatorLastLogin :exec
-UPDATE operator_accounts SET last_login_at = $1 WHERE id = $2
+UPDATE operator_accounts SET last_login_at = $1::timestamptz WHERE id = $2
 `
 
 type TouchOperatorLastLoginParams struct {
-	At *time.Time
+	At time.Time
 	ID int64
 }
 
@@ -668,11 +683,11 @@ func (q *Queries) TouchOperatorLastLogin(ctx context.Context, arg TouchOperatorL
 }
 
 const useChallenge = `-- name: UseChallenge :exec
-UPDATE operator_login_challenges SET used_at = $1, pending_secret_enc = NULL WHERE id = $2
+UPDATE operator_login_challenges SET used_at = $1::timestamptz, pending_secret_enc = NULL WHERE id = $2
 `
 
 type UseChallengeParams struct {
-	At *time.Time
+	At time.Time
 	ID int64
 }
 
@@ -683,12 +698,12 @@ func (q *Queries) UseChallenge(ctx context.Context, arg UseChallengeParams) erro
 }
 
 const useRecoveryCode = `-- name: UseRecoveryCode :execrows
-UPDATE operator_recovery_codes SET used_at = $1
+UPDATE operator_recovery_codes SET used_at = $1::timestamptz
 WHERE operator_id = $2 AND code_hash = $3 AND used_at IS NULL
 `
 
 type UseRecoveryCodeParams struct {
-	At         *time.Time
+	At         time.Time
 	OperatorID int64
 	CodeHash   []byte
 }

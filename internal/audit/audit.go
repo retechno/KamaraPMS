@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"kamarapms/internal/audit/auditdb"
+	"kamarapms/internal/operator/operatordb"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
@@ -85,7 +86,53 @@ func (w *Writer) Write(ctx context.Context, e Entry) error {
 		p.IpAddress = &ip
 	}
 	p.EntityLabel = clipLabel(e.EntityLabel)
-	return auditdb.New(tx).InsertAuditLog(ctx, p)
+	if err := auditdb.New(tx).InsertAuditLog(ctx, p); err != nil {
+		return err
+	}
+	// A change made by an operator is on the operator's own trail too, with the tenant it concerns (doc 39 P12).
+	if p.OperatorID != nil {
+		tenant := e.TenantID
+		return w.WriteOperator(ctx, OperatorEntry{OperatorID: p.OperatorID, TenantID: &tenant, Action: e.Action, EntityType: e.EntityType, EntityID: e.EntityID, EntityLabel: e.EntityLabel, Old: e.Old, New: e.New})
+	}
+	return nil
+}
+
+// OperatorEntry is one entry of the operator's own trail (operator_audit_logs).
+type OperatorEntry struct {
+	OperatorID  *int64 // nil: pms-admin or the system
+	TenantID    *int64 // set when the action concerns a tenant
+	Action      string
+	EntityType  string
+	EntityID    int64
+	EntityLabel string
+	Old, New    any
+}
+
+// WriteOperator records e in the ambient transaction (db.ErrNoTx otherwise).
+func (w *Writer) WriteOperator(ctx context.Context, e OperatorEntry) error {
+	tx, err := db.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	oldData, err := marshal(e.Old)
+	if err != nil {
+		return err
+	}
+	newData, err := marshal(e.New)
+	if err != nil {
+		return err
+	}
+	p := operatordb.InsertOperatorAuditParams{
+		OperatorID: e.OperatorID, Action: e.Action, EntityType: e.EntityType, EntityID: e.EntityID, EntityLabel: clipLabel(e.EntityLabel),
+		TenantID: e.TenantID, OldData: oldData, NewData: newData, CreatedAt: w.clock.Now(),
+	}
+	if id := httpx.RequestIDFrom(ctx); id != "" {
+		p.RequestID = &id
+	}
+	if ip, ok := httpx.ClientIPFrom(ctx); ok {
+		p.IpAddress = &ip
+	}
+	return operatordb.New(tx).InsertOperatorAudit(ctx, p)
 }
 
 // operatorFrom is the operator of the entry: the one named, or the one that makes the call (nil for a user's own change, pms-admin and the system).

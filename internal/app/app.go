@@ -36,6 +36,7 @@ import (
 	"kamarapms/internal/maintenance"
 	"kamarapms/internal/nightaudit"
 	"kamarapms/internal/notifications"
+	"kamarapms/internal/operator"
 	"kamarapms/internal/payables"
 	"kamarapms/internal/platform/apperr"
 	"kamarapms/internal/platform/auth"
@@ -65,6 +66,8 @@ type Deps struct {
 	TxManager *db.TxManager
 	Clock     clock.Clock
 	Tokens    iam.TokenConfig
+	// Operator configures the platform console (docs/architecture/39-platform-console.md). Without a Key the console is off: every route under /api/v1/platform/ answers 404 ROUTE_NOT_FOUND.
+	Operator operator.Config
 	// Mail delivers e-mail; nil turns e-mail off (nothing is queued).
 	Mail notifications.Sender
 	// MailMaxBytes is the largest message sent; a night audit pack larger than this is split (0 = the default of 7 MB).
@@ -268,6 +271,12 @@ func New(d Deps) *App {
 	mux.Handle("GET /healthz", health.Live())
 	mux.Handle("GET /readyz", health.Ready(d.DB, d.ReadyChecks...))
 	iamHTTP.RegisterPublic(mux) // login, refresh, logout: no access token required
+	// The platform console: its own authentication (an operator token, never a hotel token), outside the hotel's middleware and the subscription gate.
+	if len(d.Operator.Key) > 0 {
+		mux.Handle(operator.Prefix, operator.NewHandler(operator.NewService(d.TxManager, d.Clock, auditWriter, d.Operator), d.Operator.CookieSecure).Handler())
+	} else {
+		mux.Handle(operator.Prefix, operator.Disabled())
+	}
 	// The print agents: a token of a device, not of a user. The routes are POS for the module gate and the read-only state (docs/architecture/34-pos.md 10.3).
 	mux.Handle("/api/v1/device/", pos.NewDeviceHandler(posSvc, posGate{subscriptionSvc}, d.Clock.Now).Handler())
 	// The subscription gate runs after authentication: the module of the route and the read-only state (docs/architecture/26-subscriptions.md).

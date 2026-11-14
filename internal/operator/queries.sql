@@ -17,7 +17,7 @@ FROM operator_accounts a ORDER BY lower(a.email);
 
 -- name: CreateOperator :one
 INSERT INTO operator_accounts (email, full_name, password_hash, created_at, updated_at)
-VALUES (@email, @full_name, @password_hash, @at, @at)
+VALUES (@email, @full_name, @password_hash, @at::timestamptz, @at::timestamptz)
 RETURNING *;
 
 -- name: SetOperatorActive :exec
@@ -27,19 +27,19 @@ UPDATE operator_accounts SET is_active = @is_active WHERE id = @id;
 UPDATE operator_accounts SET password_hash = @password_hash WHERE id = @id;
 
 -- name: TouchOperatorLastLogin :exec
-UPDATE operator_accounts SET last_login_at = @at WHERE id = @id;
+UPDATE operator_accounts SET last_login_at = @at::timestamptz WHERE id = @id;
 
 -- The enrolment: the secret, the time, and the step of the code that proved it (that code cannot be used again).
 -- name: SetOperatorTotp :exec
-UPDATE operator_accounts SET totp_secret_enc = @secret_enc, totp_enrolled_at = @at, totp_last_step = @step WHERE id = @id;
+UPDATE operator_accounts SET totp_secret_enc = @secret_enc, totp_enrolled_at = @at::timestamptz, totp_last_step = @step::bigint WHERE id = @id;
 
 -- name: ClearOperatorTotp :exec
 UPDATE operator_accounts SET totp_secret_enc = NULL, totp_enrolled_at = NULL, totp_last_step = NULL WHERE id = @id;
 
 -- A code of this step or of an earlier one was used already: the update touches no row (the replay of P4, decided by the database under the row lock).
 -- name: AdvanceOperatorTotpStep :execrows
-UPDATE operator_accounts SET totp_last_step = @step
-WHERE id = @id AND (totp_last_step IS NULL OR totp_last_step < @step);
+UPDATE operator_accounts SET totp_last_step = @step::bigint
+WHERE id = @id AND (totp_last_step IS NULL OR totp_last_step < @step::bigint);
 
 -- Key rotation: every secret, under the lock.
 -- name: ListOperatorSecretsForUpdate :many
@@ -51,14 +51,14 @@ UPDATE operator_accounts SET totp_secret_enc = @secret_enc WHERE id = @id;
 -- Recovery codes ---------------------------------------------------------------------------------------------------------------------------------
 
 -- name: InsertRecoveryCode :exec
-INSERT INTO operator_recovery_codes (operator_id, code_hash, created_at) VALUES (@operator_id, @code_hash, @at);
+INSERT INTO operator_recovery_codes (operator_id, code_hash, created_at) VALUES (@operator_id, @code_hash, @at::timestamptz);
 
 -- name: DeleteRecoveryCodes :exec
 DELETE FROM operator_recovery_codes WHERE operator_id = @operator_id;
 
 -- One use: the row is marked in the same statement that finds it, so two calls with the same code cannot both succeed.
 -- name: UseRecoveryCode :execrows
-UPDATE operator_recovery_codes SET used_at = @at
+UPDATE operator_recovery_codes SET used_at = @at::timestamptz
 WHERE operator_id = @operator_id AND code_hash = @code_hash AND used_at IS NULL;
 
 -- name: CountRecoveryCodesLeft :one
@@ -68,7 +68,7 @@ SELECT count(*)::int FROM operator_recovery_codes WHERE operator_id = @operator_
 
 -- name: CreateChallenge :one
 INSERT INTO operator_login_challenges (operator_id, token_hash, purpose, expires_at, created_at)
-VALUES (@operator_id, @token_hash, @purpose, @expires_at, @at)
+VALUES (@operator_id, @token_hash, @purpose, @expires_at, @at::timestamptz)
 RETURNING id;
 
 -- The row is locked: attempts are counted and "single use" holds under concurrency.
@@ -83,11 +83,11 @@ UPDATE operator_login_challenges SET pending_secret_enc = @secret_enc WHERE id =
 
 -- A used challenge keeps no secret.
 -- name: UseChallenge :exec
-UPDATE operator_login_challenges SET used_at = @at, pending_secret_enc = NULL WHERE id = @id;
+UPDATE operator_login_challenges SET used_at = @at::timestamptz, pending_secret_enc = NULL WHERE id = @id;
 
 -- A dead challenge cannot be tried again: it is used up now, whatever the reason.
 -- name: KillChallenge :exec
-UPDATE operator_login_challenges SET used_at = @at, pending_secret_enc = NULL WHERE id = @id AND used_at IS NULL;
+UPDATE operator_login_challenges SET used_at = @at::timestamptz, pending_secret_enc = NULL WHERE id = @id AND used_at IS NULL;
 
 -- name: DeleteOldChallenges :exec
 DELETE FROM operator_login_challenges WHERE expires_at < @before;
@@ -117,10 +117,10 @@ FROM operator_sessions s JOIN operator_accounts a ON a.id = s.operator_id
 WHERE s.id = @session_id AND s.operator_id = @operator_id;
 
 -- name: RevokeSession :exec
-UPDATE operator_sessions SET revoked_at = @at, revoked_reason = @reason WHERE id = @id AND revoked_at IS NULL;
+UPDATE operator_sessions SET revoked_at = @at::timestamptz, revoked_reason = @reason WHERE id = @id AND revoked_at IS NULL;
 
 -- name: RevokeAllOperatorSessions :exec
-UPDATE operator_sessions SET revoked_at = @at, revoked_reason = @reason WHERE operator_id = @operator_id AND revoked_at IS NULL;
+UPDATE operator_sessions SET revoked_at = @at::timestamptz, revoked_reason = @reason WHERE operator_id = @operator_id AND revoked_at IS NULL;
 
 -- name: HasLiveSessionSince :one
 SELECT EXISTS (SELECT 1 FROM operator_sessions WHERE operator_id = @operator_id AND revoked_at IS NULL AND created_at >= @since);
@@ -130,3 +130,7 @@ SELECT EXISTS (SELECT 1 FROM operator_sessions WHERE operator_id = @operator_id 
 -- name: InsertOperatorAudit :exec
 INSERT INTO operator_audit_logs (operator_id, action, entity_type, entity_id, entity_label, tenant_id, old_data, new_data, request_id, ip_address, created_at)
 VALUES (sqlc.narg(operator_id), @action, @entity_type, @entity_id, sqlc.narg(entity_label), sqlc.narg(tenant_id), @old_data, @new_data, sqlc.narg(request_id), sqlc.narg(ip_address), @created_at);
+
+-- Every open challenge of an operator ends (the account was disabled, or its password or its authenticator was reset).
+-- name: KillChallengesOf :exec
+UPDATE operator_login_challenges SET used_at = @at::timestamptz, pending_secret_enc = NULL WHERE operator_id = @operator_id AND used_at IS NULL;

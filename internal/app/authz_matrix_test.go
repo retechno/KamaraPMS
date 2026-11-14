@@ -63,7 +63,24 @@ func serverRoutes(t *testing.T) []routeSpec {
 	}
 	out := make([]routeSpec, 0, len(seen))
 	for _, r := range seen {
+		if strings.HasPrefix(r.path, "/api/v1/platform/") {
+			continue // the console has its own authentication and its own matrix: platform_api_test.go
+		}
 		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].key() < out[j].key() })
+	return out
+}
+
+// platformServerRoutes: the routes of the console (/api/v1/platform/), read from the sources like serverRoutes.
+func platformServerRoutes(t *testing.T) []routeSpec {
+	t.Helper()
+	var out []routeSpec
+	for r := range codeRoutes(t) {
+		method, path, _ := strings.Cut(r, " ")
+		if strings.HasPrefix(path, "/api/v1/platform/") {
+			out = append(out, routeSpec{method, path})
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].key() < out[j].key() })
 	return out

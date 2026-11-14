@@ -16,6 +16,7 @@ import (
 	"kamarapms/internal/app"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/notifications"
+	"kamarapms/internal/operator"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/config"
 	"kamarapms/internal/platform/db"
@@ -96,6 +97,7 @@ func run() error {
 			RefreshTTL:   cfg.RefreshTokenTTL,
 			CookieSecure: cfg.CookieSecure,
 		},
+		Operator: operator.Config{Secret: cfg.JWTSecret, Key: cfg.OperatorTOTPKey, AccessTTL: cfg.OperatorAccessTTL, RefreshTTL: cfg.OperatorRefreshTTL, CookieSecure: cfg.CookieSecure},
 	})
 
 	srv := &http.Server{

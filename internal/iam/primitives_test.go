@@ -97,9 +97,20 @@ func TestAccessTokenRejectsForgeries(t *testing.T) {
 		RegisteredClaims: jwt.RegisteredClaims{Issuer: "evil", Subject: "7", ExpiresAt: jwt.NewNumericDate(c.Now().Add(time.Hour))}}).
 		SignedString(tk.cfg.Secret)
 
+	// Our issuer and key, but for the platform console (doc 39 F6): the audience is not the hotel's.
+	platformAudience, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims{TenantID: 3, SessionID: 11,
+		RegisteredClaims: jwt.RegisteredClaims{Issuer: tokenIssuer, Audience: jwt.ClaimStrings{"platform"}, Subject: "7", ExpiresAt: jwt.NewNumericDate(c.Now().Add(time.Hour))}}).
+		SignedString(tk.cfg.Secret)
+	hotelAudience, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims{TenantID: 3, SessionID: 11,
+		RegisteredClaims: jwt.RegisteredClaims{Issuer: tokenIssuer, Audience: jwt.ClaimStrings{"hotel"}, Subject: "7", ExpiresAt: jwt.NewNumericDate(c.Now().Add(time.Hour))}}).
+		SignedString(tk.cfg.Secret)
+	if _, _, err := tk.parseAccess(hotelAudience); err != nil {
+		t.Errorf("a token that names the hotel as its audience is ours: %v", err)
+	}
+
 	for name, token := range map[string]string{
 		"other key": forgedKey, "alg none": algNone, "tampered payload": swapped,
-		"wrong issuer": wrongIssuer, "garbage": "not.a.jwt",
+		"wrong issuer": wrongIssuer, "garbage": "not.a.jwt", "platform audience": platformAudience,
 	} {
 		if _, _, err := tk.parseAccess(token); !apperr.IsCode(err, "TOKEN_INVALID") {
 			t.Errorf("%s: got %v, want TOKEN_INVALID", name, err)
