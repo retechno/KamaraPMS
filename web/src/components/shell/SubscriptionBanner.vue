@@ -24,7 +24,7 @@ const kind = computed<'trial' | 'grace' | 'readOnly' | null>(() => {
   return s.value.is_trial_ending ? 'trial' : null
 })
 
-// "Not today": the key holds the day the trial warning was put away, so it comes back tomorrow (the business date of the server, not the browser's clock).
+// "Not today": the key holds the tenant, the paid_through and the days left. days_left changes every day, so a warning put away comes back the next day (and when the paid period changes).
 const dismissKey = computed(() => `kamarapms.subBanner.${auth.me?.tenant.code ?? ''}.${s.value?.paid_through ?? ''}.${s.value?.days_left ?? ''}`)
 const dismissed = ref(false)
 function stored(): boolean {

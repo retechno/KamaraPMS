@@ -38,7 +38,7 @@ export const announceWrites: Middleware = {
 
 /**
  * Tells the listeners (the subscription store) what the server says of the access state: every authenticated response carries `X-Subscription-Access`, and a write that was refused because
- * the subscription is read only says so in its body. It reads a copy of the body and only for a 403, and it never throws. It runs before `throwOnError`, which throws on a refusal.
+ * the subscription is read only says so in its body. It reads a copy of the body and only for a 403, and it never throws. openapi-fetch runs `onResponse` from the last middleware to the first, so it is registered last: that way it runs first, before `throwOnError` throws on a refusal.
  */
 export const watchSubscriptionAccess: Middleware = {
   async onResponse({ response }) {
@@ -53,6 +53,6 @@ export const watchSubscriptionAccess: Middleware = {
 }
 
 export const api = createClient<paths>({ baseUrl: '', fetch: authFetch })
-api.use(watchSubscriptionAccess)
 api.use(throwOnError)
 api.use(announceWrites)
+api.use(watchSubscriptionAccess) // last: onResponse runs last to first, so this one sees error responses before throwOnError throws

@@ -140,7 +140,7 @@ func (s *Service) invoices(ctx context.Context, tenantID int64) ([]Invoice, erro
 			PaidAt: r.PaidAt, PaymentReference: r.PaymentReference, VoidedAt: r.VoidedAt, VoidReason: r.VoidReason, Notes: r.Notes,
 		})
 		inv.PlanCode = r.PlanCode
-		inv.IsOverdue = inv.Status == "ISSUED" && inv.DueOn.Before(today)
+		inv.IsOverdue = inv.Status == InvoiceIssued && inv.DueOn.Before(today)
 		out = append(out, inv)
 	}
 	return out, nil

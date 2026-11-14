@@ -206,7 +206,7 @@ const TrialEndingDays = 7
 
 // trialEnding fills Summary.IsTrialEnding.
 func trialEnding(status string, access AccessState, left *int) bool {
-	return status == "TRIAL" && access == AccessFull && left != nil && *left <= TrialEndingDays
+	return status == StatusTrial && access == AccessFull && left != nil && *left <= TrialEndingDays
 }
 
 // daysLeft fills Summary.DaysLeft.

@@ -64,13 +64,13 @@ const columns = computed<Column<SubscriptionInvoice>[]>(() => [
 <template>
   <PageHeader :title="t('subscription.title')" :description="t('subscription.description')" />
 
-  <div v-if="!s && !subscription.error" class="grid gap-4" data-testid="subscription-loading">
+  <div v-if="!s && !subscription.error" class="grid grid-cols-1 gap-4" data-testid="subscription-loading">
     <Skeleton class="h-32 w-full" />
     <Skeleton class="h-40 w-full" />
   </div>
   <ErrorNotice v-else-if="!s" :error="subscription.error" inline />
 
-  <div v-else class="grid gap-4">
+  <div v-else class="grid grid-cols-1 gap-4">
     <Card aria-labelledby="sub-plan-title" data-testid="subscription-plan">
       <CardHeader class="flex-row items-center justify-between gap-3">
         <CardTitle id="sub-plan-title">{{ t('subscription.plan', { name: s.plan_name }) }}</CardTitle>
