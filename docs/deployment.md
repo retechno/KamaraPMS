@@ -63,6 +63,7 @@ The API reads its settings from the environment (`internal/platform/config`); no
 | `PMS_ACCESS_TOKEN_TTL`, `PMS_REFRESH_TOKEN_TTL` | `15m`, `720h` | session lifetimes (the access token cannot exceed 1 h) |
 | `PMS_COOKIE_SECURE` | `true` outside development | the refresh cookie is sent over https only; `false` is refused in production. A browser accepts it from `http://localhost` too, which is why the stack can be tried without a certificate |
 | `PMS_TRUSTED_PROXIES` | empty | the addresses or CIDR ranges of the reverse proxies whose `X-Forwarded-For` is believed (section 6.3). Empty trusts nobody. `0.0.0.0/0` is refused. The compose file gives the proxy the fixed address `172.29.0.10` and trusts exactly that |
+| `PMS_BILLING_CONTACT` | empty | free text (at most 200 characters), e.g. an e-mail and a phone number: shown to hotel administrators on Setup → Subscription as who to ask about renewing. Empty leaves the line out |
 | `PMS_RATE_LIMIT_PER_MINUTE` | `600` | requests a minute per client address, burst equal to it; `0` turns it off. Counted per real client (section 6.3). Health probes are exempt |
 | `PMS_DB_MAX_CONNS`, `PMS_DB_LOCK_TIMEOUT` | `10`, `5s` | the pool, and how long a transaction waits for a row lock before `409 RESOURCE_BUSY` |
 | `PMS_SHUTDOWN_TIMEOUT` | `15s` | how long the API lets requests in flight finish after SIGTERM (the compose `stop_grace_period` is 30 s) |

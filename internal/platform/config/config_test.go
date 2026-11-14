@@ -224,3 +224,29 @@ func TestLoadDatabaseURLNeedsNothingElse(t *testing.T) {
 		t.Fatalf("missing URL: %v", err)
 	}
 }
+
+func TestBillingContactSetting(t *testing.T) {
+	base := map[string]string{"PMS_DATABASE_URL": "postgres://pms:secret@localhost:5432/pms", "PMS_JWT_SECRET": strings.Repeat("s", 32)}
+	with := func(v string) (Config, error) {
+		m := map[string]string{}
+		for k, x := range base {
+			m[k] = x
+		}
+		if v != "" {
+			m["PMS_BILLING_CONTACT"] = v
+		}
+		return LoadFrom(env(m))
+	}
+	if cfg, err := with(""); err != nil || cfg.BillingContact != "" {
+		t.Fatalf("default is empty: %v %q", err, cfg.BillingContact)
+	}
+	if cfg, err := with("  billing@example.com · +62 811  "); err != nil || cfg.BillingContact != "billing@example.com · +62 811" {
+		t.Fatalf("trimmed: %v %q", err, cfg.BillingContact)
+	}
+	if _, err := with(strings.Repeat("é", 201)); err == nil || !strings.Contains(err.Error(), "PMS_BILLING_CONTACT") {
+		t.Fatalf("201 characters must be refused: %v", err)
+	}
+	if _, err := with(strings.Repeat("é", 200)); err != nil {
+		t.Fatalf("200 characters are fine: %v", err)
+	}
+}

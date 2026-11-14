@@ -319,6 +319,7 @@ export const router = createRouter({
       meta: { title: 'User', adminOnly: true },
     },
     { path: '/setup/system', name: 'system', component: () => import('@/views/setup/SystemView.vue'), meta: { title: 'System', adminOnly: true } },
+    { path: '/setup/subscription', name: 'subscription', component: () => import('@/views/setup/SubscriptionView.vue'), meta: { title: 'Subscription', adminOnly: true } },
     { path: '/setup/roles', name: 'roles', component: () => import('@/views/setup/RolesView.vue'), meta: { title: 'Roles', adminOnly: true } },
     {
       path: '/setup/roles/new',

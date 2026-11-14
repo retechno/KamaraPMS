@@ -10,10 +10,15 @@ import (
 )
 
 // Handler exposes the tenant's read-only view of its subscription.
-type Handler struct{ svc *Service }
+type Handler struct {
+	svc            *Service
+	billingContact string
+}
 
-// NewHandler returns the HTTP handler.
-func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
+// NewHandler returns the HTTP handler. billingContact is the free text of PMS_BILLING_CONTACT shown on the tenant's Subscription page ("" leaves it out).
+func NewHandler(svc *Service, billingContact string) *Handler {
+	return &Handler{svc: svc, billingContact: strings.TrimSpace(billingContact)}
+}
 
 // Register mounts the routes.
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -26,7 +31,14 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return httpx.WriteJSON(w, http.StatusOK, s)
+	out := struct {
+		Summary
+		BillingContact *string `json:"billing_contact"`
+	}{Summary: s}
+	if h.billingContact != "" {
+		out.BillingContact = &h.billingContact
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) invoices(w http.ResponseWriter, r *http.Request) error {

@@ -73,6 +73,8 @@ type Deps struct {
 	RateLimitPerMinute int
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For is believed when the client address is resolved; none means the peer of the connection is the client.
 	TrustedProxies []netip.Prefix
+	// BillingContact is shown on the tenant's Subscription page (PMS_BILLING_CONTACT); empty leaves the line out.
+	BillingContact string
 	// ReadyChecks are what /readyz asks besides the database (for example that the schema has the migrations of this release).
 	ReadyChecks []health.Check
 }
@@ -257,7 +259,7 @@ func New(d Deps) *App {
 		prop, err := tenancySvc.GetProperty(ctx, propertyID)
 		return prop.CurrencyDecimals, err
 	})
-	subscription.NewHandler(subscriptionSvc).Register(api)
+	subscription.NewHandler(subscriptionSvc, d.BillingContact).Register(api)
 	api.Handle("/api/", httpx.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("ROUTE_NOT_FOUND", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	}))

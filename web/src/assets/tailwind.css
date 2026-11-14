@@ -248,6 +248,11 @@
     color: var(--text);
     background: color-mix(in srgb, var(--warning) 14%, transparent);
   }
+  .alert.info {
+    border-color: var(--accent);
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
   .notice {
     margin-bottom: 1rem;
     padding: 0.625rem 0.875rem;
