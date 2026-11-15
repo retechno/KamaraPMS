@@ -1,7 +1,9 @@
 import type { Messages } from './en'
+import { platformId } from './platform'
 
 /** Indonesian messages. Typed against the English ones: every key must exist here too. */
 export const id: Messages = {
+  platform: platformId,
   language: {
     label: 'Bahasa',
     en: 'English',
@@ -3913,6 +3915,7 @@ export const id: Messages = {
     businessDate: 'Tanggal bisnis',
     user: 'Pengguna',
     system: 'sistem',
+    operator: 'KamaraPMS (operator)',
     details: 'Detail',
     hide: 'Sembunyikan',
     before: 'Sebelum',

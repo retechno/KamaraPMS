@@ -221,7 +221,7 @@ watch(pid, () => {
       >
         <template #cell-created_at="{ row }">{{ $dateTime(row.created_at) }}</template>
         <template #cell-business_date="{ row }">{{ $date(row.business_date) || '—' }}</template>
-        <template #cell-user="{ row }">{{ row.user?.name ?? t('audit.system') }}</template>
+        <template #cell-user="{ row }">{{ row.actor_kind === 'operator' ? t('audit.operator') : (row.user?.name ?? t('audit.system')) }}</template>
         <template #cell-action="{ row }"><span :title="row.action">{{ labelOf('auditAction', row.action) }}</span></template>
         <template #cell-entity="{ row }">{{ entityName(row) }}</template>
         <template #cell-toggle="{ row }">

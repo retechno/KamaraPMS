@@ -70,6 +70,23 @@ describe('AuditTrailView', () => {
     expect(w.find('[data-testid=detail-2]').exists()).toBe(false)
   })
 
+  it('says KamaraPMS (operator) for a change of an operator of the platform, never a name, and system for the system', async () => {
+    const page = {
+      data: [
+        entry(3, { user: null, actor_kind: 'operator', actor_name: 'Rina Operator', new_data: { grace_days: 9 } }),
+        entry(2, { user: null, actor_kind: 'system' }),
+        entry(1, { actor_kind: 'user' }),
+      ],
+    }
+    const w = mountView(['audit.read'], page)
+    await flushPromises()
+    expect(w.get('[data-testid=entry-3]').text()).toContain('KamaraPMS (operator)')
+    expect(w.get('[data-testid=entry-3]').text()).not.toContain('Rina')
+    expect(w.get('[data-testid=entry-2]').text()).toContain('system')
+    expect(w.get('[data-testid=entry-2]').text()).not.toContain('operator')
+    expect(w.get('[data-testid=entry-1]').text()).toContain('Siti')
+  })
+
   it('searches with the filled filters only, clears them, and loads more with the cursor', async () => {
     const w = mountView()
     await flushPromises()

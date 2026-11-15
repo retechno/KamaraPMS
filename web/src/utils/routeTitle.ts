@@ -11,7 +11,7 @@ export function routeTitle(route: Pick<RouteLocationNormalizedLoaded, 'path' | '
     const item = section.items.find((i) => navRoutes(i).includes(route.path))
     if (item) return t(`nav.items.${item.id}` as never)
   }
-  const titleKey = route.meta.titleKey
+  const titleKey = route.meta.titleKey ?? route.meta.consoleTitleKey
   if (titleKey && te(titleKey)) return t(titleKey as never)
   const key = `routeTitles.${String(route.name ?? '').replace(/-/g, '_')}`
   return te(key) ? t(key as never) : String(route.meta.title ?? '')

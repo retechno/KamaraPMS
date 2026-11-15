@@ -1,8 +1,11 @@
+import { platformEn } from './platform'
+
 /**
  * English messages: the source of truth for the keys. The other languages are typed against this object, so a key that
  * is missing in one of them fails the type check. Group keys by where they are shown, not by page.
  */
 export const en = {
+  platform: platformEn,
   language: {
     label: 'Language',
     en: 'English',
@@ -3915,6 +3918,7 @@ export const en = {
     businessDate: 'Business date',
     user: 'User',
     system: 'system',
+    operator: 'KamaraPMS (operator)',
     details: 'Details',
     hide: 'Hide',
     before: 'Before',
