@@ -26,13 +26,13 @@ const previewOf = (over: object = {}) => ({
 const mounted: VueWrapper[] = []
 const body = <T extends Element = HTMLElement>(sel: string): T | null => document.body.querySelector<T>(sel)
 
-async function mountBar(opts: { path?: string; meta?: object; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; properties?: object[]; permissions?: string[]; preview?: object } = {}) {
+async function mountBar(opts: { path?: string; meta?: object; mode?: 'full' | 'rail' | 'drawer'; collapsed?: boolean; canCollapse?: boolean; clock?: object | null; admin?: boolean; properties?: object[]; permissions?: string[]; preview?: object } = {}) {
   const GET = api.GET as unknown as ReturnType<typeof vi.fn> // the typed client is too deep for vi.mocked
   GET.mockReset()
   GET.mockResolvedValue({ data: opts.preview })
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAuthStore().me = { user: { id: 1, email: 'rina@hotel.test', full_name: 'Rina Front', is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: opts.permissions ?? NAV_PERMISSIONS }] } as never
+  useAuthStore().me = { user: { id: 1, email: 'rina@hotel.test', full_name: 'Rina Front', is_tenant_admin: opts.admin ?? false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: opts.permissions ?? NAV_PERMISSIONS }] } as never
   const property = usePropertyStore()
   property.loaded = true
   property.properties = (opts.properties ?? [{ id: 7, code: 'BALI', name: 'Bali' }, { id: 8, code: 'LOMBOK', name: 'Lombok' }]) as never
@@ -106,10 +106,23 @@ describe('TopBar', () => {
       expect(select).toHaveBeenCalledWith(8)
     })
 
-    it('invites to create one when there is none', async () => {
-      const { w } = await mountBar({ properties: [], clock: null })
+    it('invites a tenant administrator to create one when there is none', async () => {
+      const { w } = await mountBar({ properties: [], clock: null, admin: true })
       expect(w.find('[data-testid=property-switcher]').exists()).toBe(false)
       expect(w.text()).toContain('No property yet')
+      const link = w.get('[data-testid=no-property-link]')
+      expect(link.text()).toBe('No property yet · create one')
+      expect(link.attributes('href')).toBe('/setup/properties/new')
+      expect(w.find('[data-testid=no-property-note]').exists()).toBe(false)
+    })
+
+    it('says only "No property yet", with no link, to staff who are not administrators', async () => {
+      const { w } = await mountBar({ properties: [], clock: null, admin: false })
+      expect(w.find('[data-testid=property-switcher]').exists()).toBe(false)
+      expect(w.get('[data-testid=no-property-note]').text()).toBe('No property yet')
+      expect(w.find('[data-testid=no-property-link]').exists()).toBe(false)
+      expect(w.find('a[href="/setup/properties/new"]').exists()).toBe(false)
+      expect(w.text()).not.toContain('create one')
     })
   })
 

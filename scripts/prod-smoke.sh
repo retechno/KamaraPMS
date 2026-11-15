@@ -63,6 +63,34 @@ if [[ "$(header server "$BASE/")" =~ [0-9]\.[0-9] ]]; then bad "the proxy does n
 big="$(head -c 3000000 /dev/zero | tr '\0' 'a' | curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/auth/login" -H 'Content-Type: application/json' --data-binary @-)"
 [ "$big" = 413 ]; expect "a body over the proxy limit is 413 (got $big)" $?
 
+echo "== the platform console (the sign-in page, the console API, the cookie of the refresh token)"
+[ "$(status "$BASE/platform/login")" = 200 ]; expect "GET /platform/login is 200" $?
+contains "$(body "$BASE/platform/login")" 'id="app"'; expect "/platform/login is the page of the app (router fallback)" $?
+for h in content-security-policy x-content-type-options x-frame-options referrer-policy permissions-policy; do
+  [ -n "$(header $h "$BASE/platform/login")" ]; expect "/platform/login has $h" $?
+done
+# Without PMS_OPERATOR_TOTP_KEY the console is off: its API is 404. With it, the refresh without a cookie is 401. Which of the two is checked depends on deploy/.env (or the environment).
+refresh_status="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/platform/auth/refresh")"
+if [ -n "${PMS_OPERATOR_TOTP_KEY:-}" ]; then
+  echo "  (console ON: PMS_OPERATOR_TOTP_KEY is set)"
+  [ "$refresh_status" = 401 ]; expect "POST /api/v1/platform/auth/refresh with no cookie is 401 (got $refresh_status)" $?
+  login_status="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/platform/auth/login" -H 'Content-Type: application/json' -d '{}')"
+  [[ "$login_status" =~ ^4[0-9][0-9]$ ]]; expect "POST /api/v1/platform/auth/login with an empty JSON body is 4xx, not 5xx (got $login_status)" $?
+  contains "$(curl -s -D - -o /dev/null -X POST "$BASE/api/v1/platform/auth/login" -H 'Content-Type: application/json' -d '{}' | tr -d '\r')" "no-store"; expect "the sign-in answer is Cache-Control: no-store" $?
+else
+  echo "  (console OFF: PMS_OPERATOR_TOTP_KEY is empty)"
+  [ "$refresh_status" = 404 ]; expect "POST /api/v1/platform/auth/refresh is 404, the console is off (got $refresh_status)" $?
+  echo "  SKIP  the sign-in checks (4xx and no-store) need the console on"
+fi
+# the cookie of the refresh token is for the console's auth paths only, never wider
+cookies="$({ curl -s -D - -o /dev/null -X POST "$BASE/api/v1/platform/auth/refresh"; curl -s -D - -o /dev/null -X POST "$BASE/api/v1/platform/auth/login" -H 'Content-Type: application/json' -d '{}'; } | tr -d '\r' | grep -i '^set-cookie: *pms_platform_refresh=' || true)"
+if [ -z "$cookies" ]; then
+  echo "  SKIP  the Path of pms_platform_refresh: no Set-Cookie came without a session (nothing to check)"
+else
+  wrong="$(printf '%s\n' "$cookies" | grep -viE 'path=/api/v1/platform/auth(;|$)' || true)"
+  [ -z "$wrong" ]; expect "pms_platform_refresh is only set with Path=/api/v1/platform/auth" $?
+fi
+
 echo "== probes: alive is not ready"
 [ "$(status "$BASE/healthz")" = 200 ]; expect "/healthz through the proxy" $?
 [ "$(status "$BASE/readyz")" = 200 ]; expect "/readyz through the proxy" $?

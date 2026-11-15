@@ -312,11 +312,18 @@ const updated = computed(() => (today.updatedAt.value ? zoneTime(today.updatedAt
   </template>
 
   <div v-if="(property.loaded && !property.hasProperties) || auth.isAdmin" class="grid gap-4 md:grid-cols-2">
-    <Card v-if="property.loaded && !property.hasProperties">
+    <!-- Only a tenant administrator can create a property (the route is adminOnly): staff who are not assigned to one are told to ask, with no link. -->
+    <Card v-if="property.loaded && !property.hasProperties && auth.isAdmin" data-testid="no-property-setup">
       <CardHeader><CardTitle>{{ t('dashboard.page.setupTitle') }}</CardTitle></CardHeader>
       <CardContent>
         <p class="m-0 mb-3 text-sm text-muted-foreground">{{ t('dashboard.page.setupBody') }}</p>
         <RouterLink to="/setup/properties/new">{{ t('dashboard.page.createProperty') }}</RouterLink>
+      </CardContent>
+    </Card>
+    <Card v-else-if="property.loaded && !property.hasProperties" data-testid="no-property-staff">
+      <CardHeader><CardTitle>{{ t('dashboard.page.noPropertyTitle') }}</CardTitle></CardHeader>
+      <CardContent>
+        <p class="m-0 text-sm text-muted-foreground">{{ t('dashboard.page.noPropertyBody') }}</p>
       </CardContent>
     </Card>
   </div>

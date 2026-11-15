@@ -39,6 +39,47 @@ describe('HomeView and the system status', () => {
   })
 })
 
+// ---- no property yet: only a tenant administrator can create one
+describe('HomeView without a property', () => {
+  async function mountEmpty(admin: boolean) {
+    GET = vi.fn().mockResolvedValue({ data: {} })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().me = { user: { id: 5, email: 'a@hotel.com', is_tenant_admin: admin }, properties: [] } as never
+    usePropertyStore().loaded = true
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    const wrapper = mount(HomeView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('invites a tenant administrator to set up the first property, with the link', async () => {
+    await setLocale('en')
+    const w = await mountEmpty(true)
+    const card = w.get('[data-testid=no-property-setup]')
+    expect(card.text()).toContain('Set up your first property')
+    expect(card.get('a').attributes('href')).toBe('/setup/properties/new')
+    expect(w.find('[data-testid=no-property-staff]').exists()).toBe(false)
+  })
+
+  it('tells staff who are not administrators to ask the administrator, with no link, in both languages', async () => {
+    await setLocale('en')
+    const w = await mountEmpty(false)
+    const card = w.get('[data-testid=no-property-staff]')
+    expect(card.text()).toContain('No property for you yet')
+    expect(card.text()).toContain('Your account is not assigned to any property yet. Ask the hotel administrator to add you.')
+    expect(card.find('a').exists()).toBe(false)
+    expect(w.find('[data-testid=no-property-setup]').exists()).toBe(false)
+    expect(w.text()).not.toContain('Set up your first property')
+    expect(w.find('a[href="/setup/properties/new"]').exists()).toBe(false)
+    await setLocale('id')
+    const id = await mountEmpty(false)
+    expect(id.get('[data-testid=no-property-staff]').text()).toContain('Belum ada properti untuk Anda')
+    expect(id.get('[data-testid=no-property-staff]').text()).toContain('Akun Anda belum ditugaskan ke properti mana pun. Minta administrator hotel menambahkan Anda.')
+    await setLocale('en')
+  })
+})
+
 // ---- the page of the day
 const night = (i: number, held: number, sellable = 100) => ({
   date: `2026-10-${String(10 + i).padStart(2, '0')}`, sellable, blocked: 0, held, available: sellable - held, occupancy_percent: ((held / sellable) * 100).toFixed(2), in_house: held, arrivals: 0, reservations: 0, complimentary: 0, house_use: 0,

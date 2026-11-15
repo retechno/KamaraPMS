@@ -215,9 +215,10 @@ const themeLabel: Record<ThemePreference, string> = { light: 'account.themeLight
           >{{ audit.text }}</span>
         </component>
       </template>
-      <RouterLink v-else-if="property.loaded" to="/setup/properties/new" class="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground no-underline">
+      <RouterLink v-else-if="property.loaded && auth.isAdmin" to="/setup/properties/new" class="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground no-underline" data-testid="no-property-link">
         {{ t('shell.noPropertyYet') }}
       </RouterLink>
+      <span v-else-if="property.loaded" class="px-3 py-1.5 text-sm text-muted-foreground" data-testid="no-property-note">{{ t('shell.noProperty') }}</span>
 
       <BanquetBell />
       <ApprovalBell />
