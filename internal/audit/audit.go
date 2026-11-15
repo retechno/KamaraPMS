@@ -13,7 +13,6 @@ import (
 	"unicode/utf8"
 
 	"kamarapms/internal/audit/auditdb"
-	"kamarapms/internal/operator/operatordb"
 	"kamarapms/internal/platform/auth"
 	"kamarapms/internal/platform/civil"
 	"kamarapms/internal/platform/clock"
@@ -122,7 +121,7 @@ func (w *Writer) WriteOperator(ctx context.Context, e OperatorEntry) error {
 	if err != nil {
 		return err
 	}
-	p := operatordb.InsertOperatorAuditParams{
+	p := auditdb.InsertOperatorAuditParams{
 		OperatorID: e.OperatorID, Action: e.Action, EntityType: e.EntityType, EntityID: e.EntityID, EntityLabel: clipLabel(e.EntityLabel),
 		TenantID: e.TenantID, OldData: oldData, NewData: newData, CreatedAt: w.clock.Now(),
 	}
@@ -132,7 +131,7 @@ func (w *Writer) WriteOperator(ctx context.Context, e OperatorEntry) error {
 	if ip, ok := httpx.ClientIPFrom(ctx); ok {
 		p.IpAddress = &ip
 	}
-	return operatordb.New(tx).InsertOperatorAudit(ctx, p)
+	return auditdb.New(tx).InsertOperatorAudit(ctx, p)
 }
 
 // operatorFrom is the operator of the entry: the one named, or the one that makes the call (nil for a user's own change, pms-admin and the system).

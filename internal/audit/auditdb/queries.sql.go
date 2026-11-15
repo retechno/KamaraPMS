@@ -60,6 +60,43 @@ func (q *Queries) InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) 
 	return err
 }
 
+const insertOperatorAudit = `-- name: InsertOperatorAudit :exec
+INSERT INTO operator_audit_logs (operator_id, action, entity_type, entity_id, entity_label, tenant_id, old_data, new_data, request_id, ip_address, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+`
+
+type InsertOperatorAuditParams struct {
+	OperatorID  *int64
+	Action      string
+	EntityType  string
+	EntityID    int64
+	EntityLabel *string
+	TenantID    *int64
+	OldData     []byte
+	NewData     []byte
+	RequestID   *string
+	IpAddress   *netip.Addr
+	CreatedAt   time.Time
+}
+
+// The operator's own trail (docs/architecture/39-platform-console.md P12): audit data, so its insert lives here and not in the operator package. A change of an operator to a tenant is written to audit_logs too.
+func (q *Queries) InsertOperatorAudit(ctx context.Context, arg InsertOperatorAuditParams) error {
+	_, err := q.db.Exec(ctx, insertOperatorAudit,
+		arg.OperatorID,
+		arg.Action,
+		arg.EntityType,
+		arg.EntityID,
+		arg.EntityLabel,
+		arg.TenantID,
+		arg.OldData,
+		arg.NewData,
+		arg.RequestID,
+		arg.IpAddress,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const listAuditLogsForEntity = `-- name: ListAuditLogsForEntity :many
 SELECT id, tenant_id, property_id, business_date, user_id, action, entity_type, entity_id, old_data, new_data, request_id, ip_address, created_at, entity_label, operator_id FROM audit_logs
 WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3
