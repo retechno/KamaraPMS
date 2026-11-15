@@ -106,6 +106,8 @@ describe('TenantsView', () => {
     expect(r('NSA').text()).toContain('No end date')
     expect(r('NSA').get('[data-testid=users-cell]').text()).toBe('64 / ∞')
     expect(r('NSA').get('[data-testid=rooms-cell]').text()).toBe('410 / ∞')
+    // the track of the bar is the border colour, which can be seen on white
+    expect(r('KRN').find('[data-testid=rooms-cell] .bg-border').exists()).toBe(true)
     expect(r('BKT').text()).toContain('Suspended')
     expect(r('BKT').get('[data-testid=paid-hint]').text()).toBe('sign-in blocked')
     expect(wrapper.text()).toContain('6 tenants')

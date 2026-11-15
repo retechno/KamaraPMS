@@ -272,7 +272,7 @@ function onCreated(code: string): void {
       <template #cell-rooms="{ row }">
         <div class="flex min-w-24 flex-col gap-1" data-testid="rooms-cell">
           <span class="whitespace-nowrap tabular-nums">{{ row.usage.rooms }} / {{ row.limits.max_rooms === null ? '∞' : row.limits.max_rooms }}</span>
-          <div v-if="row.limits.max_rooms !== null" class="h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          <div v-if="row.limits.max_rooms !== null" class="h-1 overflow-hidden rounded-full bg-border" aria-hidden="true">
             <div :class="['h-full rounded-full', roomsBar(row)]" :style="{ width: `${Math.min(row.limits.max_rooms === 0 ? 1 : row.usage.rooms / row.limits.max_rooms, 1) * 100}%` }" />
           </div>
         </div>

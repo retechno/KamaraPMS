@@ -153,7 +153,8 @@ const meta = computed(() => {
   return t('platform.tenant.meta', { code: x.code, zone: x.timezone, since: formatDate(x.created_at.slice(0, 10)), properties: t('platform.tenant.properties', { n: x.property_count }, x.property_count) })
 })
 
-const openInvoice = computed(() => invoices.value?.find((i) => i.status === 'ISSUED') ?? null)
+// the invoice the callout names and records the payment of: of the issued ones the one whose period starts first, which is the one that is behind (the list is newest first)
+const openInvoice = computed(() => [...(invoices.value ?? [])].filter((i) => i.status === 'ISSUED').sort((a, b) => a.period_start.localeCompare(b.period_start))[0] ?? null)
 
 const callout = computed<{ kind: 'warning' | 'danger'; text: string } | null>(() => {
   const x = tenant.value
@@ -260,10 +261,12 @@ function openChange(focus?: 'quotas'): void {
         <AccessBadge v-else-if="summary" :access="summary.access" :status="summary.status" />
       </template>
       <template v-if="tenant" #actions>
-        <Button variant="outline" data-testid="action-change" @click="openChange()">{{ t('platform.tenant.actions.change') }}</Button>
-        <Button variant="outline" data-testid="action-issue" @click="issueOpen = true">{{ t('platform.tenant.actions.issue') }}</Button>
-        <Button v-if="suspended" variant="outline" data-testid="action-reactivate" @click="reactivateOpen = true">{{ t('platform.tenant.actions.reactivate') }}</Button>
-        <Button v-else variant="outline" class="border-destructive text-destructive hover:bg-destructive/10" data-testid="action-suspend" @click="suspendOpen = true">{{ t('platform.tenant.actions.suspend') }}</Button>
+        <div class="flex flex-wrap items-center justify-start gap-2 max-sm:w-full sm:justify-end" data-testid="tenant-actions">
+          <Button variant="outline" data-testid="action-change" @click="openChange()">{{ t('platform.tenant.actions.change') }}</Button>
+          <Button variant="outline" data-testid="action-issue" @click="issueOpen = true">{{ t('platform.tenant.actions.issue') }}</Button>
+          <Button v-if="suspended" variant="outline" data-testid="action-reactivate" @click="reactivateOpen = true">{{ t('platform.tenant.actions.reactivate') }}</Button>
+          <Button v-else variant="outline" class="border-destructive text-destructive hover:bg-destructive/10" data-testid="action-suspend" @click="suspendOpen = true">{{ t('platform.tenant.actions.suspend') }}</Button>
+        </div>
       </template>
     </PageHeader>
 

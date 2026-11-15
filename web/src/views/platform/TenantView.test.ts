@@ -177,6 +177,18 @@ describe('TenantView', () => {
       expect(tid(w, 'stub-RecordPaymentDialog').attributes('data-invoice')).toBe('SUB-2026-00041')
     })
 
+    it('points the callout and "Record payment" at the issued invoice whose period starts first, not the first of the list', async () => {
+      serve({
+        tenant: graceTenant(),
+        invoices: { items: [invoice({ id: 43, number: 'SUB-2026-00043', period_start: '2026-12-09', period_end: '2027-03-08' }), invoice({ id: 42, number: 'SUB-2026-00042', period_start: '2026-09-09', period_end: '2026-12-08', is_overdue: true })] },
+      })
+      const w = await mountView()
+      expect(tid(w, 'tenant-callout').text()).toContain('Invoice SUB-2026-00042 of')
+      expect(tid(w, 'tenant-callout').text()).not.toContain('SUB-2026-00043')
+      await tid(w, 'callout-pay').trigger('click')
+      expect(tid(w, 'stub-RecordPaymentDialog').attributes('data-invoice')).toBe('SUB-2026-00042')
+    })
+
     it('has no "Record payment" when no invoice is open', async () => {
       serve({ tenant: graceTenant(), invoices: { items: [invoice({ status: 'PAID', paid_on: '2026-11-01' })] } })
       const w = await mountView()
