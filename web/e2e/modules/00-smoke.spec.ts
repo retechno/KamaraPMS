@@ -8,7 +8,7 @@ import { test, expect, settle } from '../support/fixtures'
  */
 const source = readFileSync(new URL('../../src/router/index.ts', import.meta.url), 'utf8')
 const routes = [...new Set([...source.matchAll(/path: '(\/[^']*)'/g)].map((m) => m[1]!))]
-  .filter((p) => !p.includes('/:') && p !== '/login')
+  .filter((p) => !p.includes('/:') && p !== '/login' && !p.startsWith('/platform')) // the console has its own session: an operator, not this administrator (see the test below)
 
 // Grouped by the first part of the address: one sign-in per group, one step per page.
 const groups = new Map<string, string[]>()
@@ -34,4 +34,14 @@ test.describe('Smoke: every page opens', () => {
       }
     })
   }
+})
+
+// The console is a separate session. Without an operator the e2e database cannot sign in to it (that needs the key and an enrolled authenticator), but the guard can be seen.
+test.describe('Smoke: the platform console', () => {
+  test('SMOKE-PL-01 a page of the console without a session goes to its own sign-in, never the one of the hotel', async ({ page }) => {
+    await page.goto('/platform/tenants')
+    await expect(page).toHaveURL(/\/platform\/login\?redirect=/)
+    await expect(page.locator('input[name=email]')).toBeVisible()
+    await expect(page.locator('input[name=password]')).toBeVisible()
+  })
 })
