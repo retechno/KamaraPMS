@@ -38,9 +38,10 @@ async function signOut(): Promise<void> {
 async function platformSignOut(): Promise<void> {
   try {
     await usePlatformAuthStore().logout()
-  } finally {
-    await router.push('/platform/login')
+  } catch {
+    // the store has signed out locally whatever the server said; the cookie ends with its session
   }
+  await router.push('/platform/login')
 }
 </script>
 

@@ -448,6 +448,19 @@ Deviations and what the document did not say:
 - `scripts/db-test.sh` was run here on PostgreSQL 16 only; the CI runs the version of production.
 - Review after the first push: the enrolment could be confirmed twice at the same moment (fixed: the account is locked in `enrolmentChallenge` and `SetOperatorTotp` only updates an account without a secret; `TestEnrolmentConfirmedTwiceConcurrently`). Left for PR 3: `internal/audit` imports `operatordb` to write `operator_audit_logs`; the insert should move into `internal/audit/queries.sql` because the table is audit data.
 
+**PR 3 (the console's screens), no migration.** `api/platformSession.ts`, `api/platformClient.ts` and `stores/platformAuth.ts` keep the operator's session apart from the hotel's (own token in memory, own cookie, own middleware: the client has the thrower only, registered first because `onResponse` runs last to first, and a test proves the hotel's night-audit and subscription listeners hear nothing of it). The routes under `/platform` have `meta.platform` (the sign-in also `public`), go before the catch-all, and the guard checks `meta.platform` first and never calls the hotel's `auth.init()`; `App.vue` picks `PlatformLayout`, or the bare sign-in; the tab title ends "· KamaraPMS Platform". The screens P1-P9 and the dialogs of section 11 are in `views/platform/` and `components/platform/`; `QuotaMeter` and `AccessBadge` are the ones of the hotel's Subscription page. Messages are `platform.*`, one file per screen in `i18n/locales/platform/` (the glossary test reads those files too). The hotel's audit page shows "KamaraPMS (operator)" for `actor_kind: operator`, never a name. The insert into `operator_audit_logs` moved from `operator` to `internal/audit/queries.sql`, so `audit` no longer imports `operatordb` (the nit of the review of #102). E2E was not written in this PR.
+
+Deviations of the screens (the design and this document did not say, or the API cannot give):
+
+- The recovery codes, the secret of the enrolment and the first admin's password live only in component state; the store hands the codes to the screen and keeps a session without them until the person ticks "I have saved them".
+- The `totp` input accepts 8 characters (a pasted "482 913" is not cut) and only the digits are sent; the recovery-code disclosure has its own "Sign in" button; the enrolment step has a Back button.
+- `PlatformTenantRow` has no amount per tenant, so the "open invoice" column shows the count and the overdue count; the amounts per currency are in the summary card.
+- The invoice list has no counts: the tabs load the four lists together and count them. The "Total open" footer is on the Open tab only (`total_open` ignores the status filter).
+- There is no `GET /plans/{code}`: the plan form reads the list and picks its plan. The warning "what a lower quota affects" is the `affected` list after the save, not a preview.
+- "After saving" in Record payment says what the invoice gives (paid through at least its `period_end`) and does not promise the status.
+- The activity list shows the action in words (the API gives no detail of the change), and the per-quota hint lines of the design are the words of `QuotaMeter`.
+- The table of the tenants has no mobile cards mode.
+
 ## 17. Not in this work
 
 A payment gateway, proration, e-mail reminders before `paid_through`, PDF of subscription invoices, operator self-service password change in the
