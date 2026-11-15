@@ -292,6 +292,9 @@ losing it means every operator enrols again (`reset-operator-totp`)".
   - Card "Invoices": `GET /api/v1/subscription/invoices` in `DataTable` (number, period, amount, status, due). Status ISSUED past due shows "Unpaid" (danger),
     ISSUED not due "Issued", PAID "Paid", VOID "Voided". No actions.
 - Loading: `Skeleton`; error: `ErrorNotice`.
+- Card "Invoices", for a tenant administrator: the link "Subscription change history" to `/audit?scope=tenant&entity_type=subscription` (decided by the owner after the review of PR 3).
+
+**The scope of the audit page.** Everything the operator does to a subscription (change, invoice, payment, void, suspend) is a tenant-level entry (`property_id` null), and the audit page used to read the trail of one property only, so "KamaraPMS (operator)" almost never showed. The page now has a scope for a tenant administrator: "This property" (default, `GET /api/v1/properties/{propertyId}/audit-logs`) and "Company level" (`GET /api/v1/audit-logs`, which exists). The scope is in the address (`?scope=tenant`); staff who are not administrators have no choice and a typed `?scope=tenant` is ignored. The filter "self-approved" belongs to a property and is left out at company level. The address may also carry `entity_type`. Operator entries read "KamaraPMS (operator)" in both scopes.
 
 ### 10.2 Store and header (no screen)
 
@@ -460,6 +463,15 @@ Deviations of the screens (the design and this document did not say, or the API 
 - "After saving" in Record payment says what the invoice gives (paid through at least its `period_end`) and does not promise the status.
 - The activity list shows the action in words (the API gives no detail of the change), and the per-quota hint lines of the design are the words of `QuotaMeter`.
 - The table of the tenants has no mobile cards mode.
+
+Review of PR 3 (owner):
+
+- The rebase onto `main` and the removal of `web/playwright-report.zip` (an old E2E report that had been committed; `/web/playwright-report*.zip` is now ignored).
+- The notice of the Issue invoice dialog compares the preview period with `preview.open_invoice`: the server works the period out from `paid_through`, not from the open invoice. When they share a day the dialog warns in the danger colour that the invoice will be refused (`INVOICE_PERIOD_OVERLAP`) and turns Issue off; otherwise it only says the invoice is still open, with no claim about the order of periods.
+- One helper for money in the console, `utils/platformMoney.ts` ("IDR 1.500.000": code of the currency + `formatMoney`, as the hotel's Subscription page; the zeros of numeric(18,3) are dropped), with `whitespace-nowrap tabular-nums` on the amount cells.
+- P4: the rooms column is "used / limit" (infinity for none) with a thin bar, like the users column.
+- The Indonesian word for trial is "Percobaan" / "masa percobaan", as on the hotel side; the glossary test bans "trial" in Indonesian messages.
+- The audit scope and the history link of section 10 (the answer to the open question: operator actions are tenant-level entries, so the hotel needed a tenant-level view).
 
 ## 17. Not in this work
 

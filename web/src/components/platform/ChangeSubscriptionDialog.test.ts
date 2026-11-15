@@ -71,7 +71,7 @@ describe('ChangeSubscriptionDialog', () => {
 
   it('shows the quota of the plan as the placeholder, with what is used', async () => {
     await open()
-    expect(q<HTMLInputElement>('input[name=limit_rooms]').placeholder).toBe('Plan: 120')
+    expect(q<HTMLInputElement>('input[name=limit_rooms]').placeholder).toBe('120')
     expect(q('[data-testid=quota-note-rooms]').textContent).toBe('Empty = follow the plan (120). Used: 100')
     expect(q('[data-testid=quota-note-users]').textContent).toContain('Used: 25')
   })

@@ -168,7 +168,7 @@ const fieldError = (name: string, api: string): string | undefined => invalid.va
           <FormField :label="t('platform.tenant.change.paidThrough')" :error="fieldError('paid_through', 'paid_through')">
             <template #default="{ id, describedBy, invalid: bad }">
               <DateInput :id="id" v-model="paidThrough" name="paid_through" :disabled="noEnd" :aria-describedby="describedBy" :aria-invalid="bad || undefined" />
-              <Checkbox v-model="noEnd" name="no_end" data-testid="no-end">{{ t('platform.tenant.change.noEnd') }}</Checkbox>
+              <Checkbox v-model="noEnd" name="no_end" data-testid="no-end" label-class="mt-5 text-sm">{{ t('platform.tenant.change.noEnd') }}</Checkbox>
             </template>
           </FormField>
           <FormField :label="t('platform.tenant.change.graceDays')" :hint="t('platform.tenant.change.graceHint')" :error="fieldError('grace_days', 'grace_days')">
@@ -190,7 +190,7 @@ const fieldError = (name: string, api: string): string | undefined => invalid.va
                   type="number"
                   min="1"
                   inputmode="numeric"
-                  :placeholder="t('platform.tenant.change.quotaPlaceholder', { plan: planText(r) })"
+                  :placeholder="planLimit(r) === null ? '∞' : String(planLimit(r))"
                   :aria-describedby="describedBy"
                   :aria-invalid="bad || undefined"
                 />

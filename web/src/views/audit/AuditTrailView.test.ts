@@ -404,3 +404,75 @@ describe('AuditTrailView, show more keeps the filter of the page it continues', 
     expect(query(2).cursor).toBeUndefined()
   })
 })
+
+describe('AuditTrailView, the scope of the trail', () => {
+  const tenantCalls = () => GET.mock.calls.filter((c) => c[0] === '/api/v1/audit-logs')
+
+  async function mountScoped(url: string, admin: boolean, rows: object[] = [entry(2)]) {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().me = { user: { id: 5, is_tenant_admin: admin }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['audit.read'] }] } as never
+    usePropertyStore().currentId = 7
+    GET = vi.fn(async (path: string) => (path === '/api/v1/users' ? { data: { data: USERS } } : { data: { data: rows } }))
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+    await router.push(url)
+    const w = mount(AuditTrailView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+    return { w, router }
+  }
+
+  it('gives a tenant administrator the choice, with "This property" as the default and the trail of the property as before', async () => {
+    const { w } = await mountScoped('/audit', true)
+    const options = w.findAll('select[name=scope] option').map((o) => o.text())
+    expect(options).toEqual(['This property', 'Company level'])
+    expect((w.get('select[name=scope]').element as HTMLSelectElement).value).toBe('property')
+    expect(auditCalls()).toHaveLength(1)
+    expect(tenantCalls()).toHaveLength(0)
+  })
+
+  it('does not show the choice to staff who are not administrators, and ignores ?scope=tenant for them', async () => {
+    const { w } = await mountScoped('/audit?scope=tenant', false)
+    expect(w.find('[data-testid=scope]').exists()).toBe(false)
+    expect(w.find('select[name=scope]').exists()).toBe(false)
+    expect(tenantCalls()).toHaveLength(0)
+    expect(auditCalls()).toHaveLength(1)
+  })
+
+  it('reads the company-level endpoint for ?scope=tenant, with the kind of thing of the address, and leaves out the filter that only a property has', async () => {
+    const { w } = await mountScoped('/audit?scope=tenant&entity_type=subscription', true)
+    expect(tenantCalls()).toHaveLength(1)
+    expect(tenantCalls()[0]).toEqual(['/api/v1/audit-logs', { params: { query: { limit: 50, entity_type: 'subscription', cursor: undefined } } }])
+    expect(auditCalls()).toHaveLength(0)
+    expect((w.get('select[name=scope]').element as HTMLSelectElement).value).toBe('tenant')
+    expect((w.get('select[name=entity_type]').element as HTMLSelectElement).value).toBe('subscription')
+    expect(w.find('[data-testid=self-approved-filter]').exists()).toBe(false)
+  })
+
+  it('keeps the scope in the address: choosing it reads the other endpoint, and going back to the property drops it', async () => {
+    const { w, router } = await mountScoped('/audit', true)
+    await w.get('select[name=scope]').setValue('tenant')
+    await flushPromises()
+    expect(router.currentRoute.value.query.scope).toBe('tenant')
+    expect(tenantCalls()).toHaveLength(1)
+    await w.get('select[name=scope]').setValue('property')
+    await flushPromises()
+    expect(router.currentRoute.value.query.scope).toBeUndefined()
+    expect(auditCalls()).toHaveLength(2)
+  })
+
+  it('labels an entry of an operator "KamaraPMS (operator)" at company level, in both languages', async () => {
+    const rows = [entry(3, { user: null, actor_kind: 'operator', actor_name: 'Rina Operator', action: 'subscription.changed', entity_type: 'subscription' })]
+    const { w } = await mountScoped('/audit?scope=tenant', true, rows)
+    expect(w.get('[data-testid=entry-3]').text()).toContain('KamaraPMS (operator)')
+    expect(w.get('[data-testid=entry-3]').text()).not.toContain('Rina')
+  })
+
+  it('says the scope and the operator in Indonesian too', async () => {
+    const rows = [entry(3, { user: null, actor_kind: 'operator', actor_name: 'Rina Operator', action: 'subscription.changed', entity_type: 'subscription' })]
+    await setLocale('id')
+    const idw = (await mountScoped('/audit?scope=tenant', true, rows)).w
+    expect(idw.get('[data-testid=entry-3]').text()).toContain('KamaraPMS (operator)')
+    expect(idw.findAll('select[name=scope] option').map((o) => o.text())).toEqual(['Properti ini', 'Tingkat perusahaan'])
+    await setLocale('en')
+  }, 20000)
+})

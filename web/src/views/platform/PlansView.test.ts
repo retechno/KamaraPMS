@@ -57,7 +57,7 @@ describe('PlansView', () => {
     expect(GET).toHaveBeenCalledWith('/api/v1/platform/plans')
     const basic = w.get('[data-testid=plan-BASIC]')
     expect(basic.get('h2').text()).toBe('Basic')
-    expect(basic.get('[data-testid=plan-price]').text()).toBe('Rp 1,500,000')
+    expect(basic.get('[data-testid=plan-price]').text()).toBe('IDR 1,500,000')
     expect(basic.text()).toContain('/ month')
     expect(basic.get('[data-testid=limit-rooms]').text()).toContain('30')
     expect(basic.text()).toContain('Core')

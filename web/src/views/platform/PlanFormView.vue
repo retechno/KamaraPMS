@@ -247,12 +247,12 @@ const quotaField = (k: Quota | 'trial'): string => (k === 'trial' ? 'trial_days'
       <CardContent>
         <ul class="m-0 grid list-none gap-2 p-0 sm:grid-cols-2" data-testid="plan-modules">
           <li class="rounded-md border border-border bg-muted px-3 py-2">
-            <Checkbox :model-value="true" disabled name="module_core" data-testid="module-CORE" label-class="items-start">
+            <Checkbox :model-value="true" disabled name="module_core" data-testid="module-CORE" label-class="items-start text-sm">
               <span><span class="block text-sm font-medium">{{ moduleName('CORE') }}</span><span class="block text-sm text-muted-foreground">{{ moduleHint('CORE') }}</span></span>
             </Checkbox>
           </li>
           <li v-for="m in OPTIONAL" :key="m" class="rounded-md border border-border px-3 py-2">
-            <Checkbox v-model="form.modules" :value="m" name="modules" :data-testid="`module-${m}`" label-class="items-start">
+            <Checkbox v-model="form.modules" :value="m" name="modules" :data-testid="`module-${m}`" label-class="items-start text-sm">
               <span><span class="block text-sm font-medium">{{ moduleName(m) }}</span><span class="block text-sm text-muted-foreground">{{ moduleHint(m) }}</span></span>
             </Checkbox>
           </li>
@@ -270,7 +270,7 @@ const quotaField = (k: Quota | 'trial'): string => (k === 'trial' ? 'trial_days'
               <Input :id="id" v-model="quotas[k].value" :name="quotaField(k)" type="number" min="1" inputmode="numeric" :disabled="quotas[k].none" :aria-describedby="describedBy" :aria-invalid="invalid || undefined" />
             </template>
           </FormField>
-          <Checkbox v-model="quotas[k].none" :name="`${quotaField(k)}_none`" :data-testid="`none-${quotaField(k)}`">{{ quotaNone(k) }}</Checkbox>
+          <Checkbox v-model="quotas[k].none" :name="`${quotaField(k)}_none`" :data-testid="`none-${quotaField(k)}`" label-class="text-sm">{{ quotaNone(k) }}</Checkbox>
         </div>
       </CardContent>
     </Card>
@@ -278,10 +278,10 @@ const quotaField = (k: Quota | 'trial'): string => (k === 'trial' ? 'trial_days'
     <Card aria-labelledby="pf-sale">
       <CardHeader><CardTitle id="pf-sale">{{ t('platform.plans.form.sale') }}</CardTitle></CardHeader>
       <CardContent class="grid gap-3">
-        <Checkbox v-model="form.isActive" name="is_active" data-testid="is-active" label-class="items-start">
+        <Checkbox v-model="form.isActive" name="is_active" data-testid="is-active" label-class="items-start text-sm">
           <span><span class="block text-sm font-medium">{{ t('platform.plans.form.forSale') }}</span><span class="block text-sm text-muted-foreground">{{ t('platform.plans.form.forSaleHint') }}</span></span>
         </Checkbox>
-        <Checkbox v-model="form.isDefault" name="is_default" :disabled="defaultIsSelf" data-testid="is-default" label-class="items-start">
+        <Checkbox v-model="form.isDefault" name="is_default" :disabled="defaultIsSelf" data-testid="is-default" label-class="items-start text-sm">
           <span><span class="block text-sm font-medium">{{ t('platform.plans.form.makeDefault') }}</span><span class="block text-sm text-muted-foreground" data-testid="default-hint">{{ defaultHint }}</span></span>
         </Checkbox>
         <p v-if="fieldError('is_default')" class="m-0 text-xs text-destructive" role="alert">{{ fieldError('is_default') }}</p>

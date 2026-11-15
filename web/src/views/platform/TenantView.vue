@@ -19,7 +19,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { t } from '@/i18n'
-import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
+import { formatDate, formatDateTime } from '@/utils/format'
+import { platformMoney } from '@/utils/platformMoney'
 
 type Tenant = components['schemas']['PlatformTenantDetail']
 type Plan = components['schemas']['PlatformPlan']
@@ -144,7 +145,7 @@ async function seeAll(): Promise<void> {
 const planOf = computed(() => plans.value?.find((p) => p.code === tenant.value?.summary.plan_code) ?? null)
 const suspended = computed(() => tenant.value?.status === 'SUSPENDED')
 const summary = computed(() => tenant.value?.summary ?? null)
-const money = (currency: string, amount: string): string => `${currency === 'IDR' ? 'Rp' : currency} ${formatMoney(amount.replace(/\.0+$/, ''))}`
+const money = platformMoney
 
 const meta = computed(() => {
   const x = tenant.value
@@ -340,7 +341,7 @@ function openChange(focus?: 'quotas'): void {
             </CardContent>
           </Card>
 
-          <Card aria-labelledby="tenant-inv-title" data-testid="tenant-invoices">
+          <Card aria-labelledby="tenant-inv-title" class="min-w-0" data-testid="tenant-invoices">
             <CardHeader class="flex-row items-center justify-between gap-3">
               <CardTitle id="tenant-inv-title">{{ t('platform.tenant.invoices.title') }}</CardTitle>
               <Button variant="ghost" size="sm" data-testid="invoices-issue" @click="issueOpen = true">{{ t('platform.tenant.invoices.issue') }}</Button>
@@ -350,7 +351,7 @@ function openChange(focus?: 'quotas'): void {
               <DataTable v-else :columns="columns" :rows="invoices ?? []" row-key="id" :loading="invoices === null" :caption="t('platform.tenant.invoices.title')" :empty-title="t('platform.tenant.invoices.empty')" :row-test-id="(r) => `invoice-${r.number}`">
                 <template #cell-number="{ row }"><span class="whitespace-nowrap">{{ row.number }}</span></template>
                 <template #cell-period="{ row }">{{ formatDate(row.period_start) }} – {{ formatDate(row.period_end) }}</template>
-                <template #cell-amount="{ row }">{{ money(row.currency_code, row.amount) }}</template>
+                <template #cell-amount="{ row }"><span class="whitespace-nowrap tabular-nums">{{ money(row.currency_code, row.amount) }}</span></template>
                 <template #cell-status="{ row }"><Badge :variant="stateVariant[stateOf(row)]">{{ t(`platform.tenant.invoices.state.${stateOf(row)}` as never) }}</Badge></template>
                 <template #cell-due_on="{ row }">{{ formatDate(row.due_on) }}</template>
                 <template #cell-ops="{ row }">

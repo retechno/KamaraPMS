@@ -8,7 +8,7 @@ export const tenantsId: typeof tenantsEn = {
   kpi: {
     active: 'Aktif',
     activeHint: 'termasuk paket lama',
-    trial: 'Trial',
+    trial: 'Percobaan',
     trialHint: '{n} berakhir ≤ 14 hari',
     grace: 'Masa tenggang',
     graceHint: 'masih bisa menulis',
@@ -27,7 +27,7 @@ export const tenantsId: typeof tenantsEn = {
   },
   state: {
     active: 'Aktif',
-    trial: 'Trial',
+    trial: 'Percobaan',
     grace: 'Masa tenggang',
     read_only: 'Hanya baca',
     suspended: 'Ditangguhkan',
@@ -51,7 +51,7 @@ export const tenantsId: typeof tenantsEn = {
   hint: {
     left: 'sisa {n} hari',
     graceLeft: 'sisa tenggang {n} hari',
-    trialLeft: 'trial, sisa {n} hari',
+    trialLeft: 'percobaan, sisa {n} hari',
     blocked: 'login diblokir',
   },
   rooms: 'Kamar',
@@ -60,7 +60,7 @@ export const tenantsId: typeof tenantsEn = {
   none: '–',
   count: '{n} penyewa',
   countOne: '1 penyewa',
-  order: 'Urut: status yang butuh tindakan dulu (hanya baca, masa tenggang, trial hampir habis)',
+  order: 'Urut: status yang butuh tindakan dulu (hanya baca, masa tenggang, masa percobaan hampir habis)',
   emptyTitle: 'Belum ada penyewa',
   emptyFiltered: 'Tidak ada penyewa yang cocok dengan filter ini.',
   emptyDescription: 'Buat penyewa pertama dengan "Penyewa baru".',

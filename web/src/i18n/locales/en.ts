@@ -3919,6 +3919,9 @@ export const en = {
     user: 'User',
     system: 'system',
     operator: 'KamaraPMS (operator)',
+    scope: 'Scope',
+    scopeProperty: 'This property',
+    scopeTenant: 'Company level',
     details: 'Details',
     hide: 'Hide',
     before: 'Before',
@@ -8582,6 +8585,7 @@ export const en = {
     module: { CORE: 'Core', HOUSEKEEPING: 'Housekeeping', ACCOUNTING: 'Accounting', INVENTORY: 'Inventory', BANQUET: 'Banquet', POS: 'POS' },
     state: { TRIAL: 'Trial', FULL: 'Active', GRACE: 'Grace period', READ_ONLY: 'Read only' },
     invoices: 'Invoices',
+    history: 'Subscription change history',
     noInvoices: 'No invoices yet',
     invoice: { number: 'Number', period: 'Period', amount: 'Amount', status: 'Status', due: 'Due', unpaid: 'Unpaid', issued: 'Issued', paid: 'Paid', void: 'Voided' },
     banner: {

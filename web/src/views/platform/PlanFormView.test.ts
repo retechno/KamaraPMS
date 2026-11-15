@@ -269,6 +269,6 @@ describe('PlanFormView', () => {
     const { wrapper } = await mountForm('PRO')
     expect(wrapper.get('h1').text()).toBe('Ubah paket PRO')
     expect(wrapper.get('[data-testid=default-hint]').text()).toBe('Saat ini: BASIC. Hanya satu paket yang bisa menjadi bawaan.')
-    expect(wrapper.get('[data-testid=none-trial_days]').element.closest('label')?.textContent).toContain('Tanpa trial')
+    expect(wrapper.get('[data-testid=none-trial_days]').element.closest('label')?.textContent).toContain('Tanpa masa percobaan')
   })
 })

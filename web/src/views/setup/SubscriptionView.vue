@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { SubscriptionInvoice } from '@/api/types'
@@ -12,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useSubscriptionStore } from '@/stores/subscription'
 import { formatDate, formatMoney } from '@/utils/format'
 
@@ -19,6 +21,7 @@ import { formatDate, formatMoney } from '@/utils/format'
  * Setup → Subscription (administrators, read only; docs/architecture/39-platform-console.md §10.1): the plan and where its paid period stands, how much of each limit is used, the modules
  * and the invoices. Renewing and changing the plan is the operator's work, so there is no button here, only who to ask.
  */
+const auth = useAuthStore()
 const subscription = useSubscriptionStore()
 const invoices = ref<SubscriptionInvoice[] | null>(null)
 const invoiceError = ref<ApiError | null>(null)
@@ -125,7 +128,10 @@ const columns = computed<Column<SubscriptionInvoice>[]>(() => [
     </Card>
 
     <Card aria-labelledby="sub-invoices-title" data-testid="subscription-invoices">
-      <CardHeader><CardTitle id="sub-invoices-title">{{ t('subscription.invoices') }}</CardTitle></CardHeader>
+      <CardHeader class="flex-row items-center justify-between gap-3">
+        <CardTitle id="sub-invoices-title">{{ t('subscription.invoices') }}</CardTitle>
+        <RouterLink v-if="auth.isAdmin" :to="{ path: '/audit', query: { scope: 'tenant', entity_type: 'subscription' } }" class="text-sm text-primary hover:underline" data-testid="subscription-history">{{ t('subscription.history') }}</RouterLink>
+      </CardHeader>
       <CardContent>
         <ErrorNotice v-if="invoiceError" :error="invoiceError" inline />
         <DataTable v-else :columns="columns" :rows="invoices ?? []" row-key="id" :loading="invoices === null" :caption="t('subscription.invoices')" :empty-title="t('subscription.noInvoices')">

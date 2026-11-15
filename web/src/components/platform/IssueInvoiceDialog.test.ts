@@ -13,7 +13,7 @@ const q = <T extends Element>(sel: string) => document.body.querySelector<T>(sel
 let wrapper: VueWrapper | null = null
 
 const PRICE: Record<string, number> = { PRO: 7500000, BASIC: 2500000 }
-function previewFor(args: { params: { query: { plan: string; periods: number } } }, withOpen = false) {
+function previewFor(args: { params: { query: { plan: string; periods: number } } }, withOpen: boolean | 'overlap' = false) {
   const { plan, periods } = args.params.query
   return {
     data: {
@@ -24,7 +24,7 @@ function previewFor(args: { params: { query: { plan: string; periods: number } }
       currency_code: 'IDR',
       due_on: '2027-02-09',
       next_number: 'SUB-2026-00058',
-      ...(withOpen ? { open_invoice: { number: 'SUB-2026-00041', period_start: '2026-11-09', period_end: '2027-02-08' } } : {}),
+      ...(withOpen === 'overlap' ? { open_invoice: { number: 'SUB-2026-00041', period_start: '2027-01-01', period_end: '2027-04-01' } } : withOpen ? { open_invoice: { number: 'SUB-2026-00041', period_start: '2026-11-09', period_end: '2027-02-08' } } : {}),
     },
   }
 }
@@ -75,17 +75,44 @@ describe('IssueInvoiceDialog', () => {
 
   it('lists the plans that are for sale with their price and period, and puts the cursor in the plan', async () => {
     await open()
-    expect([...document.body.querySelectorAll('select[name=plan_code] option')].map((o) => o.textContent)).toEqual(['PRO · Rp 7,500,000 / 3 months', 'BASIC · Rp 2,500,000 / 3 months'])
+    expect([...document.body.querySelectorAll('select[name=plan_code] option')].map((o) => o.textContent)).toEqual(['PRO · IDR 7,500,000 / 3 months', 'BASIC · IDR 2,500,000 / 3 months'])
     expect(document.activeElement).toBe(q('select[name=plan_code]'))
   })
 
-  it('says that an invoice is still open and the new period starts after it', async () => {
+  it('says only that an invoice is still open when its period does not share a day with the new one, and lets the invoice be issued', async () => {
     GET = vi.fn(async (_url: string, args: never) => previewFor(args, true))
     await open()
-    const notice = q('[data-testid=open-invoice-conflict]').textContent ?? ''
-    expect(notice).toContain('SUB-2026-00041')
-    expect(notice).toContain('9 Nov 2026 – 8 Feb 2027')
-    expect(notice).toContain('The new period starts after it')
+    expect(q('[data-testid=open-invoice-conflict]').textContent?.trim()).toBe('SUB-2026-00041 is still open for 9 Nov 2026 – 8 Feb 2027.')
+    expect(document.body.querySelector('[data-testid=open-invoice-overlap]')).toBeNull()
+    expect(q<HTMLButtonElement>('[data-testid=dialog-submit]').disabled).toBe(false)
+  })
+
+  it('warns in the danger colour that the invoice will be refused when the periods share a day, and turns Issue off', async () => {
+    GET = vi.fn(async (_url: string, args: never) => previewFor(args, 'overlap'))
+    await open()
+    const alert = q('[data-testid=open-invoice-overlap]')
+    expect(alert.getAttribute('role')).toBe('alert')
+    expect(alert.classList.contains('text-destructive')).toBe(true)
+    expect(alert.textContent).toContain('INVOICE_PERIOD_OVERLAP')
+    expect(alert.textContent).toContain('Record the payment or void SUB-2026-00041 first.')
+    expect(document.body.querySelector('[data-testid=open-invoice-conflict]')).toBeNull()
+    expect(q<HTMLButtonElement>('[data-testid=dialog-submit]').disabled).toBe(true)
+    await submit()
+    expect(POST).not.toHaveBeenCalled()
+  })
+
+  it('says the same in Indonesian', async () => {
+    await setLocale('id')
+    GET = vi.fn(async (_url: string, args: never) => previewFor(args, 'overlap'))
+    await open()
+    expect(q('[data-testid=open-invoice-overlap]').textContent).toContain('Invoice ini akan ditolak (INVOICE_PERIOD_OVERLAP)')
+    expect(q('[data-testid=open-invoice-overlap]').textContent).toContain('Catat pembayaran atau void SUB-2026-00041 dulu.')
+    wrapper?.unmount()
+    document.body.innerHTML = ''
+    GET = vi.fn(async (_url: string, args: never) => previewFor(args, true))
+    await open()
+    expect(q('[data-testid=open-invoice-conflict]').textContent?.trim()).toBe('SUB-2026-00041 masih terbuka untuk 9 Nov 2026 – 8 Feb 2027.')
+    await setLocale('en')
   })
 
   it('works out the amount again when the periods or the plan change', async () => {

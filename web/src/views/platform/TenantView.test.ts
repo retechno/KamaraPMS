@@ -172,7 +172,7 @@ describe('TenantView', () => {
       const callout = tid(w, 'tenant-callout')
       expect(callout.attributes('data-kind')).toBe('warning')
       expect(callout.text()).toContain('Paid through 8 Nov 2026. The grace period ends 22 Nov 2026 (8 days left)')
-      expect(callout.text()).toContain('Invoice SUB-2026-00041 of Rp 7,500,000 is not paid.')
+      expect(callout.text()).toContain('Invoice SUB-2026-00041 of IDR 7,500,000 is not paid.')
       await tid(w, 'callout-pay').trigger('click')
       expect(tid(w, 'stub-RecordPaymentDialog').attributes('data-invoice')).toBe('SUB-2026-00041')
     })
@@ -203,7 +203,7 @@ describe('TenantView', () => {
       expect(tid(w, 'fact-started').text()).toBe('2 Mar 2026')
       expect(tid(w, 'fact-paid-through').text()).toBe('8 Feb 2027')
       expect(tid(w, 'fact-grace-days').text()).toBe('14 days')
-      expect(tid(w, 'fact-billing').text()).toBe('Rp 7,500,000 / 3 months')
+      expect(tid(w, 'fact-billing').text()).toBe('IDR 7,500,000 / 3 months')
     })
 
     it('says "No end date" for a subscription without an end, and "Trial" for a trial', async () => {
@@ -300,12 +300,12 @@ describe('TenantView', () => {
       const w = await mountView()
       const first = tid(w, 'invoice-SUB-2026-00041')
       expect(first.text()).toContain('9 Nov 2026 – 8 Feb 2027')
-      expect(first.text()).toContain('Rp 7,500,000')
+      expect(first.text()).toContain('IDR 7,500,000')
       expect(first.text()).toContain('Overdue')
       expect(tid(w, 'invoice-SUB-2026-00012').text()).toContain('Issued')
       expect(tid(w, 'invoice-SUB-2026-00027').text()).toContain('Paid')
       expect(tid(w, 'invoice-SUB-2026-00011').text()).toContain('Voided')
-      expect(tid(w, 'invoice-SUB-2026-00011').text()).toContain('Rp 8,250,000')
+      expect(tid(w, 'invoice-SUB-2026-00011').text()).toContain('IDR 8,250,000')
     })
 
     it('has Record payment and Void on an issued invoice only; paid shows date and reference, voided the reason', async () => {

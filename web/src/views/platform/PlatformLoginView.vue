@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
                 <Button type="button" variant="outline" size="sm" data-testid="download-codes" @click="download">{{ t('platform.login.enroll.download') }}</Button>
                 <Button type="button" variant="outline" size="sm" data-testid="copy-codes" @click="copyText(codes.join('\n'), 'codes')">{{ t('platform.login.enroll.copyAll') }}</Button>
                 <span v-if="codesCopied" class="text-sm text-muted-foreground" role="status">{{ t('platform.login.enroll.copied') }}</span>
-                <Checkbox v-model="saved" name="saved" data-testid="codes-saved">{{ t('platform.login.enroll.saved') }}</Checkbox>
+                <Checkbox v-model="saved" name="saved" data-testid="codes-saved" label-class="text-sm">{{ t('platform.login.enroll.saved') }}</Checkbox>
                 <Button type="button" :disabled="!saved" data-testid="open-console" @click="openTheConsole">{{ t('platform.login.enroll.open') }}</Button>
               </div>
             </section>

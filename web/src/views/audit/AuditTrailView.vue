@@ -3,6 +3,7 @@ import FilterBar from '@/components/app/FilterBar.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { labelOf } from '@/i18n/labels'
 import { computed, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import type { AuditLog } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
@@ -24,6 +25,16 @@ import { AUDIT_ACTIONS, AUDIT_ENTITIES } from '@/utils/audit'
 
 const auth = useAuthStore()
 const property = usePropertyStore()
+const route = useRoute()
+const router = useRouter()
+
+// The scope of the trail, kept in the address (?scope=tenant): "This property" is the trail of the property in use (audit.read), "Company level" the entries of the whole tenant (users, roles, guests,
+// the subscription and what the platform operator did to it), for a tenant administrator only. Anyone else has no choice, and a ?scope=tenant they type is ignored.
+const scope = computed<'property' | 'tenant'>(() => (auth.isAdmin && route.query.scope === 'tenant' ? 'tenant' : 'property'))
+function setScope(next: string): void {
+  const { scope: _s, ...rest } = route.query
+  void router.replace({ query: { ...rest, ...(next === 'tenant' ? { scope: 'tenant' } : {}) } })
+}
 
 const open = ref<number | null>(null)
 
@@ -31,7 +42,8 @@ const open = ref<number | null>(null)
 // sorts goes between the two; the newest first is the server's own order, so it is the address with no order.
 const { sort, params: sortParams, setSort } = useServerSort(['created_at'])
 const NEWEST_FIRST = { key: 'created_at', dir: 'desc' } as const
-const filter = reactive({ entity_type: '', user_id: '', action: '', document: '', from: '', to: '', self_approved: false })
+// the address may bring the kind of thing to look at (the link of the Subscription page: ?scope=tenant&entity_type=subscription)
+const filter = reactive({ entity_type: typeof route.query.entity_type === 'string' ? route.query.entity_type : '', user_id: '', action: '', document: '', from: '', to: '', self_approved: false })
 const users = ref<{ id: number; full_name: string }[]>([])
 
 // The choices of the entity and action filters, in the words of the language of the page.
@@ -62,7 +74,7 @@ const columns = computed<Column<AuditLog>[]>(() => [
 ])
 
 const pid = computed(() => property.currentId)
-const allowed = computed(() => auth.can('audit.read', pid.value))
+const allowed = computed(() => (scope.value === 'tenant' ? auth.isAdmin : auth.can('audit.read', pid.value)))
 
 // The document number is a search of the server: it finds a part of the label of an entry (a number or a code, "0012" in RES000012), in any case, from three characters. Under three
 // the search is not sent (the field says so) and the list is as it was.
@@ -76,28 +88,30 @@ function query(): Record<string, string | number | undefined> {
     if (k !== 'document' && k !== 'self_approved' && String(v).trim()) q[k] = k === 'user_id' ? Number(v) : String(v).trim()
   }
   // The approvals an administrator gave to their own correction against the rule of the property (docs/architecture/32-distinct-approver.md).
-  if (filter.self_approved) q.self_approved = 'true'
+  if (filter.self_approved && scope.value === 'property') q.self_approved = 'true'
   if (searchText.value && !searchTooShort.value) q.q = searchText.value
   return q
 }
 
-async function fetchPage(propertyId: number, asked: Record<string, string | number | undefined>, cursor?: string) {
-  const { data } = await api.GET('/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId }, query: { ...asked, cursor } } })
+async function fetchPage(propertyId: number | null, tenantWide: boolean, asked: Record<string, string | number | undefined>, cursor?: string) {
+  const { data } = tenantWide || propertyId === null
+    ? await api.GET('/api/v1/audit-logs', { params: { query: { ...asked, cursor } } })
+    : await api.GET('/api/v1/properties/{propertyId}/audit-logs', { params: { path: { propertyId }, query: { ...asked, cursor } } })
   return { entries: data?.data ?? [], next: data?.next_cursor }
 }
 
 // One page of 50 at a time, newest first; every filter, the search too, is asked of the server. The query is read once, when a search starts: "Show more" goes on with it.
-const list = usePagedList<AuditLog, { propertyId: number; asked: Record<string, string | number | undefined> }>(
-  () => ({ propertyId: pid.value!, asked: query() }),
-  async (cursor, { propertyId, asked }) => {
-    const page = await fetchPage(propertyId, asked, cursor)
+const list = usePagedList<AuditLog, { propertyId: number | null; tenantWide: boolean; asked: Record<string, string | number | undefined> }>(
+  () => ({ propertyId: pid.value, tenantWide: scope.value === 'tenant', asked: query() }),
+  async (cursor, { propertyId, tenantWide, asked }) => {
+    const page = await fetchPage(propertyId, tenantWide, asked, cursor)
     return { data: page.entries, next_cursor: page.next }
   },
 )
 const { rows, error, loading, loadingMore, loaded, hasMore } = list
 
 async function load(): Promise<void> {
-  if (pid.value === null || !allowed.value) return
+  if ((pid.value === null && scope.value === 'property') || !allowed.value) return
   await list.reload()
 }
 
@@ -134,7 +148,7 @@ watch(sort, () => {
   void load()
 })
 
-watch(pid, () => {
+watch([pid, scope], () => {
   list.reset()
   open.value = null
   void load()
@@ -146,7 +160,17 @@ watch(pid, () => {
   <PageHeader :title="t('audit.title')" />
 
   <ErrorNotice v-if="error" :error="error" inline data-testid="form-error" />
-  <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
+  <div v-if="auth.isAdmin" class="mb-3 max-w-xs" data-testid="scope">
+    <FormField :label="t('audit.scope')">
+      <template #default="{ id }">
+        <NativeSelect :id="id" :model-value="scope" name="scope" @update:model-value="(v) => setScope(String(v))">
+          <option value="property">{{ t('audit.scopeProperty') }}</option>
+          <option value="tenant">{{ t('audit.scopeTenant') }}</option>
+        </NativeSelect>
+      </template>
+    </FormField>
+  </div>
+  <p v-if="pid === null && scope === 'property'" class="muted">{{ t('setup.selectProperty') }}</p>
   <p v-else-if="!allowed" class="muted" data-testid="no-access">{{ t('audit.noAccess', { permission: 'audit.read' }) }}</p>
 
   <template v-else>
@@ -183,7 +207,7 @@ watch(pid, () => {
           </template>
         </FormField>
         
-        <label class="flex items-start gap-2 text-sm sm:col-span-2 lg:col-span-4" data-testid="self-approved-filter">
+        <label v-if="scope === 'property'" class="flex items-start gap-2 text-sm sm:col-span-2 lg:col-span-4" data-testid="self-approved-filter">
           <input v-model="filter.self_approved" type="checkbox" name="self_approved" class="mt-1 size-4 accent-primary" />
           <span>{{ t('audit.selfApproved') }}</span>
         </label>

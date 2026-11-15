@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate } from '@/utils/format'
+import { platformMoney } from '@/utils/platformMoney'
 
 type Plan = components['schemas']['PlatformPlan']
 type Preview = components['schemas']['PlatformInvoicePreview']
@@ -41,6 +42,12 @@ const invalid = ref<Record<string, string>>({})
 let ticket = 0
 
 const planOptions = computed(() => props.plans.filter((p) => p.is_active || p.code === props.currentPlan))
+// The server works the new period out from paid_through, not from the open invoice: the two are compared here, and only when they share a day is the new invoice refused.
+const overlaps = computed(() => {
+  const p = preview.value
+  const o = p?.open_invoice
+  return !!p && !!o && p.period_start <= o.period_end && o.period_start <= p.period_end
+})
 const periodsValid = computed(() => /^\d+$/.test(String(periods.value).trim()) && Number(periods.value) >= 1 && Number(periods.value) <= 36)
 
 /** "7500000.000" -> "7500000": the field keeps the plain decimal text without the zeros the server pads. */
@@ -102,7 +109,7 @@ function validate(): boolean {
 }
 
 async function submit(): Promise<void> {
-  if (busy.value || !validate()) return
+  if (busy.value || overlaps.value || !validate()) return
   busy.value = true
   error.value = null
   try {
@@ -127,7 +134,7 @@ async function submit(): Promise<void> {
 }
 
 const fieldError = (name: string): string | undefined => invalid.value[name] ?? error.value?.fieldMessage(name)
-const optionText = (p: Plan): string => t('platform.tenant.issue.planOption', { plan: p.code, price: `${p.currency_code === 'IDR' ? 'Rp' : p.currency_code} ${formatMoney(p.price.replace(/\.0+$/, ''))}`, n: p.billing_period_months })
+const optionText = (p: Plan): string => t('platform.tenant.issue.planOption', { plan: p.code, price: platformMoney(p.currency_code, p.price), n: p.billing_period_months })
 </script>
 
 <template>
@@ -163,8 +170,11 @@ const optionText = (p: Plan): string => t('platform.tenant.issue.planOption', { 
             <dd class="m-0 font-semibold" data-testid="preview-number">{{ preview?.next_number ?? '–' }}</dd>
           </div>
         </dl>
-        <p v-if="preview?.open_invoice" class="m-0 mt-3 rounded-md border border-warning bg-warning/15 p-3 text-sm" role="status" data-testid="open-invoice-conflict">
-          {{ t('platform.tenant.issue.conflict', { number: preview.open_invoice.number, start: formatDate(preview.open_invoice.period_start), end: formatDate(preview.open_invoice.period_end) }) }}
+        <p v-if="preview?.open_invoice && overlaps" class="m-0 mt-3 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive" role="alert" data-testid="open-invoice-overlap">
+          {{ t('platform.tenant.issue.overlap', { number: preview.open_invoice.number, start: formatDate(preview.open_invoice.period_start), end: formatDate(preview.open_invoice.period_end) }) }}
+        </p>
+        <p v-else-if="preview?.open_invoice" class="m-0 mt-3 rounded-md bg-muted p-3 text-sm" role="status" data-testid="open-invoice-conflict">
+          {{ t('platform.tenant.issue.openInfo', { number: preview.open_invoice.number, start: formatDate(preview.open_invoice.period_start), end: formatDate(preview.open_invoice.period_end) }) }}
         </p>
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <FormField :label="t('platform.tenant.issue.amount')" :hint="t('platform.tenant.issue.amountHint')" :error="fieldError('amount')">
@@ -194,7 +204,7 @@ const optionText = (p: Plan): string => t('platform.tenant.issue.planOption', { 
         </div>
         <div class="mt-5 flex justify-end gap-2">
           <Button type="button" variant="outline" data-testid="dialog-cancel" @click="emit('update:open', false)">{{ t('platform.tenant.issue.cancel') }}</Button>
-          <Button type="submit" :disabled="busy" data-testid="dialog-submit">{{ t('platform.tenant.issue.submit') }}</Button>
+          <Button type="submit" :disabled="busy || overlaps" data-testid="dialog-submit">{{ t('platform.tenant.issue.submit') }}</Button>
         </div>
       </form>
     </DialogContent>

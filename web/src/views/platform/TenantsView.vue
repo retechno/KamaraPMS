@@ -11,7 +11,6 @@ import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FilterBar from '@/components/app/FilterBar.vue'
 import KpiCard from '@/components/app/KpiCard.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
-import QuotaMeter from '@/components/app/QuotaMeter.vue'
 import NewTenantDialog from '@/components/platform/NewTenantDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +18,8 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { toast } from '@/composables/useToast'
 import { currentLocale, t } from '@/i18n'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate } from '@/utils/format'
+import { platformMoney } from '@/utils/platformMoney'
 
 /**
  * P4, the tenants (docs/architecture/39-platform-console.md 11): the summary, the filters (kept in the address: `?q=&status=&plan=`, so a link keeps them), the table, the export and
@@ -118,7 +118,7 @@ const filtered = computed(() => Object.keys(params()).length > 0)
 
 const openTotal = computed(() => {
   const totals = summary.value?.open_invoice_totals ?? []
-  return totals.length ? totals.map((c) => `${c.currency_code} ${formatMoney(c.total)}`).join(' + ') : t('platform.tenants.none')
+  return totals.length ? totals.map((c) => platformMoney(c.currency_code, c.total)).join(' + ') : t('platform.tenants.none')
 })
 const kpis = computed(() => {
   const s = summary.value
@@ -157,6 +157,7 @@ function hint(r: Row): string {
   if (r.state === 'trial') return t('platform.tenants.hint.trialLeft', { n: r.days_left })
   return t('platform.tenants.hint.left', { n: r.days_left })
 }
+const roomsBar = (r: Row): string => (r.limits.max_rooms !== null && r.usage.rooms >= r.limits.max_rooms ? 'bg-destructive' : r.limits.max_rooms !== null && r.usage.rooms >= r.limits.max_rooms * 0.85 ? 'bg-warning' : 'bg-primary')
 const hintTone = (r: Row): string => (r.state === 'read_only' || r.state === 'suspended' ? 'text-destructive' : r.state === 'grace' ? 'text-warning-text' : 'text-muted-foreground')
 const tenantPath = (r: Row): string => `/platform/tenants/${encodeURIComponent(r.code)}`
 
@@ -269,7 +270,12 @@ function onCreated(code: string): void {
         </div>
       </template>
       <template #cell-rooms="{ row }">
-        <div class="min-w-36"><QuotaMeter what="rooms" :label="t('platform.tenants.rooms')" :used="row.usage.rooms" :limit="row.limits.max_rooms" /></div>
+        <div class="flex min-w-24 flex-col gap-1" data-testid="rooms-cell">
+          <span class="whitespace-nowrap tabular-nums">{{ row.usage.rooms }} / {{ row.limits.max_rooms === null ? '∞' : row.limits.max_rooms }}</span>
+          <div v-if="row.limits.max_rooms !== null" class="h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+            <div :class="['h-full rounded-full', roomsBar(row)]" :style="{ width: `${Math.min(row.limits.max_rooms === 0 ? 1 : row.usage.rooms / row.limits.max_rooms, 1) * 100}%` }" />
+          </div>
+        </div>
       </template>
       <template #cell-users="{ row }">
         <span class="whitespace-nowrap tabular-nums" data-testid="users-cell">{{ row.usage.users }} / {{ row.limits.max_users === null ? '∞' : row.limits.max_users }}</span>

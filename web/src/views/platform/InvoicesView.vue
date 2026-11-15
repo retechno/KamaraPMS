@@ -14,7 +14,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/composables/useToast'
 import { t } from '@/i18n'
 import { todayIn } from '@/utils/dates'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate } from '@/utils/format'
+import { platformMoney } from '@/utils/platformMoney'
 
 /**
  * P9, the invoices of every tenant (docs/architecture/39-platform-console.md 11): tabs Open / Overdue / Paid / Voided with their counts, and the actions of an issued invoice. The API has
@@ -131,7 +132,7 @@ const showTotal = computed(() => tab.value === 'open')
         <span class="ml-1 text-xs text-muted-foreground">{{ row.tenant_code }}</span>
       </template>
       <template #cell-period="{ row }"><span class="whitespace-nowrap">{{ formatDate(row.period_start) }} – {{ formatDate(row.period_end) }}</span></template>
-      <template #cell-amount="{ row }"><span class="whitespace-nowrap tabular-nums">{{ row.currency_code }} {{ formatMoney(row.amount) }}</span></template>
+      <template #cell-amount="{ row }"><span class="whitespace-nowrap tabular-nums">{{ platformMoney(row.currency_code, row.amount) }}</span></template>
       <template #cell-due_on="{ row }">
         <div class="flex flex-col">
           <span>{{ formatDate(row.due_on) }}</span>
@@ -150,7 +151,7 @@ const showTotal = computed(() => tab.value === 'open')
         <p v-if="!loading" class="m-0 mt-2 text-sm text-muted-foreground" data-testid="invoice-count">{{ t(`platform.invoices.count.${tab}` as never, { n: rows.length }) }}</p>
         <p v-if="showTotal && totals[tab].length" class="m-0 mt-2 flex flex-wrap justify-end gap-x-3 text-sm" data-testid="invoice-total">
           <span class="text-muted-foreground">{{ t('platform.invoices.totalOpen') }}</span>
-          <strong v-for="c in totals[tab]" :key="c.currency_code" class="tabular-nums" :data-testid="`total-${c.currency_code}`">{{ c.currency_code }} {{ formatMoney(c.total) }}</strong>
+          <strong v-for="c in totals[tab]" :key="c.currency_code" class="tabular-nums" :data-testid="`total-${c.currency_code}`">{{ platformMoney(c.currency_code, c.total) }}</strong>
         </p>
       </template>
     </DataTable>

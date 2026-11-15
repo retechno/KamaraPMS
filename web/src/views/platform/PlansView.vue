@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { t } from '@/i18n'
-import { formatMoney } from '@/utils/format'
+import { platformMoney } from '@/utils/platformMoney'
 
 type Plan = components['schemas']['PlatformPlan']
 
@@ -40,7 +40,7 @@ const moduleChips = (p: Plan): string[] =>
     ? [t('platform.plans.allModules')]
     : [t('platform.plans.moduleShort.CORE'), ...OPTIONAL.filter((m) => p.modules.includes(m)).map((m) => t(`platform.plans.moduleShort.${m}`))]
 
-const price = (p: Plan): string => `${p.currency_code === 'IDR' ? 'Rp' : p.currency_code} ${formatMoney(p.price.replace(/\.0+$/, ''))}`
+const price = (p: Plan): string => platformMoney(p.currency_code, p.price)
 const period = (p: Plan): string => (p.billing_period_months === 1 ? t('platform.plans.perMonth') : t('platform.plans.perMonths', { n: p.billing_period_months }))
 const limit = (v: number | null): string => (v === null ? t('platform.plans.unlimited') : String(v))
 const trial = (p: Plan): string => (p.code === 'LEGACY' ? t('platform.plans.legacyTrial') : p.trial_days > 0 ? t('platform.plans.trialDays', { n: p.trial_days }) : t('platform.plans.noTrial'))

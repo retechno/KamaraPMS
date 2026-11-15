@@ -3916,6 +3916,9 @@ export const id: Messages = {
     user: 'Pengguna',
     system: 'sistem',
     operator: 'KamaraPMS (operator)',
+    scope: 'Lingkup',
+    scopeProperty: 'Properti ini',
+    scopeTenant: 'Tingkat perusahaan',
     details: 'Detail',
     hide: 'Sembunyikan',
     before: 'Sebelum',
@@ -8579,6 +8582,7 @@ export const id: Messages = {
     module: { CORE: 'Inti', HOUSEKEEPING: 'Housekeeping', ACCOUNTING: 'Akuntansi', INVENTORY: 'Persediaan', BANQUET: 'Banquet', POS: 'POS' },
     state: { TRIAL: 'Percobaan', FULL: 'Aktif', GRACE: 'Masa tenggang', READ_ONLY: 'Hanya baca' },
     invoices: 'Invoice',
+    history: 'Riwayat perubahan langganan',
     noInvoices: 'Belum ada invoice',
     invoice: { number: 'Nomor', period: 'Periode', amount: 'Jumlah', status: 'Status', due: 'Jatuh tempo', unpaid: 'Belum dibayar', issued: 'Diterbitkan', paid: 'Dibayar', void: 'Di-void' },
     banner: {

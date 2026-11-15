@@ -12,7 +12,8 @@ import { Input } from '@/components/ui/input'
 import { vAutofocus } from '@/directives/autofocus'
 import { t } from '@/i18n'
 import { todayIn } from '@/utils/dates'
-import { formatDate, formatMoney } from '@/utils/format'
+import { formatDate } from '@/utils/format'
+import { platformMoney } from '@/utils/platformMoney'
 
 /**
  * Record the payment of an invoice (docs/architecture/39-platform-console.md 11, P6): the invoice, the date and the reference. "After saving" says what the server does with a paid
@@ -78,7 +79,7 @@ async function submit(): Promise<void> {
         <dt class="text-muted-foreground">{{ t('platform.invoices.recordPaymentDialog.period') }}</dt>
         <dd class="m-0 font-medium">{{ formatDate(invoice.period_start) }} – {{ formatDate(invoice.period_end) }} · {{ invoice.plan_code }}</dd>
         <dt class="text-muted-foreground">{{ t('platform.invoices.recordPaymentDialog.amount') }}</dt>
-        <dd class="m-0 font-semibold tabular-nums">{{ invoice.currency_code }} {{ formatMoney(invoice.amount) }}</dd>
+        <dd class="m-0 font-semibold tabular-nums">{{ platformMoney(invoice.currency_code, invoice.amount) }}</dd>
       </dl>
 
       <form class="mt-4 grid gap-4" novalidate data-testid="pay-form" @submit.prevent="submit">
