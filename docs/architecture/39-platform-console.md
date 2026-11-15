@@ -292,6 +292,9 @@ losing it means every operator enrols again (`reset-operator-totp`)".
   - Card "Invoices": `GET /api/v1/subscription/invoices` in `DataTable` (number, period, amount, status, due). Status ISSUED past due shows "Unpaid" (danger),
     ISSUED not due "Issued", PAID "Paid", VOID "Voided". No actions.
 - Loading: `Skeleton`; error: `ErrorNotice`.
+- Card "Invoices", for a tenant administrator: the link "Subscription change history" to `/audit?scope=tenant&entity_type=subscription` (decided by the owner after the review of PR 3).
+
+**The scope of the audit page.** Everything the operator does to a subscription (change, invoice, payment, void, suspend) is a tenant-level entry (`property_id` null), and the audit page used to read the trail of one property only, so "KamaraPMS (operator)" almost never showed. The page now has a scope for a tenant administrator: "This property" (default, `GET /api/v1/properties/{propertyId}/audit-logs`) and "Company level" (`GET /api/v1/audit-logs`, which exists). The scope is in the address (`?scope=tenant`); staff who are not administrators have no choice and a typed `?scope=tenant` is ignored. The filter "self-approved" belongs to a property and is left out at company level. The address may also carry `entity_type`. Operator entries read "KamaraPMS (operator)" in both scopes.
 
 ### 10.2 Store and header (no screen)
 
@@ -447,6 +450,28 @@ Deviations and what the document did not say:
 - The hotel's access-token audience is checked only when the token has one (tokens issued before this change have none and stay valid until they expire).
 - `scripts/db-test.sh` was run here on PostgreSQL 16 only; the CI runs the version of production.
 - Review after the first push: the enrolment could be confirmed twice at the same moment (fixed: the account is locked in `enrolmentChallenge` and `SetOperatorTotp` only updates an account without a secret; `TestEnrolmentConfirmedTwiceConcurrently`). Left for PR 3: `internal/audit` imports `operatordb` to write `operator_audit_logs`; the insert should move into `internal/audit/queries.sql` because the table is audit data.
+
+**PR 3 (the console's screens), no migration.** `api/platformSession.ts`, `api/platformClient.ts` and `stores/platformAuth.ts` keep the operator's session apart from the hotel's (own token in memory, own cookie, own middleware: the client has the thrower only, registered first because `onResponse` runs last to first, and a test proves the hotel's night-audit and subscription listeners hear nothing of it). The routes under `/platform` have `meta.platform` (the sign-in also `public`), go before the catch-all, and the guard checks `meta.platform` first and never calls the hotel's `auth.init()`; `App.vue` picks `PlatformLayout`, or the bare sign-in; the tab title ends "· KamaraPMS Platform". The screens P1-P9 and the dialogs of section 11 are in `views/platform/` and `components/platform/`; `QuotaMeter` and `AccessBadge` are the ones of the hotel's Subscription page. Messages are `platform.*`, one file per screen in `i18n/locales/platform/` (the glossary test reads those files too). The hotel's audit page shows "KamaraPMS (operator)" for `actor_kind: operator`, never a name. The insert into `operator_audit_logs` moved from `operator` to `internal/audit/queries.sql`, so `audit` no longer imports `operatordb` (the nit of the review of #102). E2E was not written in this PR.
+
+Deviations of the screens (the design and this document did not say, or the API cannot give):
+
+- The recovery codes, the secret of the enrolment and the first admin's password live only in component state; the store hands the codes to the screen and keeps a session without them until the person ticks "I have saved them".
+- The `totp` input accepts 8 characters (a pasted "482 913" is not cut) and only the digits are sent; the recovery-code disclosure has its own "Sign in" button; the enrolment step has a Back button.
+- `PlatformTenantRow` has no amount per tenant, so the "open invoice" column shows the count and the overdue count; the amounts per currency are in the summary card.
+- The invoice list has no counts: the tabs load the four lists together and count them. The "Total open" footer is on the Open tab only (`total_open` ignores the status filter).
+- There is no `GET /plans/{code}`: the plan form reads the list and picks its plan. The warning "what a lower quota affects" is the `affected` list after the save, not a preview.
+- "After saving" in Record payment says what the invoice gives (paid through at least its `period_end`) and does not promise the status.
+- The activity list shows the action in words (the API gives no detail of the change), and the per-quota hint lines of the design are the words of `QuotaMeter`.
+- The table of the tenants has no mobile cards mode.
+
+Review of PR 3 (owner):
+
+- The rebase onto `main` and the removal of `web/playwright-report.zip` (an old E2E report that had been committed; `/web/playwright-report*.zip` is now ignored).
+- The notice of the Issue invoice dialog compares the preview period with `preview.open_invoice`: the server works the period out from `paid_through`, not from the open invoice. When they share a day the dialog warns in the danger colour that the invoice will be refused (`INVOICE_PERIOD_OVERLAP`) and turns Issue off; otherwise it only says the invoice is still open, with no claim about the order of periods.
+- One helper for money in the console, `utils/platformMoney.ts` ("IDR 1.500.000": code of the currency + `formatMoney`, as the hotel's Subscription page; the zeros of numeric(18,3) are dropped), with `whitespace-nowrap tabular-nums` on the amount cells.
+- P4: the rooms column is "used / limit" (infinity for none) with a thin bar, like the users column.
+- The Indonesian word for trial is "Percobaan" / "masa percobaan", as on the hotel side; the glossary test bans "trial" in Indonesian messages.
+- The audit scope and the history link of section 10 (the answer to the open question: operator actions are tenant-level entries, so the hotel needed a tenant-level view).
 
 ## 17. Not in this work
 

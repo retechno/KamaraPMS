@@ -22,7 +22,10 @@ const BANNED: [RegExp, string][] = [
 
 describe('the glossary of the Indonesian messages', () => {
   it('has none of the English or non-standard terms it replaced', () => {
-    const source = fs.readFileSync(path.resolve(__dirname, 'locales', 'id.ts'), 'utf8')
+    // the platform console's messages are in their own files (locales/platform/*.id.ts)
+    const platformDir = path.resolve(__dirname, 'locales', 'platform')
+    const files = [path.resolve(__dirname, 'locales', 'id.ts'), ...fs.readdirSync(platformDir).filter((f) => f.endsWith('.id.ts')).map((f) => path.join(platformDir, f))]
+    const source = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
     const hits: string[] = []
     for (const [, key, value] of source.matchAll(/^\s*(\w+): '((?:[^'\\]|\\.)*)',?$/gm)) {
       for (const [banned, use] of BANNED) {

@@ -855,44 +855,6 @@ func (q *Queries) HasLiveSessionSince(ctx context.Context, arg HasLiveSessionSin
 	return exists, err
 }
 
-const insertOperatorAudit = `-- name: InsertOperatorAudit :exec
-
-INSERT INTO operator_audit_logs (operator_id, action, entity_type, entity_id, entity_label, tenant_id, old_data, new_data, request_id, ip_address, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-`
-
-type InsertOperatorAuditParams struct {
-	OperatorID  *int64
-	Action      string
-	EntityType  string
-	EntityID    int64
-	EntityLabel *string
-	TenantID    *int64
-	OldData     []byte
-	NewData     []byte
-	RequestID   *string
-	IpAddress   *netip.Addr
-	CreatedAt   time.Time
-}
-
-// Audit ------------------------------------------------------------------------------------------------------------------------------------------
-func (q *Queries) InsertOperatorAudit(ctx context.Context, arg InsertOperatorAuditParams) error {
-	_, err := q.db.Exec(ctx, insertOperatorAudit,
-		arg.OperatorID,
-		arg.Action,
-		arg.EntityType,
-		arg.EntityID,
-		arg.EntityLabel,
-		arg.TenantID,
-		arg.OldData,
-		arg.NewData,
-		arg.RequestID,
-		arg.IpAddress,
-		arg.CreatedAt,
-	)
-	return err
-}
-
 const insertRecoveryCode = `-- name: InsertRecoveryCode :exec
 
 INSERT INTO operator_recovery_codes (operator_id, code_hash, created_at) VALUES ($1, $2, $3::timestamptz)

@@ -43,3 +43,4 @@ docs/screenshots/
 /web/e2e/.state/
 /web/playwright-report/
 /web/test-results/
+/web/playwright-report*.zip

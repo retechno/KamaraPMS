@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { watch } from 'vue'
 import { i18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { usePlatformAuthStore } from '@/stores/platformAuth'
 import { useSubscriptionStore } from '@/stores/subscription'
 import { usePropertyStore } from '@/stores/property'
 import { routeTitle } from '@/utils/routeTitle'
@@ -12,6 +13,8 @@ declare module 'vue-router' {
     title?: string
     titleKey?: string // the i18n key of the heading of the page, when the breadcrumb must say it (a report that sits under a menu item)
     public?: boolean // reachable without signing in
+    consoleTitleKey?: string // the i18n key of the title of a page of the console (the same as titleKey, which is the reports')
+    platform?: boolean // a screen of the platform console: its own session (usePlatformAuthStore), its own layout; the hotel's auth store is never asked
     adminOnly?: boolean // tenant administrators only
     module?: string // an optional module of the plan the page belongs to (POS): a tenant without it goes home
     permission?: string | string[] // a permission of the open property that the page needs (the one that manages what it shows); the pages of setup name it
@@ -334,6 +337,16 @@ export const router = createRouter({
       props: true,
       meta: { title: 'Role', adminOnly: true },
     },
+    // The platform console (docs/architecture/39-platform-console.md 11): before the catch-all, and every one of them has meta.platform.
+    { path: '/platform', redirect: { name: 'platform-tenants' }, meta: { platform: true } },
+    { path: '/platform/login', name: 'platform-login', component: () => import('@/views/platform/PlatformLoginView.vue'), meta: { consoleTitleKey: 'platform.titles.login', title: 'Sign in', platform: true, public: true } },
+    { path: '/platform/tenants', name: 'platform-tenants', component: () => import('@/views/platform/TenantsView.vue'), meta: { consoleTitleKey: 'platform.nav.tenants', title: 'Tenants', platform: true } },
+    { path: '/platform/tenants/:code', name: 'platform-tenant', component: () => import('@/views/platform/TenantView.vue'), props: true, meta: { consoleTitleKey: 'platform.titles.tenant', title: 'Tenant', platform: true } },
+    { path: '/platform/plans', name: 'platform-plans', component: () => import('@/views/platform/PlansView.vue'), meta: { consoleTitleKey: 'platform.nav.plans', title: 'Plans', platform: true } },
+    { path: '/platform/plans/new', name: 'platform-plan-new', component: () => import('@/views/platform/PlanFormView.vue'), meta: { consoleTitleKey: 'platform.titles.newPlan', title: 'New plan', platform: true } },
+    { path: '/platform/plans/:code', name: 'platform-plan', component: () => import('@/views/platform/PlanFormView.vue'), props: true, meta: { consoleTitleKey: 'platform.titles.plan', title: 'Plan', platform: true } },
+    { path: '/platform/invoices', name: 'platform-invoices', component: () => import('@/views/platform/InvoicesView.vue'), meta: { consoleTitleKey: 'platform.nav.invoices', title: 'Invoices', platform: true } },
+    { path: '/platform/:pathMatch(.*)*', redirect: { name: 'platform-tenants' }, meta: { platform: true } },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
@@ -346,6 +359,14 @@ export const router = createRouter({
 // Every page needs a signed-in user except those marked public. The UI check is a
 // convenience: the API enforces the same rules on every request.
 router.beforeEach(async (to) => {
+  // The console first: it has its own session, and the hotel's `auth.init()` must never run for it (it would call the hotel's refresh with no cookie of the hotel).
+  if (to.meta.platform) {
+    const platform = usePlatformAuthStore()
+    await platform.init()
+    if (to.meta.public) return platform.isAuthenticated && to.name === 'platform-login' ? { name: 'platform-tenants' } : true
+    if (!platform.isAuthenticated) return { name: 'platform-login', query: { redirect: to.fullPath } }
+    return true
+  }
   const auth = useAuthStore()
   await auth.init()
   if (to.meta.public) {
@@ -373,7 +394,8 @@ router.beforeEach(async (to) => {
 // The title of the tab follows the page and the language.
 const setTitle = (to: Parameters<typeof routeTitle>[0]): void => {
   const title = routeTitle(to)
-  document.title = title ? `${title} · KamaraPMS` : 'KamaraPMS'
+  const product = to.meta.platform ? 'KamaraPMS Platform' : 'KamaraPMS'
+  document.title = title ? `${title} · ${product}` : product
 }
 watch(() => i18n.global.locale.value, () => setTitle(router.currentRoute.value))
 router.afterEach((to) => {

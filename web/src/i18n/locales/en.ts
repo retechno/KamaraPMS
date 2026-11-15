@@ -1,8 +1,11 @@
+import { platformEn } from './platform'
+
 /**
  * English messages: the source of truth for the keys. The other languages are typed against this object, so a key that
  * is missing in one of them fails the type check. Group keys by where they are shown, not by page.
  */
 export const en = {
+  platform: platformEn,
   language: {
     label: 'Language',
     en: 'English',
@@ -3915,6 +3918,10 @@ export const en = {
     businessDate: 'Business date',
     user: 'User',
     system: 'system',
+    operator: 'KamaraPMS (operator)',
+    scope: 'Scope',
+    scopeProperty: 'This property',
+    scopeTenant: 'Company level',
     details: 'Details',
     hide: 'Hide',
     before: 'Before',
@@ -8578,6 +8585,7 @@ export const en = {
     module: { CORE: 'Core', HOUSEKEEPING: 'Housekeeping', ACCOUNTING: 'Accounting', INVENTORY: 'Inventory', BANQUET: 'Banquet', POS: 'POS' },
     state: { TRIAL: 'Trial', FULL: 'Active', GRACE: 'Grace period', READ_ONLY: 'Read only' },
     invoices: 'Invoices',
+    history: 'Subscription change history',
     noInvoices: 'No invoices yet',
     invoice: { number: 'Number', period: 'Period', amount: 'Amount', status: 'Status', due: 'Due', unpaid: 'Unpaid', issued: 'Issued', paid: 'Paid', void: 'Voided' },
     banner: {

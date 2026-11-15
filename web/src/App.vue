@@ -2,7 +2,9 @@
 import { onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppShell from './components/shell/AppShell.vue'
+import PlatformLayout from './layouts/PlatformLayout.vue'
 import { useAuthStore } from './stores/auth'
+import { usePlatformAuthStore } from './stores/platformAuth'
 import { usePropertyStore } from './stores/property'
 
 const auth = useAuthStore()
@@ -32,13 +34,27 @@ async function signOut(): Promise<void> {
   await auth.logout()
   await router.push('/login')
 }
+
+async function platformSignOut(): Promise<void> {
+  try {
+    await usePlatformAuthStore().logout()
+  } catch {
+    // the store has signed out locally whatever the server said; the cookie ends with its session
+  }
+  await router.push('/platform/login')
+}
 </script>
 
 <template>
-  <RouterView v-if="route.meta.public" />
-  <AppShell v-else @sign-out="signOut">
-    <div class="w-full max-w-[1400px]">
-      <RouterView />
-    </div>
-  </AppShell>
+  <!-- Nothing is drawn until the first navigation has a page: before that the route is the empty start location, and the hotel's shell (its banner loads the subscription) would ask the hotel's API for a session that a page of the console does not have, and send the operator to the hotel's sign-in. -->
+  <template v-if="route.matched.length > 0">
+    <!-- the console has its own frame; its sign-in is a bare page like the hotel's -->
+    <RouterView v-if="route.meta.public" />
+    <PlatformLayout v-else-if="route.meta.platform" @sign-out="platformSignOut" />
+    <AppShell v-else @sign-out="signOut">
+      <div class="w-full max-w-[1400px]">
+        <RouterView />
+      </div>
+    </AppShell>
+  </template>
 </template>

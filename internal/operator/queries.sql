@@ -126,12 +126,6 @@ UPDATE operator_sessions SET revoked_at = @at::timestamptz, revoked_reason = @re
 -- name: HasLiveSessionSince :one
 SELECT EXISTS (SELECT 1 FROM operator_sessions WHERE operator_id = @operator_id AND revoked_at IS NULL AND created_at >= @since);
 
--- Audit ------------------------------------------------------------------------------------------------------------------------------------------
-
--- name: InsertOperatorAudit :exec
-INSERT INTO operator_audit_logs (operator_id, action, entity_type, entity_id, entity_label, tenant_id, old_data, new_data, request_id, ip_address, created_at)
-VALUES (sqlc.narg(operator_id), @action, @entity_type, @entity_id, sqlc.narg(entity_label), sqlc.narg(tenant_id), @old_data, @new_data, sqlc.narg(request_id), sqlc.narg(ip_address), @created_at);
-
 -- Every open challenge of an operator ends (the account was disabled, or its password or its authenticator was reset).
 -- name: KillChallengesOf :exec
 UPDATE operator_login_challenges SET used_at = @at::timestamptz, pending_secret_enc = NULL WHERE operator_id = @operator_id AND used_at IS NULL;

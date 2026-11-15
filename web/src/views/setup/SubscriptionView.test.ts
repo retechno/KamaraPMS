@@ -1,8 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError } from '@/api/problem'
 import { setLocale } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import SubscriptionView from './SubscriptionView.vue'
 
 let GET = vi.fn()
@@ -141,5 +143,21 @@ describe('SubscriptionView', () => {
     const wrapper = await mountPage()
     expect(wrapper.get('h1').text()).toBe('Langganan')
     expect(wrapper.get('[data-testid=access-badge]').text()).toBe('Masa tenggang')
+  })
+
+  it('links an administrator to the history of the subscription at company level, and nobody else', async () => {
+    const link = async (admin: boolean) => {
+      serve(summary())
+      setActivePinia(createPinia())
+      useAuthStore().me = { user: { id: 1, is_tenant_admin: admin }, properties: [] } as never
+      const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
+      const wrapper = mount(SubscriptionView, { global: { plugins: [router] } })
+      await flushPromises()
+      return wrapper.find('[data-testid=subscription-history]')
+    }
+    const a = await link(true)
+    expect(a.text()).toBe('Subscription change history')
+    expect(a.attributes('href')).toBe('/audit?scope=tenant&entity_type=subscription')
+    expect((await link(false)).exists()).toBe(false)
   })
 })

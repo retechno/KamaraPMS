@@ -8,8 +8,10 @@ import { router } from './router'
 import { formatPlugin } from './utils/format'
 import './assets/tailwind.css'
 
+import { onPlatformSessionLost } from './api/platformSession'
 import { onSessionLost } from './api/session'
 import { useAuthStore } from './stores/auth'
+import { usePlatformAuthStore } from './stores/platformAuth'
 
 initTheme()
 const pinia = createPinia()
@@ -21,5 +23,13 @@ onSessionLost(() => {
   useAuthStore(pinia).signedOut()
   if (router.currentRoute.value.name !== 'login') {
     void router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } })
+  }
+})
+
+// The same for the platform console, with its own session: back to its sign-in page, never the hotel's.
+onPlatformSessionLost(() => {
+  usePlatformAuthStore(pinia).signedOut()
+  if (router.currentRoute.value.name !== 'platform-login') {
+    void router.push({ name: 'platform-login', query: { redirect: router.currentRoute.value.fullPath } })
   }
 })

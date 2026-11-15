@@ -21,6 +21,7 @@ function routedViews(): string[] {
   const files = new Set<string>()
   for (const m of router.matchAll(/(?:import\(|from )'@\/(views\/[^']+\.vue)'/g)) files.add(m[1]!)
   files.delete('views/LoginView.vue') // public: it is not inside the app's layout, so it has no page header
+  files.delete('views/platform/PlatformLoginView.vue') // public too: the console's sign-in is a bare page, like LoginView
   return [...files].sort()
 }
 

@@ -54,3 +54,8 @@ WHERE a.tenant_id = @tenant_id
   AND (sqlc.narg(after_id)::bigint IS NULL OR a.id > sqlc.narg(after_id)::bigint)
 ORDER BY a.id ASC
 LIMIT @row_limit;
+
+-- The operator's own trail (docs/architecture/39-platform-console.md P12): audit data, so its insert lives here and not in the operator package. A change of an operator to a tenant is written to audit_logs too.
+-- name: InsertOperatorAudit :exec
+INSERT INTO operator_audit_logs (operator_id, action, entity_type, entity_id, entity_label, tenant_id, old_data, new_data, request_id, ip_address, created_at)
+VALUES (sqlc.narg(operator_id), @action, @entity_type, @entity_id, sqlc.narg(entity_label), sqlc.narg(tenant_id), @old_data, @new_data, sqlc.narg(request_id), sqlc.narg(ip_address), @created_at);
