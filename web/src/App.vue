@@ -46,12 +46,15 @@ async function platformSignOut(): Promise<void> {
 </script>
 
 <template>
-  <!-- the console has its own frame; its sign-in is a bare page like the hotel's -->
-  <RouterView v-if="route.meta.public" />
-  <PlatformLayout v-else-if="route.meta.platform" @sign-out="platformSignOut" />
-  <AppShell v-else @sign-out="signOut">
-    <div class="w-full max-w-[1400px]">
-      <RouterView />
-    </div>
-  </AppShell>
+  <!-- Nothing is drawn until the first navigation has a page: before that the route is the empty start location, and the hotel's shell (its banner loads the subscription) would ask the hotel's API for a session that a page of the console does not have, and send the operator to the hotel's sign-in. -->
+  <template v-if="route.matched.length > 0">
+    <!-- the console has its own frame; its sign-in is a bare page like the hotel's -->
+    <RouterView v-if="route.meta.public" />
+    <PlatformLayout v-else-if="route.meta.platform" @sign-out="platformSignOut" />
+    <AppShell v-else @sign-out="signOut">
+      <div class="w-full max-w-[1400px]">
+        <RouterView />
+      </div>
+    </AppShell>
+  </template>
 </template>

@@ -31,6 +31,18 @@ async function mountAt(path: string) {
 }
 
 describe('App picks the frame of the page', () => {
+  it('draws nothing before the first navigation has a page, so the hotel shell never asks the hotel for a session on the way to the console', async () => {
+    setActivePinia(createPinia())
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/platform/tenants', component: Page, meta: { platform: true } }] })
+    const w = mount(App, { global: { plugins: [router, i18n], stubs: { AppShell: Shell, PlatformLayout: Layout } } })
+    expect(w.find('[data-testid=hotel-shell]').exists()).toBe(false)
+    expect(w.find('[data-testid=platform-frame]').exists()).toBe(false)
+    await router.push('/platform/tenants')
+    await flushPromises()
+    expect(w.find('[data-testid=platform-frame]').exists()).toBe(true)
+    expect(w.find('[data-testid=hotel-shell]').exists()).toBe(false)
+  })
+
   it('draws a page of the console in the console frame, and the hotel pages in the hotel shell', async () => {
     expect((await mountAt('/platform/tenants')).w.find('[data-testid=platform-frame]').exists()).toBe(true)
     expect((await mountAt('/platform/tenants')).w.find('[data-testid=hotel-shell]').exists()).toBe(false)
