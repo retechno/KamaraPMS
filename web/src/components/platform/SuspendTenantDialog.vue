@@ -64,19 +64,19 @@ async function submit(): Promise<void> {
 
 <template>
   <Dialog :open="open" @update:open="(v) => emit('update:open', v)">
-    <DialogContent :role="suspending ? 'alertdialog' : 'dialog'" class="max-w-md p-5" :data-testid="suspending ? 'suspend-dialog' : 'reactivate-dialog'" @interact-outside.prevent>
+    <DialogContent :role="suspending ? 'alertdialog' : 'dialog'" class="max-w-md p-5" :data-testid="suspending ? 'suspend-dialog' : 'reactivate-dialog'" aria-describedby="platform-suspend-what" @interact-outside.prevent>
       <form novalidate @submit.prevent="submit">
         <div class="mb-3 flex items-start justify-between gap-3">
           <DialogTitle>{{ suspending ? t('platform.tenant.suspend.title', { name: tenantName }) : t('platform.tenant.reactivate.title', { name: tenantName }) }}</DialogTitle>
           <Button type="button" variant="ghost" size="icon" :aria-label="t('common.close')" data-testid="dialog-close" @click="emit('update:open', false)"><X /></Button>
         </div>
         <ErrorNotice v-if="error" :error="error" inline class="mb-3" />
-        <ul v-if="suspending" class="mb-3 mt-0 grid list-disc gap-1.5 pl-5 text-sm" data-testid="suspend-consequences">
+        <ul v-if="suspending" id="platform-suspend-what" class="mb-3 mt-0 grid list-disc gap-1.5 pl-5 text-sm" data-testid="suspend-consequences">
           <li>{{ t('platform.tenant.suspend.signOut') }}</li>
           <li>{{ t('platform.tenant.suspend.dataKept') }}</li>
           <li>{{ t('platform.tenant.suspend.late') }}</li>
         </ul>
-        <p v-else class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('platform.tenant.reactivate.body') }}</p>
+        <p v-else id="platform-suspend-what" class="mb-3 mt-0 text-sm text-muted-foreground">{{ t('platform.tenant.reactivate.body') }}</p>
         <div class="flex flex-col gap-3">
           <FormField :label="suspending ? t('platform.tenant.suspend.reason') : t('platform.tenant.reactivate.reason')" :error="reasonError" required>
             <template #default="{ id, describedBy, invalid }">

@@ -203,12 +203,12 @@ onBeforeUnmount(() => {
           <!-- Step 1: the password -->
           <form v-if="step === 'password'" v-autofocus class="grid gap-4" novalidate data-testid="step-password" @submit.prevent="submitPassword">
             <div class="flex items-center gap-2.5">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary font-bold text-primary-foreground" aria-hidden="true">K</span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[#1c2128] font-bold text-[#3fa98d] dark:border dark:border-border" aria-hidden="true">K</span>
               <div class="min-w-0 flex-1">
                 <h1 class="m-0 text-lg font-semibold">{{ t('platform.login.title') }}</h1>
                 <span class="text-sm text-muted-foreground">{{ t('platform.login.subtitle') }}</span>
               </div>
-              <span class="rounded-full bg-[#e0a93a] px-2 py-0.5 text-xs uppercase tracking-wide text-[#0c1512]" data-testid="platform-pill">{{ t('platform.pill') }}</span>
+              <span class="rounded-full bg-[#1c2128] px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white dark:border dark:border-border" data-testid="platform-pill">{{ t('platform.pill') }}</span>
             </div>
             <p v-if="message" class="alert m-0" role="alert" data-testid="login-error">{{ message }}</p>
             <FormField :label="t('platform.login.email')">
@@ -238,9 +238,9 @@ onBeforeUnmount(() => {
           <!-- Step 2: the code, or a recovery code -->
           <div v-else-if="step === 'code'" class="grid gap-4" data-testid="step-code">
             <div class="flex items-center gap-2.5">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary font-bold text-primary-foreground" aria-hidden="true">K</span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[#1c2128] font-bold text-[#3fa98d] dark:border dark:border-border" aria-hidden="true">K</span>
               <h1 class="m-0 min-w-0 flex-1 text-lg font-semibold">{{ t('platform.login.totp.title') }}</h1>
-              <span class="rounded-full bg-[#e0a93a] px-2 py-0.5 text-xs uppercase tracking-wide text-[#0c1512]">{{ t('platform.pill') }}</span>
+              <span class="rounded-full bg-[#1c2128] px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white dark:border dark:border-border">{{ t('platform.pill') }}</span>
             </div>
             <p class="m-0 text-sm">{{ t('platform.login.totp.intro') }} <strong data-testid="login-email">{{ form.email }}</strong>.</p>
             <p v-if="message" class="alert m-0" role="alert" data-testid="login-error">{{ message }}</p>
@@ -272,12 +272,12 @@ onBeforeUnmount(() => {
           <!-- Step 3: the enrolment of the authenticator -->
           <div v-else class="grid gap-4" data-testid="step-enroll">
             <div class="flex items-center gap-2.5">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary font-bold text-primary-foreground" aria-hidden="true">K</span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[#1c2128] font-bold text-[#3fa98d] dark:border dark:border-border" aria-hidden="true">K</span>
               <div class="min-w-0 flex-1">
                 <h1 class="m-0 text-lg font-semibold">{{ t('platform.login.enroll.title') }}</h1>
                 <span class="text-sm text-muted-foreground">{{ t('platform.login.enroll.subtitle') }}</span>
               </div>
-              <span class="rounded-full bg-[#e0a93a] px-2 py-0.5 text-xs uppercase tracking-wide text-[#0c1512]">{{ t('platform.pill') }}</span>
+              <span class="rounded-full bg-[#1c2128] px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white dark:border dark:border-border">{{ t('platform.pill') }}</span>
             </div>
             <p v-if="message" class="alert m-0" role="alert" data-testid="login-error">{{ message }}</p>
             <ol class="m-0 grid list-none gap-4 p-0 sm:grid-cols-2">
