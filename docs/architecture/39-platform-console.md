@@ -387,6 +387,13 @@ Web (Vitest, fresh `vi.fn()` per test):
 - Error messages do not reveal whether an e-mail exists.
 - The access-log middleware redacts `password`, `code`, `recovery_code`, `challenge` (check `AccessLog` logs no bodies).
 
+Residual risk, accepted (trust on first use, section 6): until the first sign-in of an operator, the password alone is enough to enrol an authenticator, so whoever holds the password from `create-operator` before the operator enrols can enrol their own. The procedure:
+
+- Deliver the password from `create-operator` through a separate channel (never the channel that carries the e-mail or the console address).
+- The operator enrols right away; `pms-admin list-operators` shows `TOTP` false until then.
+- If the password may have leaked before the enrolment, run `pms-admin reset-operator-password` and `pms-admin reset-operator-totp` (the second clears an authenticator that the wrong person enrolled and ends the sessions), and deliver the new password again.
+- Two enrolments confirmed at the same moment cannot both win: the account row is locked and the update only takes an account that has no authenticator yet.
+
 ## 14. PRs and order
 
 | PR | Contents | Migration | Depends on |
@@ -439,6 +446,7 @@ Deviations and what the document did not say:
 - `GET .../tenants/{code}/admins`, `.../activity` and `.../invoices` answer `{items: [...]}`.
 - The hotel's access-token audience is checked only when the token has one (tokens issued before this change have none and stay valid until they expire).
 - `scripts/db-test.sh` was run here on PostgreSQL 16 only; the CI runs the version of production.
+- Review after the first push: the enrolment could be confirmed twice at the same moment (fixed: the account is locked in `enrolmentChallenge` and `SetOperatorTotp` only updates an account without a secret; `TestEnrolmentConfirmedTwiceConcurrently`). Left for PR 3: `internal/audit` imports `operatordb` to write `operator_audit_logs`; the insert should move into `internal/audit/queries.sql` because the table is audit data.
 
 ## 17. Not in this work
 

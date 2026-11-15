@@ -400,7 +400,8 @@ func (s *Service) enrolmentChallenge(ctx context.Context, token string) (operato
 	if ch.Purpose != PurposeEnroll {
 		return ch, operatordb.OperatorAccount{}, apperr.Conflict("TOTP_ALREADY_ENROLLED", "this account has an authenticator already"), nil
 	}
-	op, err := q.GetOperator(ctx, ch.OperatorID)
+	// The account row is locked: two challenges of one operator are answered one after the other, and the second sees the authenticator of the first.
+	op, err := q.GetOperatorForUpdate(ctx, ch.OperatorID)
 	if err != nil {
 		return ch, op, nil, err
 	}
@@ -463,8 +464,13 @@ func (s *Service) EnrollConfirm(ctx context.Context, in EnrollConfirmInput) (Ses
 			return s.audit.WriteOperator(ctx, audit.OperatorEntry{Action: ActionLoginFailed, EntityType: "operator", EntityID: op.ID, EntityLabel: op.Email, New: map[string]any{"step": "enrolment"}})
 		}
 		s.operators.Reset(opKey)
-		if err := q.SetOperatorTotp(ctx, operatordb.SetOperatorTotpParams{ID: op.ID, SecretEnc: ch.PendingSecretEnc, At: now, Step: step}); err != nil {
+		n, err := q.SetOperatorTotp(ctx, operatordb.SetOperatorTotpParams{ID: op.ID, SecretEnc: ch.PendingSecretEnc, At: now, Step: step})
+		if err != nil {
 			return err
+		}
+		if n == 0 { // an authenticator was kept meanwhile: this confirmation lost
+			failure = challengeInvalid()
+			return nil
 		}
 		if err := q.UseChallenge(ctx, operatordb.UseChallengeParams{ID: ch.ID, At: now}); err != nil {
 			return err

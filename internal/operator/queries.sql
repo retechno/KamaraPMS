@@ -30,8 +30,9 @@ UPDATE operator_accounts SET password_hash = @password_hash WHERE id = @id;
 UPDATE operator_accounts SET last_login_at = @at::timestamptz WHERE id = @id;
 
 -- The enrolment: the secret, the time, and the step of the code that proved it (that code cannot be used again).
--- name: SetOperatorTotp :exec
-UPDATE operator_accounts SET totp_secret_enc = @secret_enc, totp_enrolled_at = @at::timestamptz, totp_last_step = @step::bigint WHERE id = @id;
+-- It touches no row when the account has an authenticator already: a second enrolment confirmed at the same moment must not overwrite the first.
+-- name: SetOperatorTotp :execrows
+UPDATE operator_accounts SET totp_secret_enc = @secret_enc, totp_enrolled_at = @at::timestamptz, totp_last_step = @step::bigint WHERE id = @id AND totp_secret_enc IS NULL;
 
 -- name: ClearOperatorTotp :exec
 UPDATE operator_accounts SET totp_secret_enc = NULL, totp_enrolled_at = NULL, totp_last_step = NULL WHERE id = @id;

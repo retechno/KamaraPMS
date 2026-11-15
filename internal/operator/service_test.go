@@ -625,3 +625,74 @@ func TestAuditTrailOfAnOperatorsChange(t *testing.T) {
 		}
 	}
 }
+
+// Two sign-ins of an operator who has not enrolled give two ENROLL challenges, each with its own pending secret. Confirmed at the same moment, exactly one may win: one
+// session, one set of 10 recovery codes, and the stored secret is the winner's (the loser must not overwrite it or throw away the codes the winner was shown).
+func TestEnrolmentConfirmedTwiceConcurrently(t *testing.T) {
+	e := setup(t)
+	for round := 0; round < 8; round++ {
+		email := "race" + strings.Repeat("x", round) + "@example.test"
+		e.account(t, email)
+		type attempt struct {
+			token  string
+			secret []byte
+		}
+		var tries [2]attempt
+		for i := range tries {
+			ch := must(e.svc.Login(bg, LoginInput{Email: email, Password: testPassword}))
+			if ch.Next != "enroll" {
+				t.Fatalf("next = %s", ch.Next)
+			}
+			st := must(e.svc.EnrollStart(bg, ch.Token))
+			tries[i] = attempt{ch.Token, must(secretEncoding.DecodeString(strings.ReplaceAll(st.Secret, " ", "")))}
+		}
+		var (
+			wg       sync.WaitGroup
+			start    = make(chan struct{})
+			sessions [2]Session
+			errs     [2]error
+		)
+		for i := range tries {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				sessions[i], errs[i] = e.svc.EnrollConfirm(bg, EnrollConfirmInput{Challenge: tries[i].token, Code: e.code(tries[i].secret)})
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		winner := -1
+		for i, err := range errs {
+			if err == nil {
+				if winner >= 0 {
+					t.Fatalf("round %d: both confirmations got a session", round)
+				}
+				winner = i
+			}
+		}
+		if winner < 0 {
+			t.Fatalf("round %d: nobody won: %v", round, errs)
+		}
+		if len(sessions[winner].RecoveryCodes) != 10 {
+			t.Fatalf("round %d: the winner holds %d codes", round, len(sessions[winner].RecoveryCodes))
+		}
+		var opID int64
+		var sealed []byte
+		if err := e.pool.QueryRow(bg, `SELECT id, totp_secret_enc FROM operator_accounts WHERE lower(email) = $1`, email).Scan(&opID, &sealed); err != nil {
+			t.Fatal(err)
+		}
+		stored, err := open(e.svc.cfg.Key, sealed)
+		if err != nil || !bytes.Equal(stored, tries[winner].secret) {
+			t.Fatalf("round %d: the stored secret is not the winner's (%v)", round, err)
+		}
+		if n := e.count(t, `SELECT count(*) FROM operator_sessions WHERE operator_id = $1`, opID); n != 1 {
+			t.Fatalf("round %d: %d sessions, want 1", round, n)
+		}
+		if n := e.count(t, `SELECT count(*) FROM operator_recovery_codes WHERE operator_id = $1 AND used_at IS NULL`, opID); n != 10 {
+			t.Fatalf("round %d: %d recovery codes, want 10", round, n)
+		}
+		e.c.Advance(totpStep * time.Second)
+	}
+}

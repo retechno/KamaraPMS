@@ -1152,8 +1152,8 @@ func (q *Queries) SetOperatorSecretEnc(ctx context.Context, arg SetOperatorSecre
 	return err
 }
 
-const setOperatorTotp = `-- name: SetOperatorTotp :exec
-UPDATE operator_accounts SET totp_secret_enc = $1, totp_enrolled_at = $2::timestamptz, totp_last_step = $3::bigint WHERE id = $4
+const setOperatorTotp = `-- name: SetOperatorTotp :execrows
+UPDATE operator_accounts SET totp_secret_enc = $1, totp_enrolled_at = $2::timestamptz, totp_last_step = $3::bigint WHERE id = $4 AND totp_secret_enc IS NULL
 `
 
 type SetOperatorTotpParams struct {
@@ -1164,14 +1164,18 @@ type SetOperatorTotpParams struct {
 }
 
 // The enrolment: the secret, the time, and the step of the code that proved it (that code cannot be used again).
-func (q *Queries) SetOperatorTotp(ctx context.Context, arg SetOperatorTotpParams) error {
-	_, err := q.db.Exec(ctx, setOperatorTotp,
+// It touches no row when the account has an authenticator already: a second enrolment confirmed at the same moment must not overwrite the first.
+func (q *Queries) SetOperatorTotp(ctx context.Context, arg SetOperatorTotpParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOperatorTotp,
 		arg.SecretEnc,
 		arg.At,
 		arg.Step,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const touchOperatorLastLogin = `-- name: TouchOperatorLastLogin :exec

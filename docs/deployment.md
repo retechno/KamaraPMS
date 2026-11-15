@@ -82,6 +82,10 @@ The API reads its settings from the environment (`internal/platform/config`); no
 
 **Secrets.** Never in an image, never in git (`.env` and `deploy/.env` are ignored; only the `.example` files are tracked). On a server give the compose file its values from the environment of the machine or from the secret store of your platform; the compose file uses `${VAR:?message}` for the two that are required, so it refuses to start without them.
 
+### The first sign-in of an operator
+
+Until an operator signs in the first time, the password alone is enough to enrol an authenticator (trust on first use). So: send the password printed by `pms-admin create-operator` through a channel other than the one that carries the console address; the operator enrols right away (`pms-admin list-operators` shows TOTP `false` until then); and if the password may have leaked before that, run `pms-admin reset-operator-password -email EMAIL` and `pms-admin reset-operator-totp -email EMAIL`, then deliver the new password again.
+
 ## 4. Database setup
 
 The stack starts PostgreSQL with the volume `pms-db`. To use a database you run yourself, remove the `db` service and the `depends_on` on it from the compose file, and give `PMS_DATABASE_URL` of the `api` and `migrate` services. Requirements: PostgreSQL 16 or 18 (both pass the schema tests in CI), a database and a user that owns it (the migrations create tables, functions, triggers and views), UTF-8.
