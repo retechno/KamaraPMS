@@ -21,6 +21,13 @@ import (
 	"kamarapms/internal/tenancy"
 )
 
+// The kinds of actor of an entry.
+const (
+	ActorUser     = "user"
+	ActorOperator = "operator"
+	ActorSystem   = "system"
+)
+
 // User is the user an entry is attributed to.
 type User struct {
 	ID   int64  `json:"id"`
@@ -48,18 +55,20 @@ func (r *Reader) searchRows(ctx context.Context, f Filter, tenantID int64, entit
 
 // Record is an audit entry as the viewer shows it.
 type Record struct {
-	ID           int64           `json:"id"`
-	CreatedAt    time.Time       `json:"created_at"`
-	BusinessDate *civil.Date     `json:"business_date"`
-	User         *User           `json:"user"`
-	Action       string          `json:"action"`
-	EntityType   string          `json:"entity_type"`
-	EntityID     int64           `json:"entity_id"`
-	EntityLabel  *string         `json:"entity_label"` // what the entry is about as a person reads it (a number or a code); null for an entry without one
-	OldData      json.RawMessage `json:"old_data"`
-	NewData      json.RawMessage `json:"new_data"`
-	RequestID    string          `json:"request_id,omitempty"`
-	IPAddress    *netip.Addr     `json:"ip_address,omitempty"`
+	ID           int64       `json:"id"`
+	CreatedAt    time.Time   `json:"created_at"`
+	BusinessDate *civil.Date `json:"business_date"`
+	User         *User       `json:"user"`
+	// ActorKind says who made the change: a "user" of the hotel, an "operator" of the platform (shown as KamaraPMS, never by name: the hotel does not know the people of the platform), or the "system".
+	ActorKind   string          `json:"actor_kind"`
+	Action      string          `json:"action"`
+	EntityType  string          `json:"entity_type"`
+	EntityID    int64           `json:"entity_id"`
+	EntityLabel *string         `json:"entity_label"` // what the entry is about as a person reads it (a number or a code); null for an entry without one
+	OldData     json.RawMessage `json:"old_data"`
+	NewData     json.RawMessage `json:"new_data"`
+	RequestID   string          `json:"request_id,omitempty"`
+	IPAddress   *netip.Addr     `json:"ip_address,omitempty"`
 }
 
 // Filter narrows a search. A nil PropertyID searches the tenant-level entries (users, roles, guests).
@@ -146,6 +155,14 @@ func (r *Reader) Search(ctx context.Context, f Filter, position int64, limit int
 			EntityLabel: a.EntityLabel, OldData: redact(a.OldData), NewData: redact(a.NewData), IPAddress: a.IpAddress}
 		if a.RequestID != nil {
 			rec.RequestID = *a.RequestID
+		}
+		switch {
+		case a.UserID != nil:
+			rec.ActorKind = ActorUser
+		case a.OperatorID != nil:
+			rec.ActorKind = ActorOperator
+		default:
+			rec.ActorKind = ActorSystem
 		}
 		if a.UserID != nil {
 			rec.User = &User{ID: *a.UserID}

@@ -21,6 +21,7 @@ import (
 	"kamarapms/internal/platform/entitlement"
 	"kamarapms/internal/platform/httpx"
 	"kamarapms/internal/platform/logging"
+	"kamarapms/internal/platform/loginlimit"
 )
 
 // Service is the identity and access application service.
@@ -29,8 +30,8 @@ type Service struct {
 	clock    clock.Clock
 	audit    *audit.Writer
 	tokens   tokens
-	accounts *limiter // failed logins per tenant+email
-	sources  *limiter // failed logins per client IP
+	accounts *loginlimit.Limiter // failed logins per tenant+email
+	sources  *loginlimit.Limiter // failed logins per client IP
 	quota    entitlement.Gate
 }
 
@@ -45,8 +46,8 @@ func NewService(txm *db.TxManager, c clock.Clock, a *audit.Writer, cfg TokenConf
 		clock:    c,
 		audit:    a,
 		tokens:   tokens{cfg: cfg, clock: c},
-		accounts: newLimiter(5, 15*time.Minute, c),
-		sources:  newLimiter(50, 15*time.Minute, c),
+		accounts: loginlimit.New(5, 15*time.Minute, c),
+		sources:  loginlimit.New(50, 15*time.Minute, c),
 	}
 }
 
@@ -88,13 +89,13 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Session, error) {
 		sourceKey = ip.String()
 	}
 	for _, l := range []struct {
-		lim *limiter
+		lim *loginlimit.Limiter
 		key string
 	}{{s.accounts, accountKey}, {s.sources, sourceKey}} {
 		if l.key == "" {
 			continue
 		}
-		if ok, until := l.lim.allowed(l.key); !ok {
+		if ok, until := l.lim.Allowed(l.key); !ok {
 			return Session{}, apperr.New(apperr.KindRateLimited, "TOO_MANY_ATTEMPTS", "too many failed sign-in attempts; try again later").
 				WithContext("retry_after", until.UTC())
 		}
@@ -105,14 +106,14 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (Session, error) {
 		return Session{}, err
 	}
 	if !ok {
-		s.accounts.fail(accountKey)
+		s.accounts.Fail(accountKey)
 		if sourceKey != "" {
-			s.sources.fail(sourceKey)
+			s.sources.Fail(sourceKey)
 		}
 		logging.FromContext(ctx).Info("login failed", "tenant_code", tenantCode, "email", email)
 		return Session{}, invalidCredentials()
 	}
-	s.accounts.reset(accountKey)
+	s.accounts.Reset(accountKey)
 
 	var out Session
 	err = s.txm.WithinTx(ctx, func(ctx context.Context) error {

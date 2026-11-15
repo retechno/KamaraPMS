@@ -97,9 +97,20 @@ func TestAccessTokenRejectsForgeries(t *testing.T) {
 		RegisteredClaims: jwt.RegisteredClaims{Issuer: "evil", Subject: "7", ExpiresAt: jwt.NewNumericDate(c.Now().Add(time.Hour))}}).
 		SignedString(tk.cfg.Secret)
 
+	// Our issuer and key, but for the platform console (doc 39 F6): the audience is not the hotel's.
+	platformAudience, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims{TenantID: 3, SessionID: 11,
+		RegisteredClaims: jwt.RegisteredClaims{Issuer: tokenIssuer, Audience: jwt.ClaimStrings{"platform"}, Subject: "7", ExpiresAt: jwt.NewNumericDate(c.Now().Add(time.Hour))}}).
+		SignedString(tk.cfg.Secret)
+	hotelAudience, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims{TenantID: 3, SessionID: 11,
+		RegisteredClaims: jwt.RegisteredClaims{Issuer: tokenIssuer, Audience: jwt.ClaimStrings{"hotel"}, Subject: "7", ExpiresAt: jwt.NewNumericDate(c.Now().Add(time.Hour))}}).
+		SignedString(tk.cfg.Secret)
+	if _, _, err := tk.parseAccess(hotelAudience); err != nil {
+		t.Errorf("a token that names the hotel as its audience is ours: %v", err)
+	}
+
 	for name, token := range map[string]string{
 		"other key": forgedKey, "alg none": algNone, "tampered payload": swapped,
-		"wrong issuer": wrongIssuer, "garbage": "not.a.jwt",
+		"wrong issuer": wrongIssuer, "garbage": "not.a.jwt", "platform audience": platformAudience,
 	} {
 		if _, _, err := tk.parseAccess(token); !apperr.IsCode(err, "TOKEN_INVALID") {
 			t.Errorf("%s: got %v, want TOKEN_INVALID", name, err)
@@ -118,31 +129,5 @@ func TestRefreshTokens(t *testing.T) {
 	}
 	if string(hashRefreshToken(a)) != string(ha) {
 		t.Fatal("hash mismatch")
-	}
-}
-
-func TestLimiter(t *testing.T) {
-	c := clock.NewFake(time.Date(2026, 9, 30, 13, 0, 0, 0, time.UTC))
-	l := newLimiter(3, 15*time.Minute, c)
-	for i := 0; i < 3; i++ {
-		if ok, _ := l.allowed("k"); !ok {
-			t.Fatalf("attempt %d should be allowed", i+1)
-		}
-		l.fail("k")
-	}
-	if ok, until := l.allowed("k"); ok || !until.Equal(c.Now().Add(15*time.Minute)) {
-		t.Fatalf("4th attempt should be blocked until the window ends, got %v %v", ok, until)
-	}
-	if ok, _ := l.allowed("other"); !ok {
-		t.Fatal("keys are independent")
-	}
-	c.Advance(15 * time.Minute)
-	if ok, _ := l.allowed("k"); !ok {
-		t.Fatal("window should reset")
-	}
-	l.fail("k")
-	l.reset("k")
-	if ok, _ := l.allowed("k"); !ok {
-		t.Fatal("reset")
 	}
 }

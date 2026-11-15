@@ -15750,6 +15750,515 @@ paths:
               schema: { $ref: "#/components/schemas/AssetRepairList" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/auth/login:
+    post:
+      operationId: platformLogin
+      summary: Console sign-in, step 1 - the password (gives a challenge)
+      description: "Every failure answers the same 401 INVALID_CREDENTIALS (an unknown e-mail, a wrong password and a disabled account look alike). 429 TOO_MANY_ATTEMPTS with `retry_after` after 5 failures per e-mail or 50 per address in 15 minutes. When PMS_OPERATOR_TOTP_KEY is not set the whole /api/v1/platform/ tree answers 404 ROUTE_NOT_FOUND (docs/architecture/39-platform-console.md)."
+      tags: [platform]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformLoginRequest" }
+      responses:
+        "200":
+          description: The password was right. `next` says what the second step is.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformChallenge" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/auth/totp:
+    post:
+      operationId: platformTotp
+      summary: Console sign-in, step 2 - the code of the authenticator, or a recovery code
+      description: "Exactly one of `code` and `recovery_code`. A code is accepted for the current 30-second step and one step either side, once: a code that was already used is 401 TOTP_REPLAYED. A wrong code is 401 TOTP_INVALID with `context.attempts_left`; the fifth wrong code kills the challenge (401 CHALLENGE_INVALID). Sets the httpOnly cookie pms_platform_refresh (Path=/api/v1/platform/auth, SameSite=Strict)."
+      tags: [platform]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformTotpRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformSession" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/auth/enroll/start:
+    post:
+      operationId: platformEnrollStart
+      summary: First sign-in - the secret of the authenticator
+      description: "For the holder of a challenge whose account has no authenticator yet (`next` = enroll). The secret is kept encrypted on the challenge until it is confirmed; calling it again replaces it. It is shown here and never again."
+      tags: [platform]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformChallengeRequest" }
+      responses:
+        "200":
+          description: The secret, as a URI and as a QR code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformEnrollStarted" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/auth/enroll/confirm:
+    post:
+      operationId: platformEnrollConfirm
+      summary: First sign-in - confirm the authenticator with a code; gives a session and the recovery codes
+      description: "The ten recovery codes are in the answer once (`XXXX-XXXX-XX`); only their hashes are kept. Sets the httpOnly cookie pms_platform_refresh."
+      tags: [platform]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformEnrollConfirmRequest" }
+      responses:
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformSession" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/auth/refresh:
+    post:
+      operationId: platformRefresh
+      summary: Exchange the console's refresh cookie for a new access token (rotates the cookie)
+      description: "The refresh token is valid 12 hours from the sign-in, however often it is rotated (an absolute limit). Presenting a token that was already rotated, after 30 seconds, ends every session of the operator."
+      tags: [platform]
+      security: []
+      responses:
+        "200":
+          description: A new session; the cookie is replaced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformSession" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/auth/logout:
+    post:
+      operationId: platformLogout
+      summary: End the session of the cookie (or of the bearer token)
+      tags: [platform]
+      security: []
+      responses:
+        "204": { description: Signed out; the cookie is cleared. }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/auth/me:
+    get:
+      operationId: platformMe
+      summary: The signed-in operator
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      responses:
+        "200":
+          description: The operator.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformOperator" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants:
+    get:
+      operationId: platformListTenants
+      summary: The hotels, the ones that need attention first
+      description: "Sorted: read-only, grace, trials ending within 14 days, then by name. The summary counts every tenant that `q` and `plan` select, whatever `status` says."
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Part of the code or the name. }
+        - { name: status, in: query, schema: { type: string, enum: [active, trial, grace, read_only, suspended] } }
+        - { name: plan, in: query, schema: { type: string }, description: A plan code. }
+      responses:
+        "200":
+          description: The tenants and their summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformTenantList" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: platformCreateTenant
+      summary: Open a hotel, with its first administrator if asked (one transaction)
+      description: "The tenant starts on the default plan. The generated password of the administrator is in the answer once."
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformCreateTenantRequest" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformCreateTenantResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/export.csv:
+    get:
+      operationId: platformExportTenants
+      summary: The same rows as the list, as CSV
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [active, trial, grace, read_only, suspended] } }
+        - { name: plan, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Lang"
+      responses:
+        "200":
+          description: A CSV file.
+          content:
+            text/csv:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    get:
+      operationId: platformGetTenant
+      summary: One hotel with its subscription, the limits in force and the usage
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      responses:
+        "200":
+          description: The tenant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformTenantDetail" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}/admins:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    get:
+      operationId: platformTenantAdmins
+      summary: The administrators of a hotel (name, e-mail, active, last sign-in; nothing else of the user)
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      responses:
+        "200":
+          description: The administrators.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PlatformTenantAdmin" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}/activity:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    get:
+      operationId: platformTenantActivity
+      summary: The latest changes of the subscription, the invoices and the tenant, newest first
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: The entries, with who did them.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PlatformActivityEntry" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}/subscription:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    patch:
+      operationId: platformChangeSubscription
+      summary: Change a hotel's plan, paid period, grace, status or limit overrides
+      description: "Only the fields that are sent change. `no_end` removes the end of the paid period; `clear_limits` names the overrides that go back to the plan's. The change is audited in the operator's trail and in the tenant's."
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformChangeSubscription" }
+      responses:
+        "200":
+          description: The subscription after the change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformSubscription" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    post:
+      operationId: platformSuspendTenant
+      summary: Suspend a hotel
+      description: "`reason` is 1 to 500 characters and `confirm_code` must be the tenant's code (422 CONFIRMATION_MISMATCH). The hotel's sessions end with the reason ACCOUNT_DISABLED and its users cannot sign in until it is reactivated. 409 TENANT_ALREADY_SUSPENDED."
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformSuspendRequest" }
+      responses:
+        "200":
+          description: The tenant, suspended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformTenantDetail" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}/reactivate:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    post:
+      operationId: platformReactivateTenant
+      summary: Lift the suspension of a hotel
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformReactivateRequest" }
+      responses:
+        "200":
+          description: The tenant, active again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformTenantDetail" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/plans:
+    get:
+      operationId: platformListPlans
+      summary: The plans, with the number of tenants on each
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      responses:
+        "200":
+          description: The plans.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PlatformPlan" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: platformCreatePlan
+      summary: Add a plan
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformPlanInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformPlanResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/plans/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: platformUpdatePlan
+      summary: Replace the editable part of a plan
+      description: "The code does not change. The answer lists the tenants on the plan that are now over a limit of the plan (a tenant with an override of its own is left out): the change is made anyway, this is the warning."
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformPlanInput" }
+      responses:
+        "200":
+          description: The plan, and the tenants it now puts over a limit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformPlanResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/invoices:
+    get:
+      operationId: platformListInvoices
+      summary: Every hotel's subscription invoices, newest first (at most 500)
+      description: "`overdue` is ISSUED with a due date before today in the tenant's time zone."
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, overdue, paid, void] } }
+        - { name: tenant, in: query, schema: { type: string }, description: A tenant code. }
+      responses:
+        "200":
+          description: The invoices, and what is owed per currency.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformInvoiceList" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}/invoices:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    get:
+      operationId: platformTenantInvoices
+      summary: One hotel's invoices
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      responses:
+        "200":
+          description: The invoices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/SubscriptionInvoice" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: platformIssueInvoice
+      summary: Bill a hotel for its next period
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformIssueInvoice" }
+      responses:
+        "201":
+          description: Issued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionInvoice" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/tenants/{code}/invoices/preview:
+    parameters:
+      - $ref: "#/components/parameters/TenantCode"
+    get:
+      operationId: platformPreviewInvoice
+      summary: What issuing an invoice would give, without saving it
+      description: "Reads only. `next_number` is a hint, it is not reserved. `open_invoice` is set when the tenant already has an invoice waiting for its payment."
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      parameters:
+        - { name: plan, in: query, schema: { type: string }, description: The plan billed; the current one when empty. }
+        - { name: periods, in: query, schema: { type: integer, minimum: 1, maximum: 36, default: 1 } }
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformInvoicePreview" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/invoices/{number}/pay:
+    parameters:
+      - $ref: "#/components/parameters/InvoiceNumber"
+    post:
+      operationId: platformPayInvoice
+      summary: Record the payment of an invoice (extends the subscription to the end of its period)
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformPayInvoice" }
+      responses:
+        "200":
+          description: The invoice, paid, and the subscription it extended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlatformPayResult" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/platform/invoices/{number}/void:
+    parameters:
+      - $ref: "#/components/parameters/InvoiceNumber"
+    post:
+      operationId: platformVoidInvoice
+      summary: Cancel an invoice that is still waiting for its payment
+      tags: [platform]
+      security: [{ platformAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlatformVoidInvoice" }
+      responses:
+        "200":
+          description: The invoice, void.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubscriptionInvoice" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
@@ -15757,6 +16266,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Access token from /api/v1/auth/login or /api/v1/auth/refresh (15 minutes).
+    platformAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "The access token of an operator of the platform console (10 minutes), from /api/v1/platform/auth/totp. It is accepted on /api/v1/platform/ only, and a token of a hotel user is not accepted there."
     deviceToken:
       type: http
       scheme: bearer
@@ -15783,6 +16297,17 @@ components:
       in: path
       required: true
       schema: { type: integer, format: int64 }
+    TenantCode:
+      name: code
+      in: path
+      required: true
+      schema: { type: string }
+      description: The tenant's code (upper case; lower case is accepted).
+    InvoiceNumber:
+      name: number
+      in: path
+      required: true
+      schema: { type: string, examples: ["SUB-2026-00001"] }
     Limit:
       name: limit
       in: query
@@ -20817,7 +21342,7 @@ components:
               child_count: { type: integer }
     AuditLog:
       type: object
-      required: [id, created_at, business_date, user, action, entity_type, entity_id, entity_label, old_data, new_data]
+      required: [id, created_at, business_date, user, actor_kind, action, entity_type, entity_id, entity_label, old_data, new_data]
       properties:
         id: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
@@ -20833,6 +21358,7 @@ components:
                 id: { type: integer, format: int64 }
                 name: { type: string }
             - { type: "null" }
+        actor_kind: { type: string, enum: [user, operator, system], description: "Who made the change: a user of the hotel (`user` is set), an operator of the platform console (shown as KamaraPMS, never by name: the hotel does not know the people of the platform), or the system." }
         action: { type: string }
         entity_type: { type: string }
         entity_id: { type: integer, format: int64 }
@@ -29557,3 +30083,343 @@ components:
       required: [data]
       properties:
         data: { type: array, items: { $ref: "#/components/schemas/AssetExpiringRow" } }
+    PlatformLoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string }
+        password: { type: string }
+    PlatformChallenge:
+      type: object
+      required: [challenge, next, expires_at]
+      properties:
+        challenge: { type: string, description: "Proof of the password, single use, valid 5 minutes." }
+        next: { type: string, enum: [totp, enroll], description: "totp: the account has an authenticator. enroll: it has none yet, and enrols at this sign-in." }
+        expires_at: { type: string, format: date-time }
+    PlatformChallengeRequest:
+      type: object
+      required: [challenge]
+      additionalProperties: false
+      properties:
+        challenge: { type: string }
+    PlatformTotpRequest:
+      type: object
+      required: [challenge]
+      additionalProperties: false
+      properties:
+        challenge: { type: string }
+        code: { type: string, description: "Six digits (spaces are ignored)." }
+        recovery_code: { type: string, description: "A recovery code, any case, with or without the dashes. Used once." }
+    PlatformEnrollStarted:
+      type: object
+      required: [secret, otpauth_uri, qr_png]
+      properties:
+        secret: { type: string, description: "The secret in base 32, in groups of four, to type in by hand." }
+        otpauth_uri: { type: string }
+        qr_png: { type: string, description: "A data URI of a PNG of the QR code." }
+    PlatformEnrollConfirmRequest:
+      type: object
+      required: [challenge, code]
+      additionalProperties: false
+      properties:
+        challenge: { type: string }
+        code: { type: string }
+    PlatformOperator:
+      type: object
+      required: [id, email, full_name, is_active, totp_enrolled, last_login_at, recovery_codes_left]
+      properties:
+        id: { type: integer, format: int64 }
+        email: { type: string }
+        full_name: { type: string }
+        is_active: { type: boolean }
+        totp_enrolled: { type: boolean }
+        last_login_at: { type: [string, "null"], format: date-time }
+        recovery_codes_left: { type: integer }
+    PlatformSession:
+      type: object
+      required: [access_token, token_type, expires_in, operator]
+      properties:
+        access_token: { type: string, description: "A JWT for 10 minutes. Not accepted on the hotel's routes, and a hotel token is not accepted here." }
+        token_type: { type: string, enum: [Bearer] }
+        expires_in: { type: integer, description: Seconds. }
+        operator: { $ref: "#/components/schemas/PlatformOperator" }
+        recovery_codes:
+          type: array
+          items: { type: string }
+          description: "Only when the authenticator was just enrolled: ten codes, shown once."
+    PlatformCurrencyTotal:
+      type: object
+      required: [currency_code, invoice_count, total]
+      properties:
+        currency_code: { type: string }
+        invoice_count: { type: integer }
+        total: { $ref: "#/components/schemas/Amount" }
+    PlatformTenantRow:
+      type: object
+      required: [code, name, timezone, state, tenant_status, status_reason, plan_code, plan_name, subscription_status, access, paid_through, days_left, trial_ending, usage, limits, open_invoice_count, overdue_invoice_count, created_at]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        timezone: { type: string }
+        state: { type: string, enum: [active, trial, grace, read_only, suspended] }
+        tenant_status: { type: string, enum: [ACTIVE, SUSPENDED] }
+        status_reason: { type: [string, "null"] }
+        plan_code: { type: string }
+        plan_name: { type: string }
+        subscription_status: { type: string, enum: [TRIAL, ACTIVE, CANCELLED] }
+        access: { type: string, enum: [FULL, GRACE, READ_ONLY] }
+        paid_through: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        days_left: { type: [integer, "null"] }
+        trial_ending: { type: boolean }
+        usage:
+          type: object
+          required: [properties, rooms, users]
+          properties:
+            properties: { type: integer }
+            rooms: { type: integer }
+            users: { type: integer }
+        limits: { $ref: "#/components/schemas/SubscriptionLimits" }
+        open_invoice_count: { type: integer }
+        overdue_invoice_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    PlatformTenantSummary:
+      type: object
+      required: [active, trial, trial_ending, grace, read_only, suspended, open_invoice_count, open_invoice_totals, overdue_invoice_count]
+      properties:
+        active: { type: integer }
+        trial: { type: integer }
+        trial_ending: { type: integer }
+        grace: { type: integer }
+        read_only: { type: integer }
+        suspended: { type: integer }
+        open_invoice_count: { type: integer }
+        open_invoice_totals: { type: array, items: { $ref: "#/components/schemas/PlatformCurrencyTotal" }, description: "What is owed, per currency (plans may be billed in different currencies)." }
+        overdue_invoice_count: { type: integer }
+    PlatformTenantList:
+      type: object
+      required: [items, summary]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PlatformTenantRow" } }
+        summary: { $ref: "#/components/schemas/PlatformTenantSummary" }
+    PlatformCreateTenantRequest:
+      type: object
+      required: [code, name, timezone]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        name: { type: string }
+        timezone: { type: string, examples: ["Asia/Jakarta"] }
+        admin:
+          type: object
+          required: [email, full_name]
+          additionalProperties: false
+          properties:
+            email: { type: string }
+            full_name: { type: string }
+    PlatformCreateTenantResult:
+      type: object
+      required: [tenant]
+      properties:
+        tenant:
+          type: object
+          required: [id, code, name, status, timezone, created_at]
+          properties:
+            id: { type: integer, format: int64 }
+            code: { type: string }
+            name: { type: string }
+            status: { type: string }
+            timezone: { type: string }
+            created_at: { type: string, format: date-time }
+        admin: { $ref: "#/components/schemas/User" }
+        admin_password: { type: string, description: "Generated; shown here once and never again." }
+    PlatformSubscription:
+      type: object
+      required: [id, plan_id, status, started_on, paid_through, grace_days, overrides, version]
+      properties:
+        id: { type: integer, format: int64 }
+        plan_id: { type: integer, format: int64 }
+        status: { type: string, enum: [TRIAL, ACTIVE, CANCELLED] }
+        started_on: { $ref: "#/components/schemas/Date" }
+        paid_through: { oneOf: [{ $ref: "#/components/schemas/Date" }, { type: "null" }] }
+        grace_days: { type: integer }
+        overrides: { $ref: "#/components/schemas/SubscriptionLimits" }
+        version: { type: integer }
+    PlatformTenantDetail:
+      type: object
+      required: [code, name, timezone, created_at, status, status_reason, status_changed_at, subscription, summary, property_count]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        timezone: { type: string }
+        created_at: { type: string, format: date-time }
+        status: { type: string, enum: [ACTIVE, SUSPENDED] }
+        status_reason: { type: [string, "null"], description: "Why the tenant is suspended; null while it is active." }
+        status_changed_at: { type: [string, "null"], format: date-time }
+        subscription: { $ref: "#/components/schemas/PlatformSubscription" }
+        summary: { $ref: "#/components/schemas/SubscriptionSummary" }
+        property_count: { type: integer }
+    PlatformTenantAdmin:
+      type: object
+      required: [full_name, email, is_active, last_login_at]
+      properties:
+        full_name: { type: string }
+        email: { type: string }
+        is_active: { type: boolean }
+        last_login_at: { type: [string, "null"], format: date-time }
+    PlatformActivityEntry:
+      type: object
+      required: [id, action, entity_type, entity_id, at, actor_kind]
+      properties:
+        id: { type: integer, format: int64 }
+        action: { type: string, examples: ["subscription.changed"] }
+        entity_type: { type: string }
+        entity_id: { type: integer, format: int64 }
+        at: { type: string, format: date-time }
+        actor_kind: { type: string, enum: [user, operator, system] }
+        actor_name: { type: string }
+    PlatformChangeSubscription:
+      type: object
+      additionalProperties: false
+      properties:
+        plan_code: { type: string }
+        paid_through: { $ref: "#/components/schemas/Date" }
+        no_end: { type: boolean, description: "Remove the end of the paid period (paid_through becomes null)." }
+        grace_days: { type: integer, minimum: 0, maximum: 90 }
+        status: { type: string, enum: [TRIAL, ACTIVE, CANCELLED] }
+        limits:
+          type: object
+          description: "Overrides to set; a limit that is not sent stays as it is."
+          properties:
+            max_properties: { type: integer, minimum: 1 }
+            max_rooms: { type: integer, minimum: 1 }
+            max_users: { type: integer, minimum: 1 }
+        clear_limits:
+          type: array
+          items: { type: string, enum: [properties, rooms, users] }
+          description: "The overrides that go back to the plan's."
+    PlatformSuspendRequest:
+      type: object
+      required: [reason, confirm_code]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        confirm_code: { type: string, description: "The tenant's code, typed again." }
+    PlatformReactivateRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    PlatformPlan:
+      type: object
+      required: [id, code, name, modules, limits, price, currency_code, billing_period_months, trial_days, is_active, is_default, tenant_count]
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        modules: { type: array, items: { type: string, enum: [HOUSEKEEPING, ACCOUNTING, INVENTORY, BANQUET, POS] } }
+        limits: { $ref: "#/components/schemas/SubscriptionLimits" }
+        price: { $ref: "#/components/schemas/Amount" }
+        currency_code: { type: string }
+        billing_period_months: { type: integer, enum: [1, 3, 6, 12] }
+        trial_days: { type: integer }
+        is_active: { type: boolean }
+        is_default: { type: boolean }
+        tenant_count: { type: integer }
+    PlatformPlanInput:
+      type: object
+      required: [name, modules, limits, price, currency_code, billing_period_months, trial_days, is_active, is_default]
+      additionalProperties: false
+      properties:
+        code: { type: string, description: "Required on create; on update it must be absent or the code of the path." }
+        name: { type: string }
+        modules: { type: array, items: { type: string, enum: [HOUSEKEEPING, ACCOUNTING, INVENTORY, BANQUET, POS] } }
+        limits:
+          type: object
+          description: "A limit that is absent is unlimited."
+          properties:
+            max_properties: { type: integer, minimum: 1 }
+            max_rooms: { type: integer, minimum: 1 }
+            max_users: { type: integer, minimum: 1 }
+        price: { $ref: "#/components/schemas/Amount" }
+        currency_code: { type: string }
+        billing_period_months: { type: integer, enum: [1, 3, 6, 12] }
+        trial_days: { type: integer, minimum: 0, maximum: 365 }
+        is_active: { type: boolean }
+        is_default: { type: boolean }
+    PlatformAffected:
+      type: object
+      required: [tenant_code, resource, used, limit]
+      properties:
+        tenant_code: { type: string }
+        resource: { type: string, enum: [properties, rooms, users] }
+        used: { type: integer }
+        limit: { type: integer }
+    PlatformPlanResult:
+      type: object
+      required: [plan, affected]
+      properties:
+        plan: { $ref: "#/components/schemas/PlatformPlan" }
+        affected: { type: array, items: { $ref: "#/components/schemas/PlatformAffected" } }
+    PlatformInvoiceRow:
+      allOf:
+        - { $ref: "#/components/schemas/SubscriptionInvoice" }
+        - type: object
+          required: [tenant_code, tenant_name, overdue_days]
+          properties:
+            tenant_code: { type: string }
+            tenant_name: { type: string }
+            overdue_days: { type: integer, description: "Days past the due date in the tenant's time zone for an ISSUED invoice; 0 otherwise." }
+    PlatformInvoiceList:
+      type: object
+      required: [items, total_open]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PlatformInvoiceRow" } }
+        total_open: { type: array, items: { $ref: "#/components/schemas/PlatformCurrencyTotal" } }
+    PlatformIssueInvoice:
+      type: object
+      additionalProperties: false
+      properties:
+        plan_code: { type: string, description: "The plan billed; the current one when empty. Paying the invoice moves the tenant to it." }
+        periods: { type: integer, minimum: 1, maximum: 36, default: 1 }
+        amount: { $ref: "#/components/schemas/Amount" }
+        due_on: { $ref: "#/components/schemas/Date" }
+        notes: { type: string }
+    PlatformInvoicePreview:
+      type: object
+      required: [plan_code, period_start, period_end, amount, currency_code, due_on, next_number]
+      properties:
+        plan_code: { type: string }
+        period_start: { $ref: "#/components/schemas/Date" }
+        period_end: { $ref: "#/components/schemas/Date" }
+        amount: { $ref: "#/components/schemas/Amount" }
+        currency_code: { type: string }
+        due_on: { $ref: "#/components/schemas/Date" }
+        next_number: { type: string }
+        open_invoice:
+          type: object
+          required: [number, period_start, period_end]
+          properties:
+            number: { type: string }
+            period_start: { $ref: "#/components/schemas/Date" }
+            period_end: { $ref: "#/components/schemas/Date" }
+    PlatformPayInvoice:
+      type: object
+      required: [paid_on]
+      additionalProperties: false
+      properties:
+        paid_on: { $ref: "#/components/schemas/Date" }
+        reference: { type: string }
+    PlatformPayResult:
+      type: object
+      required: [invoice, subscription]
+      properties:
+        invoice: { $ref: "#/components/schemas/SubscriptionInvoice" }
+        subscription: { $ref: "#/components/schemas/PlatformSubscription" }
+    PlatformVoidInvoice:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string }

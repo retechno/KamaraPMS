@@ -13690,6 +13690,449 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Console sign-in, step 1 - the password (gives a challenge)
+         * @description Every failure answers the same 401 INVALID_CREDENTIALS (an unknown e-mail, a wrong password and a disabled account look alike). 429 TOO_MANY_ATTEMPTS with `retry_after` after 5 failures per e-mail or 50 per address in 15 minutes. When PMS_OPERATOR_TOTP_KEY is not set the whole /api/v1/platform/ tree answers 404 ROUTE_NOT_FOUND (docs/architecture/39-platform-console.md).
+         */
+        post: operations["platformLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Console sign-in, step 2 - the code of the authenticator, or a recovery code
+         * @description Exactly one of `code` and `recovery_code`. A code is accepted for the current 30-second step and one step either side, once: a code that was already used is 401 TOTP_REPLAYED. A wrong code is 401 TOTP_INVALID with `context.attempts_left`; the fifth wrong code kills the challenge (401 CHALLENGE_INVALID). Sets the httpOnly cookie pms_platform_refresh (Path=/api/v1/platform/auth, SameSite=Strict).
+         */
+        post: operations["platformTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/enroll/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * First sign-in - the secret of the authenticator
+         * @description For the holder of a challenge whose account has no authenticator yet (`next` = enroll). The secret is kept encrypted on the challenge until it is confirmed; calling it again replaces it. It is shown here and never again.
+         */
+        post: operations["platformEnrollStart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/enroll/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * First sign-in - confirm the authenticator with a code; gives a session and the recovery codes
+         * @description The ten recovery codes are in the answer once (`XXXX-XXXX-XX`); only their hashes are kept. Sets the httpOnly cookie pms_platform_refresh.
+         */
+        post: operations["platformEnrollConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange the console's refresh cookie for a new access token (rotates the cookie)
+         * @description The refresh token is valid 12 hours from the sign-in, however often it is rotated (an absolute limit). Presenting a token that was already rotated, after 30 seconds, ends every session of the operator.
+         */
+        post: operations["platformRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the session of the cookie (or of the bearer token) */
+        post: operations["platformLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in operator */
+        get: operations["platformMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The hotels, the ones that need attention first
+         * @description Sorted: read-only, grace, trials ending within 14 days, then by name. The summary counts every tenant that `q` and `plan` select, whatever `status` says.
+         */
+        get: operations["platformListTenants"];
+        put?: never;
+        /**
+         * Open a hotel, with its first administrator if asked (one transaction)
+         * @description The tenant starts on the default plan. The generated password of the administrator is in the answer once.
+         */
+        post: operations["platformCreateTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same rows as the list, as CSV */
+        get: operations["platformExportTenants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        /** One hotel with its subscription, the limits in force and the usage */
+        get: operations["platformGetTenant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}/admins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        /** The administrators of a hotel (name, e-mail, active, last sign-in; nothing else of the user) */
+        get: operations["platformTenantAdmins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        /** The latest changes of the subscription, the invoices and the tenant, newest first */
+        get: operations["platformTenantActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a hotel's plan, paid period, grace, status or limit overrides
+         * @description Only the fields that are sent change. `no_end` removes the end of the paid period; `clear_limits` names the overrides that go back to the plan's. The change is audited in the operator's trail and in the tenant's.
+         */
+        patch: operations["platformChangeSubscription"];
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend a hotel
+         * @description `reason` is 1 to 500 characters and `confirm_code` must be the tenant's code (422 CONFIRMATION_MISMATCH). The hotel's sessions end with the reason ACCOUNT_DISABLED and its users cannot sign in until it is reactivated. 409 TENANT_ALREADY_SUSPENDED.
+         */
+        post: operations["platformSuspendTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lift the suspension of a hotel */
+        post: operations["platformReactivateTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The plans, with the number of tenants on each */
+        get: operations["platformListPlans"];
+        put?: never;
+        /** Add a plan */
+        post: operations["platformCreatePlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/plans/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Replace the editable part of a plan
+         * @description The code does not change. The answer lists the tenants on the plan that are now over a limit of the plan (a tenant with an override of its own is left out): the change is made anyway, this is the warning.
+         */
+        patch: operations["platformUpdatePlan"];
+        trace?: never;
+    };
+    "/api/v1/platform/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every hotel's subscription invoices, newest first (at most 500)
+         * @description `overdue` is ISSUED with a due date before today in the tenant's time zone.
+         */
+        get: operations["platformListInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        /** One hotel's invoices */
+        get: operations["platformTenantInvoices"];
+        put?: never;
+        /** Bill a hotel for its next period */
+        post: operations["platformIssueInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{code}/invoices/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What issuing an invoice would give, without saving it
+         * @description Reads only. `next_number` is a hint, it is not reserved. `open_invoice` is set when the tenant already has an invoice waiting for its payment.
+         */
+        get: operations["platformPreviewInvoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/invoices/{number}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: components["parameters"]["InvoiceNumber"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record the payment of an invoice (extends the subscription to the end of its period) */
+        post: operations["platformPayInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/invoices/{number}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: components["parameters"]["InvoiceNumber"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an invoice that is still waiting for its payment */
+        post: operations["platformVoidInvoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -18659,6 +19102,11 @@ export interface components {
                 id: number;
                 name: string;
             } | null;
+            /**
+             * @description Who made the change: a user of the hotel (`user` is set), an operator of the platform console (shown as KamaraPMS, never by name: the hotel does not know the people of the platform), or the system.
+             * @enum {string}
+             */
+            actor_kind: "user" | "operator" | "system";
             action: string;
             entity_type: string;
             /** Format: int64 */
@@ -28018,6 +28466,304 @@ export interface components {
         AssetExpiringList: {
             data: components["schemas"]["AssetExpiringRow"][];
         };
+        PlatformLoginRequest: {
+            email: string;
+            password: string;
+        };
+        PlatformChallenge: {
+            /** @description Proof of the password, single use, valid 5 minutes. */
+            challenge: string;
+            /**
+             * @description totp: the account has an authenticator. enroll: it has none yet, and enrols at this sign-in.
+             * @enum {string}
+             */
+            next: "totp" | "enroll";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        PlatformChallengeRequest: {
+            challenge: string;
+        };
+        PlatformTotpRequest: {
+            challenge: string;
+            /** @description Six digits (spaces are ignored). */
+            code?: string;
+            /** @description A recovery code, any case, with or without the dashes. Used once. */
+            recovery_code?: string;
+        };
+        PlatformEnrollStarted: {
+            /** @description The secret in base 32, in groups of four, to type in by hand. */
+            secret: string;
+            otpauth_uri: string;
+            /** @description A data URI of a PNG of the QR code. */
+            qr_png: string;
+        };
+        PlatformEnrollConfirmRequest: {
+            challenge: string;
+            code: string;
+        };
+        PlatformOperator: {
+            /** Format: int64 */
+            id: number;
+            email: string;
+            full_name: string;
+            is_active: boolean;
+            totp_enrolled: boolean;
+            /** Format: date-time */
+            last_login_at: string | null;
+            recovery_codes_left: number;
+        };
+        PlatformSession: {
+            /** @description A JWT for 10 minutes. Not accepted on the hotel's routes, and a hotel token is not accepted here. */
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            /** @description Seconds. */
+            expires_in: number;
+            operator: components["schemas"]["PlatformOperator"];
+            /** @description Only when the authenticator was just enrolled: ten codes, shown once. */
+            recovery_codes?: string[];
+        };
+        PlatformCurrencyTotal: {
+            currency_code: string;
+            invoice_count: number;
+            total: components["schemas"]["Amount"];
+        };
+        PlatformTenantRow: {
+            code: string;
+            name: string;
+            timezone: string;
+            /** @enum {string} */
+            state: "active" | "trial" | "grace" | "read_only" | "suspended";
+            /** @enum {string} */
+            tenant_status: "ACTIVE" | "SUSPENDED";
+            status_reason: string | null;
+            plan_code: string;
+            plan_name: string;
+            /** @enum {string} */
+            subscription_status: "TRIAL" | "ACTIVE" | "CANCELLED";
+            /** @enum {string} */
+            access: "FULL" | "GRACE" | "READ_ONLY";
+            paid_through: components["schemas"]["Date"] | null;
+            days_left: number | null;
+            trial_ending: boolean;
+            usage: {
+                properties: number;
+                rooms: number;
+                users: number;
+            };
+            limits: components["schemas"]["SubscriptionLimits"];
+            open_invoice_count: number;
+            overdue_invoice_count: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PlatformTenantSummary: {
+            active: number;
+            trial: number;
+            trial_ending: number;
+            grace: number;
+            read_only: number;
+            suspended: number;
+            open_invoice_count: number;
+            /** @description What is owed, per currency (plans may be billed in different currencies). */
+            open_invoice_totals: components["schemas"]["PlatformCurrencyTotal"][];
+            overdue_invoice_count: number;
+        };
+        PlatformTenantList: {
+            items: components["schemas"]["PlatformTenantRow"][];
+            summary: components["schemas"]["PlatformTenantSummary"];
+        };
+        PlatformCreateTenantRequest: {
+            code: string;
+            name: string;
+            /** @example Asia/Jakarta */
+            timezone: string;
+            admin?: {
+                email: string;
+                full_name: string;
+            };
+        };
+        PlatformCreateTenantResult: {
+            tenant: {
+                /** Format: int64 */
+                id: number;
+                code: string;
+                name: string;
+                status: string;
+                timezone: string;
+                /** Format: date-time */
+                created_at: string;
+            };
+            admin?: components["schemas"]["User"];
+            /** @description Generated; shown here once and never again. */
+            admin_password?: string;
+        };
+        PlatformSubscription: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            plan_id: number;
+            /** @enum {string} */
+            status: "TRIAL" | "ACTIVE" | "CANCELLED";
+            started_on: components["schemas"]["Date"];
+            paid_through: components["schemas"]["Date"] | null;
+            grace_days: number;
+            overrides: components["schemas"]["SubscriptionLimits"];
+            version: number;
+        };
+        PlatformTenantDetail: {
+            code: string;
+            name: string;
+            timezone: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "SUSPENDED";
+            /** @description Why the tenant is suspended; null while it is active. */
+            status_reason: string | null;
+            /** Format: date-time */
+            status_changed_at: string | null;
+            subscription: components["schemas"]["PlatformSubscription"];
+            summary: components["schemas"]["SubscriptionSummary"];
+            property_count: number;
+        };
+        PlatformTenantAdmin: {
+            full_name: string;
+            email: string;
+            is_active: boolean;
+            /** Format: date-time */
+            last_login_at: string | null;
+        };
+        PlatformActivityEntry: {
+            /** Format: int64 */
+            id: number;
+            /** @example subscription.changed */
+            action: string;
+            entity_type: string;
+            /** Format: int64 */
+            entity_id: number;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            actor_kind: "user" | "operator" | "system";
+            actor_name?: string;
+        };
+        PlatformChangeSubscription: {
+            plan_code?: string;
+            paid_through?: components["schemas"]["Date"];
+            /** @description Remove the end of the paid period (paid_through becomes null). */
+            no_end?: boolean;
+            grace_days?: number;
+            /** @enum {string} */
+            status?: "TRIAL" | "ACTIVE" | "CANCELLED";
+            /** @description Overrides to set; a limit that is not sent stays as it is. */
+            limits?: {
+                max_properties?: number;
+                max_rooms?: number;
+                max_users?: number;
+            };
+            /** @description The overrides that go back to the plan's. */
+            clear_limits?: ("properties" | "rooms" | "users")[];
+        };
+        PlatformSuspendRequest: {
+            reason: string;
+            /** @description The tenant's code, typed again. */
+            confirm_code: string;
+        };
+        PlatformReactivateRequest: {
+            reason: string;
+        };
+        PlatformPlan: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            name: string;
+            modules: ("HOUSEKEEPING" | "ACCOUNTING" | "INVENTORY" | "BANQUET" | "POS")[];
+            limits: components["schemas"]["SubscriptionLimits"];
+            price: components["schemas"]["Amount"];
+            currency_code: string;
+            /** @enum {integer} */
+            billing_period_months: 1 | 3 | 6 | 12;
+            trial_days: number;
+            is_active: boolean;
+            is_default: boolean;
+            tenant_count: number;
+        };
+        PlatformPlanInput: {
+            /** @description Required on create; on update it must be absent or the code of the path. */
+            code?: string;
+            name: string;
+            modules: ("HOUSEKEEPING" | "ACCOUNTING" | "INVENTORY" | "BANQUET" | "POS")[];
+            /** @description A limit that is absent is unlimited. */
+            limits: {
+                max_properties?: number;
+                max_rooms?: number;
+                max_users?: number;
+            };
+            price: components["schemas"]["Amount"];
+            currency_code: string;
+            /** @enum {integer} */
+            billing_period_months: 1 | 3 | 6 | 12;
+            trial_days: number;
+            is_active: boolean;
+            is_default: boolean;
+        };
+        PlatformAffected: {
+            tenant_code: string;
+            /** @enum {string} */
+            resource: "properties" | "rooms" | "users";
+            used: number;
+            limit: number;
+        };
+        PlatformPlanResult: {
+            plan: components["schemas"]["PlatformPlan"];
+            affected: components["schemas"]["PlatformAffected"][];
+        };
+        PlatformInvoiceRow: components["schemas"]["SubscriptionInvoice"] & {
+            tenant_code: string;
+            tenant_name: string;
+            /** @description Days past the due date in the tenant's time zone for an ISSUED invoice; 0 otherwise. */
+            overdue_days: number;
+        };
+        PlatformInvoiceList: {
+            items: components["schemas"]["PlatformInvoiceRow"][];
+            total_open: components["schemas"]["PlatformCurrencyTotal"][];
+        };
+        PlatformIssueInvoice: {
+            /** @description The plan billed; the current one when empty. Paying the invoice moves the tenant to it. */
+            plan_code?: string;
+            /** @default 1 */
+            periods: number;
+            amount?: components["schemas"]["Amount"];
+            due_on?: components["schemas"]["Date"];
+            notes?: string;
+        };
+        PlatformInvoicePreview: {
+            plan_code: string;
+            period_start: components["schemas"]["Date"];
+            period_end: components["schemas"]["Date"];
+            amount: components["schemas"]["Amount"];
+            currency_code: string;
+            due_on: components["schemas"]["Date"];
+            next_number: string;
+            open_invoice?: {
+                number: string;
+                period_start: components["schemas"]["Date"];
+                period_end: components["schemas"]["Date"];
+            };
+        };
+        PlatformPayInvoice: {
+            paid_on: components["schemas"]["Date"];
+            reference?: string;
+        };
+        PlatformPayResult: {
+            invoice: components["schemas"]["SubscriptionInvoice"];
+            subscription: components["schemas"]["PlatformSubscription"];
+        };
+        PlatformVoidInvoice: {
+            reason: string;
+        };
     };
     responses: {
         /** @description An error, described as RFC 9457 problem details. */
@@ -28036,6 +28782,9 @@ export interface components {
         PropertyId: number;
         Id: number;
         LineId: number;
+        /** @description The tenant's code (upper case; lower case is accepted). */
+        TenantCode: string;
+        InvoiceNumber: string;
         Limit: number;
         /** @description Opaque cursor from a previous page's next_cursor. */
         Cursor: string;
@@ -50407,6 +51156,700 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    platformLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description The password was right. `next` says what the second step is. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformChallenge"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    platformTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformTotpRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSession"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    platformEnrollStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformChallengeRequest"];
+            };
+        };
+        responses: {
+            /** @description The secret, as a URI and as a QR code. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformEnrollStarted"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformEnrollConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformEnrollConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSession"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    platformRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A new session; the cookie is replaced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSession"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    platformLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out; the cookie is cleared. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    platformMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The operator. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformOperator"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    platformListTenants: {
+        parameters: {
+            query?: {
+                /** @description Part of the code or the name. */
+                q?: string;
+                status?: "active" | "trial" | "grace" | "read_only" | "suspended";
+                /** @description A plan code. */
+                plan?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tenants and their summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformCreateTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformCreateTenantRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformCreateTenantResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformExportTenants: {
+        parameters: {
+            query?: {
+                q?: string;
+                status?: "active" | "trial" | "grace" | "read_only" | "suspended";
+                plan?: string;
+                /** @description The language of the document or of the column names of a CSV report: `id` for Indonesian (the words of the program, months and number separators; what people typed is printed as it is). English keeps the stable CSV column names; the chart of accounts export always does, so that it can be imported again. */
+                lang?: components["parameters"]["Lang"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A CSV file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformGetTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tenant. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    platformTenantAdmins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The administrators. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PlatformTenantAdmin"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    platformTenantActivity: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entries, with who did them. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PlatformActivityEntry"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformChangeSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformChangeSubscription"];
+            };
+        };
+        responses: {
+            /** @description The subscription after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSubscription"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformSuspendTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformSuspendRequest"];
+            };
+        };
+        responses: {
+            /** @description The tenant, suspended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformReactivateTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description The tenant, active again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformListPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plans. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PlatformPlan"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    platformCreatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformPlanResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformUpdatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformPlanInput"];
+            };
+        };
+        responses: {
+            /** @description The plan, and the tenants it now puts over a limit. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformPlanResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformListInvoices: {
+        parameters: {
+            query?: {
+                status?: "open" | "overdue" | "paid" | "void";
+                /** @description A tenant code. */
+                tenant?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoices, and what is owed per currency. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformInvoiceList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformTenantInvoices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invoices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SubscriptionInvoice"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    platformIssueInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformIssueInvoice"];
+            };
+        };
+        responses: {
+            /** @description Issued. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionInvoice"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformPreviewInvoice: {
+        parameters: {
+            query?: {
+                /** @description The plan billed; the current one when empty. */
+                plan?: string;
+                periods?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The tenant's code (upper case; lower case is accepted). */
+                code: components["parameters"]["TenantCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformInvoicePreview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformPayInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: components["parameters"]["InvoiceNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformPayInvoice"];
+            };
+        };
+        responses: {
+            /** @description The invoice, paid, and the subscription it extended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformPayResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    platformVoidInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                number: components["parameters"]["InvoiceNumber"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformVoidInvoice"];
+            };
+        };
+        responses: {
+            /** @description The invoice, void. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionInvoice"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
 }

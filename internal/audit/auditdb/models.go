@@ -26,4 +26,5 @@ type AuditLog struct {
 	IpAddress    *netip.Addr
 	CreatedAt    time.Time
 	EntityLabel  *string
+	OperatorID   *int64
 }

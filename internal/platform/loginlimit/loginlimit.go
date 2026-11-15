@@ -1,4 +1,5 @@
-package iam
+// Package loginlimit throttles failed sign-in attempts per key (an account, an IP, a challenge). It is shared by the hotel's iam and the platform console's operator.
+package loginlimit
 
 import (
 	"sync"
@@ -7,10 +8,10 @@ import (
 	"kamarapms/internal/platform/clock"
 )
 
-// limiter counts failed attempts per key in a fixed window (login throttling).
+// Limiter counts failed attempts per key in a fixed window (login throttling).
 // It is in-memory, i.e. per API instance; a shared store (Redis) can replace it
 // when the API runs on several instances.
-type limiter struct {
+type Limiter struct {
 	mu      sync.Mutex
 	max     int
 	window  time.Duration
@@ -23,12 +24,13 @@ type window struct {
 	resetAt  time.Time
 }
 
-func newLimiter(maxFailures int, w time.Duration, c clock.Clock) *limiter {
-	return &limiter{max: maxFailures, window: w, clock: c, entries: map[string]*window{}}
+// New returns a Limiter that blocks a key after maxFailures failures within w.
+func New(maxFailures int, w time.Duration, c clock.Clock) *Limiter {
+	return &Limiter{max: maxFailures, window: w, clock: c, entries: map[string]*window{}}
 }
 
-// allowed reports whether key may try again, and when it may if not.
-func (l *limiter) allowed(key string) (bool, time.Time) {
+// Allowed reports whether key may try again, and when it may if not.
+func (l *Limiter) Allowed(key string) (bool, time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	w, ok := l.entries[key]
@@ -38,8 +40,8 @@ func (l *limiter) allowed(key string) (bool, time.Time) {
 	return w.failures < l.max, w.resetAt
 }
 
-// fail records a failed attempt for key.
-func (l *limiter) fail(key string) {
+// Fail records a failed attempt for key.
+func (l *Limiter) Fail(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.clock.Now()
@@ -54,14 +56,14 @@ func (l *limiter) fail(key string) {
 	w.failures++
 }
 
-// reset forgets key (after a successful login).
-func (l *limiter) reset(key string) {
+// Reset forgets key (after a successful login).
+func (l *Limiter) Reset(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.entries, key)
 }
 
-func (l *limiter) sweep(now time.Time) {
+func (l *Limiter) sweep(now time.Time) {
 	for k, w := range l.entries {
 		if !now.Before(w.resetAt) {
 			delete(l.entries, k)

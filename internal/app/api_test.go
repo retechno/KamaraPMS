@@ -17,6 +17,7 @@ import (
 	"kamarapms/internal/audit"
 	"kamarapms/internal/iam"
 	"kamarapms/internal/notifications"
+	"kamarapms/internal/operator"
 	"kamarapms/internal/platform/clock"
 	"kamarapms/internal/platform/db"
 	"kamarapms/internal/platform/dbtest"
@@ -30,12 +31,13 @@ const testPassword = "correct horse battery staple"
 
 // apiEnv runs the real router (middleware, authentication, handlers, services) on a real database.
 type apiEnv struct {
-	t       *testing.T
-	handler http.Handler
-	clock   *clock.Fake
-	build   func(perMinute int) *App
-	app     *App
-	mail    notifications.Sender
+	t        *testing.T
+	handler  http.Handler
+	clock    *clock.Fake
+	build    func(perMinute int) *App
+	app      *App
+	mail     notifications.Sender
+	operator operator.Config // zero: the console is off
 }
 
 func newAPI(t *testing.T) *apiEnv {
@@ -63,7 +65,7 @@ func newAPI(t *testing.T) *apiEnv {
 	}
 	env := &apiEnv{t: t, clock: c}
 	env.build = func(perMinute int) *App {
-		return New(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens, RateLimitPerMinute: perMinute, Mail: env.mail})
+		return New(Deps{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), DB: pool, TxManager: txm, Clock: c, Tokens: tokens, RateLimitPerMinute: perMinute, Mail: env.mail, Operator: env.operator})
 	}
 	env.app = env.build(0)
 	env.handler = env.app.Handler

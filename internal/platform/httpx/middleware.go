@@ -49,6 +49,11 @@ func ClientIPFrom(ctx context.Context) (netip.Addr, bool) {
 	return ip, ok
 }
 
+// WithClientIP stores the caller's address in ctx: what RequestID does for a request, for a use case called without one (a test, a command).
+func WithClientIP(ctx context.Context, ip netip.Addr) context.Context {
+	return context.WithValue(ctx, clientIPKey{}, ip)
+}
+
 // RequestID assigns a correlation id to every request, echoes it in the
 // response, and stores a logger tagged with it in the request context. It also
 // resolves the client address (the rate limiter, the audit trail and the

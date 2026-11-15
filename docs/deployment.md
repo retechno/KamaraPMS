@@ -61,6 +61,8 @@ The API reads its settings from the environment (`internal/platform/config`); no
 | `PMS_DATABASE_URL` | none, required | `postgres://user:password@host:5432/db?sslmode=...`. The compose file builds it from `POSTGRES_*`. With an external database use `sslmode=require` or `verify-full`. The migration job needs this variable and no other |
 | `PMS_JWT_SECRET` | none, required | at least 32 characters (`openssl rand -base64 48`). Signs access tokens; changing it signs everybody out |
 | `PMS_ACCESS_TOKEN_TTL`, `PMS_REFRESH_TOKEN_TTL` | `15m`, `720h` | session lifetimes (the access token cannot exceed 1 h) |
+| `PMS_OPERATOR_TOTP_KEY` | empty: the platform console is off | base64 of 32 bytes (`openssl rand -base64 32`). Encrypts the authenticator secrets of the operators (AES-256-GCM). **Keep a copy in the secret store**: if it is lost, every operator must enrol again (`pms-admin reset-operator-totp`). While it is empty every `/api/v1/platform/` route answers 404 `ROUTE_NOT_FOUND`. To change it use `pms-admin rotate-operator-totp-key -old-env OLD -new-env NEW`, then set the new value and restart; replacing it by hand makes every secret unreadable |
+| `PMS_OPERATOR_ACCESS_TTL`, `PMS_OPERATOR_REFRESH_TTL` | `10m`, `12h` | the console's sessions: the access token (at most 15 m) and the refresh token, whose 12 hours run from the sign-in however often it is renewed (at most 24 h) |
 | `PMS_COOKIE_SECURE` | `true` outside development | the refresh cookie is sent over https only; `false` is refused in production. A browser accepts it from `http://localhost` too, which is why the stack can be tried without a certificate |
 | `PMS_TRUSTED_PROXIES` | empty | the addresses or CIDR ranges of the reverse proxies whose `X-Forwarded-For` is believed (section 6.3). Empty trusts nobody. `0.0.0.0/0` is refused. The compose file gives the proxy the fixed address `172.29.0.10` and trusts exactly that |
 | `PMS_BILLING_CONTACT` | empty | free text (at most 200 characters), e.g. an e-mail and a phone number: shown to hotel administrators on Setup → Subscription as who to ask about renewing. Empty leaves the line out |
@@ -79,6 +81,10 @@ The API reads its settings from the environment (`internal/platform/config`); no
 **Frontend API URL.** The single-page app calls `/api/...` on the origin it was loaded from. There is no build-time URL to configure; where the API is (host and port) is the `API_UPSTREAM` variable of the proxy container (default `api:8080`, the compose service). Moving the API means changing that one variable, not rebuilding the page.
 
 **Secrets.** Never in an image, never in git (`.env` and `deploy/.env` are ignored; only the `.example` files are tracked). On a server give the compose file its values from the environment of the machine or from the secret store of your platform; the compose file uses `${VAR:?message}` for the two that are required, so it refuses to start without them.
+
+### The first sign-in of an operator
+
+Until an operator signs in the first time, the password alone is enough to enrol an authenticator (trust on first use). So: send the password printed by `pms-admin create-operator` through a channel other than the one that carries the console address; the operator enrols right away (`pms-admin list-operators` shows TOTP `false` until then); and if the password may have leaked before that, run `pms-admin reset-operator-password -email EMAIL` and `pms-admin reset-operator-totp -email EMAIL`, then deliver the new password again.
 
 ## 4. Database setup
 
@@ -242,7 +248,7 @@ Nothing in the stack changes; the checklist is:
 
 1. A machine with Docker, a firewall that opens 80 and 443 (and your admin port) only. Do not open 5432 or 8080: the database and the API are on a private network and must stay there.
 2. Copy the repository (or build the two images in CI and push them to a registry, then replace `build:` by `image:` in the compose file).
-3. `deploy/.env` with new secrets (`POSTGRES_PASSWORD`, `PMS_JWT_SECRET`), `PMS_BIND=0.0.0.0`, `PMS_PUBLIC_PORT=80`, `PMS_PUBLIC_TLS_PORT=443`.
+3. `deploy/.env` with new secrets (`POSTGRES_PASSWORD`, `PMS_JWT_SECRET`, and `PMS_OPERATOR_TOTP_KEY` if the platform console is used: keep a copy of it in the secret store, then `pms-admin create-operator`), `PMS_BIND=0.0.0.0`, `PMS_PUBLIC_PORT=80`, `PMS_PUBLIC_TLS_PORT=443`.
 4. A certificate for your host name in `deploy/certs/` and the TLS file (option A), or a TLS balancer in front (option B).
 5. `docker compose ... up -d`, create the first tenant and administrator, run `scripts/prod-smoke.sh` against the public address (`PMS_SMOKE_URL=https://...`, with `SMOKE_NETWORK_TESTS=0` unless you run it on the host).
 6. Before the first night audit: ask `GET /api/v1/properties/{id}/accounting/readiness` (accounting.view): it must say `READY`. The night audit asks the same question and **refuses to close a day** while it says `NOT_READY` (`409 NIGHT_AUDIT_BLOCKED`, `blockers.accounting_readiness`; the blocker codes are in audit F-15). Also: backups scheduled and watched, one restore rehearsed on the production data (backup-restore.md, section 12).

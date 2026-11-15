@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -16,6 +17,9 @@ import (
 )
 
 const tokenIssuer = "kamarapms"
+
+// tokenAudience is the audience a hotel token may name; a token of ours has none. A token for the platform console names "platform" and is refused here.
+const tokenAudience = "hotel"
 
 // TokenConfig configures access and refresh tokens.
 type TokenConfig struct {
@@ -75,6 +79,10 @@ func (t tokens) parseAccess(raw string) (userID int64, claims accessClaims, err 
 	}
 	if err != nil {
 		return 0, accessClaims{}, apperr.Unauthorized("TOKEN_INVALID", "the access token is invalid").WithCause(err)
+	}
+	// Defence in depth (doc 39 F6): the issuer already tells a platform token from ours; a token that names an audience must name the hotel.
+	if len(claims.Audience) > 0 && !slices.Contains(claims.Audience, tokenAudience) {
+		return 0, accessClaims{}, apperr.Unauthorized("TOKEN_INVALID", "the access token is invalid")
 	}
 	userID, err = strconv.ParseInt(claims.Subject, 10, 64)
 	if err != nil || userID < 1 || claims.TenantID < 1 || claims.SessionID < 1 {

@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -48,7 +49,11 @@ type Config struct {
 	SMTPTLS         string        // PMS_SMTP_TLS: starttls (default), tls or none
 	SMTPMaxBytes    int           // PMS_SMTP_MAX_BYTES: the largest message sent, default 7340032 (7 MB); a night audit pack larger than this goes in several messages
 	BillingContact  string        // PMS_BILLING_CONTACT: free text on the tenant's Subscription page (who to ask about renewing), at most 200 characters; empty leaves it out
-	RateLimit       int           // PMS_RATE_LIMIT_PER_MINUTE: requests a minute per client address, default 600, 0 disables
+	// OperatorTOTPKey is PMS_OPERATOR_TOTP_KEY: the AES-256 key (base64 of 32 bytes) of the operators' TOTP secrets. Unset, the platform console is off (docs/architecture/39-platform-console.md P1).
+	OperatorTOTPKey    []byte
+	OperatorAccessTTL  time.Duration // PMS_OPERATOR_ACCESS_TTL, default 10m, at most 15m
+	OperatorRefreshTTL time.Duration // PMS_OPERATOR_REFRESH_TTL, default 12h (absolute), at most 24h
+	RateLimit          int           // PMS_RATE_LIMIT_PER_MINUTE: requests a minute per client address, default 600, 0 disables
 	// TrustedProxies is PMS_TRUSTED_PROXIES: the addresses (or CIDR ranges) of the reverse proxies whose X-Forwarded-For is believed. Empty, the default, trusts nobody:
 	// the client is the peer of the connection and the header is ignored.
 	TrustedProxies []netip.Prefix
@@ -140,6 +145,22 @@ func LoadFrom(lookup func(string) (string, bool)) (Config, error) {
 	cfg.BillingContact = strings.TrimSpace(get("PMS_BILLING_CONTACT", ""))
 	if utf8.RuneCountInString(cfg.BillingContact) > 200 {
 		errs = append(errs, errors.New("PMS_BILLING_CONTACT: at most 200 characters"))
+	}
+
+	if raw := get("PMS_OPERATOR_TOTP_KEY", ""); raw != "" {
+		key, err := ParseOperatorKey(raw)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("PMS_OPERATOR_TOTP_KEY: %w (e.g. openssl rand -base64 32)", err))
+		}
+		cfg.OperatorTOTPKey = key
+	}
+	cfg.OperatorAccessTTL = positiveDuration(get, "PMS_OPERATOR_ACCESS_TTL", "10m", &errs)
+	cfg.OperatorRefreshTTL = positiveDuration(get, "PMS_OPERATOR_REFRESH_TTL", "12h", &errs)
+	if cfg.OperatorAccessTTL > 15*time.Minute {
+		errs = append(errs, errors.New("PMS_OPERATOR_ACCESS_TTL: at most 15m"))
+	}
+	if cfg.OperatorRefreshTTL > 24*time.Hour {
+		errs = append(errs, errors.New("PMS_OPERATOR_REFRESH_TTL: at most 24h"))
 	}
 
 	cfg.SMTPHost = get("PMS_SMTP_HOST", "")
@@ -259,4 +280,25 @@ func (c Config) RedactedDatabaseURL() string {
 		return "(redacted)"
 	}
 	return u.Redacted()
+}
+
+// OperatorKeyLength is the length of PMS_OPERATOR_TOTP_KEY in bytes: AES-256.
+const OperatorKeyLength = 32
+
+// ParseOperatorKey reads a key of the operators' TOTP secrets: the base64 of exactly 32 bytes (the standard or the URL alphabet, with or without padding).
+func ParseOperatorKey(s string) ([]byte, error) {
+	var b []byte
+	var err error
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		if b, err = enc.DecodeString(s); err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return nil, errors.New("not base64")
+	}
+	if len(b) != OperatorKeyLength {
+		return nil, fmt.Errorf("must be %d bytes, not %d", OperatorKeyLength, len(b))
+	}
+	return b, nil
 }

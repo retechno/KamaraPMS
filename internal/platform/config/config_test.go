@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bytes"
+	"encoding/base64"
 	"log/slog"
 	"strings"
 	"testing"
@@ -248,5 +250,48 @@ func TestBillingContactSetting(t *testing.T) {
 	}
 	if _, err := with(strings.Repeat("é", 200)); err != nil {
 		t.Fatalf("200 characters are fine: %v", err)
+	}
+}
+
+func TestOperatorSettings(t *testing.T) {
+	base := map[string]string{"PMS_DATABASE_URL": "postgres://pms:secret@localhost:5432/pms", "PMS_JWT_SECRET": strings.Repeat("s", 32)}
+	with := func(kv ...string) map[string]string {
+		m := map[string]string{}
+		for k, v := range base {
+			m[k] = v
+		}
+		for i := 0; i < len(kv); i += 2 {
+			m[kv[i]] = kv[i+1]
+		}
+		return m
+	}
+	// unset: the console is off, with the defaults of the lifetimes
+	cfg, err := LoadFrom(env(base))
+	if err != nil || cfg.OperatorTOTPKey != nil || cfg.OperatorAccessTTL != 10*time.Minute || cfg.OperatorRefreshTTL != 12*time.Hour {
+		t.Fatalf("defaults: %+v %v", cfg, err)
+	}
+	// a key of 32 bytes, in any base64
+	raw := bytes.Repeat([]byte{4}, 32)
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		cfg, err := LoadFrom(env(with("PMS_OPERATOR_TOTP_KEY", enc.EncodeToString(raw))))
+		if err != nil || !bytes.Equal(cfg.OperatorTOTPKey, raw) {
+			t.Fatalf("a key in %v: %v", enc, err)
+		}
+	}
+	// refused at start-up: not base64, the wrong length, lifetimes over the limits
+	for name, m := range map[string]map[string]string{
+		"PMS_OPERATOR_TOTP_KEY":     with("PMS_OPERATOR_TOTP_KEY", "not base64 !!"),
+		"PMS_OPERATOR_TOTP_KEY ":    with("PMS_OPERATOR_TOTP_KEY", base64.StdEncoding.EncodeToString(raw[:16])),
+		"PMS_OPERATOR_ACCESS_TTL":   with("PMS_OPERATOR_ACCESS_TTL", "16m"),
+		"PMS_OPERATOR_REFRESH_TTL":  with("PMS_OPERATOR_REFRESH_TTL", "25h"),
+		"PMS_OPERATOR_REFRESH_TTL ": with("PMS_OPERATOR_REFRESH_TTL", "soon"),
+	} {
+		if _, err := LoadFrom(env(m)); err == nil || !strings.Contains(err.Error(), strings.TrimSpace(name)) {
+			t.Errorf("%s: want a refusal naming it, got %v", name, err)
+		}
+	}
+	// the limits themselves are allowed
+	if _, err := LoadFrom(env(with("PMS_OPERATOR_ACCESS_TTL", "15m", "PMS_OPERATOR_REFRESH_TTL", "24h"))); err != nil {
+		t.Fatalf("15m and 24h are the limits: %v", err)
 	}
 }

@@ -3256,6 +3256,49 @@ SELECT expect_ok('the history keeps the address after the recipient is deleted (
     $q$DELETE FROM nap_recipients$q$, $q$SELECT 1 / (SELECT count(*)::int FROM email_outbox WHERE kind = 'NIGHT_AUDIT_PACK' AND to_address = 'gm@example.test')$q$);
 
 ------------------------------------------------------------------------------------------
+-- Platform operators (migration 00100)
+------------------------------------------------------------------------------------------
+CREATE FUNCTION pms_test.operator(p_email text DEFAULT 'op@example.test') RETURNS void
+LANGUAGE sql AS $f$ INSERT INTO operator_accounts (email, full_name, password_hash) VALUES (p_email, 'Op', 'hash') $f$;
+
+SELECT expect_ok('an operator account starts without TOTP', $q$SELECT pms_test.operator()$q$);
+SELECT expect_error('an operator e-mail is unique whatever its case', '23505', $q$SELECT pms_test.operator('op@example.test')$q$, $q$SELECT pms_test.operator('OP@Example.Test')$q$);
+SELECT expect_error('a TOTP secret comes with its enrolment time', '23514', $q$SELECT pms_test.operator()$q$,
+    $q$UPDATE operator_accounts SET totp_secret_enc = '\x01'$q$);
+SELECT expect_error('an enrolment time comes with a TOTP secret', '23514', $q$SELECT pms_test.operator()$q$,
+    $q$UPDATE operator_accounts SET totp_enrolled_at = now()$q$);
+SELECT expect_ok('a TOTP secret and its enrolment time together', $q$SELECT pms_test.operator()$q$,
+    $q$UPDATE operator_accounts SET totp_secret_enc = '\x01', totp_enrolled_at = now()$q$);
+SELECT expect_error('a recovery code is once per operator', '23505', $q$SELECT pms_test.operator()$q$,
+    $q$INSERT INTO operator_recovery_codes (operator_id, code_hash) SELECT id, '\xab' FROM operator_accounts$q$,
+    $q$INSERT INTO operator_recovery_codes (operator_id, code_hash) SELECT id, '\xab' FROM operator_accounts$q$);
+SELECT expect_error('a challenge is for verifying or enrolling', '23514', $q$SELECT pms_test.operator()$q$,
+    $q$INSERT INTO operator_login_challenges (operator_id, token_hash, purpose, expires_at) SELECT id, '\x01', 'OTHER', now() FROM operator_accounts$q$);
+SELECT expect_error('a challenge token is unique', '23505', $q$SELECT pms_test.operator()$q$,
+    $q$INSERT INTO operator_login_challenges (operator_id, token_hash, purpose, expires_at) SELECT id, '\x01', 'VERIFY', now() FROM operator_accounts$q$,
+    $q$INSERT INTO operator_login_challenges (operator_id, token_hash, purpose, expires_at) SELECT id, '\x01', 'ENROLL', now() FROM operator_accounts$q$);
+SELECT expect_error('a revoked operator session says why', '23514', $q$SELECT pms_test.operator()$q$,
+    $q$INSERT INTO operator_sessions (operator_id, refresh_token_hash, expires_at, revoked_at) SELECT id, '\x01', now(), now() FROM operator_accounts$q$);
+SELECT expect_error('an operator session is revoked for a known reason', '23514', $q$SELECT pms_test.operator()$q$,
+    $q$INSERT INTO operator_sessions (operator_id, refresh_token_hash, expires_at, revoked_at, revoked_reason) SELECT id, '\x01', now(), now(), 'BORED' FROM operator_accounts$q$);
+SELECT expect_error('an operator session token is unique', '23505', $q$SELECT pms_test.operator()$q$,
+    $q$INSERT INTO operator_sessions (operator_id, refresh_token_hash, expires_at) SELECT id, '\x01', now() FROM operator_accounts$q$,
+    $q$INSERT INTO operator_sessions (operator_id, refresh_token_hash, expires_at) SELECT id, '\x01', now() FROM operator_accounts$q$);
+SELECT expect_ok('deleting an operator takes its sessions, challenges and codes', $q$SELECT pms_test.operator()$q$,
+    $q$INSERT INTO operator_sessions (operator_id, refresh_token_hash, expires_at) SELECT id, '\x01', now() FROM operator_accounts$q$,
+    $q$DELETE FROM operator_accounts$q$, $q$SELECT 1 / (1 - (SELECT count(*)::int FROM operator_sessions))$q$);
+SELECT expect_error('the operator audit trail cannot be changed', '23001', $q$INSERT INTO operator_audit_logs (action, entity_type, entity_id) VALUES ('operator.login', 'operator', 1)$q$,
+    $q$UPDATE operator_audit_logs SET action = 'x'$q$);
+SELECT expect_error('the operator audit trail cannot be deleted from', '23001', $q$INSERT INTO operator_audit_logs (action, entity_type, entity_id) VALUES ('operator.login', 'operator', 1)$q$,
+    $q$DELETE FROM operator_audit_logs$q$);
+SELECT expect_error('the operator audit trail cannot be truncated', '23001', $q$TRUNCATE operator_audit_logs$q$);
+SELECT expect_error('an audit row of a tenant has a user or an operator, not both', '23514',
+    $q$INSERT INTO audit_logs (tenant_id, user_id, operator_id, action, entity_type, entity_id) VALUES (tn('ABC'), 1, 1, 'subscription.changed', 'subscription', 1)$q$);
+SELECT expect_ok('an audit row of a tenant written by an operator', $q$INSERT INTO audit_logs (tenant_id, operator_id, action, entity_type, entity_id) VALUES (tn('ABC'), 1, 'subscription.changed', 'subscription', 1)$q$);
+SELECT expect_error('a suspended tenant has a reason', '23514', $q$UPDATE tenants SET status = 'SUSPENDED' WHERE id = tn('ABC')$q$);
+SELECT expect_ok('a suspended tenant with its reason', $q$UPDATE tenants SET status = 'SUSPENDED', status_reason = 'unpaid for 90 days', status_changed_at = now() WHERE id = tn('ABC')$q$);
+
+------------------------------------------------------------------------------------------
 -- Summary
 ------------------------------------------------------------------------------------------
 DO $$
