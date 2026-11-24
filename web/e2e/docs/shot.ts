@@ -36,6 +36,9 @@ async function quiet(page: Page): Promise<void> {
   await page.mouse.move(0, 0) // no hover state left on a button
 }
 
+/** The height of the sticky top bar of the shell: an element above it is hidden behind the bar. */
+const TOP_BAR = 64
+
 /** A picture of the whole window (1440×900). */
 export async function shotPage(page: Page, file: string, o: ShotOptions = {}): Promise<void> {
   await quiet(page)
@@ -49,8 +52,15 @@ export async function shot(target: Locator, file: string, o: ShotOptions = {}): 
   await expect(target).toBeVisible()
   await target.scrollIntoViewIfNeeded()
   await quiet(page)
-  const box = await target.boundingBox()
+  let box = await target.boundingBox()
   if (!box) throw new Error(`no box for the screenshot ${file}`)
+  if (box.y < TOP_BAR) { // under the sticky top bar: bring it below the bar
+    const by = box.y - TOP_BAR - 16
+    await page.evaluate((d) => window.scrollBy(0, d), by)
+    await quiet(page)
+    box = await target.boundingBox()
+    if (!box) throw new Error(`no box for the screenshot ${file}`)
+  }
   const pad = o.pad ?? 12
   const vp = page.viewportSize() ?? { width: 1440, height: 900 }
   const x = Math.max(0, Math.floor(box.x - pad))

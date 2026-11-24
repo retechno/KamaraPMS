@@ -37,9 +37,8 @@
 ## Perlu diperhatikan
 
 - **Check-out tidak memindahkan ke piutang perusahaan.** Pindahkan saldonya dulu di tab **Transfer** folio, lalu check-out.
-- **Tamu yang pulang lebih awal**: check-out memposting sendiri biaya kamar malam ini, dan wizard check-out meminta biaya itu dibayar. Pemindahan tidak boleh melebihi saldo yang sudah ada, jadi biaya malam itu belum bisa dipindahkan ke perusahaan sebelum check-out.
-
-  > ⚠️ PERLU VERIFIKASI: cara menagihkan biaya malam terakhir tamu yang pulang lebih awal ke perusahaan belum dicoba.
+- **Tamu yang pulang lebih awal** pada siang hari, setelah menginap sejak sebelum hari ini, tidak ditagih untuk malam ini. Yang dipindahkan ke perusahaan cukup saldo folio yang sudah ada. Wizard check-out lalu masih meminta biaya malam ini: lihat KD-06 di [Check-out](../01-front-desk/check-out.md).
+- **Tamu yang tiba dan pulang di hari yang sama** ditagih untuk malam ini, tetapi biayanya baru diposting saat check-out. Pemindahan tidak boleh melebihi saldo yang sudah ada, dan pemindahan hanya bisa dilakukan sebelum check-out, jadi biaya malam itu tidak bisa dipindahkan ke perusahaan. Biaya itu dibayar tamu di wizard check-out. Kalau perusahaan yang harus membayarnya, laporkan ke supervisor atau administrator, beserta nomor kamar, nama perusahaan, dan jumlahnya.
 - **"Pemindahan ini melampaui batas kredit perusahaan."**: minta manajer menaikkan batas kredit, atau tagih sebagian ke tamu.
 - **"Pemindahan melebihi saldo folio."**: jumlahnya lebih besar dari saldo.
 - **Membatalkan pemindahan**: pemindahan hari ini bisa di-**Void** dari folio dengan persetujuan, kecuali sudah dilunasi penerimaan dari perusahaan. Pemindahan hari sebelumnya dikoreksi dengan nota kredit. Lihat [Nota kredit dan penghapusan piutang](nota-kredit-dan-penghapusan-piutang.md).

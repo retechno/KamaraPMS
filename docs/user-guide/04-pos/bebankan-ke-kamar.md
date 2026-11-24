@@ -37,7 +37,7 @@
 - **Tamu grup** yang tagihannya diarahkan ke master folio: beban masuk ke master folio grup. Hasil pencarian menampilkan "ditagihkan ke grup …".
 - **Membatalkan beban ke kamar** setelah bill lunas belum bisa dilakukan dari layar. Di folio tamu, keterangan barisnya berisi nama outlet dan nomor bill, dan kodenya kode transfer `TRF`. Baris itu tidak bisa di-reverse, tidak muncul di **Kembalikan**, dan tidak bisa dikoreksi dengan **Penyesuaian** ("Kode TRF diposting oleh transfer saldo, bukan manual."). Periksa bill sebelum memilih **Bebankan ke kamar**. Kalau sudah terlanjur, laporkan ke supervisor atau administrator. Lihat [Reverse dan penyesuaian](../03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md).
 
-  > ⚠️ PERLU VERIFIKASI: **Buka kembali** bill (lihat [Void, diskon, dan komplimen](void-diskon-komplimen.md)) membuka bill lagi, tetapi layar bill tidak punya tombol untuk mengembalikan beban kamarnya. Pengembaliannya hanya ada di API.
+  > 🐞 Kendala yang diketahui (KD-02): **Buka kembali** (lihat [Void, diskon, dan komplimen](void-diskon-komplimen.md)) membuka bill lagi, tetapi tidak menarik beban kamarnya dari folio tamu, dan layar bill tidak punya tombol untuk itu. **Dampaknya:** beban yang salah tetap ada di tagihan tamu walaupun billnya sudah dibuka kembali. **Sementara ini:** belum bisa dilakukan dari layar. Laporkan ke supervisor atau administrator, beserta nomor kamar, nomor bill, dan jumlahnya.
 - Hanya tamu yang sedang menginap yang muncul di pencarian.
 
 ## Terkait

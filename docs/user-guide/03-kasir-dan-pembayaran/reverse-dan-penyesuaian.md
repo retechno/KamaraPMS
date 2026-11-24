@@ -50,14 +50,16 @@ Pembayaran yang salah dikoreksi dengan void atau refund, bukan dengan cara ini. 
 
 ## Perlu diperhatikan
 
-- **Tombol Reverse hanya muncul** untuk biaya dan penyesuaian yang diposting pada tanggal bisnis hari ini, yang belum dibalik. Untuk biaya kemarin, tombolnya tidak ada: pakai **Penyesuaian**. Kalau pembalikan dicoba dari layar lama, muncul "Hanya tanda terima pada tanggal bisnis berjalan yang bisa dibatalkan." (pesan ini juga berlaku untuk biaya, bukan hanya tanda terima).
+- **Tombol Reverse hanya muncul** untuk biaya dan penyesuaian yang diposting pada tanggal bisnis hari ini, yang belum dibalik. Untuk biaya kemarin, tombolnya tidak ada: pakai **Penyesuaian**.
+
+  > 🐞 Kendala yang diketahui (KD-08): kalau layar belum dimuat ulang setelah audit malam dan Anda mencoba me-reverse biaya kemarin, pesannya berbunyi "Hanya tanda terima pada tanggal bisnis berjalan yang bisa dibatalkan.". Pesan yang sama muncul saat membatalkan pembayaran kemarin. **Dampaknya:** pesan itu menyebut tanda terima, padahal yang ditolak adalah biaya atau pembayaran dari hari sebelumnya. **Sementara ini:** muat ulang halaman folio, lalu koreksi biayanya dengan **Penyesuaian**. Untuk pembayaran, lihat [Void dan refund](void-dan-refund.md).
 - **Kredit penyesuaian tidak boleh melebihi yang sudah diposting** pada kode biaya itu di folio ini: "Kredit melebihi yang sudah diposting pada kode biaya ini di folio.".
 - **"Kode biaya ini belum punya posting di folio: posting biaya, bukan penyesuaian."** berarti yang Anda tambahkan sebenarnya biaya baru. Gunakan [Memposting biaya ke folio](posting-biaya-ke-folio.md).
 - **Biaya kamar yang di-reverse** muncul lagi sebagai malam yang siap diposting di halaman **Biaya kamar**, jadi bisa tertagih lagi. Untuk mengurangi biaya kamar satu malam (misalnya tamu mendapat potongan atau malam gratis), gunakan **Penyesuaian**. Lihat [Posting biaya kamar](posting-biaya-kamar.md).
 - **Biaya yang datang dari transfer** tidak di-reverse: "Biaya hasil transfer tidak di-reverse: kembalikan dengan Kembalikan (di folio asalnya, Tampilkan yang ditransfer).". Lihat [Transfer antar folio](transfer-antar-folio.md).
   - **Kecuali biaya dari POS** (**Bebankan ke kamar**). Baris itu tidak bisa dikembalikan dengan **Kembalikan**: tidak muncul di **Tampilkan yang ditransfer** folio tamu, dan bill outletnya sudah tertutup. Baris itu juga tidak bisa dikoreksi dengan **Penyesuaian**, karena kodenya `TRF` dan kode itu ditolak: "Kode TRF diposting oleh transfer saldo, bukan manual.". Lihat [Bebankan ke kamar](../04-pos/bebankan-ke-kamar.md).
 
-    > ⚠️ PERLU VERIFIKASI: belum ada cara di layar untuk membatalkan beban POS di folio tamu setelah bill lunas. Pengembaliannya hanya ada di API (`room-charges/{id}/return`, setelah bill dibuka kembali). Laporkan ke supervisor atau administrator.
+    > 🐞 Kendala yang diketahui (KD-01): beban POS yang sudah masuk folio tamu belum bisa dibatalkan dari layar setelah bill outletnya lunas. **Dampaknya:** kalau beban salah, atau masuk ke kamar yang salah, tagihan tamu tetap memuat beban itu. **Sementara ini:** belum bisa dilakukan dari layar. Laporkan ke supervisor atau administrator sebelum tamu check-out, beserta nomor kamar, nomor bill, dan jumlahnya.
 - **Penyetuju salah memasukkan kata sandi?** Jendela tetap terbuka dengan pesan "Email atau kata sandi penyetuju salah.". Ulangi.
 - **"Aturan properti ini meminta penyetuju selain orang yang membuat perubahan."** berarti Anda tidak boleh menyetujui koreksi Anda sendiri. Minta orang lain. Aturan ini diatur di [Aturan persetujuan](../13-pengaturan/aturan-persetujuan.md).
 

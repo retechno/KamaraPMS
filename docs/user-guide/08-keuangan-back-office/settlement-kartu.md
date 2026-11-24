@@ -51,9 +51,9 @@ Pembayaran kartu, e-wallet, dan QRIS dari tamu ditampung di akun penampung sampa
 
 > ⚠️ Penting: settlement tidak bisa dibatalkan atau dikoreksi, dan setiap pembayaran hanya bisa diselesaikan sekali. Periksa centang pembayaran dan komisinya sebelum mengklik **Selesaikan dan cocokkan**.
 
-- **Pembayaran muncul di sini** setelah hari bisnisnya ditutup audit malam beserta jurnalnya.
+- **Pembayaran muncul di sini** setelah audit malam menutup hari bisnisnya. Pembayaran hari ini belum terlihat. Pembayaran kartu dari POS, dari penerimaan piutang perusahaan, dan dari deposit banquet juga ikut. Pembayaran yang di-void tidak pernah muncul. Refund ke kartu muncul sebagai baris minus setelah harinya ditutup.
 
-  > ⚠️ PERLU VERIFIKASI: kapan tepatnya pembayaran kartu masuk ke daftar **Belum dibayar** belum dipastikan dari kode jurnal penutupan hari.
+  > 🐞 Kendala yang diketahui (KD-05): settlement yang sudah dicatat tidak bisa dibatalkan. Kalau pasangan barisnya dilepas ("batalkan") di halaman rekonsiliasi, jurnalnya tetap ada, dan baris rekening koran itu tidak bisa diselesaikan lagi. **Dampaknya:** settlement yang salah (pembayaran atau komisi yang keliru) tetap tercatat di buku besar. **Sementara ini:** belum bisa dibetulkan dari layar. Laporkan ke manajer keuangan, yang bisa membalik jurnalnya di [Jurnal manual dan pembalikan](../07-accounting/jurnal-manual-dan-pembalikan.md). Periksa centang dan komisi sebelum menyimpan.
 
 - **Aturan fee tidak bisa diubah atau dihapus.** Untuk tarif baru, tambahkan aturan baru dengan tanggal mulai yang lebih baru. Setiap pembayaran menyimpan tarif pada harinya.
 - **Pembayaran sebelum ada aturan** tidak punya perkiraan fee.

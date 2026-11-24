@@ -1753,3 +1753,1505 @@ export async function flowAnggaran(page: Page, loginAs: LoginAs, seed: SeedState
   await expect(page.getByTestId('report')).toBeVisible()
   await shotAround([page.locator('main h1'), page.getByTestId('report')], 'anggaran-realisasi-08')
 }
+
+// --- 10-aset-tetap (the tenant admin: no E2E role holds asset.*; pms-seed assets ran in the E2E setup)
+
+async function openAsset(page: Page, name: string): Promise<void> {
+  await page.goto('/assets')
+  await page.getByTestId('filter-q').fill(name)
+  await page.getByTestId('filter-q').press('Enter')
+  await page.getByTestId('asset-table').getByRole('link', { name }).first().click()
+  await expect(page.locator('main h1')).toContainText(name)
+}
+
+export async function flowDaftarTunggu(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Aset tetap → Daftar tunggu
+  await loginAs('admin', '/assets/waiting')
+  const table = page.getByTestId('waiting-table')
+  await expect(table).toBeVisible()
+  await shot(table, 'aset-tunggu-01')
+  // STEP 2-4: Jadikan aset on the restaurant chairs, twelve units
+  const row = table.locator('[data-testid^="line-"]').filter({ hasText: 'Kursi restoran' }).first()
+  await row.locator('[data-testid^="make-"]').click()
+  const dlg = page.getByTestId('make-dialog')
+  await dlg.locator('input[name=name]').fill('Kursi restoran')
+  await dlg.locator('input[name=units]').fill('12')
+  await expect(dlg.getByTestId('make-units')).toBeVisible()
+  await shot(dlg, 'aset-tunggu-04')
+  await dlg.getByTestId('make-confirm').click()
+  await expect(page.getByTestId('toast-success').first()).toBeVisible()
+  // STEP 5-6: the register
+  await page.goto('/assets')
+  await expect(page.getByTestId('asset-table')).toBeVisible()
+  await shotPage(page, 'aset-register-06')
+}
+
+export async function flowSaldoAwalAset(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Aset tetap → Saldo awal aset, one old asset
+  await loginAs('admin', '/assets/opening')
+  await page.getByTestId('toggle-single').click()
+  const form = page.getByTestId('opening-form')
+  await setDate(form, 'as_of', '2026-10-31')
+  const single = page.getByTestId('single-form')
+  await single.locator('input[name=name]').fill('Meja resepsionis')
+  await single.locator('select[name=category]').selectOption('FFE')
+  await single.locator('input[name=cost]').fill('15000000')
+  await setDate(single, 'acquisition_date', '2024-01-02')
+  await setDate(single, 'in_service_date', '2024-01-02')
+  await single.locator('input[name=accumulated_depreciation]').fill('5312500')
+  await single.locator('input[name=months_done]').fill('34')
+  await shotAround([page.locator('main h1'), page.getByTestId('opening-form')], 'aset-saldoawal-03')
+  // STEP 4-5: Periksa (uji coba), then Impor
+  await page.getByTestId('dry-run').click()
+  const result = page.getByTestId('opening-result')
+  await expect(page.getByTestId('confirm-import')).toBeEnabled()
+  await shot(result, 'aset-saldoawal-05')
+  await page.getByTestId('confirm-import').click()
+  await expect(page).toHaveURL(/\/assets$/)
+}
+
+export async function flowPindahAset(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: the asset page
+  await loginAs('admin')
+  await openAsset(page, 'Sofa lobi')
+  await shotPage(page, 'aset-detail-01')
+  // STEP 2-3: Pindahkan to the front office
+  await page.getByTestId('act-move').click()
+  const dlg = page.getByTestId('move-dialog')
+  await dlg.getByTestId('move-location-on').check()
+  await selectContaining(dlg.getByTestId('move-location'), 'KANTOR')
+  await dlg.locator('input[name=reason], textarea[name=reason]').fill('Lobi direnovasi, sofa sementara di kantor depan')
+  await shot(dlg, 'aset-pindah-03')
+  await dlg.getByTestId('move-confirm').click()
+  await expect(page.getByTestId('toast-success').first()).toBeVisible()
+  // STEP 5-6: Ubah umur / nilai sisa / metode (shown, not saved)
+  await page.getByTestId('act-terms').click()
+  const rev = page.getByTestId('revise-dialog')
+  await rev.getByTestId('revise-kind').selectOption('LIFE')
+  await rev.getByTestId('revise-life').fill('120')
+  await rev.locator('input[name=reason], textarea[name=reason]').fill('Masih layak pakai lebih lama dari perkiraan')
+  await shot(rev, 'aset-ubah-06')
+  await page.keyboard.press('Escape')
+}
+
+export async function flowPenyusutan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Aset tetap → Penyusutan, the preview of November (not ended yet in the E2E world)
+  await loginAs('admin', '/assets/depreciation')
+  await page.getByTestId('month-2026-11').click()
+  const preview = page.getByTestId('depr-preview')
+  await expect(preview).toBeVisible()
+  await expect(page.getByTestId('depr-journal')).toBeVisible()
+  await shot(preview, 'aset-penyusutan-02')
+}
+
+export async function flowPelepasanAset(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-3: Lepas / jual: the car is sold
+  await loginAs('admin')
+  await openAsset(page, 'Toyota Innova')
+  await page.getByTestId('act-dispose').click()
+  const dlg = page.getByTestId('dispose-dialog')
+  await dlg.getByTestId('dispose-sale').check()
+  await dlg.getByTestId('dispose-price').fill('300000000')
+  await selectContaining(dlg.getByTestId('dispose-account'), '1130')
+  await expect(dlg.getByTestId('dispose-journal')).toBeVisible()
+  await tallWindow(page, 1600, () => shot(dlg, 'aset-lepas-03', { pad: 0 }))
+  await dlg.getByTestId('dispose-confirm').click()
+  await expect(page.getByTestId('toast-success').first()).toBeVisible()
+  // STEP 5-6: Pelepasan aset: the request of the asset clerk waits for a decision
+  await page.goto('/assets/disposals')
+  const pending = page.getByTestId('pending-list')
+  await expect(pending).toBeVisible()
+  await shotAround([page.getByTestId('tab-pending'), pending], 'aset-lepas-06')
+  const approveBtn = pending.locator('[data-testid^="approve-"]').first()
+  if (await approveBtn.count()) {
+    await approveBtn.click()
+    await expect(page.getByTestId('toast-success').first()).toBeVisible()
+  }
+  // STEP 8: the posted disposals
+  await page.getByTestId('tab-disposals').click()
+  const list = page.getByTestId('disposal-list')
+  await expect(list).toBeVisible()
+  await shotAround([page.getByTestId('tab-disposals'), list], 'aset-lepas-08')
+}
+
+export async function flowOpnameAset(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Label QR
+  await loginAs('admin', '/assets/labels')
+  await expect(page.getByTestId('labels-print')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('labels-print')], 'aset-label-02')
+  // STEP 4: Opname aset: the list
+  await page.goto('/assets/audits')
+  const audits = page.getByTestId('asset-audits')
+  await expect(audits.locator('[data-testid^="audit-"]').first()).toBeVisible()
+  await shotPage(page, 'aset-opname-04')
+  // STEP 5-6: the open stock-take of the demo data
+  await audits.locator('li[data-testid^="audit-"]').first().getByRole('link').click()
+  await expect(page.getByTestId('asset-audit')).toBeVisible()
+  await expect(page.getByTestId('audit-counts')).toBeVisible()
+  await shotPage(page, 'aset-opname-06')
+}
+
+export async function flowLaporanAset(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Aset tetap → Laporan aset
+  await loginAs('admin', '/assets/reports')
+  await expect(page.getByTestId('report-register')).toBeVisible()
+  await shotPage(page, 'aset-laporan-01')
+  // STEP 2-3: the register on a date
+  await page.getByTestId('report-register').click()
+  await page.getByTestId('report-run').click()
+  const table = page.getByTestId('register-table')
+  await expect(table).toBeVisible()
+  await shotAround([table], 'aset-laporan-03')
+}
+
+// --- 09-inventory. The tenant admin drives the screens (no E2E role holds inventory.manage, request, purchase, receive, move or count). Where a
+// document needs a second person (nobody approves a document of their own, the administrator included), the approvers of the seed decide:
+// invHead (head of every department, level 1), invCost (level 2 of a purchase request), invFinal (last level of a store requisition) and
+// invApprover (a count). pms-seed inventory ran without its purchasing demo (one administrator) and without the open count, so the supplier,
+// the requests and the order are made here, in the order of the tests: "09 penerimaan" receives the order of "09 permintaan pembelian".
+// A count opened here is approved, or cancelled, before its flow ends: an open count holds the night audit.
+
+type ApiAs = (user: UserKey) => Promise<Factories['api']>
+
+const INV_SUPPLIER = { code: 'SUMBER', name: 'CV Sumber Segar' }
+const INV_ITEM = { code: 'KAPORIT', name: 'Kaporit kolam renang' }
+const INV_CATEGORY = { code: 'KIMIA', name: 'Bahan kimia kolam' }
+
+interface InvRow { id: number; code: string; name: string }
+
+/** The rows of an inventory list ({ data } or, for the items, { items }). */
+async function invRows<T>(data: Factories, path: string, query: Record<string, string | number | boolean> = {}): Promise<T[]> {
+  const r = await data.api.get<{ data?: T[]; items?: T[] }>(`${data.P}${path}`, { limit: 200, ...query })
+  return r.data ?? r.items ?? []
+}
+
+async function invByCode(data: Factories, path: string, code: string): Promise<InvRow> {
+  const rows = await invRows<InvRow>(data, path, path === '/inventory/items' ? { q: code } : {})
+  const row = rows.find((r) => r.code === code)
+  if (!row) throw new Error(`${path}: ${code} not found`)
+  return row
+}
+
+/** The unit of an item by its code (karton, kg): the units of an item come with its detail. */
+async function invUnit(data: Factories, itemId: number, unitCode: string): Promise<number> {
+  const it = await data.api.get<{ units: { unit_id: number; unit_code: string }[] }>(`${data.P}/inventory/items/${itemId}`)
+  const u = it.units.find((x) => x.unit_code === unitCode)
+  if (!u) throw new Error(`item ${itemId} has no unit ${unitCode}`)
+  return u.unit_id
+}
+
+/** The supplier of the purchasing pages: pms-seed makes it only with its purchasing demo, which needs three administrators. */
+async function invSupplier(data: Factories): Promise<number> {
+  const find = async () => (await invRows<InvRow>(data, '/inventory/suppliers')).find((s) => s.code === INV_SUPPLIER.code)
+  const found = await find()
+  if (found) return found.id
+  await data.api.post(`${data.P}/payables/suppliers`, { code: INV_SUPPLIER.code, name: INV_SUPPLIER.name, contact_name: 'Bu Ratna', city: 'Denpasar', payment_terms_days: 30 })
+  const made = await find()
+  if (!made) throw new Error('the supplier SUMBER was not made')
+  return made.id
+}
+
+/** Lets the item details a line asked for come back (a line sets its unit, price and supplier when its item answers). */
+async function invSettle(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => { /* the shell polls: never idle for long */ })
+}
+
+/** Toasts left by an earlier step (they would cover the picture). */
+async function closeToasts(page: Page): Promise<void> {
+  const close = page.getByTestId('toast-close')
+  for (let i = await close.count(); i > 0; i--) await close.first().click().catch(() => undefined)
+  await expect(page.getByTestId('toast-success')).toHaveCount(0, { timeout: 10_000 }).catch(() => undefined)
+}
+
+/** A picture of something taller than the window: the window grows for the picture, then goes back to 1440×900. */
+async function tallWindow(page: Page, height: number, take: () => Promise<void>, width?: number): Promise<void> {
+  const vp = page.viewportSize() ?? { width: 1440, height: 900 }
+  await page.setViewportSize({ width: width ?? vp.width, height })
+  try {
+    await take()
+  } finally {
+    await page.setViewportSize(vp)
+  }
+}
+
+/** Fills line i of a document: the item (by its code), then its unit (by its exact label) once the item has answered. */
+async function invLine(page: Page, form: Locator, i: number, item: string, unit: string | null, qty: string): Promise<void> {
+  if (!(await form.locator(`select[name=item_${i}]`).count())) await form.getByTestId('line-add').click()
+  await expect(form.locator(`select[name=item_${i}]`)).toBeVisible()
+  await invSettle(page)
+  await selectContaining(form.locator(`select[name=item_${i}]`), `${item} ·`)
+  await invSettle(page)
+  if (unit) {
+    const u = form.locator(`select[name=unit_${i}]`)
+    await expect(u.locator('option', { hasText: unit }).first()).toBeAttached()
+    await selectContaining(u, unit) // the label carries more than the unit name (e.g. "karung (25 kg)")
+  }
+  await form.locator(`input[name=qty_${i}]`).fill(qty)
+}
+
+/** 09-inventory/menyiapkan-persediaan.md */
+export async function flowMenyiapkanPersediaan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Persediaan → Harga pokok: the method (locked by the opening stock of the seed) and the setup check
+  await loginAs('admin', '/inventory/costing')
+  await expect(page.getByTestId('method-AVERAGE')).toBeVisible()
+  await expect(page.getByTestId('setup')).toBeVisible()
+  await shotAround([page.getByTestId('method'), page.getByTestId('setup')], 'inventaris-siapkan-02')
+  // STEP 4-5: Satuan → Satuan baru: the jerrycan
+  await page.goto('/inventory/units')
+  await page.getByTestId('unit-new').click()
+  const unit = page.getByTestId('unit-form')
+  await unit.locator('input[name=code]').fill('jrg')
+  await unit.locator('input[name=name]').fill('Jeriken')
+  await shot(unit, 'inventaris-siapkan-05')
+  await page.getByTestId('unit-save').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 6-8: Kategori & akun → Kategori baru: the pool chemicals (the item of the next page goes into it)
+  await page.goto('/inventory/categories')
+  await page.getByTestId('category-new').click()
+  const cat = page.getByTestId('category-form')
+  await cat.locator('input[name=code]').fill(INV_CATEGORY.code)
+  await cat.locator('input[name=name]').fill(INV_CATEGORY.name)
+  await cat.locator('select[name=kind]').selectOption('SUPPLIES')
+  await selectContaining(cat.locator('select[name=inventory_account_id]'), '1330 ·')
+  await shot(cat, 'inventaris-siapkan-07')
+  await page.getByTestId('category-save').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 9-10: back on Harga pokok, the setup check and the queue of the POS sales
+  await page.goto('/inventory/costing')
+  await expect(page.getByTestId('queue')).toBeVisible()
+}
+
+/** 09-inventory/barang-gudang-dan-saldo-awal.md */
+export async function flowBarangGudang(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-3: Barang & stok → Barang baru, kept in kg and bought in sacks of 25 kg
+  await loginAs('admin', '/inventory/items')
+  await page.getByTestId('item-new').click()
+  const form = page.getByTestId('item-form')
+  await form.locator('input[name=code]').fill(INV_ITEM.code)
+  await form.locator('input[name=name]').fill(INV_ITEM.name)
+  await selectContaining(form.locator('select[name=category_id]'), `${INV_CATEGORY.name} (`)
+  await selectContaining(form.locator('select[name=stock_unit_id]'), 'kg ·')
+  await form.locator('input[name=reference_cost]').fill('32000')
+  await form.getByTestId('unit-add').click()
+  const row = form.getByTestId('unit-row-0')
+  await selectContaining(row.locator('select[name=unit_0]'), 'karung ·')
+  await row.locator('input[name=num_0]').fill('25')
+  await row.locator('input[name=den_0]').fill('1')
+  // the dot does not stay drawn after the click (the choice itself is kept: KD in barang-gudang-dan-saldo-awal.md)
+  await row.getByRole('radio', { name: tx('inventory.itemForm.defaultPurchase') }).click()
+  await shot(form, 'inventaris-barang-03')
+  // STEP 4: Simpan
+  await page.getByTestId('item-save').click()
+  await expect(page).toHaveURL(/\/inventory\/items\/\d+$/)
+  // STEP 5-7: Gudang → UTAMA, its minimum level for the new item
+  await page.goto('/inventory/warehouses')
+  await page.getByTestId('warehouse-UTAMA').getByRole('link', { name: 'UTAMA' }).click()
+  const levels = page.getByTestId('levels')
+  await expect(levels).toBeVisible()
+  await invSettle(page)
+  await levels.getByTestId('level-add').click()
+  const i = (await levels.locator('tr[data-testid^="level-"]').count()) - 1
+  await selectContaining(levels.locator(`select[name=level_item_${i}]`), `${INV_ITEM.code} ·`)
+  await levels.locator(`input[name=min_${i}]`).fill('50')
+  await levels.locator(`input[name=max_${i}]`).fill('150')
+  await levels.locator(`input[name=reorder_${i}]`).fill('100')
+  await levels.locator(`tr[data-testid="level-${i}"]`).scrollIntoViewIfNeeded()
+  await shot(levels, 'inventaris-barang-07')
+  await levels.getByTestId('levels-save').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 8-9: Saldo awal → Saldo awal baru, 40 kg in the main store
+  await page.goto('/inventory/openings/new')
+  const op = page.getByTestId('opening-form')
+  await selectContaining(op.locator('select[name=warehouse_id]'), 'UTAMA ·')
+  await invLine(page, op, 0, INV_ITEM.code, 'kg', '40')
+  await op.locator('input[name=cost_0]').fill('32000')
+  await expect(op.getByTestId('line-value-0')).not.toBeEmpty()
+  await shot(op, 'inventaris-barang-09')
+  // STEP 10: Posting saldo awal
+  await page.getByTestId('opening-post').click()
+  await expect(page).toHaveURL(/\/inventory\/openings\/\d+$/)
+  await expect(page.getByTestId('opening-posted')).toBeVisible()
+  // STEP 11: the item on Barang & stok, its side panel
+  await page.goto('/inventory/items')
+  await page.getByTestId('item-search').fill(INV_ITEM.code)
+  await page.getByTestId(`item-${INV_ITEM.code}`).click()
+  await expect(page.getByTestId('item-panel')).toBeVisible()
+}
+
+/** 09-inventory/permintaan-dan-pesanan-pembelian.md */
+export async function flowPermintaanPembelian(page: Page, loginAs: LoginAs, data: Factories, apiAs: ApiAs): Promise<void> {
+  await invSupplier(data)
+  // STEP 1-3: Pembelian → Permintaan baru, the weekly rice and oil of the kitchen
+  await loginAs('admin', '/inventory/purchasing')
+  await page.getByTestId('request-new').click()
+  const form = page.getByTestId('request-form')
+  await expect(form).toBeVisible()
+  await selectContaining(form.locator('select[name=department_id]'), 'FB ·')
+  await selectContaining(form.locator('select[name=warehouse_id]'), 'UTAMA ·')
+  await setDate(form, 'needed_on', addDays(await data.businessDate(), 3))
+  await form.locator('input[name=note]').fill('Kebutuhan mingguan dapur')
+  await invLine(page, form, 0, 'BERAS', 'karung', '4')
+  await form.locator('input[name=price_0]').fill('434000')
+  await selectContaining(form.locator('select[name=supplier_0]'), INV_SUPPLIER.name)
+  await form.getByTestId('line-add').click()
+  await invLine(page, form, 1, 'MGRNG', 'l', '20')
+  await form.locator('input[name=price_1]').fill('23500')
+  await selectContaining(form.locator('select[name=supplier_1]'), INV_SUPPLIER.name)
+  await shot(form, 'inventaris-pr-03')
+  // STEP 4: Ajukan untuk persetujuan
+  await page.getByTestId('request-submit').click()
+  await expect(page).toHaveURL(/\/inventory\/requests\/\d+$/)
+  const id = Number(page.url().split('/').pop())
+  await expect.poll(async () => (await data.api.get<{ status: string }>(`${data.P}/inventory/requests/${id}`)).status).toBe('SUBMITTED')
+  // STEP 5: the chain decides: the head of F&B, then cost control (2,206,000 is under the third level)
+  await (await apiAs('invHead')).post(`${data.P}/inventory/requests/${id}/approve`, { note: 'Sesuai menu minggu ini' })
+  await (await apiAs('invCost')).post(`${data.P}/inventory/requests/${id}/approve`, { note: 'Harga wajar' })
+  await expect.poll(async () => (await data.api.get<{ status: string }>(`${data.P}/inventory/requests/${id}`)).status).toBe('APPROVED')
+  // STEP 6: the approved request: the box of the orders, sent to the supplier at once
+  await page.reload()
+  const box = page.getByTestId('orders-box')
+  await expect(box).toBeVisible()
+  for (const n of [1, 2]) await selectContaining(box.locator(`select[name=order_supplier_${n}]`), INV_SUPPLIER.name)
+  await box.locator('input[name=send]').check()
+  await shot(box, 'inventaris-pr-06')
+  // STEP 7: Buat 1 pesanan
+  await box.getByTestId('orders-make').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 8: the order, on its page
+  const number = (await data.api.get<{ request_number: string }>(`${data.P}/inventory/requests/${id}`)).request_number
+  const po = (await invRows<{ id: number; request_number: string | null }>(data, '/inventory/purchase-orders')).find((o) => o.request_number === number)
+  if (!po) throw new Error(`no order made from ${number}`)
+  await page.goto(`/inventory/purchase-orders/${po.id}`)
+  await expect(page.getByTestId('order-view')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('order-view')], 'inventaris-pr-08')
+}
+
+/** 09-inventory/penerimaan-tagihan-dan-retur.md (the order of flowPermintaanPembelian) */
+export async function flowPenerimaan(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const orders = await invRows<{ id: number; status: string; supplier_name: string }>(data, '/inventory/purchase-orders')
+  const po = orders.filter((o) => o.status === 'ORDERED' && o.supplier_name === INV_SUPPLIER.name).sort((a, b) => b.id - a.id)[0]
+  if (!po) throw new Error('no order of SUMBER waits for its goods: run "09 permintaan pembelian" first')
+  // STEP 1-3: the order → Terima barang, everything came
+  await loginAs('admin', `/inventory/purchase-orders/${po.id}`)
+  await page.getByTestId('order-receive').click()
+  const form = page.getByTestId('receipt-form')
+  await expect(form).toBeVisible()
+  await expect(form.locator('input[name=qty_0]')).not.toHaveValue('')
+  await form.locator('input[name=delivery_note]').fill('SJ-SS-0412')
+  await shot(form, 'inventaris-terima-03')
+  // STEP 4: Posting penerimaan
+  await page.getByTestId('receipt-post').click()
+  await expect(page).toHaveURL(/\/inventory\/receipts\/\d+$/)
+  await expect(page.getByTestId('receipt-view')).toBeVisible()
+  const receiptId = Number(page.url().split('/').pop())
+  const receipt = (await data.api.get<{ receipt_number: string }>(`${data.P}/inventory/receipts/${receiptId}`)).receipt_number
+  // STEP 5-7: Retur ke pemasok: one wet sack of rice, before the bill
+  await page.getByTestId('receipt-return').click()
+  const ret = page.getByTestId('return-form')
+  await expect(ret).toBeVisible()
+  await ret.locator('input[name=reason]').fill('Satu karung beras basah saat diterima')
+  await ret.locator('input[name=qty_0]').fill('1')
+  await shot(ret, 'inventaris-terima-06')
+  await page.getByTestId('return-post').click()
+  await expect(page).toHaveURL(/\/inventory\/returns\/\d+$/)
+  await expect(page.getByTestId('return-view')).toBeVisible()
+  // STEP 8-9: Draf tagihan → the receipt → Tagih yang dipilih, the invoice of the supplier
+  await page.goto('/inventory/bill-drafts')
+  await page.getByTestId(`pick-${receipt}`).click()
+  await page.getByTestId('bill-picked').click()
+  await expect(page).toHaveURL(/\/inventory\/bill-drafts\/\d+/)
+  await page.getByTestId('invoice-number').fill('INV/SS/1124/118')
+  await expect(page.getByTestId('bill-summary')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('bill-summary')], 'inventaris-tagihan-09')
+  // STEP 10-11: Konfirmasi tagihan (the prices are those of the order: no approval)
+  await expect(page.getByTestId('bill-confirm')).toBeEnabled()
+  await page.getByTestId('bill-confirm').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+}
+
+/** 09-inventory/rantai-persetujuan.md */
+export async function flowRantaiPersetujuan(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  // STEP 1: Rantai persetujuan, the chain of the purchase requests (shown, not changed)
+  await loginAs('admin', '/inventory/approval-chains')
+  const chain = page.getByTestId('chain-PR')
+  await expect(chain.getByTestId('level-PR-1')).toBeVisible()
+  await shot(chain, 'inventaris-rantai-01')
+  // a request of the administrator for housekeeping, waiting for its head (it stays at level 2 for the report of the pending documents)
+  const supplier = await invSupplier(data)
+  const sampo = await invByCode(data, '/inventory/items', 'SAMPO')
+  const rooms = await invByCode(data, '/departments', 'ROOMS')
+  const hk = await invByCode(data, '/inventory/warehouses', 'HK')
+  const pr = await data.api.post<{ id: number; request_number: string }>(`${data.P}/inventory/requests`, {
+    client_uuid: crypto.randomUUID(), department_id: rooms.id, warehouse_id: hk.id, note: 'Stok amenities kamar',
+    lines: [{ item_id: sampo.id, unit_id: await invUnit(data, sampo.id, 'karton'), qty: '2', est_unit_price: '325000', supplier_id: supplier }],
+  })
+  await data.api.post(`${data.P}/inventory/requests/${pr.id}/submit`, {})
+  // STEP 5: the head of the department: Perlu saya setujui
+  await loginAs('invHead', '/inventory/approvals')
+  const inbox = page.getByTestId('inbox-table')
+  await expect(inbox.getByTestId(`inbox-${pr.request_number}`)).toBeVisible()
+  await shotAround([page.locator('main h1'), inbox], 'inventaris-rantai-05')
+  // STEP 6-8: the request, its chain and the decision box
+  await inbox.getByTestId(`inbox-${pr.request_number}`).click()
+  const decision = page.getByTestId('decision-box')
+  await expect(decision.getByTestId('decision-approve')).toBeVisible()
+  await decision.getByTestId('decision-note').fill('Stok sampo tinggal untuk satu minggu')
+  await shot(page.getByTestId('chain-aside'), 'inventaris-rantai-08')
+  // STEP 9: Setujui: the request goes to cost control
+  await decision.getByTestId('decision-approve').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+}
+
+/** 09-inventory/permintaan-barang-dan-transfer.md */
+export async function flowPermintaanBarang(page: Page, loginAs: LoginAs, data: Factories, apiAs: ApiAs): Promise<void> {
+  // STEP 1-3: Permintaan & transfer → Permintaan baru, the kitchen asks the main store
+  await loginAs('admin', '/inventory/requisitions')
+  await page.getByTestId('requisition-new').click()
+  const form = page.getByTestId('sr-form')
+  await expect(form).toBeVisible()
+  await selectContaining(form.locator('select[name=to_warehouse_id]'), 'DAPUR ·')
+  await selectContaining(form.locator('select[name=from_warehouse_id]'), 'UTAMA ·')
+  await setDate(form, 'needed_on', addDays(await data.businessDate(), 1))
+  await form.locator('input[name=note]').fill('Persiapan menu akhir pekan')
+  await invLine(page, form, 0, 'BERAS', 'kg', '30')
+  await form.getByTestId('line-add').click()
+  await invLine(page, form, 1, 'TELUR', 'pcs', '120')
+  await form.getByTestId('line-add').click()
+  await invLine(page, form, 2, 'GULA', 'kg', '10')
+  await shot(form, 'inventaris-sr-03')
+  // STEP 4: Ajukan untuk persetujuan
+  await page.getByTestId('sr-submit').click()
+  await expect(page).toHaveURL(/\/inventory\/requisitions\/\d+$/)
+  const id = Number(page.url().split('/').pop())
+  await expect.poll(async () => (await data.api.get<{ status: string }>(`${data.P}/inventory/requisitions/${id}`)).status).toBe('SUBMITTED')
+  // STEP 5: the head of F&B, then the final approver of the store requisitions
+  await (await apiAs('invHead')).post(`${data.P}/inventory/requisitions/${id}/approve`, { note: 'Sesuai rencana menu' })
+  await (await apiAs('invFinal')).post(`${data.P}/inventory/requisitions/${id}/approve`, {})
+  await expect.poll(async () => (await data.api.get<{ status: string }>(`${data.P}/inventory/requisitions/${id}`)).status).toBe('APPROVED')
+  await page.reload()
+  await expect(page.getByTestId('sr-answer')).toBeVisible()
+  await expect(page.getByTestId('chain-aside')).toBeVisible()
+  await shotPage(page, 'inventaris-sr-05')
+  // STEP 6-7: Jawab dengan transfer: the lines come from the request
+  await page.getByTestId('sr-answer').click()
+  const trf = page.getByTestId('transfer-form')
+  await expect(trf).toBeVisible()
+  await expect(trf.locator('input[name=qty_0]')).not.toHaveValue('')
+  await shotAround([page.locator('main h1'), trf], 'inventaris-sr-07')
+  // STEP 8: Kirim transfer
+  await page.getByTestId('transfer-post').click()
+  await expect(page).toHaveURL(/\/inventory\/transfers\/\d+$/)
+  await expect(page.getByTestId('transfer-view')).toBeVisible()
+}
+
+/** 09-inventory/pemakaian-dan-waste.md */
+export async function flowPemakaian(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Pemakaian & waste
+  await loginAs('admin', '/inventory/issues')
+  await expect(page.getByTestId('issues-table')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('issues-table')], 'inventaris-pakai-01')
+  // STEP 2-4: Catat waste: dried noodles past their date in the kitchen store (no recipe uses them, so the stock is the opening's)
+  await page.getByTestId('issue-waste').click()
+  const form = page.getByTestId('issue-form')
+  await expect(form).toBeVisible()
+  await expect(page.getByTestId('purpose-WASTE')).toHaveAttribute('aria-selected', 'true')
+  await selectContaining(form.locator('select[name=warehouse_id]'), 'DAPUR ·')
+  await form.locator('select[name=reason_code]').selectOption('EXPIRED')
+  await form.locator('input[name=note]').fill('Mie kering lewat tanggal kedaluwarsa')
+  await invLine(page, form, 0, 'MIE', null, '2')
+  await expect(form.getByTestId('too-much-0')).toHaveCount(0)
+  await shot(form, 'inventaris-pakai-04')
+  // STEP 5: Posting waste: the document opens
+  await page.getByTestId('issue-post').click()
+  await expect(page).toHaveURL(/\/inventory\/issues\/\d+$/)
+  await expect(page.getByTestId('issue-view')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('issue-view')], 'inventaris-pakai-05')
+}
+
+/** 09-inventory/opname.md: the count of the bar is approved (or cancelled) before the flow ends, or it would hold the night audit. */
+export async function flowOpname(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  let id = 0
+  try {
+    // STEP 1-2: Opname → Mulai opname, the whole bar
+    await loginAs('admin', '/inventory/counts')
+    await page.getByTestId('count-start-open').click()
+    const form = page.getByTestId('count-form')
+    await selectContaining(form.locator('select[name=warehouse_id]'), 'BAR ·')
+    await form.locator('select[name=scope]').selectOption('ALL')
+    await form.locator('input[name=note]').fill('Opname mingguan bar')
+    await shot(form, 'inventaris-opname-02')
+    // STEP 3: Mulai dan bekukan: the count sheet
+    await page.getByTestId('count-start').click()
+    await expect(page).toHaveURL(/\/inventory\/counts\/\d+$/)
+    id = Number(page.url().split('/').pop())
+    // STEP 4: what the shelf holds, saved when the box is left
+    for (const [code, qty] of [['BIR', '46'], ['SODA', '22']] as const) {
+      const box = page.locator(`input[name=count_${code}]`)
+      await expect(box).toBeVisible()
+      await box.fill(qty)
+      const saved = page.waitForResponse((r) => r.url().includes(`/inventory/counts/${id}/lines`) && r.request().method() === 'PUT')
+      await box.press('Tab')
+      await saved
+    }
+    await page.getByTestId('tab-done').click()
+    await expect(page.locator('input[name=count_BIR]')).toBeVisible()
+    await shotPage(page, 'inventaris-opname-04')
+    // STEP 5: Kirim untuk disetujui
+    await page.getByTestId('count-submit').click()
+    await expect(page.getByTestId('notice')).toBeVisible()
+    // STEP 6-7: the approver reviews and approves
+    await loginAs('invApprover', `/inventory/counts/${id}`)
+    await expect(page.getByTestId('count-review')).toBeVisible()
+    await shotPage(page, 'inventaris-opname-06')
+    await page.getByTestId('count-approve').click()
+    await expect(page.getByTestId('notice')).toBeVisible()
+  } finally {
+    if (id) {
+      const st = (await data.api.get<{ status: string }>(`${data.P}/inventory/counts/${id}`)).status
+      if (st === 'OPEN' || st === 'SUBMITTED') await data.api.post(`${data.P}/inventory/counts/${id}/cancel`, {})
+    }
+    // no count of this run may stay open (the night audit of the final project)
+    for (const c of await invRows<{ id: number }>(data, '/inventory/counts', { status: 'OPEN' })) await data.api.soft('POST', `${data.P}/inventory/counts/${c.id}/cancel`, {})
+  }
+}
+
+/** 09-inventory/resep.md */
+export async function flowResep(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-3: POS → Produk dan menu → the fried rice: its recipe and the cost of its ingredients (pms-seed inventory)
+  await loginAs('admin', '/pos/products')
+  await page.getByTestId('product-NASGOR').click()
+  const recipe = page.getByTestId('product-recipe')
+  await expect(recipe.getByTestId('recipe-summary')).toBeVisible()
+  await tallWindow(page, 2400, () => shot(recipe, 'inventaris-resep-03')) // the recipe is taller than the window
+  // STEP 7: POS → Outlet → Ubah on the restaurant: the cost targets
+  await page.goto('/pos/outlets')
+  await page.getByTestId('outlet-edit-RESTO').click()
+  const dialog = page.getByTestId('outlet-dialog')
+  const targets = dialog.getByTestId('outlet-targets')
+  await expect(targets).toBeVisible()
+  await targets.getByTestId('target-FOOD').fill('32')
+  await targets.getByTestId('target-BEVERAGE').fill('25') // shown, not saved (Escape below)
+  await tallWindow(page, 1800, () => shotAround([dialog.getByTestId('outlet-stock'), targets], 'inventaris-resep-07'))
+  await page.keyboard.press('Escape')
+}
+
+/** 09-inventory/amenities-otomatis.md */
+export async function flowAmenities(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-3: Amenities otomatis: the plan of pms-seed inventory (shown, not saved: a save would make a new version)
+  await loginAs('admin', '/inventory/amenities')
+  await expect(page.getByTestId('plan-form')).toBeVisible()
+  await expect(page.getByTestId('plan-lines')).toBeVisible()
+  await expect(page.getByTestId('runs-box')).toBeVisible()
+  await shotPage(page, 'inventaris-amenities-03')
+  // STEP 6: the document of the night the world's audit closed (none when that audit could not run)
+  const run = page.getByTestId('runs-box').locator('a[data-testid^="run-"]').first()
+  if (await run.count()) {
+    await run.click()
+    await expect(page.getByTestId('run-view')).toBeVisible()
+    await shotPage(page, 'inventaris-amenities-06')
+  }
+}
+
+/** 09-inventory/laporan-persediaan.md */
+export async function flowLaporanPersediaan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Persediaan → Ringkasan
+  await loginAs('admin', '/inventory')
+  await expect(page.getByTestId('dashboard')).toBeVisible()
+  await expect(page.getByTestId('reports-list')).toBeVisible()
+  await shotPage(page, 'inventaris-laporan-01')
+  // STEP 2-3: Nilai stok → Tampilkan
+  await page.getByTestId('report-value').click()
+  await expect(page).toHaveURL(/\/inventory\/reports\/stock-value/)
+  await page.getByTestId('report-show').click()
+  await expect(page.getByTestId('value-table').or(page.getByTestId('value-empty')).first()).toBeVisible()
+  await tallWindow(page, 1800, () => shotAround([page.locator('main h1'), page.getByTestId('report-period'), page.getByTestId('value-table').or(page.getByTestId('value-empty')).first()], 'inventaris-laporan-03'))
+  // STEP 4: Barang di bawah minimum: the pool chlorine of "09 barang gudang dan saldo awal" (40 kg under a minimum of 50)
+  await page.goto('/inventory/reports/low-stock')
+  const low = page.getByTestId('low-table')
+  await expect(low.getByTestId(`low-UTAMA-${INV_ITEM.code}`)).toBeVisible()
+  await low.getByTestId(`low-check-UTAMA-${INV_ITEM.code}`).click()
+  await expect(page.getByTestId('low-selected')).toBeVisible()
+  await shotAround([page.locator('main h1'), low], 'inventaris-laporan-04')
+}
+
+
+// =====================================================================================================================
+// 11-audit-malam and 12-laporan. No seeded role holds nightaudit.* or audit.read: the administrator works the night audit, its pack and the
+// audit trail; the supervisor (report.view, cashier.shift_manage) reads the reports. The order of the tests (docs-screenshots.spec.ts) matters:
+//   (A) on 2026-11-24, before the run: the reports, the pack archive and its recipients, the screen with its blockers, then the no-shows;
+//   (B) flowJalankanAuditMalam clears what still holds the day, checks in the guest of (C) and closes 2026-11-24;
+//   (C) flowCekPulangLebihAwal, on 2026-11-25: the check-out wizard of an early departure, facts written to the run log ([PULANGAWAL]).
+
+/** The preview of the night audit as far as these flows read it. */
+interface NaPreview {
+  business_date: string
+  can_run: boolean
+  time_guard_ok?: boolean
+  blockers: {
+    unresolved_arrivals?: { reservation_room_id: number; confirmation_number: string; guest: string }[]
+    unresolved_departures?: { stay_id: number; stay_number: string; guest: string }[]
+    charge_errors?: unknown[]
+    invalid_charges?: unknown[]
+    open_shifts?: { id: number; number: string; drawer: string; user_name: string }[]
+    accounting_readiness?: { code: string; message: string }[]
+    outlet_bills?: { code: string; message: string }[]
+    stock?: { code: string; message: string; ref?: string }[]
+  }
+  warnings?: Record<string, unknown>
+}
+
+async function naPreview(data: Factories): Promise<NaPreview> {
+  return data.api.get<NaPreview>(`${data.P}/night-audit/preview`)
+}
+
+/** What holds the day, in one line of the run log. */
+function naSummary(p: NaPreview): string {
+  const b = p.blockers ?? {}
+  const n = (x?: unknown[]) => x?.length ?? 0
+  return `can_run=${p.can_run} time=${p.time_guard_ok !== false} arrivals=${n(b.unresolved_arrivals)} [${(b.unresolved_arrivals ?? []).map((a) => a.guest).join(', ')}]`
+    + ` departures=${n(b.unresolved_departures)} [${(b.unresolved_departures ?? []).map((d) => d.guest).join(', ')}] charge_errors=${n(b.charge_errors)}`
+    + ` invalid=${n(b.invalid_charges)} shifts=${n(b.open_shifts)} accounting=${(b.accounting_readiness ?? []).map((a) => a.code).join(',') || 0}`
+    + ` outlets=${n(b.outlet_bills)} stock=${(b.stock ?? []).map((s) => s.code).join(',') || 0}`
+}
+
+/** Akhir hari → Audit malam, as the administrator, read. */
+async function openNightAudit(page: Page, loginAs: LoginAs): Promise<void> {
+  await loginAs('admin', '/night-audit')
+  await expect(page.getByTestId('audit-date')).toBeVisible()
+  await expect(page.getByTestId('run')).toBeVisible()
+}
+
+/** Step 2 of the page: ticks every arrival that is left (Pilih semua), the reason and the statement, then Tandai {n} sebagai no-show. */
+async function markNoShows(page: Page, reason: string, file?: string): Promise<boolean> {
+  const arrivals = page.getByTestId('arrivals')
+  if (!(await arrivals.locator('[data-testid^="arrival-"]').count())) return false
+  await arrivals.getByTestId('select-all').check()
+  const form = page.getByTestId('noshow-form')
+  await form.locator('input[name=reason]').fill(reason)
+  await form.locator('input[name=confirm]').check()
+  await expect(page.getByTestId('mark-no-shows')).toBeEnabled()
+  if (file) await shot(arrivals, file)
+  await page.getByTestId('mark-no-shows').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  await expect(page.getByTestId('no-arrivals')).toBeVisible()
+  return true
+}
+
+// --- 12-laporan
+
+/** 12-laporan/laporan-front-office.md */
+export async function flowLaporanFrontOffice(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Akhir hari → Laporan (Sari Supervisor: report.view)
+  await loginAs('supervisor', '/reports')
+  const form = page.getByTestId('filters')
+  await expect(form).toBeVisible()
+  // STEP 2: Laporan Kedatangan; Tanggal is the business date already
+  await form.locator('select[name=report]').selectOption('arrivals')
+  await expect(form.locator('input[name=date]')).toBeAttached()
+  await shot(form, 'laporan-fo-02')
+  // STEP 3: Jalankan: the table of the arrivals of today
+  await form.getByTestId('run').click()
+  const result = page.getByTestId('result')
+  await expect(result).toBeVisible()
+  await shot(result, 'laporan-fo-03')
+  // STEP 4: Unduh CSV is offered once a result is shown (not clicked: the file would go to the downloads)
+  await expect(form.getByTestId('csv')).toBeEnabled()
+  // STEP 5: another report: Okupansi dan statistik over the default seven days (only the closed days have a row)
+  await form.locator('select[name=report]').selectOption('statistics')
+  await form.getByTestId('run').click()
+  await expect(result).toBeVisible()
+  await tallWindow(page, 1200, () => shot(result, 'laporan-fo-05'), 1920) // the statistics table is wider than 1440
+}
+
+/** 12-laporan/laporan-harian.md */
+export async function flowLaporanHarian(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Akhir hari → Laporan: the card Laporan harian (the supervisor also sees the Z report)
+  await loginAs('supervisor', '/reports')
+  const hub = page.getByTestId('day-reports')
+  await expect(hub.getByTestId('day-report-flash')).toBeVisible()
+  await shot(hub, 'laporan-harian-01')
+  // STEP 2: Daily flash report: it shows itself for the last closed day
+  await hub.getByTestId('day-report-flash').click()
+  await expect(page).toHaveURL(/\/reports\/daily-flash/)
+  await expect(page.getByTestId('flash-summary')).toBeVisible({ timeout: 30_000 })
+  // STEP 3: the cards and the room statistics
+  await expect(page.getByTestId('flash-rooms')).toBeVisible()
+  await tallWindow(page, 1600, () => shotAround([page.locator('main h1'), page.getByTestId('flash-rooms')], 'laporan-harian-03'))
+  // STEP 4: PDF and Unduh CSV are offered (not clicked: a new tab, a download)
+  await expect(page.getByTestId('pdf')).toBeEnabled()
+  // STEP 5: Guest ledger of the last closed day, with the check against the ledger
+  await page.goto('/reports/guest-ledger')
+  await expect(page.getByTestId('guest-ledger')).toBeVisible()
+  await expect(page.getByTestId('gl-table').or(page.getByTestId('empty')).or(page.getByTestId('report-error')).first()).toBeVisible({ timeout: 30_000 })
+  const checks = page.getByTestId('ledger-checks')
+  if (await checks.count()) await shotAround([page.locator('main h1'), checks], 'laporan-harian-05')
+  else await shotPage(page, 'laporan-harian-05')
+  // STEP 6: the form below the card: Ringkasan harian of today (run, not shot)
+  await page.goto('/reports')
+  const form = page.getByTestId('filters')
+  await form.locator('select[name=report]').selectOption('daily-summary')
+  await form.getByTestId('run').click()
+  await expect(page.getByTestId('result').or(page.getByTestId('form-error')).first()).toBeVisible()
+}
+
+/** 12-laporan/kinerja-dan-dasbor.md */
+export async function flowKinerja(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Akhir hari → Kinerja
+  await loginAs('supervisor', '/performance')
+  await expect(page.getByTestId('main-kpis')).toBeVisible()
+  await expect(page.getByTestId('forecast')).toBeVisible()
+  await shotPage(page, 'laporan-kinerja-01')
+  // STEP 2: Periode → Bulan berjalan: the four cards follow
+  await page.getByTestId('period-month').click()
+  await expect(page.getByTestId('kpi-occupancy')).toBeVisible()
+  await shotAround([page.getByTestId('period'), page.getByTestId('main-kpis')], 'laporan-kinerja-02')
+  // STEP 4: the 14 nights ahead
+  const forecast = page.getByTestId('forecast')
+  await shot(forecast, 'laporan-kinerja-04')
+  // STEP 5: Muat ulang
+  await page.getByTestId('dash-refresh').click()
+  await expect(page.getByTestId('main-kpis')).toBeVisible()
+}
+
+/** 12-laporan/jejak-audit.md */
+export async function flowJejakAudit(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  const entries = page.locator('[data-testid^="entry-"]')
+  // STEP 1: Pengaturan → Jejak audit (the administrator: no seeded role holds audit.read)
+  await loginAs('admin', '/audit')
+  const filters = page.getByTestId('filters')
+  await expect(filters).toBeVisible()
+  await expect(entries.first()).toBeVisible()
+  await shotPage(page, 'laporan-jejak-01')
+  // STEP 2-3: Nomor dokumen = the reservation of Yusuf Maulana (cancelled with a fee in 01 membatalkan reservasi), Cari
+  await filters.locator('input[name=document]').fill(w.future.yusuf.confirmation)
+  await page.getByTestId('search').click()
+  await expect(entries.first()).toBeVisible()
+  await shotAround([filters, entries.last()], 'laporan-jejak-03')
+  // STEP 4: Detail of the newest entry: Sebelum and Sesudah
+  // the first entry row (the side menu also has toggle-* test ids, so read the id from the row)
+  const id = ((await entries.first().getAttribute('data-testid')) ?? '').replace('entry-', '')
+  await page.getByTestId(`toggle-${id}`).first().click()
+  const detail = page.getByTestId(`detail-${id}`)
+  await expect(detail).toBeVisible()
+  await shotAround([page.getByTestId(`entry-${id}`), detail], 'laporan-jejak-04')
+}
+
+// --- 11-audit-malam (A): screens that do not close the day
+
+/** 11-audit-malam/paket-audit-malam.md, steps 1-6: the archive and the pack of the day the docs world closed. */
+export async function flowArsipPaket(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const closed = addDays(await data.businessDate(), -1)
+  // STEP 1: Akhir hari → Arsip audit malam
+  await loginAs('admin', '/night-audit/archive')
+  const row = page.getByTestId(`pack-row-${closed}`)
+  await expect(row.or(page.getByTestId('late')).first()).toBeVisible({ timeout: 60_000 })
+  await shotAround([page.locator('main h1'), page.getByTestId('packs')], 'auditmalam-paket-01')
+  if (!(await row.count())) {
+    console.warn(`[docs] no night audit pack for ${closed}: the docs world did not close the day of setup`)
+    return
+  }
+  // STEP 3: Buka on the row of the day: its sections and their state
+  await page.getByTestId(`open-${closed}`).click()
+  const detail = page.getByTestId('detail')
+  await expect(detail.getByTestId('section-SUMMARY')).toBeVisible()
+  // STEP 4: a section ticked under Cetak makes PDF bagian yang dipilih available (the PDF itself opens in a new tab: not opened)
+  const pick = detail.getByTestId('section-SUMMARY').locator('input[type=checkbox]')
+  if (await pick.isEnabled()) {
+    await pick.check()
+    await expect(detail.getByTestId('pdf-chosen')).toBeEnabled()
+  }
+  await shot(detail, 'auditmalam-paket-03')
+  // STEP 5: Riwayat pengiriman (e-mail is off on the E2E server)
+  await expect(page.getByTestId('history')).toBeVisible()
+}
+
+/** 11-audit-malam/paket-audit-malam.md, steps 7-9: the recipients of the pack (pms-seed nightaudit made five). */
+export async function flowPenerimaPaket(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 7: Akhir hari → Penerima paket
+  await loginAs('admin', '/night-audit/recipients')
+  await expect(page.getByTestId('recipients')).toBeVisible()
+  await expect(page.getByTestId('email-state')).toBeVisible()
+  // STEP 8: Tambah penerima: the address, the name, two more sections
+  await page.getByTestId('add-recipient').click()
+  const dialog = page.getByTestId('recipient-dialog')
+  await dialog.locator('input[name=email]').fill('night.manager@hotelkamara.example')
+  await dialog.locator('input[name=name]').fill('Night manager')
+  await dialog.locator('input[name=section_IN_HOUSE]').check()
+  await dialog.locator('input[name=section_NEXT_DAY]').check()
+  await expect(dialog.getByTestId('save-recipient')).toBeEnabled()
+  await shot(dialog, 'auditmalam-paket-08')
+  // STEP 9: Simpan is not clicked: the list of the pictures stays the one of the demo data
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+}
+
+/** 11-audit-malam/menangani-penghalang.md: the screen with what holds 2026-11-24 after the earlier docs flows. */
+export async function flowPenghalang(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const preview = await naPreview(data)
+  console.log(`[docs] night audit ${preview.business_date} before the no-shows: ${naSummary(preview)}`)
+  // STEP 1: Akhir hari → Audit malam: the card Jalankan lists why the day cannot close
+  await openNightAudit(page, loginAs)
+  const run = page.getByTestId('run')
+  if (!preview.can_run) await expect(run.getByTestId('cannot-run')).toBeVisible()
+  await shot(run, 'auditmalam-penghalang-01')
+  // STEP 2: each reason is a link to its step (not clicked: the steps are shot one by one)
+  // STEP 3: Keberangkatan yang belum selesai, with Bayar & check-out and Perpanjang on the row
+  const departures = page.getByTestId('departures')
+  await expect(departures).toBeVisible()
+  await shot(departures, 'auditmalam-penghalang-03')
+  // STEP 6: the card Peringatan (only when the day has warnings)
+  const warnings = page.getByTestId('warnings')
+  if (await warnings.count()) await shot(warnings, 'auditmalam-penghalang-06')
+  else console.warn('[docs] the night audit shows no warnings: auditmalam-penghalang-06 keeps the picture of the last run')
+}
+
+/** 11-audit-malam/menandai-no-show.md: every arrival of the day still unresolved is marked no-show the way the screen does it. */
+export async function flowNoShow(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  // STEP 1: step 2 of Audit malam, Kedatangan yang belum selesai
+  await openNightAudit(page, loginAs)
+  const arrivals = page.getByTestId('arrivals')
+  if (!(await arrivals.locator('[data-testid^="arrival-"]').count())) {
+    console.warn('[docs] no arrival is left to mark no-show: the pictures of menandai-no-show keep those of the last run')
+    return
+  }
+  await shot(arrivals, 'auditmalam-noshow-01')
+  // STEP 3-4: Pilih semua, the reason and the statement (shot), then Tandai {n} sebagai no-show
+  await markNoShows(page, 'Tidak datang sampai pukul 23.00, telepon tidak dijawab', 'auditmalam-noshow-03')
+  await shotAround([page.getByTestId('notice'), page.getByTestId('no-arrivals')], 'auditmalam-noshow-04')
+  const left = await naPreview(data)
+  console.log(`[docs] night audit after the no-shows: ${naSummary(left)}`)
+}
+
+// --- 11-audit-malam (B): the run that closes 2026-11-24
+
+/** The guest of the early departure of (C): arrives on the business date of (B) for three nights, checked in before the run, no extra charge. */
+const PULANG_AWAL = { first_name: 'Rahmat', last_name: 'Pulangawal' }
+let pulangAwal: { stayId: number; folioId: number } | null = null
+
+async function findPulangAwal(data: Factories): Promise<{ stayId: number; folioId: number } | null> {
+  if (pulangAwal) return pulangAwal
+  const rows = (await data.api.get<{ data: { id: number }[] }>(`${data.P}/stays/in-house`, { q: PULANG_AWAL.last_name })).data
+  const id = rows[0]?.id
+  if (!id) return null
+  const st = await data.stay(id)
+  const folio = st.folios[0]
+  if (!folio) return null
+  pulangAwal = { stayId: id, folioId: folio.id }
+  return pulangAwal
+}
+
+async function checkInPulangAwal(data: Factories): Promise<void> {
+  if (await findPulangAwal(data)) return // a second run on the same database
+  const guest = await data.guest({ ...PULANG_AWAL, phone: '+62 812 4400 1515' })
+  const res = await data.reservation({ nights: 3, guest })
+  const full = await data.api.get<{ version: number; rooms: { id: number }[] }>(`${data.P}/reservations/${res.id}`)
+  const out = await data.api.post<{ stay: { id: number }; folio: { id: number } }>(`${data.P}/reservations/${res.id}/rooms/${full.rooms[0]!.id}/check-in`,
+    { version: full.version, guest_id: guest.id, adult_count: 2, room_id: res.room!.id })
+  pulangAwal = { stayId: out.stay.id, folioId: out.folio.id }
+  console.log(`[PULANGAWAL] checked in on ${res.arrival_date} until ${res.departure_date}: stay ${out.stay.id}, folio ${out.folio.id}`)
+}
+
+/** Step 3 of the page: every unfinished departure is checked out in the side sheet (paid by card first when the guest owes). */
+async function checkOutDepartures(page: Page, data: Factories): Promise<void> {
+  const tried = new Set<number>()
+  for (let i = 0; i < 20; i++) {
+    const rows = page.getByTestId('departures').locator('tr[data-testid^="departure-"]')
+    const ids: number[] = []
+    for (const t of await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-testid') ?? ''))) ids.push(Number(t.replace('departure-', '')))
+    const stayId = ids.find((id) => !tried.has(id))
+    if (stayId === undefined) return
+    tried.add(stayId)
+    await page.getByTestId(`check-out-${stayId}`).click()
+    const sheet = page.getByTestId('departure-sheet')
+    const wizard = sheet.getByTestId('checkout-wizard')
+    await expect(wizard).toBeVisible()
+    const early = wizard.locator('input[name=confirm_early]')
+    if (await early.count()) await early.check()
+    // each guest folio that owes money: Bayar by card, then the wizard reads the stay again
+    for (let k = 0; k < 4; k++) {
+      const owing = wizard.locator('[data-testid^="folio-due-"]').filter({ has: page.getByTestId('checkout-pay') })
+      if (!(await owing.count())) break
+      const box = owing.first()
+      const folio = ((await box.getAttribute('data-testid')) ?? '').replace('folio-due-', '')
+      const pay = box.getByTestId('checkout-pay')
+      await pay.locator('select[name=pay_method]').selectOption('CARD')
+      await pay.locator('input[name=pay_reference]').fill(`EDC 0046${10 + k}`)
+      await pay.getByTestId('checkout-pay-submit').click()
+      await expect(wizard.getByTestId(`folio-due-${folio}`).getByTestId('checkout-pay')).toHaveCount(0, { timeout: 15_000 })
+    }
+    const submit = wizard.getByTestId('checkout-submit')
+    if (await submit.isEnabled()) {
+      await submit.click()
+      await expect(sheet).toHaveCount(0, { timeout: 15_000 })
+      await expect(page.getByTestId(`departure-${stayId}`)).toHaveCount(0, { timeout: 15_000 })
+      continue
+    }
+    // what the wizard cannot do (a credit to refund, a company folio): said in the run log, the API tries the check-out of the screen
+    const reason = (await wizard.getByTestId('checkout-due-reason').count()) ? await wizard.getByTestId('checkout-due-reason').innerText() : ''
+    console.warn(`[docs] the check-out of stay ${stayId} is not offered on the screen (${reason}): tried through the API`)
+    await page.keyboard.press('Escape')
+    const st = await data.stay(stayId)
+    for (const f of st.folios) await data.settle(f.id).catch(() => undefined)
+    await data.api.post(`${data.P}/stays/${stayId}/check-out`, { version: st.stay.version, confirm_early_departure: true })
+      .catch((e: unknown) => console.warn(`[docs] the check-out of stay ${stayId} was refused: ${e instanceof Error ? e.message : String(e)}`))
+    await page.getByTestId('refresh').click()
+    await expect(page.getByTestId('refresh')).toBeEnabled()
+  }
+}
+
+/** Step 5 of the page: the shifts still open are closed with the cash they expect (closing another cashier's shift is not offered on the screen). */
+async function closeOpenShifts(data: Factories, p: NaPreview): Promise<void> {
+  for (const sh of p.blockers.open_shifts ?? []) {
+    try {
+      const d = await data.api.get<{ cash?: { expected: string } }>(`${data.P}/cashier/shifts/${sh.id}`)
+      await data.api.post(`${data.P}/cashier/shifts/${sh.id}/close`, { counted_cash: d.cash?.expected ?? '0', reason: 'Ditutup sebelum audit malam' })
+      console.log(`[docs] closed the cashier shift ${sh.number} of ${sh.user_name} (${sh.drawer})`)
+    } catch (e) {
+      console.warn(`[docs] the shift ${sh.number} could not be closed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+}
+
+/** An open or submitted inventory count freezes its warehouse and may hold the close: cancelled (the docs run counts nothing). */
+async function cancelOpenCounts(data: Factories): Promise<void> {
+  for (const status of ['OPEN', 'SUBMITTED']) {
+    const counts = (await data.api.soft<{ data: { id: number; cnt_number: string }[] }>('GET', `${data.P}/inventory/counts?status=${status}`))?.data ?? []
+    for (const c of counts) {
+      await data.api.soft('POST', `${data.P}/inventory/counts/${c.id}/cancel`, {})
+      console.log(`[docs] cancelled the inventory count ${c.cnt_number} (${status})`)
+    }
+  }
+}
+
+/** 11-audit-malam/menjalankan-audit-malam.md: closes 2026-11-24 from the screen. Runs after every other docs flow of that day. */
+export async function flowJalankanAuditMalam(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const bd = await data.businessDate()
+  // the guest of flowCekPulangLebihAwal: in house tonight, three nights from today
+  await checkInPulangAwal(data)
+  await cancelOpenCounts(data)
+  await closeOpenShifts(data, await naPreview(data))
+  console.log(`[docs] night audit ${bd} before the run: ${naSummary(await naPreview(data))}`)
+
+  // STEP 1: Akhir hari → Audit malam
+  await openNightAudit(page, loginAs)
+  // STEP 3: what still holds the day is done on the page: the arrivals (no-show), the departures (check-out in the sheet)
+  await markNoShows(page, 'Tidak datang sampai audit malam')
+  await checkOutDepartures(page, data)
+  await page.getByTestId('refresh').click()
+  await expect(page.getByTestId('refresh')).toBeEnabled()
+  const preview = await naPreview(data)
+  if (!preview.can_run) throw new Error(`the night audit of ${bd} cannot run: ${naSummary(preview)} ${JSON.stringify(preview.blockers).slice(0, 1500)}`)
+  await expect(page.getByTestId('cannot-run')).toHaveCount(0)
+  await expect(page.getByTestId('readiness')).toBeVisible()
+  // STEP 2: every step in order (the whole page, from the top)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await closeToasts(page)
+  await shotPage(page, 'auditmalam-jalankan-02')
+  // STEP 5: Tutup {date} dan buka tanggal bisnis berikutnya
+  const run = page.getByTestId('run')
+  await run.locator('input[name=confirm_run]').check()
+  await expect(page.getByTestId('run-audit')).toBeEnabled()
+  await closeToasts(page)
+  await shot(run, 'auditmalam-jalankan-05')
+  // STEP 6: Jalankan audit malam
+  await page.getByTestId('run-audit').click()
+  // STEP 7: the result: the day closed, the new business date, the summary and the pack
+  const result = page.getByTestId('result')
+  await expect(result).toBeVisible({ timeout: 120_000 })
+  await expect(result.getByTestId('new-date')).toBeVisible()
+  await expect(result.getByTestId('pack')).toBeVisible({ timeout: 30_000 }).catch(() => undefined) // the pack strip follows a moment later
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await shot(result, 'auditmalam-jalankan-07')
+  const next = await data.businessDate()
+  expect(next).toBe(addDays(bd, 1))
+  console.log(`[docs] night audit closed ${bd}; the business date is ${next}`)
+}
+
+// --- 11-audit-malam (C): after the run
+
+/**
+ * Verifies a suspected bug of the check-out wizard (not a page of the guide): a daytime early departure of a guest who arrived before today.
+ * The wizard adds the room charge of tonight (the dry run of the room charges) to what is due, while the check-out cuts the stay to today and posts
+ * no charge for tonight (frontdesk/stayops.go settleDeparture). The facts go to the run log as [PULANGAWAL] lines; the outcome never fails the test.
+ */
+export async function flowCekPulangLebihAwal(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const log = (s: string) => console.log(`[PULANGAWAL] ${s}`)
+  const textOf = async (l: Locator): Promise<string> => ((await l.count()) ? (await l.first().innerText()).replace(/\s+/g, ' ').trim().slice(0, 300) : '(none)')
+  const bd = await data.businessDate()
+  const guest = await findPulangAwal(data)
+  if (!guest) {
+    log(`no stay of the guest ${PULANG_AWAL.last_name} found on ${bd}: the test "11 menjalankan audit malam" did not check him in`)
+    return
+  }
+  const before = await data.stay(guest.stayId)
+  const folio0 = await data.folio(guest.folioId)
+  log(`business date ${bd}; stay ${guest.stayId} ${before.stay.status}, departure ${before.stay.departure_date}; folio ${folio0.folio_number} balance (API) ${folio0.balance}`)
+  const dry = await data.api.soft<{ items?: { service_date: string; status: string; total: string; folio_id: number | null; reason?: string }[] }>(
+    'POST', `${data.P}/night-audit/room-charges/preview`, { business_date: bd, stay_ids: [guest.stayId] })
+  log(`room-charge dry run the wizard reads: ${JSON.stringify((dry?.items ?? []).map((i) => ({ night: i.service_date, status: i.status, total: i.total })))}`)
+
+  const wizard = page.getByTestId('checkout-wizard')
+  async function openWizard(): Promise<void> {
+    await page.getByTestId('checkout').click()
+    await expect(wizard.getByTestId('step-departure')).toBeVisible()
+    const early = wizard.locator('input[name=confirm_early]')
+    const shown = (await early.count()) > 0
+    if (shown) await early.check()
+    log(`wizard: "Konfirmasi keberangkatan lebih awal" ${shown ? 'shown and ticked' : 'NOT shown'}`)
+    await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined) // the dry run of the wizard
+  }
+  async function readWizard(when: string): Promise<boolean> {
+    const enabled = await wizard.getByTestId('checkout-submit').isEnabled().catch(() => false)
+    log(`${when}: Check-out button ${enabled ? 'ENABLED' : 'DISABLED'}`)
+    log(`${when}: due reason "${await textOf(wizard.getByTestId('checkout-due-reason'))}"`)
+    log(`${when}: tonight line "${await textOf(wizard.locator('[data-testid^="tonight-charge-"]'))}"`)
+    log(`${when}: folio line "${await textOf(wizard.locator('[data-testid^="open-folio-"]'))}" ${await textOf(wizard.getByTestId('step-folios'))}`)
+    return enabled
+  }
+
+  // STEP 1: the stay page → Check-out, the early departure confirmed
+  await loginAs('admin', `/stays/${guest.stayId}`)
+  await openWizard()
+  await readWizard('first look')
+
+  // the real balance of the folio is paid through the API, then the check-out is tried from the screen
+  const folio = await data.folio(guest.folioId)
+  log(`folio ${folio.folio_number} balance (API) before paying: ${folio.balance}`)
+  if (Number(folio.balance) > 0) {
+    await data.pay(guest.folioId, folio.balance, 'CARD')
+    log(`paid ${folio.balance} by card through the API; balance now ${(await data.folio(guest.folioId)).balance}`)
+  } else if (Number(folio.balance) < 0) {
+    log(`the folio holds a credit of ${folio.balance}: nothing paid`)
+  }
+  await page.reload()
+  await expect(page.getByTestId('checkout')).toBeVisible()
+  await openWizard()
+  const enabled = await readWizard('after paying the folio balance')
+  if (enabled) {
+    await wizard.getByTestId('checkout-submit').click()
+    const done = page.getByTestId('notice').or(wizard.getByTestId('checkout-done')).or(wizard.getByTestId('checkout-error'))
+    try {
+      await expect(done.first()).toBeVisible({ timeout: 15_000 })
+    } catch {
+      log('the check-out click gave no notice and no error within 15 s')
+    }
+    const error = wizard.getByTestId('checkout-error')
+    if (await error.count()) log(`check-out from the screen REFUSED: "${await textOf(error)}"`)
+    else log(`check-out from the screen: SUCCESS "${await textOf(page.getByTestId('notice'))}"`)
+  } else {
+    log('check-out from the screen: NOT POSSIBLE, the button stays disabled')
+    // the way round tried from the screen: a user whose role may check out but holds neither folio.post_charge nor nightaudit.run
+    // (the wizard then has no dry run of tonight's charge and asks only for the balance of today)
+    const roleName = 'Check-out tanpa posting'
+    const roles = (await data.api.get<{ data: { id: number; name: string }[] }>('/roles')).data
+    const role = roles.find((r) => r.name === roleName)
+      ?? await data.api.post<{ id: number }>('/roles', { name: roleName, description: 'Check-out tanpa izin memposting tagihan', permissions: ['reservation.read', 'guest.read', 'frontdesk.checkout', 'folio.read', 'payment.post'] })
+    const email = 'checkout.saja@hotelkamara.example'
+    const pwd = 'lampu-teras-menyala-malam'
+    if (!(await data.api.all<{ email: string }>('/users')).some((u) => u.email.toLowerCase() === email)) {
+      const propertyId = Number(data.P.split('/').pop())
+      await data.api.post('/users', { email, full_name: 'Petugas Check-out', password: pwd, grants: [{ property_id: propertyId, role_id: role.id }] })
+    }
+    await page.context().clearCookies()
+    const r = await page.request.post('/api/v1/auth/login', { data: { tenant_code: TENANT, email, password: pwd } })
+    log(`login of the user without posting rights: ${r.status()}`)
+    await page.goto(`/stays/${guest.stayId}`)
+    await expect(page.getByTestId('checkout')).toBeVisible()
+    await openWizard()
+    if (await readWizard('user without posting rights')) {
+      await wizard.getByTestId('checkout-submit').click()
+      const done = page.getByTestId('notice').or(wizard.getByTestId('checkout-done')).or(wizard.getByTestId('checkout-error'))
+      await expect(done.first()).toBeVisible({ timeout: 15_000 }).catch(() => log('no notice and no error within 15 s'))
+      const error = wizard.getByTestId('checkout-error')
+      if (await error.count()) log(`check-out by the user without posting rights REFUSED: "${await textOf(error)}"`)
+      else log(`check-out by the user without posting rights: SUCCESS "${await textOf(page.getByTestId('notice'))}"`)
+      const mid = await data.stay(guest.stayId)
+      log(`after that click: stay ${mid.stay.status}, departure ${mid.stay.departure_date}, folios ${mid.folios.map((f) => `${f.id}:${f.balance ?? '?'}`).join(', ')}`)
+      if (mid.stay.status !== 'OPEN') return
+    }
+    await loginAs('admin', `/stays/${guest.stayId}`)
+    await openWizard()
+    // what staff would try next: pay what the wizard asks for (tonight's charge on top), then click Check-out
+    const asked = await textOf(wizard.getByTestId('checkout-due-reason'))
+    const extra = (asked.match(/[\d.]+(?=\.?$)/)?.[0] ?? '').replace(/\./g, '')
+    if (extra && Number(extra) > 0) {
+      await data.pay(guest.folioId, extra, 'CARD')
+      log(`paid the extra ${extra} the wizard asks for; folio balance (API) now ${(await data.folio(guest.folioId)).balance}`)
+      await page.reload()
+      await expect(page.getByTestId('checkout')).toBeVisible()
+      await openWizard()
+      if (await readWizard('after paying what the wizard asks')) {
+        await wizard.getByTestId('checkout-submit').click()
+        const done = page.getByTestId('notice').or(wizard.getByTestId('checkout-done')).or(wizard.getByTestId('checkout-error'))
+        await expect(done.first()).toBeVisible({ timeout: 15_000 }).catch(() => log('no notice and no error within 15 s'))
+        const error = wizard.getByTestId('checkout-error')
+        if (await error.count()) log(`check-out after paying the extra REFUSED: "${await textOf(error)}"`)
+        else log(`check-out after paying the extra: SUCCESS "${await textOf(page.getByTestId('notice'))}"`)
+        const mid = await data.stay(guest.stayId)
+        log(`after that click: stay ${mid.stay.status}, departure ${mid.stay.departure_date}, folios ${mid.folios.map((f) => `${f.id}:${f.balance ?? '?'}`).join(', ')}`)
+        if (mid.stay.status !== 'IN_HOUSE' && mid.stay.status !== 'OPEN') return
+      }
+    }
+    // what the server says to the same request as the button (the stay is checked out if it accepts)
+    const st = await data.stay(guest.stayId)
+    try {
+      const r = await data.api.post<{ stay?: { departure_date?: string }; posted_room_charges?: unknown[] }>(`${data.P}/stays/${guest.stayId}/check-out`,
+        { version: st.stay.version, confirm_early_departure: true })
+      log(`server check-out (API, the request of the button): ACCEPTED, departure ${r.stay?.departure_date}, room charges posted ${r.posted_room_charges?.length ?? 0}`)
+    } catch (e) {
+      log(`server check-out (API, the request of the button): REFUSED ${e instanceof Error ? e.message.slice(0, 400) : String(e)}`)
+    }
+  }
+  const after = await data.stay(guest.stayId)
+  log(`end: stay ${after.stay.status}, departure ${after.stay.departure_date}, folios ${after.folios.map((f) => `${f.id}:${f.balance ?? '?'}`).join(', ')}`)
+}
+
+
+// =====================================================================================================================
+// 13-pengaturan and 14-admin-platform. The tenant administrator: no E2E role holds room.manage, billing_config.manage, rate.manage or
+// property.manage. Nothing the other pictures read is renamed or switched off: what is new gets a name of its own (the role Kasir malam,
+// the user Dewi Anggraeni, the charge code SPA, the rate plan BB, the yield rule PENUH90), and the forms of what must stay are shown unsaved.
+
+/** A card of a setup page by its title. */
+function setupCard(page: Page, title: string): Locator {
+  return page.locator('main [data-slot=card]').filter({ has: page.locator('[data-slot=card-title]', { hasText: title }) }).first()
+}
+
+/** The example role of 13-pengaturan: made through the screen by flowPeranPengaturan, by the API in flowPengguna when that test did not run. */
+const NIGHT_CASHIER = {
+  name: 'Kasir malam',
+  description: 'Shift kasir malam: tagihan, pembayaran, dan laporan',
+  permissions: ['reservation.read', 'guest.read', 'folio.read', 'folio.post_charge', 'payment.post', 'cashier.shift', 'report.view'],
+}
+/** The example user of 13-pengaturan (the passwords are made up for the guide). */
+const NIGHT_CASHIER_USER = { email: 'dewi.kasir@hotelkamara.example', fullName: 'Dewi Anggraeni', password: 'kopi-pagi-sawah-hijau', reset: 'teh-hangat-sore-hari' }
+
+/** 13-pengaturan/properti.md: the form of a new property is filled and left unsaved (a new property becomes the current one of every later picture). */
+export async function flowProperti(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Pengaturan → Properti
+  await loginAs('admin', '/setup/properties')
+  const list = page.locator('main table').first()
+  await expect(list.getByRole('link').first()).toBeVisible()
+  await shotAround([page.locator('main h1').first(), list], 'pengaturan-properti-01')
+  // STEP 2-5: Properti baru: identity, time and money, and the two cards of a new property
+  await page.getByRole('button', { name: tx('properties.new'), exact: true }).click()
+  await expect(page).toHaveURL(/\/setup\/properties\/new$/)
+  const form = page.locator('main form').first()
+  await form.locator('input[name=code]').fill('SANUR')
+  await form.locator('input[name=name]').fill('Hotel Kamara Sanur')
+  await form.locator('input[name=address]').fill('Jl. Danau Tamblingan No. 50')
+  await form.locator('input[name=city]').fill('Denpasar')
+  await form.locator('input[name=country_code]').fill('ID')
+  await form.locator('input[name=timezone]').fill('Asia/Makassar')
+  await form.locator('select[name=data_language]').selectOption('id')
+  const day = setupCard(page, tx('propertyForm.businessDay'))
+  const language = page.getByTestId('data-language-card')
+  await day.scrollIntoViewIfNeeded()
+  await language.scrollIntoViewIfNeeded()
+  await shotAround([day, language], 'pengaturan-properti-05')
+  await form.getByRole('button', { name: tx('common.cancel'), exact: true }).click()
+  await expect(page).toHaveURL(/\/setup\/properties$/)
+  // STEP 7-8: the hotel's own property: its currency is locked by the first financial records (shown, not saved)
+  await page.locator('main table').first().getByRole('link').first().click()
+  await expect(page.getByTestId('currency-locked')).toBeVisible()
+  await shot(setupCard(page, tx('propertyForm.timeMoney')), 'pengaturan-properti-08')
+}
+
+/** 13-pengaturan/peran.md */
+export async function flowPeranPengaturan(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const roles = (await data.api.get<{ data: { id: number; name: string }[] }>('/roles')).data
+  // STEP 1: Pengaturan → Peran
+  await loginAs('admin', '/setup/roles')
+  if (!roles.some((r) => r.name === NIGHT_CASHIER.name)) {
+    // STEP 2: Peran baru, its name and description
+    await page.getByRole('button', { name: tx('roles.new'), exact: true }).click()
+    await expect(page).toHaveURL(/\/setup\/roles\/new$/)
+    await page.locator('input[name=name]').fill(NIGHT_CASHIER.name)
+    await page.locator('input[name=description]').fill(NIGHT_CASHIER.description)
+    // STEP 3: open the groups and tick the permissions of the night cashier
+    for (const group of ['Reservations', 'Guests', 'Billing', 'Reports']) await page.getByTestId(`group-toggle-${group}`).click()
+    for (const code of NIGHT_CASHIER.permissions) await page.locator(`[data-permission="${code}"]`).check()
+    await shot(page.getByTestId('group-Billing'), 'pengaturan-peran-03')
+    // STEP 4: the bar at the bottom of the screen: Buat peran
+    const bar = page.getByTestId('save-bar')
+    await expect(bar).toBeVisible()
+    await shot(bar, 'pengaturan-peran-04')
+    await bar.getByTestId('save').click()
+    await expect(page).toHaveURL(/\/setup\/roles$/)
+  }
+  // STEP 5: the list, with the new role and its number of permissions
+  const table = page.locator('main table').first()
+  await expect(table.getByRole('link', { name: NIGHT_CASHIER.name, exact: true })).toBeVisible()
+  await shotAround([page.locator('main h1').first(), table], 'pengaturan-peran-05')
+}
+
+/** 13-pengaturan/pengguna.md */
+export async function flowPengguna(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const roles = (await data.api.get<{ data: { id: number; name: string }[] }>('/roles')).data
+  if (!roles.some((r) => r.name === NIGHT_CASHIER.name)) await data.api.post('/roles', NIGHT_CASHIER)
+  const exists = (await data.api.all<{ email: string }>('/users')).some((u) => u.email.toLowerCase() === NIGHT_CASHIER_USER.email)
+  // STEP 1: Pengaturan → Pengguna, the column Akses
+  await loginAs('admin', '/setup/users')
+  const table = page.locator('main table').first()
+  await expect(table.getByRole('link').first()).toBeVisible()
+  await shotAround([page.locator('main h1').first(), table], 'pengaturan-pengguna-01')
+  if (!exists) {
+    // STEP 2: Pengguna baru, the profile
+    await page.getByRole('button', { name: tx('users.new'), exact: true }).click()
+    await expect(page).toHaveURL(/\/setup\/users\/new$/)
+    await page.locator('input[name=email]').fill(NIGHT_CASHIER_USER.email)
+    await page.locator('input[name=full_name]').fill(NIGHT_CASHIER_USER.fullName)
+    await page.locator('input[name=password]').fill(NIGHT_CASHIER_USER.password)
+    // STEP 3: Tambah properti: the property (the only one: option 0 is the placeholder) and the role
+    await page.getByRole('button', { name: tx('users.addProperty'), exact: true }).click()
+    await page.getByLabel(tx('users.propertyN', { n: 1 }), { exact: true }).selectOption({ index: 1 })
+    await page.getByLabel(tx('users.roleN', { n: 1 }), { exact: true }).selectOption({ label: NIGHT_CASHIER.name })
+    await shot(page.locator('main [data-slot=card]').first(), 'pengaturan-pengguna-03')
+    // STEP 4: Buat pengguna
+    await page.getByRole('button', { name: tx('users.create'), exact: true }).click()
+    await expect(page).toHaveURL(/\/setup\/users$/)
+  }
+  // STEP 5: the user's page
+  await page.locator('main table').first().getByRole('link', { name: NIGHT_CASHIER_USER.fullName, exact: true }).click()
+  await expect(page.locator('main h1').first()).toContainText(NIGHT_CASHIER_USER.fullName)
+  // STEP 7: Atur kata sandi baru, and its message at the top of the page
+  const card = setupCard(page, tx('users.newPasswordTitle'))
+  await card.getByLabel(tx('users.newPassword'), { exact: true }).fill(NIGHT_CASHIER_USER.reset)
+  await card.getByRole('button', { name: tx('users.setPassword'), exact: true }).click()
+  const notice = page.locator('main [role=status]').filter({ hasText: tx('users.passwordSet') })
+  await expect(notice).toBeVisible()
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await shotAround([notice, card], 'pengaturan-pengguna-07')
+}
+
+/** 13-pengaturan/tipe-kamar-dan-kamar.md: the forms are filled and left unsaved (a new room type or room would show in every later grid and list). */
+export async function flowTipeKamar(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Pengaturan → Tipe kamar
+  await loginAs('admin', '/setup/room-types')
+  await expect(page.getByTestId('type-STD')).toBeVisible()
+  await shotAround([page.locator('main h1').first(), page.locator('main table').first()], 'pengaturan-tipekamar-01')
+  // STEP 2: Tipe kamar baru
+  await page.getByTestId('new-type').click()
+  const type = page.locator('main form').first()
+  await type.locator('input[name=code]').fill('FAM')
+  await type.locator('input[name=name]').fill('Family Room')
+  await type.locator('input[name=description]').fill('Dua kamar tidur terhubung')
+  await type.locator('input[name=max_adult]').fill('4')
+  await type.locator('input[name=max_child]').fill('2')
+  await type.locator('input[name=sort_order]').fill('50')
+  await type.locator('input[name=max_occupancy]').fill('5')
+  await type.locator('input[name=base_occupancy]').fill('2')
+  await shot(type, 'pengaturan-tipekamar-02')
+  await type.getByRole('button', { name: tx('common.cancel'), exact: true }).click()
+  // STEP 5-6: Pengaturan → Kamar → Kamar baru
+  await page.goto('/setup/rooms')
+  await page.getByTestId('new-room').click()
+  const room = page.locator('main form').first()
+  await room.locator('input[name=room_number]').fill('601')
+  await selectContaining(room.locator('select[name=room_type_id]'), 'DLX')
+  await room.locator('select[name=initial_housekeeping_status]').selectOption('DIRTY')
+  await selectContaining(room.locator('select[name=bed_type_id]'), 'King')
+  await room.locator('input[name=floor]').fill('6')
+  await room.locator('input[name=building]').fill('Gedung utama')
+  await shot(room, 'pengaturan-kamar-06')
+  await room.getByRole('button', { name: tx('common.cancel'), exact: true }).click()
+}
+
+/** 13-pengaturan/pajak-dan-kode-biaya.md: a new charge code SPA (service, exclusive) with SC then PB1, and its calculator. */
+export async function flowPajakKodeBiaya(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Pengaturan → Pajak & biaya layanan (PB1 and SC of the pictures' hotel, world.ts)
+  await loginAs('admin', '/setup/taxes')
+  await expect(page.getByTestId('section-tax').getByTestId('tax-PB1')).toBeVisible()
+  await expect(page.getByTestId('section-service').getByTestId('service-SC')).toBeVisible()
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await shotAround([page.locator('main h1').first(), page.getByTestId('section-service')], 'pengaturan-pajak-01')
+  // STEP 5: Kode biaya → Kode biaya baru
+  await page.goto('/setup/charge-codes')
+  await expect(page.getByTestId('code-ROOM')).toBeVisible()
+  const fresh = (await page.getByTestId('code-SPA').count()) === 0
+  if (fresh) {
+    await page.getByTestId('new-code').click()
+    const create = page.getByTestId('code-form')
+    await create.locator('input[name=code]').fill('SPA')
+    await create.locator('input[name=name]').fill('Spa dan pijat')
+    await create.locator('select[name=charge_type]').selectOption('SERVICE')
+    await create.locator('select[name=price_mode]').selectOption('EXCLUSIVE')
+    await create.locator('input[name=default_unit_price]').fill('350000')
+    await create.locator('input[name=gl_account_code]').fill('4310')
+    await selectContaining(create.getByTestId('department-select'), 'OOD')
+    await shot(create, 'pengaturan-kodebiaya-05')
+    // STEP 6: Simpan: the code is in the list, without rules yet
+    await create.getByRole('button', { name: tx('common.save'), exact: true }).click()
+    await expect(page.getByTestId('code-SPA')).toBeVisible()
+  }
+  // STEP 7: Ubah → Aturan: the service charge, then PB1, Simpan aturan
+  await page.getByTestId('code-SPA').getByRole('button', { name: tx('common.edit'), exact: true }).click()
+  const form = page.getByTestId('code-form')
+  await expect(form.getByTestId('rules')).toBeVisible()
+  if (fresh) {
+    await selectContaining(form.locator('select[name=add_service]'), 'SC ·')
+    await form.getByTestId('add-service').click()
+    await selectContaining(form.locator('select[name=add_tax]'), 'PB1 ·')
+    await form.getByTestId('add-tax').click()
+    await form.getByTestId('save-rules').click()
+    await expect(form.getByTestId('rules-saved')).toBeVisible()
+  }
+  // STEP 8: Kalkulator: one treatment, nothing is posted
+  const calc = form.getByTestId('calculator')
+  await calc.locator('input[name=quantity]').fill('1')
+  await calc.locator('input[name=unit_price]').fill('350000')
+  await calc.getByTestId('calculate').click()
+  await expect(calc.getByTestId('result')).toBeVisible()
+  await expect(calc.getByTestId('tax-line')).toHaveCount(1)
+  await shot(calc, 'pengaturan-kodebiaya-08')
+  await form.getByRole('button', { name: tx('common.close'), exact: true }).click()
+}
+
+/** 13-pengaturan/paket-tarif-dan-grid-tarif.md: the rate plan BB (room and breakfast) and two weeks of its STD price. */
+export async function flowPaketTarif(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const bd = await data.businessDate()
+  // STEP 1-2: Pengaturan → Paket tarif → Paket tarif baru
+  await loginAs('admin', '/setup/rate-plans')
+  await expect(page.getByTestId('plan-RO')).toBeVisible()
+  if (!(await page.getByTestId('plan-BB').count())) {
+    await page.getByTestId('new-plan').click()
+    const form = page.getByTestId('plan-form')
+    await form.locator('input[name=code]').fill('BB')
+    await form.locator('input[name=name]').fill('Kamar dan sarapan')
+    await form.locator('select[name=meal_plan]').selectOption('BB')
+    await form.locator('select[name=occupancy_kind]').selectOption('PAID')
+    await selectContaining(form.locator('select[name=room_charge_code_id]'), 'ROOM ·')
+    await expect(form.getByTestId('mode-hint')).toBeVisible()
+    await form.locator('input[name=description]').fill('Termasuk sarapan untuk dua orang')
+    await form.locator('input[name=cancellation_policy]').fill('Gratis dibatalkan sampai H-2')
+    await shot(form, 'pengaturan-pakettarif-02')
+    // STEP 3: Simpan
+    await form.getByRole('button', { name: tx('common.save'), exact: true }).click()
+    await expect(page.getByTestId('plan-BB')).toBeVisible()
+  }
+  // STEP 5: Pengaturan → Grid tarif, the plan BB
+  await page.goto('/setup/rates')
+  await expect(page.getByTestId('grid')).toBeVisible()
+  await selectContaining(page.locator('select[name=rate_plan]'), 'BB ·')
+  const first = page.getByTestId(`cell-STD-${bd}`)
+  await expect(first).toBeVisible()
+  // STEP 6: a click on the first night of STD fills Atur tarif; fourteen nights from it
+  await first.click()
+  const fill = page.getByTestId('fill-form')
+  await setDate(fill, 'to', addDays(bd, 14))
+  await fill.locator('input[name=amount]').fill('850000')
+  await shot(fill, 'pengaturan-gridtarif-06')
+  // STEP 7: Terapkan: the message, and the prices in the grid
+  await fill.getByRole('button', { name: tx('rateGrid.apply'), exact: true }).click()
+  await expect(fill.getByTestId('notice')).toBeVisible()
+  await expect(first).not.toHaveText('—')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await shotAround([page.locator('main h1').first(), page.getByTestId('grid')], 'pengaturan-gridtarif-07')
+}
+
+/** 13-pengaturan/pembatasan-yield-dan-kuota.md: a minimum stay on Saturdays for BB only (no other picture books BB), a yield rule that only
+ *  starts at 90% occupancy (the pictures' hotel never gets there), and the price check. */
+export async function flowPembatasanYield(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const bd = await data.businessDate()
+  // STEP 1: Pengaturan → Pembatasan penjualan, the plan BB (flowPaketTarif made it; without it the grid of RO is shown unchanged)
+  await loginAs('admin', '/setup/restrictions')
+  await expect(page.getByTestId('grid')).toBeVisible()
+  const plan = page.locator('select[name=rate_plan]')
+  if (await plan.locator('option', { hasText: 'BB ·' }).count()) {
+    await selectContaining(plan, 'BB ·')
+    // STEP 2: Atur pembatasan: arrivals on a Saturday of the next two weeks stay two nights at least
+    const form = page.getByTestId('fill-form')
+    await setDate(form, 'from', bd)
+    await setDate(form, 'to', addDays(bd, 14))
+    await form.locator('input[name="plan-BB"]').check()
+    await form.locator('input[name="weekday-SAT"]').check()
+    await form.locator('input[name=min_stay]').fill('2')
+    await form.locator('input[name=note]').fill('Akhir pekan minimal 2 malam')
+    // STEP 3: Terapkan: the grid shows ≥2 on the Saturdays
+    await form.getByTestId('apply').click()
+    await expect(form.getByTestId('notice')).toBeVisible()
+    await expect(page.getByTestId('grid').getByTestId('mark-min_stay').first()).toBeVisible()
+  }
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await shotAround([page.getByTestId('grid'), page.getByTestId('legend')], 'pengaturan-pembatasan-03')
+  // STEP 4-5: Pengaturan → Aturan yield → Aturan baru
+  await page.goto('/setup/yield-rules')
+  await expect(page.getByTestId('new-rule')).toBeVisible()
+  if (!(await page.getByTestId('rule-PENUH90').count())) {
+    await page.getByTestId('new-rule').click()
+    const form = page.getByTestId('rule-form')
+    await form.locator('input[name=code]').fill('PENUH90')
+    await form.locator('input[name=name]').fill('Hotel hampir penuh')
+    await form.locator('input[name=priority]').fill('100')
+    await form.locator('input[name=occupancy_from]').fill('90')
+    await form.locator('input[name=occupancy_to]').fill('100')
+    await form.locator('select[name=adjustment_type]').selectOption('PERCENT')
+    await form.locator('input[name=adjustment_value]').fill('15')
+    await form.locator('input[name=cap_amount]').fill('2500000')
+    await shot(form, 'pengaturan-yield-05')
+    // STEP 6: Simpan
+    await form.getByRole('button', { name: tx('common.save'), exact: true }).click()
+    await expect(page.getByTestId('rule-PENUH90')).toBeVisible()
+  }
+  // STEP 7: Cek harga: two nights of STD on RO
+  const quote = page.getByTestId('quote-form')
+  await selectContaining(quote.locator('select[name=quote_plan]'), 'RO ·')
+  await selectContaining(quote.locator('select[name=quote_type]'), 'STD ·')
+  await setDate(quote, 'quote_arrival', addDays(bd, 3))
+  await setDate(quote, 'quote_departure', addDays(bd, 5))
+  await quote.getByTestId('quote-run').click()
+  await expect(quote.getByTestId('quote')).toBeVisible()
+  await shot(quote, 'pengaturan-yield-07')
+}
+
+/** 13-pengaturan/aturan-persetujuan.md: the rule of one kind is changed on the screen and not saved (the other pictures keep the hotel's rules). */
+export async function flowAturanPersetujuan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Pengaturan → Aturan persetujuan
+  await loginAs('admin', '/setup/approval-rules')
+  const rules = page.getByTestId('rules')
+  await expect(rules.getByTestId('rule-FOLIO_ADJUSTMENT')).toBeVisible()
+  await shotAround([page.locator('main h1').first(), rules.getByTestId('rule-FOLIO_TRANSFER')], 'pengaturan-persetujuan-01')
+  // STEP 2: the asset disposals: Selalu orang lain since the demo data (pms-seed assets), with the warning about its approvers
+  await shot(rules.getByTestId('rule-ASSET_DISPOSAL'), 'pengaturan-persetujuan-02')
+  // STEP 3: Penyesuaian folio: Orang lain di atas batas, Rp500.000
+  const row = rules.getByTestId('rule-FOLIO_ADJUSTMENT')
+  await row.locator('select[name=rule_FOLIO_ADJUSTMENT]').selectOption('DISTINCT_ABOVE')
+  await row.locator('input[name=limit_FOLIO_ADJUSTMENT]').fill('500000')
+  await expect(row).toHaveAttribute('data-changed', 'true')
+  await expect(page.getByTestId('save')).toBeEnabled()
+  await shot(row, 'pengaturan-persetujuan-03')
+  // not saved: a reload shows the rules as they are
+  await page.reload()
+  const again = page.getByTestId('rules').getByTestId('rule-FOLIO_ADJUSTMENT')
+  await expect(again).toBeVisible()
+  await expect(page.getByTestId('save')).toBeDisabled()
+}
+
+/** 13-pengaturan/langganan-dan-sistem.md */
+export async function flowLangganan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Pengaturan → Langganan (the E2E tenant is on the default plan, in its trial)
+  await loginAs('admin', '/setup/subscription')
+  await expect(page.getByTestId('subscription-plan')).toBeVisible()
+  await expect(page.getByTestId('subscription-invoices')).toBeVisible()
+  await shotAround([page.locator('main h1').first(), page.getByTestId('subscription-invoices')], 'pengaturan-langganan-01')
+  // STEP 6: Pengaturan → Sistem → Muat ulang
+  await page.goto('/setup/system')
+  await page.getByTestId('system-refresh').click()
+  await expect(page.getByTestId('system-status-card')).toContainText(tx('system.lastChecked', { time: '' }).trim())
+  await shotAround([page.locator('main h1').first(), page.getByTestId('system-status-card')], 'pengaturan-sistem-06')
+}
+
+/** 14-admin-platform/console-platform.md: only the sign-in page (P1). The E2E world has no platform operator, so the other steps of the page
+ *  have no pictures yet (they wait for an operator made with pms-admin create-operator and an authenticator enrolment). */
+export async function flowConsolePlatform(page: Page): Promise<void> {
+  // STEP 1: the sign-in page of the console, in Indonesian (the language of the browser is the one the hotel screens keep)
+  await page.context().addInitScript(() => {
+    try { localStorage.setItem('pms.locale', 'id') } catch { /* storage refused: the page shows its default language */ }
+  })
+  await page.goto('/platform/login')
+  const step = page.getByTestId('step-password')
+  await expect(step).toBeVisible()
+  await expect(step.getByRole('heading', { name: tx('platform.login.title') })).toBeVisible()
+  await step.locator('input[name=email]').fill('operator@kamarapms.example')
+  await shot(page.locator('main > div').first(), 'platform-login-01', { pad: 24 })
+}

@@ -54,7 +54,9 @@
 
 > ⚠️ Penting: catat pembayaran untuk invoice lewat tombol **Bayar** pada invoicenya, bukan lewat **Catat pembayaran dari perusahaan**.
 
-- **"Catat pembayaran dari perusahaan"** di bagian atas mencatat penerimaan tanpa invoice. Saldo piutang turun, tetapi penerimaan itu tidak pernah terhubung ke invoice mana pun: invoice tetap **Belum dibayar**, dan tetap muncul di **Invoice jatuh tempo**. Pakai hanya untuk uang muka atau pembayaran yang belum diinvoice.
+- **"Catat pembayaran dari perusahaan"** di bagian atas mencatat penerimaan tanpa invoice. Pakai hanya untuk uang muka atau pembayaran yang belum diinvoice.
+
+  > 🐞 Kendala yang diketahui (KD-04): penerimaan dari **Catat pembayaran dari perusahaan** tidak pernah terhubung ke invoice, dan tidak ada layar untuk menghubungkannya nanti. **Dampaknya:** saldo piutang turun, tetapi invoice tetap **Belum dibayar** dan tetap muncul di **Invoice jatuh tempo**, sehingga perusahaan bisa ditagih atau diberi surat peringatan untuk invoice yang sudah dibayar. **Sementara ini:** untuk pembayaran invoice, selalu pakai **Bayar** pada invoicenya. Kalau penerimaan sudah terlanjur dicatat tanpa invoice, laporkan ke manajer keuangan atau administrator, beserta nama perusahaan, nomor invoice, dan jumlahnya.
 - **Hanya tamu yang sudah check-out** yang bisa diinvoice. Pemindahan tamu yang masih menginap bertanda "menginap".
 - **Membatalkan invoice**: klik **Batalkan**, isi **Alasan** di kartu yang muncul di bagian bawah halaman, lalu **Lanjutkan** ke persetujuan. Invoice yang sudah dibayar atau punya nota kredit harus dibereskan dulu. Pemindahannya kembali bisa diinvoice lagi.
 - **Membatalkan penerimaan** hanya bisa pada tanggal bisnis yang sama, lewat **Batalkan** di rekening koran, dengan persetujuan: "Hanya tanda terima pada tanggal bisnis berjalan yang bisa dibatalkan.".

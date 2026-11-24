@@ -59,6 +59,8 @@
 
 9. Buka **Utang usaha → Umur utang usaha**. Utang per pemasok dibagi menurut hari lewat jatuh tempo. Klik baris pemasok untuk melihat tagihannya.
 
+   > 🐞 Kendala yang diketahui (KD-07): di baris **Total**, angka-angkanya bergeser satu kolom. Total **Belum jatuh tempo** tampil di bawah kolom **31–60 hari**. **Dampaknya:** utang yang belum jatuh tempo terbaca seolah sudah lewat 31–60 hari. **Sementara ini:** baca total per kolom dari baris pemasok, atau dari kolom **Total** paling kanan.
+
    ![Umur utang usaha](../screenshots/utang-umur-09.png)
 
 ## Hasilnya

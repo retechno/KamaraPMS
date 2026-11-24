@@ -20,7 +20,7 @@
    | Pax aktual | Tidak | Jumlah tamu yang hadir, misalnya `42`. Yang ditagih adalah yang lebih besar dari pax garansi dan pax aktual. |
    | Tidak ada pax garansi maupun aktual. Tagih menurut … pax perkiraan. | Kalau tidak ada pax | Hanya muncul kalau sesi tidak punya pax garansi maupun pax aktual. |
 
-   > ⚠️ PERLU VERIFIKASI: saat ini angka yang diketik di **Pax aktual** tidak terbaca. **Ditagih** tetap menunjukkan pax garansi, dan sesi ditagih menurut pax garansi. Periksa **Ditagih** sebelum memposting. Kalau tamu yang hadir lebih banyak dari garansi, tambahkan selisihnya dengan **Penyesuaian** (angka positif) di folio acara, pada kode biaya yang sudah diposting. Lihat [Reverse dan penyesuaian](../03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md).
+   > 🐞 Kendala yang diketahui (KD-03): angka yang diketik di **Pax aktual** tidak terbaca. **Ditagih** tetap menunjukkan pax garansi, dan sesi ditagih menurut pax garansi. **Dampaknya:** kalau tamu yang hadir lebih banyak dari garansi, kelebihannya tidak tertagih. **Sementara ini:** periksa **Ditagih** sebelum memposting. Setelah posting, selama folio acara masih terbuka, tambahkan selisihnya dengan **Penyesuaian** (angka positif) di folio acara, pada kode biaya yang sama dengan baris sesinya (misalnya `BQT_FB`). Penyesuaian butuh persetujuan dan tercatat pada tanggal bisnis hari ini. Penyesuaian itu tidak masuk laporan pendapatan banquet dan tidak mengurangi stok. Kalau biaya sesi diarahkan ke master folio grup, buat penyesuaiannya di master folio itu. Lihat [Reverse dan penyesuaian](../03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md).
 
    ![Jendela Posting sesi](../screenshots/banquet-posting-03.png)
 
