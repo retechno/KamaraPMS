@@ -582,16 +582,13 @@ Tautan dari halaman yang sudah ditulis ke halaman yang belum ada. Halaman yang d
 <!-- PENDING-LINKS:START -->
 | Halaman tujuan (belum ada) | Ditautkan dari |
 |---|---|
-| `06-corporate-group-city-ledger/grup-dan-master-folio.md` | `03-kasir-dan-pembayaran/posting-biaya-ke-folio.md`, `03-kasir-dan-pembayaran/transfer-antar-folio.md` |
-| `06-corporate-group-city-ledger/transfer-ke-piutang-perusahaan.md` | `03-kasir-dan-pembayaran/menerima-pembayaran.md`, `03-kasir-dan-pembayaran/transfer-antar-folio.md` |
-| `07-accounting/departemen.md` | `04-pos/menyiapkan-outlet.md` |
-| `08-keuangan-back-office/pajak-dan-faktur.md` | `03-kasir-dan-pembayaran/grup-tagihan-dan-cetak.md` |
 | `09-inventory/resep.md` | `04-pos/menyiapkan-outlet.md` |
+| `10-aset-tetap/penyusutan-bulanan.md` | `07-accounting/periode-dan-tahun-buku.md` |
 | `11-audit-malam/menangani-penghalang.md` | `03-kasir-dan-pembayaran/posting-biaya-kamar.md` |
-| `11-audit-malam/menjalankan-audit-malam.md` | `00-memulai/memahami-tanggal-bisnis.md`, `01-front-desk/membatalkan-reservasi-dan-no-show.md`, `02-housekeeping/daftar-pembersihan-dan-tugas-saya.md`, `03-kasir-dan-pembayaran/posting-biaya-kamar.md`, `03-kasir-dan-pembayaran/shift-kasir.md` |
-| `12-laporan/laporan-harian.md` | `03-kasir-dan-pembayaran/shift-kasir.md`, `04-pos/laporan-outlet.md` |
+| `11-audit-malam/menjalankan-audit-malam.md` | `00-memulai/memahami-tanggal-bisnis.md`, `01-front-desk/membatalkan-reservasi-dan-no-show.md`, `02-housekeeping/daftar-pembersihan-dan-tugas-saya.md`, `03-kasir-dan-pembayaran/posting-biaya-kamar.md`, `03-kasir-dan-pembayaran/shift-kasir.md`, `05-banquet/posting-sesi-dan-penagihan.md`, `07-accounting/periode-dan-tahun-buku.md` |
+| `12-laporan/laporan-harian.md` | `03-kasir-dan-pembayaran/shift-kasir.md`, `04-pos/laporan-outlet.md`, `07-accounting/laporan-keuangan.md` |
 | `13-pengaturan/aturan-persetujuan.md` | `00-memulai/meminta-persetujuan.md`, `03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md`, `04-pos/void-diskon-komplimen.md` |
-| `13-pengaturan/pajak-dan-kode-biaya.md` | `00-memulai/setup-awal-hotel.md`, `04-pos/menyiapkan-outlet.md` |
+| `13-pengaturan/pajak-dan-kode-biaya.md` | `00-memulai/setup-awal-hotel.md`, `04-pos/menyiapkan-outlet.md`, `05-banquet/menyiapkan-banquet.md`, `07-accounting/bagan-akun-dan-akun-sistem.md`, `08-keuangan-back-office/pajak-dan-faktur.md` |
 | `13-pengaturan/paket-tarif-dan-grid-tarif.md` | `00-memulai/setup-awal-hotel.md`, `03-kasir-dan-pembayaran/posting-biaya-kamar.md` |
 | `13-pengaturan/pengguna.md` | `00-memulai/peran-dan-hak-akses.md`, `00-memulai/setup-awal-hotel.md` |
 | `13-pengaturan/peran.md` | `00-memulai/peran-dan-hak-akses.md`, `00-memulai/setup-awal-hotel.md` |

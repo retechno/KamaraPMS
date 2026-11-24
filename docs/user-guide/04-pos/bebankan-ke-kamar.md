@@ -35,7 +35,9 @@
   Setiap penolakan tercatat di **Tagihan → Beban outlet**, sehingga resepsionis bisa melihat dan membuka folionya kalau tamu memang boleh.
 - **Folio terkunci lagi dengan sendirinya** saat batasnya tercapai, saat tamu check-out, atau (kalau dibuka untuk satu hari) saat audit malam.
 - **Tamu grup** yang tagihannya diarahkan ke master folio: beban masuk ke master folio grup. Hasil pencarian menampilkan "ditagihkan ke grup …".
-- **Membatalkan beban ke kamar** setelah bill lunas belum bisa dilakukan dari layar POS. Baris itu di folio tamu juga tidak bisa di-reverse, karena datang dari transfer. Kalau tamu memang tidak seharusnya ditagih, minta supervisor front office memberi **Penyesuaian** (kredit) sebesar tagihan itu di folio tamu, dengan alasan dan persetujuan. Lihat [Reverse dan penyesuaian](../03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md).
+- **Membatalkan beban ke kamar** setelah bill lunas belum bisa dilakukan dari layar. Di folio tamu, keterangan barisnya berisi nama outlet dan nomor bill, dan kodenya kode transfer `TRF`. Baris itu tidak bisa di-reverse, tidak muncul di **Kembalikan**, dan tidak bisa dikoreksi dengan **Penyesuaian** ("Kode TRF diposting oleh transfer saldo, bukan manual."). Periksa bill sebelum memilih **Bebankan ke kamar**. Kalau sudah terlanjur, laporkan ke supervisor atau administrator. Lihat [Reverse dan penyesuaian](../03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md).
+
+  > ⚠️ PERLU VERIFIKASI: **Buka kembali** bill (lihat [Void, diskon, dan komplimen](void-diskon-komplimen.md)) membuka bill lagi, tetapi layar bill tidak punya tombol untuk mengembalikan beban kamarnya. Pengembaliannya hanya ada di API.
 - Hanya tamu yang sedang menginap yang muncul di pencarian.
 
 ## Terkait

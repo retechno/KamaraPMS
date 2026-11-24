@@ -69,4 +69,35 @@ test.describe('Panduan pengguna: screenshot', () => {
   test('04 bebankan ke kamar', async ({ page, loginAs }) => { await flows.flowBebankanKamar(page, loginAs, readWorld()) })
   test('04 void diskon komplimen', async ({ page, loginAs, seed }) => { await flows.flowVoidPos(page, loginAs, seed) })
   test('04 laporan outlet', async ({ page, loginAs }) => { await flows.flowLaporanOutlet(page, loginAs) })
+
+  // --- 05-banquet (the tests after "05 membuat acara dan sesi" use its event)
+  test('05 menyiapkan banquet', async ({ page, loginAs }) => { await flows.flowMenyiapkanBanquet(page, loginAs) })
+  test('05 membuat acara dan sesi', async ({ page, loginAs, data }) => { await flows.flowAcaraBaru(page, loginAs, readWorld(), data) })
+  test('05 tentatif dan konfirmasi', async ({ page, loginAs, data }) => { await flows.flowTentatifKonfirmasi(page, loginAs, readWorld(), data) })
+  test('05 item paket dan deposit', async ({ page, loginAs, data }) => { await flows.flowItemDeposit(page, loginAs, data) })
+  test('05 posting sesi', async ({ page, loginAs, data }) => { await flows.flowPostingSesi(page, loginAs, data) })
+  test('05 beo dan dokumen', async ({ page, loginAs, data }) => { await flows.flowBeoDokumen(page, loginAs, data) })
+  test('05 membatalkan acara', async ({ page, loginAs, data }) => { await flows.flowBatalAcara(page, loginAs, readWorld(), data) })
+
+  // --- 06-corporate-group-city-ledger (the tests after "06 perusahaan" use its company, in this order)
+  test('06 perusahaan', async ({ page, loginAs }) => { await flows.flowPerusahaan(page, loginAs) })
+  test('06 grup dan master folio', async ({ page, loginAs }) => { await flows.flowGrup(page, loginAs, readWorld()) })
+  test('06 transfer ke piutang perusahaan', async ({ page, loginAs, data }) => { await flows.flowTransferPiutang(page, loginAs, data) })
+  test('06 invoice dan penerimaan', async ({ page, loginAs, data }) => { await flows.flowInvoice(page, loginAs, data) })
+  test('06 nota kredit', async ({ page, loginAs, data, seed }) => { await flows.flowNotaKredit(page, loginAs, data, seed) })
+  test('06 surat peringatan', async ({ page, loginAs }) => { await flows.flowSuratPeringatan(page, loginAs) })
+
+  // --- 07-accounting
+  test('07 bagan akun', async ({ page, loginAs }) => { await flows.flowBaganAkun(page, loginAs) })
+  test('07 jurnal manual', async ({ page, loginAs, seed }) => { await flows.flowJurnalManual(page, loginAs, readWorld(), seed) })
+  test('07 periode dan tahun buku', async ({ page, loginAs }) => { await flows.flowPeriode(page, loginAs) })
+  test('07 departemen', async ({ page, loginAs }) => { await flows.flowDepartemen(page, loginAs) })
+  test('07 laporan keuangan', async ({ page, loginAs }) => { await flows.flowLaporanKeuangan(page, loginAs) })
+  // --- 08-keuangan-back-office
+  test('08 utang usaha', async ({ page, loginAs, data }) => { await flows.flowUtangUsaha(page, loginAs, readWorld(), data) })
+  test('08 pajak dan faktur', async ({ page, loginAs }) => { await flows.flowPajak(page, loginAs) })
+  test('08 rekonsiliasi bank', async ({ page, loginAs }) => { await flows.flowRekonsiliasiBank(page, loginAs, readWorld()) })
+  test('08 settlement kartu', async ({ page, loginAs }) => { await flows.flowSettlementKartu(page, loginAs, readWorld()) })
+  test('08 anggaran', async ({ page, loginAs, seed }) => { await flows.flowAnggaran(page, loginAs, seed) })
+
 })

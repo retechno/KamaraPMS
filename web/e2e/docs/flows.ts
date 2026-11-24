@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from 'playwright/test'
-import { addDays } from '../support/factories'
+import { addDays, type Factories } from '../support/factories'
 import { TENANT, USER_PASSWORD } from '../support/env'
 import { tx } from '../support/i18n'
 import { ROLES, type SeedState, type UserKey } from '../support/state'
@@ -1142,4 +1142,614 @@ export async function flowLaporanOutlet(page: Page, loginAs: LoginAs): Promise<v
   await expect(page.getByTestId('report-totals')).toBeVisible()
   await expect(page.getByTestId('report-methods')).toBeVisible()
   await shotAround([page.locator('main h1'), page.getByTestId('report-methods')], 'pos-laporan-03')
+}
+
+// =====================================================================================================================
+// 07-accounting
+
+/** 07-accounting/bagan-akun-dan-akun-sistem.md */
+export async function flowBaganAkun(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Akuntansi → Bagan akun → Akun baru (Andi Akuntansi)
+  await loginAs('accounting', '/accounting/accounts')
+  await page.getByTestId('new-account').click()
+  // STEP 2: a petty cash account under 1100
+  const form = page.getByTestId('account-form')
+  await form.locator('input[name=code]').fill('1125')
+  await form.locator('input[name=name]').fill('Kas kecil housekeeping')
+  await form.locator('select[name=account_type]').selectOption('ASSET')
+  await pickCombo(form, 'parent_id', '1100 ·')
+  await form.locator('select[name=statement_group]').selectOption('CASH')
+  await form.locator('input[name=description]').fill('Kas kecil yang dipegang kepala housekeeping')
+  await shot(form, 'akuntansi-bagan-02')
+  // STEP 3: Simpan
+  await form.getByRole('button', { name: tx('common.save'), exact: true }).click()
+  await expect(form).toHaveCount(0)
+  // STEP 4: Cari the code
+  await page.locator('input[name=q]').first().fill('112')
+  await expect(page.getByTestId('account-1125')).toBeVisible()
+  await shot(page.getByTestId('accounts'), 'akuntansi-bagan-04')
+  // STEP 7-8: Akuntansi → Akun sistem
+  await page.goto('/accounting/mapping')
+  await expect(page.getByTestId('map-CITY_LEDGER')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('map-CITY_LEDGER')], 'akuntansi-sistem-07')
+}
+
+/** 07-accounting/jurnal-manual-dan-pembalikan.md */
+export async function flowJurnalManual(page: Page, loginAs: LoginAs, w: DocsWorld, seed: SeedState): Promise<void> {
+  const admin = seed.users.admin
+  // STEP 1: Akuntansi → Jurnal → Jurnal baru
+  await loginAs('accounting', '/accounting/journals')
+  await page.getByTestId('new-journal').click()
+  const form = page.getByTestId('journal-form')
+  // STEP 2: the header
+  await setDate(form, 'date', w.businessDate)
+  await form.locator('input[name=reference]').fill('BKK-0112')
+  await form.locator('input[name=description]').fill('Pengisian kas kecil dari bank')
+  // STEP 3: two lines, balanced
+  await pickCombo(form.getByTestId('line-0'), 'account_0', '1120 ·')
+  await form.locator('input[name=debit_0]').fill('500000')
+  await pickCombo(form.getByTestId('line-1'), 'account_1', '1130 ·')
+  await form.locator('input[name=credit_1]').fill('500000')
+  await expect(form.getByTestId('line-totals')).toContainText(tx('journals.balanced'))
+  await shot(form, 'akuntansi-jurnal-03')
+  // STEP 4: Posting
+  await form.getByTestId('journal-post').click()
+  const notice = page.getByTestId('notice')
+  await expect(notice).toBeVisible()
+  const number = ((await notice.innerText()).match(/JV\d+/) ?? [''])[0]
+  // STEP 5-6: the journal, Balik…, the reason
+  await page.getByTestId(`journal-${number}`).click()
+  const detail = page.getByTestId('journal-detail')
+  await detail.getByTestId('reverse').click()
+  await detail.locator('input[name=reason]').fill('Seharusnya rekening penggajian')
+  await shot(detail, 'akuntansi-jurnal-06')
+  // STEP 7: Balik dengan persetujuan → Setujui (the accountant may not approve: the duty manager does)
+  await detail.getByTestId('reverse-ask').click()
+  await approve(page, admin.email, admin.password)
+  // STEP 8: the reversed journal in the list
+  await expect(page.getByTestId(`journal-${number}`)).toContainText(number)
+  await expect(notice).toContainText(number)
+  await shotAround([notice, page.getByTestId(`journal-${number}`)], 'akuntansi-jurnal-08')
+}
+
+/** 07-accounting/periode-dan-tahun-buku.md */
+export async function flowPeriode(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Akuntansi → Periode akuntansi
+  await loginAs('admin', '/accounting/periods')
+  await expect(page.getByTestId('periods')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('periods')], 'akuntansi-periode-01')
+  // STEP 5: Akuntansi → Tahun buku
+  await page.goto('/accounting/fiscal-years')
+  await expect(page.getByTestId('years')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('years')], 'akuntansi-periode-05')
+}
+
+/** 07-accounting/departemen.md */
+export async function flowDepartemen(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Akuntansi → Departemen → Tambah sub-departemen on FB
+  await loginAs('accounting', '/accounting/departments')
+  await page.getByTestId('sub-FB').click()
+  const form = page.getByTestId('add-form')
+  await form.locator('input[name=code]').fill('BAR')
+  await form.locator('input[name=name]').fill('Bar kolam')
+  await form.locator('input[name=sort_order]').fill('21')
+  await shot(form, 'akuntansi-departemen-02')
+  // STEP 3: Buat
+  await form.getByTestId('create').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 4: the list with the new sub-department
+  await expect(page.getByTestId('department-BAR')).toBeVisible()
+  await shot(page.getByTestId('departments'), 'akuntansi-departemen-04')
+  // STEP 5-7: Akuntansi → Laporan departemen
+  await page.goto('/accounting/department-report')
+  await expect(page.getByTestId('report')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('report')], 'akuntansi-departemen-07')
+}
+
+/** 07-accounting/laporan-keuangan.md */
+export async function flowLaporanKeuangan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Akuntansi → Neraca saldo
+  await loginAs('accounting', '/accounting/trial-balance')
+  await expect(page.getByTestId('trial-balance')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('trial-balance')], 'akuntansi-laporan-02')
+  // STEP 4: Akuntansi → Laporan laba rugi
+  await page.goto('/accounting/income-statement')
+  await expect(page.getByTestId('statement')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('statement')], 'akuntansi-laporan-04')
+  // STEP 8-9: Akuntansi → Akun kontrol, the last closed day
+  await page.goto('/accounting/reconciliation')
+  await page.getByTestId('apply').click()
+  await expect(page.getByTestId('controls')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('controls')], 'akuntansi-laporan-06')
+}
+
+// --- 05-banquet. No role of the E2E seed holds a banquet permission: the pictures use the administrator. The seed has rooms, items, the
+// FULLDAY package and the STANDARD template but no event, so the main event is made on screen (session on the business date, so that it can
+// be posted) and the event of the cancellation picture by the API.
+
+const BQ_EVENT = 'Rapat Kerja Tahunan'
+const BQ_COMPANY = 'PT Cahaya Nusantara'
+
+/** Selects the option of a select whose text contains `text`. */
+async function selectContaining(select: Locator, text: string): Promise<void> {
+  const value = await select.locator('option', { hasText: text }).first().getAttribute('value')
+  await select.selectOption(value ?? '')
+}
+
+async function bqEvent(data: Factories, name: string): Promise<{ id: number; number: string; sessions: { id: number }[] }> {
+  const list = await data.api.all<{ id: number; name: string }>(`${data.P}/banquet/events`)
+  const ev = list.find((e) => e.name === name)
+  if (!ev) throw new Error(`banquet event ${name} not found`)
+  return data.api.get(`${data.P}/banquet/events/${ev.id}`)
+}
+
+export async function flowMenyiapkanBanquet(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Banquet → Ruang pertemuan
+  await loginAs('admin', '/banquet/rooms')
+  await expect(page.getByTestId('room-SARA')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('room-list')], 'banquet-setup-02')
+  // STEP 5: Item dan paket, tab Paket
+  await page.goto('/banquet/catalog')
+  await page.getByTestId('tab-packages').click()
+  await expect(page.getByTestId('package-FULLDAY')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('package-FULLDAY')], 'banquet-setup-05')
+  // STEP 6: Pengaturan banquet, the policy templates
+  await page.goto('/banquet/settings')
+  await expect(page.getByTestId('template-STANDARD')).toBeVisible()
+  await shot(page.getByTestId('templates-section'), 'banquet-setup-06')
+}
+
+export async function flowAcaraBaru(page: Page, loginAs: LoginAs, w: DocsWorld, data: Factories): Promise<void> {
+  const company = await data.company({ name: BQ_COMPANY })
+  // STEP 1-2: Banquet → Acara → Pemesanan baru
+  await loginAs('admin', '/banquet/events')
+  await page.getByTestId('event-new').click()
+  const ev = page.getByTestId('banquet-event-dialog')
+  await ev.locator('input[name=name]').fill(BQ_EVENT)
+  await ev.locator('select[name=booker_company_id]').selectOption(String(company.id))
+  await ev.locator('input[name=contact_name]').fill('Ibu Rina Kartika')
+  await shot(ev, 'banquet-acara-02')
+  // STEP 3: Simpan
+  await page.getByTestId('banquet-event-save').click()
+  await expect(page).toHaveURL(/\/banquet\/events\/\d+/)
+  await expect(page.getByTestId('event-status')).toHaveText(tx('banquet.status.INQUIRY'))
+  // STEP 4-5: Tambah sesi, on the business date so that it can be posted later
+  await page.getByTestId('session-add').click()
+  const s = page.getByTestId('banquet-session-dialog')
+  await s.locator('input[name=name]').fill('Rapat hari pertama')
+  await selectContaining(page.getByTestId('session-room'), 'Saraswati A')
+  await setDate(s, 'session_date', w.businessDate)
+  await s.locator('input[name=start_time]').fill('09:00')
+  await s.locator('input[name=end_time]').fill('17:00')
+  await s.locator('input[name=pax_estimated]').fill('45')
+  await s.locator('input[name=pax_guaranteed]').fill('40')
+  await expect(page.getByTestId('check-free')).toBeVisible()
+  await shot(s, 'banquet-acara-05')
+  // STEP 6: Simpan
+  await page.getByTestId('banquet-session-save').click()
+  await expect(page.getByTestId('banquet-session-dialog')).toBeHidden()
+  await expect(page.getByTestId('session-list')).toContainText('Rapat hari pertama')
+  await shotAround([page.getByTestId('event-status'), page.getByTestId('session-list')], 'banquet-acara-06')
+}
+
+export async function flowTentatifKonfirmasi(page: Page, loginAs: LoginAs, w: DocsWorld, data: Factories): Promise<void> {
+  const ev = await bqEvent(data, BQ_EVENT)
+  // STEP 1-2: Tahan sebagai tentatif
+  await loginAs('admin', `/banquet/events/${ev.id}`)
+  await page.getByTestId('event-tentative').click()
+  const t = page.getByTestId('tentative-dialog')
+  await setDate(t, 'option_until', w.businessDate)
+  await shot(t, 'banquet-konfirmasi-02')
+  // STEP 3: Simpan
+  await page.getByTestId('tentative-save').click()
+  await expect(page.getByTestId('toast-success').first()).toBeVisible()
+  await expect(page.getByTestId('event-status')).toHaveText(tx('banquet.status.TENTATIVE'))
+  // STEP 4-5: Konfirmasi, the default template
+  await page.getByTestId('event-confirm').click()
+  const c = page.getByTestId('banquet-confirm-dialog')
+  await expect(c.getByTestId('confirm-template')).toBeVisible()
+  await shot(c, 'banquet-konfirmasi-05')
+  // STEP 6: Konfirmasi
+  await page.getByTestId('confirm-event').click()
+  await expect(page.getByTestId('event-status')).toHaveText(tx('banquet.status.DEFINITE'))
+  // STEP 7: Banquet → Kalender on the day of the event
+  await page.goto('/banquet')
+  await expect(page.getByTestId('calendar-day')).toBeVisible()
+  await shotAround([page.getByTestId('calendar-bar'), page.getByTestId('calendar-day')], 'banquet-konfirmasi-07')
+}
+
+export async function flowItemDeposit(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const ev = await bqEvent(data, BQ_EVENT)
+  const pkgs = await data.api.all<{ id: number; code: string }>(`${data.P}/banquet/packages`)
+  const fullday = pkgs.find((p) => p.code === 'FULLDAY')!
+  // STEP 1-2: tab Item & paket → Jual item atau paket, the package Fullday Meeting
+  await loginAs('admin', `/banquet/events/${ev.id}?tab=lines`)
+  await page.getByTestId('line-add').click()
+  const d = page.getByTestId('line-dialog')
+  await d.locator('select[name=what]').selectOption(`p${fullday.id}`)
+  await shot(d, 'banquet-item-02')
+  // STEP 3-4: Simpan, the estimate
+  await page.getByTestId('line-save').click()
+  await expect(page.getByTestId('line-dialog')).toBeHidden()
+  await expect(page.getByTestId('estimate-total')).not.toHaveText('0')
+  await shot(page.getByTestId('estimate-card'), 'banquet-item-04')
+  // STEP 5-6: tab Deposit & kebijakan → Terima DP by bank transfer
+  await page.getByTestId('tab-deposit').click()
+  await page.getByTestId('receive-open').click()
+  const r = page.getByTestId('receive-dialog')
+  await r.locator('[name=receive_amount]').fill('5000000')
+  await r.locator('select[name=receive_method]').selectOption('BANK_TRANSFER')
+  await r.locator('[name=receive_reference]').fill('TRF-BCA-2411')
+  await shot(r, 'banquet-item-07')
+  // STEP 7: Terima
+  await page.getByTestId('receive-save').click()
+  await expect(page.getByTestId('receive-dialog')).toBeHidden()
+  await expect(page.getByTestId('deposit-held')).toBeVisible()
+}
+
+export async function flowPostingSesi(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const ev = await bqEvent(data, BQ_EVENT)
+  const sid = ev.sessions[0]!.id
+  // STEP 1-3: tab Folio → Posting sesi. Pax aktual is left empty: typing in it throws in BanquetPostDialog.vue:57 (the number input
+  // gives a number, the code calls trim), and the session is billed at the guaranteed pax anyway (_laporan.md 5.1)
+  await loginAs('admin', `/banquet/events/${ev.id}?tab=folio`)
+  await page.getByTestId(`folio-post-${sid}`).click()
+  const d = page.getByTestId('post-dialog')
+  await shot(d, 'banquet-posting-03')
+  // STEP 4-5: Posting sesi, the folio card
+  await page.getByTestId('post-save').click()
+  await expect(page.getByTestId('toast-success').first()).toBeVisible()
+  await expect(page.getByTestId(`folio-posted-${sid}`)).toBeVisible()
+  await shot(page.getByTestId('folio-card'), 'banquet-posting-05')
+}
+
+export async function flowBeoDokumen(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const ev = await bqEvent(data, BQ_EVENT)
+  const sid = ev.sessions[0]!.id
+  // STEP 1-3: tab BEO, the kitchen text and the reason
+  await loginAs('admin', `/banquet/events/${ev.id}?tab=beo`)
+  const sess = page.getByTestId(`beo-session-${sid}`)
+  await sess.getByTestId(`beo-text-${sid}-KITCHEN`).fill('Makan siang prasmanan 42 porsi, 3 vegetarian. Coffee break pukul 10.00 dan 15.00.')
+  await sess.getByPlaceholder(tx('banquet.beo.notePlaceholder')).fill('Tambah menu vegetarian')
+  await shot(sess.getByTestId(`beo-${sid}-KITCHEN`), 'banquet-beo-03')
+  // STEP 4: Simpan sebagai revisi
+  await sess.getByTestId(`beo-save-${sid}`).click()
+  await expect(page.getByTestId('toast-success').first()).toBeVisible()
+  // STEP 6: tab Dokumen
+  await page.getByTestId('tab-docs').click()
+  await expect(page.getByTestId('docs-list')).toBeVisible()
+  await shot(page.getByTestId('docs-list'), 'banquet-beo-06')
+}
+
+export async function flowBatalAcara(page: Page, loginAs: LoginAs, w: DocsWorld, data: Factories): Promise<void> {
+  // A Definit event 40 days ahead with a package and a deposit, made by the API
+  const P = `${data.P}/banquet`
+  const company = await data.company({ name: 'PT Bumi Lestari' })
+  const rooms = await data.api.all<{ id: number; code: string }>(`${P}/rooms`)
+  const pkgs = await data.api.all<{ id: number; code: string }>(`${P}/packages`)
+  const tpls = await data.api.all<{ id: number; code: string }>(`${P}/policy-templates`)
+  const ev = await data.api.post<{ id: number }>(`${P}/events`, { name: 'Seminar Keuangan Daerah', booker_company_id: company.id, contact_name: 'Bapak Yoga' })
+  const withS = await data.api.post<{ sessions: { id: number }[] }>(`${P}/events/${ev.id}/sessions`, {
+    name: 'Seminar', room_id: rooms.find((r) => r.code === 'SARB')!.id, session_date: addDays(w.businessDate, 40), start_time: '09:00', end_time: '16:00',
+    pax_estimated: 80, pax_guaranteed: 70, accept_capacity: true,
+  })
+  await data.api.post(`${P}/events/${ev.id}/tentative`, { option_until: w.businessDate })
+  await data.api.post(`${P}/events/${ev.id}/confirm`, { policy_template_id: tpls.find((t) => t.code === 'STANDARD')!.id })
+  await data.api.post(`${P}/events/${ev.id}/lines`, { session_id: withS.sessions[0]!.id, package_id: pkgs.find((p) => p.code === 'FULLDAY')!.id, price_mode: 'EXCLUSIVE' })
+  const folio = await data.api.post<{ id: number }>(`${P}/events/${ev.id}/folio`)
+  await data.pay(folio.id, '10000000', 'BANK_TRANSFER')
+  // STEP 1-4: Batalkan acara, the reason
+  await loginAs('admin', `/banquet/events/${ev.id}`)
+  await page.getByTestId('event-cancel').click()
+  const d = page.getByTestId('close-dialog')
+  await expect(d.getByTestId('close-tier')).toBeVisible()
+  await selectContaining(d.locator('select[name=reason_id]'), 'Dibatalkan pemesan')
+  await d.locator('[name=reason_note]').fill('Seminar dipindah ke kantor pusat')
+  await shot(d, 'banquet-batal-04')
+  // STEP 5: save, the result
+  await d.getByTestId('close-save').click()
+  await expect(page.getByTestId('close-result')).toBeVisible()
+  await shot(page.getByTestId('close-result'), 'banquet-batal-05')
+}
+
+// --- 06-corporate-group-city-ledger. Only the administrator holds company.manage, group.manage, folio.master_* and cityledger.*; the
+// supervisor approves. No seed makes companies or groups: "06 perusahaan" makes PT Sinar Wisata Bali on screen, the next tests use it.
+
+const CL_CODE = 'SINAR'
+const CL_GUEST = { first_name: 'Rudi', last_name: 'Hartanto', phone: '+62 812 3300 4411', email: 'rudi.hartanto@contoh.example' }
+
+async function clCompany(data: Factories): Promise<{ id: number; code: string }> {
+  const list = await data.api.all<{ id: number; code: string }>(`${data.P}/companies`)
+  const c = list.find((x) => x.code === CL_CODE)
+  if (!c) throw new Error(`company ${CL_CODE} not found`)
+  return c
+}
+
+/** 06-corporate-group-city-ledger/perusahaan.md */
+export async function flowPerusahaan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Pengaturan → Perusahaan → Perusahaan baru
+  await loginAs('admin', '/setup/companies')
+  await page.getByTestId('new-company').click()
+  const form = page.getByTestId('company-form')
+  await form.locator('input[name=code]').fill(CL_CODE)
+  await form.locator('input[name=name]').fill('PT Sinar Wisata Bali')
+  await form.locator('input[name=contact_name]').fill('Ibu Ratna Dewi')
+  await form.locator('input[name=email]').fill('keuangan@sinarwisata.example')
+  await form.locator('input[name=phone]').fill('+62 361 470 123')
+  await form.locator('input[name=city]').fill('Denpasar')
+  await form.locator('input[name=payment_terms_days]').fill('30')
+  await form.locator('input[name=unlimited]').uncheck()
+  await form.locator('input[name=credit_limit]').fill('25000000')
+  await shot(form, 'perusahaan-baru-02')
+  // STEP 3: Simpan
+  await form.getByRole('button', { name: tx('common.save'), exact: true }).click()
+  await expect(page.getByTestId(`company-${CL_CODE}`)).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId(`company-${CL_CODE}`)], 'perusahaan-daftar-03')
+}
+
+/** 06-corporate-group-city-ledger/grup-dan-master-folio.md */
+export async function flowGrup(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1-2: Front Desk → Grup → Grup baru
+  await loginAs('admin', '/groups')
+  await page.getByTestId('new-group').click()
+  const g = page.getByTestId('group-form')
+  await g.locator('input[name=code]').fill('RAKER26')
+  await g.locator('input[name=name]').fill('Rapat Kerja Sinar Wisata')
+  await pickCombo(g, 'company_id', CL_CODE)
+  await setDate(g, 'arrival_date', w.businessDate)
+  await setDate(g, 'departure_date', addDays(w.businessDate, 2))
+  await g.locator('input[name=contact_name]').fill('Ibu Ratna Dewi')
+  await shot(g, 'grup-baru-02')
+  // STEP 3: Simpan, open the group
+  await g.getByRole('button', { name: tx('common.save'), exact: true }).click()
+  await page.getByTestId('group-RAKER26').getByRole('link').first().click()
+  // STEP 5-6: Buka master folio, the room charges of every member go to it
+  const m = page.getByTestId('group-master')
+  await m.getByTestId('master-open').click()
+  await expect(m.getByTestId('master-notice')).toBeVisible()
+  await m.locator('input[name=route_room]').check()
+  await m.getByTestId('routing-save').click()
+  await expect(m.getByTestId('master-summary')).toBeVisible()
+  await shot(m, 'grup-master-06')
+}
+
+/** 06-corporate-group-city-ledger/transfer-ke-piutang-perusahaan.md. The stay then checks out by the API, for the invoice pictures. */
+export async function flowTransferPiutang(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const company = await clCompany(data)
+  const guest = await data.guest(CL_GUEST)
+  const res = await data.reservation({ nights: 1, guest, companyId: company.id })
+  const full = await data.api.get<{ version: number; rooms: { id: number }[] }>(`${data.P}/reservations/${res.id}`)
+  const ci = await data.api.post<{ stay: { id: number }; folio: { id: number } }>(`${data.P}/reservations/${res.id}/rooms/${full.rooms[0]!.id}/check-in`,
+    { version: full.version, guest_id: guest.id, adult_count: 2, room_id: res.room!.id })
+  await data.postCharge(ci.folio.id, 'FOOD_BEVERAGE', '450000', 'Makan malam tamu perusahaan')
+  const balance = (await data.folio(ci.folio.id)).balance
+  // STEP 1-3: the folio → tab Transfer, the whole balance to PT Sinar Wisata Bali
+  await loginAs('admin', `/folios/${ci.folio.id}?tab=transfer`)
+  const form = page.getByTestId('transfer-form')
+  await pickCombo(form, 'transfer_company', CL_CODE)
+  await form.locator('input[name=transfer_amount]').fill(String(Math.round(Number(balance))))
+  await form.locator('input[name=transfer_reference]').fill('PO-SWB-0457')
+  await shot(form, 'piutang-transfer-03')
+  // STEP 4: Transfer
+  await form.getByRole('button', { name: tx('folio.transferButton') }).click()
+  await expect(page.getByTestId('notice')).toHaveText(tx('folio.noticeTransfer'))
+  // Check-out by the API: tonight's room charge is paid by card first, the check-out posts it
+  const bd = await data.businessDate()
+  const preview = await data.api.post<{ items: { folio_id: number | null; status: string; total: string }[] }>(`${data.P}/night-audit/room-charges/preview`, { business_date: bd, stay_ids: [ci.stay.id] })
+  const tonight = preview.items.filter((i) => i.status === 'READY' && i.folio_id === ci.folio.id).reduce((n, i) => n + Number(i.total), 0)
+  if (tonight > 0) await data.pay(ci.folio.id, String(tonight), 'CARD')
+  const st = await data.stay(ci.stay.id)
+  await data.api.post(`${data.P}/stays/${ci.stay.id}/check-out`, { version: st.stay.version, confirm_early_departure: true })
+}
+
+/** 06-corporate-group-city-ledger/invoice-dan-penerimaan.md */
+export async function flowInvoice(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const company = await clCompany(data)
+  // STEP 1-4: Tagihan → Piutang perusahaan → the company, Invoice baru
+  await loginAs('admin', `/city-ledger/${company.id}`)
+  const b = page.getByTestId('invoice-builder')
+  await b.getByTestId('pick-all').check()
+  await b.locator('input[name=invoice_notes]').fill('PO-SWB-0457, rapat kerja November')
+  await shot(b, 'piutang-invoice-03')
+  // STEP 5: Buat invoice
+  await b.getByTestId('create-invoice').click()
+  await expect(page.getByTestId('notice')).toContainText(/CINV/)
+  const inv = ((await page.getByTestId('notice').innerText()).match(/CINV\d+/) ?? [''])[0]
+  // STEP 7-8: Bayar on the invoice, part of it
+  await page.getByTestId(`pay-${inv}`).click()
+  const pf = page.getByTestId('pay-form')
+  await pf.locator('input[name=pay_amount]').fill('300000')
+  await pf.locator('select[name=pay_method]').selectOption('BANK_TRANSFER')
+  await pf.locator('input[name=pay_reference]').fill('TRF-SWB-1124')
+  await shot(pf, 'piutang-invoice-07')
+  await pf.getByTestId('pay-submit').click()
+  await expect(page.getByTestId('notice')).toContainText(inv)
+  await shot(page.getByTestId('invoices'), 'piutang-invoice-09')
+}
+
+/** 06-corporate-group-city-ledger/nota-kredit-dan-penghapusan-piutang.md */
+export async function flowNotaKredit(page: Page, loginAs: LoginAs, data: Factories, seed: SeedState): Promise<void> {
+  const company = await clCompany(data)
+  // STEP 1-3: the invoice → Nota kredit…
+  await loginAs('admin', `/city-ledger/${company.id}`)
+  const row = page.getByTestId('invoices').locator('[data-testid^="invoice-CINV"]').first()
+  const inv = ((await row.getAttribute('data-testid')) ?? '').replace('invoice-', '')
+  await page.getByTestId(`credit-${inv}`).click()
+  const f = page.getByTestId('adjust-form')
+  await f.locator('input[name=line_description_0]').fill('Potongan makan malam: hidangan terlambat')
+  await pickCombo(f, 'line_account_0', '4290')
+  await selectContaining(f.locator('select[name=line_department_0]'), 'FB')
+  await f.locator('input[name=line_net_0]').fill('50000')
+  await f.locator('input[name=adjust_reason]').fill('Keluhan tamu, disetujui manajer F&B')
+  await shot(f, 'piutang-nota-03')
+  // STEP 4: Lanjutkan → approval by the supervisor
+  await f.getByTestId('adjust-continue').click()
+  await approve(page, seed.users.supervisor.email, seed.users.supervisor.password)
+  await expect(page.getByTestId('notice')).toHaveText(tx('clAccount.creditNoteMade'))
+  await shot(page.getByTestId('adjustments'), 'piutang-nota-05')
+}
+
+/** 06-corporate-group-city-ledger/surat-peringatan.md: no invoice is overdue in the pictures' hotel (that needs a night audit after
+ *  the due date), so only the page and its late fee. */
+export async function flowSuratPeringatan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Tagihan → Invoice jatuh tempo, the late fee
+  await loginAs('admin', '/city-ledger/overdue')
+  await expect(page.getByTestId('overdue-summary')).toBeVisible()
+  const lf = page.getByTestId('late-fee')
+  await lf.locator('input[name=monthly_rate]').fill('2')
+  await lf.locator('input[name=grace_days]').fill('7')
+  await shotAround([page.locator('main h1'), lf], 'piutang-peringatan-02')
+}
+
+// --- 08-keuangan-back-office. The accounting user (payables, bank, budget) and the administrator (tax: nobody else holds tax.manage,
+// tax.file, tax.invoice; budget.approve). Nothing of this area is seeded but the suppliers SUMBER and DEMO-WL-SUP.
+
+/** 08-keuangan-back-office/utang-usaha.md */
+export async function flowUtangUsaha(page: Page, loginAs: LoginAs, w: DocsWorld, data: Factories): Promise<void> {
+  await data.api.post(`${data.P}/payables/suppliers`, { code: 'BERSIH', name: 'CV Bersih Cemerlang', contact_name: 'Pak Made Sudana', city: 'Gianyar', payment_terms_days: 30 })
+  // STEP 1-3: Utang usaha → Tagihan pemasok → Catat tagihan
+  await loginAs('accounting', '/payables/bills')
+  await page.getByTestId('new-bill').click()
+  const form = page.getByTestId('bill-form')
+  await pickCombo(form, 'supplier_id', 'BERSIH')
+  await form.locator('input[name=invoice]').fill('INV/BC/1124/031')
+  await setDate(form, 'bill_date', w.businessDate)
+  await form.locator('input[name=description]').fill('Bahan pembersih November')
+  await pickCombo(form.getByTestId('line-0'), 'account_0', '5140 ·')
+  await selectContaining(form.locator('select[name=department_0]'), 'ROOMS')
+  await form.locator('input[name=detail_0]').fill('Cairan pembersih lantai 20 jeriken')
+  await form.locator('input[name=amount_0]').fill('2400000')
+  await shot(form, 'utang-tagihan-03')
+  // STEP 4: Catat tagihan
+  await form.getByTestId('bill-post').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 5-7: Pembayaran pemasok → Bayar pemasok
+  await page.goto('/payables/payments')
+  await page.getByTestId('new-payment').click()
+  const pay = page.getByTestId('payment-form')
+  await pickCombo(pay, 'supplier_id', 'BERSIH')
+  await setDate(pay, 'payment_date', w.businessDate)
+  await pay.locator('input[name=reference]').fill('TRF-BCA-88120')
+  await expect(pay.getByTestId('open-bills')).toBeVisible()
+  await pay.getByTestId('pay-all').click()
+  await shot(pay, 'utang-bayar-06')
+  await pay.getByTestId('payment-post').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 9: Umur utang usaha
+  await page.goto('/payables/aging')
+  await expect(page.getByTestId('aging')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('aging')], 'utang-umur-09')
+}
+
+/** 08-keuangan-back-office/pajak-dan-faktur.md */
+export async function flowPajak(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Pajak → Status PKP
+  await loginAs('admin', '/tax/status')
+  await expect(page.getByTestId('current')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('history')], 'pajak-status-01')
+  // STEP 3-4: Pajak → Profil pelaporan pajak → Atur pajak, PB1
+  await page.goto('/tax/profiles')
+  await page.getByTestId('new-profile').click()
+  const form = page.getByTestId('profile-form')
+  await pickCombo(form, 'tax_id', /^PB1 ·/)
+  await form.locator('input[name=authority]').fill('Bapenda Kabupaten Gianyar')
+  await form.locator('input[name=registration_number]').fill('973/0412/BPD-GNR')
+  await form.locator('input[name=due_day]').fill('15')
+  await shot(form, 'pajak-profil-04')
+  await form.getByRole('button', { name: tx('common.save'), exact: true }).click()
+  await expect(page.getByTestId('profile-PB1')).toBeVisible()
+  // STEP 6: Pajak → SPT Masa PPN, the months of PB1
+  await page.goto('/tax/returns')
+  await selectContaining(page.locator('select[name=tax]'), 'PB1')
+  await expect(page.getByTestId('periods')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('periods')], 'pajak-spt-06')
+}
+
+/** 08-keuangan-back-office/rekonsiliasi-bank.md */
+export async function flowRekonsiliasiBank(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1-2: Bank → Rekening bank → Daftarkan rekening
+  await loginAs('accounting', '/bank/accounts')
+  await page.getByTestId('new-bank').click()
+  const form = page.getByTestId('bank-form')
+  await pickCombo(form, 'account_id', '1130 ·')
+  await form.locator('input[name=name]').fill('BCA operasional')
+  await form.locator('input[name=account_number]').fill('146 000 7788')
+  await shot(form, 'bank-rekening-02')
+  await form.getByRole('button', { name: tx('common.save'), exact: true }).click()
+  await expect(page.getByTestId('bank-1130')).toBeVisible()
+  // STEP 3-5: Bank → Mutasi bank → Impor rekening koran
+  await page.goto('/bank/statements')
+  await expect(page.getByTestId('new-statement')).toBeVisible()
+  await page.getByTestId('new-statement').click()
+  const imp = page.getByTestId('import-form')
+  await setDate(imp, 'period_from', addDays(w.businessDate, -6))
+  await setDate(imp, 'period_to', w.businessDate)
+  await imp.locator('input[name=opening_balance]').fill('50000000')
+  await imp.locator('input[name=closing_balance]').fill('49250000')
+  const d1 = addDays(w.businessDate, -2)
+  const d2 = addDays(w.businessDate, -1)
+  await imp.locator('textarea[name=csv]').fill(`date,description,reference,amount\n${d1},Setoran tunai,STR-0098,1500000\n${d2},Biaya administrasi,ADM-11,-250000\n${d2},Transfer keluar,TRF-7781,-2000000`)
+  await shot(imp, 'bank-impor-04')
+  await imp.getByTestId('import-run').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 6-7: Rekonsiliasi, Cocokkan otomatis
+  await page.getByTestId('statements').locator('[data-testid^="open-"]').first().click()
+  await expect(page.getByTestId('summary')).toBeVisible()
+  await page.getByTestId('auto-match').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('lines')], 'bank-rekonsiliasi-07')
+}
+
+/** 08-keuangan-back-office/settlement-kartu.md */
+export async function flowSettlementKartu(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1: Bank → Settlement kartu, what the acquirer still owes
+  await loginAs('accounting', '/bank/cards')
+  await expect(page.getByTestId('expected')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('expected')], 'kartu-belum-01')
+  // STEP 2-3: Aturan fee, a card rule
+  const r = page.getByTestId('rule-form')
+  await r.locator('select[name=rule_method]').selectOption('CARD')
+  await r.locator('input[name=mdr_rate]').fill('2.5')
+  await r.locator('input[name=vat_rate]').fill('11')
+  await r.locator('input[name=settlement_days]').fill('2')
+  await setDate(r, 'effective_from', w.businessDate)
+  await r.getByTestId('add-rule').click()
+  await expect(page.getByTestId('rule-list')).toBeVisible()
+  await shot(page.getByTestId('rules'), 'kartu-aturan-03')
+}
+
+/** 08-keuangan-back-office/anggaran.md */
+export async function flowAnggaran(page: Page, loginAs: LoginAs, seed: SeedState): Promise<void> {
+  // STEP 1-2: Anggaran → Anggaran baru
+  await loginAs('accounting', '/budget')
+  await page.getByTestId('new-budget').click()
+  const form = page.getByTestId('new-form')
+  await selectContaining(form.locator('select[name=year_start]'), '2026-01-01')
+  await form.locator('input[name=name]').fill('Anggaran 2026')
+  await form.locator('input[name=description]').fill('Rencana pendapatan kamar dan biaya utama')
+  await shot(form, 'anggaran-baru-02')
+  await form.getByTestId('create').click()
+  await expect(page).toHaveURL(/\/budget\/\d+/)
+  // STEP 4-5: add the room revenue account, spread a year over the months
+  await selectContaining(page.locator('select[name=add_account]'), '4110')
+  await page.getByTestId('add-row').click()
+  await page.locator('[data-testid^="spread-"]').first().click()
+  const sp = page.getByTestId('spread-form')
+  await sp.locator('input[name=spread_total]').fill('1800000000')
+  await sp.locator('select[name=spread_method]').selectOption('EQUAL')
+  await sp.getByTestId('spread-apply').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // The table is wider than its card: shoot the scroll box from its left edge
+  // (a shot of the table itself scrolls it sideways under the sidebar).
+  const gridBox = page.getByTestId('grid').locator('..')
+  await gridBox.evaluate((el) => { el.scrollLeft = 0 })
+  await shot(gridBox, 'anggaran-angka-05')
+  // STEP 7: Aktifkan, approved by the administrator
+  await page.getByTestId('activate').click()
+  await approve(page, seed.users.admin.email, seed.users.admin.password)
+  await expect(page.getByTestId('status')).toHaveAttribute('data-status', 'ACTIVE')
+  // STEP 8: Anggaran terhadap realisasi
+  await page.goto('/budget/vs-actual')
+  await expect(page.getByTestId('report')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('report')], 'anggaran-realisasi-08')
 }

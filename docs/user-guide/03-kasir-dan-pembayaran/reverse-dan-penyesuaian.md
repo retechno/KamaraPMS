@@ -35,7 +35,7 @@ Pembayaran yang salah dikoreksi dengan void atau refund, bukan dengan cara ini. 
    | Field | Wajib? | Keterangan |
    |---|---|---|
    | Kode biaya | Ya | Kode biaya yang dikoreksi. Hanya kode yang sudah pernah diposting di folio ini yang ditawarkan. Di bawahnya tertulis jumlah yang sudah terposting. |
-   | Jumlah (negatif untuk mengkredit) | Ya | Untuk mengurangi tagihan, isi angka negatif, misalnya `-100000`. Angka positif menambah tagihan. Jumlah ini belum termasuk pajak dan biaya layanan kode biaya itu: `-100000` untuk `ROOM` tercatat sebagai kredit 121.000 (dengan servis 10% dan pajak 10%). |
+   | Jumlah (negatif untuk mengkredit) | Ya | Untuk mengurangi tagihan, isi angka negatif, misalnya `-100000`. Angka positif menambah tagihan. Jumlah ini belum termasuk pajak dan servis kode biaya itu; keduanya dihitung ulang menurut aturan kode biayanya. Contoh: kalau kode biaya `ROOM` dikenai servis 10% dan pajak 10%, `-100000` tercatat sebagai kredit 121.000. |
    | Alasan | Ya | Misalnya `Kompensasi AC kamar tidak dingin semalam`. |
 
    ![Formulir Penyesuaian](../screenshots/kasir-koreksi-06.png)
@@ -55,6 +55,9 @@ Pembayaran yang salah dikoreksi dengan void atau refund, bukan dengan cara ini. 
 - **"Kode biaya ini belum punya posting di folio: posting biaya, bukan penyesuaian."** berarti yang Anda tambahkan sebenarnya biaya baru. Gunakan [Memposting biaya ke folio](posting-biaya-ke-folio.md).
 - **Biaya kamar yang di-reverse** muncul lagi sebagai malam yang siap diposting di halaman **Biaya kamar**, jadi bisa tertagih lagi. Untuk mengurangi biaya kamar satu malam (misalnya tamu mendapat potongan atau malam gratis), gunakan **Penyesuaian**. Lihat [Posting biaya kamar](posting-biaya-kamar.md).
 - **Biaya yang datang dari transfer** tidak di-reverse: "Biaya hasil transfer tidak di-reverse: kembalikan dengan Kembalikan (di folio asalnya, Tampilkan yang ditransfer).". Lihat [Transfer antar folio](transfer-antar-folio.md).
+  - **Kecuali biaya dari POS** (**Bebankan ke kamar**). Baris itu tidak bisa dikembalikan dengan **Kembalikan**: tidak muncul di **Tampilkan yang ditransfer** folio tamu, dan bill outletnya sudah tertutup. Baris itu juga tidak bisa dikoreksi dengan **Penyesuaian**, karena kodenya `TRF` dan kode itu ditolak: "Kode TRF diposting oleh transfer saldo, bukan manual.". Lihat [Bebankan ke kamar](../04-pos/bebankan-ke-kamar.md).
+
+    > ⚠️ PERLU VERIFIKASI: belum ada cara di layar untuk membatalkan beban POS di folio tamu setelah bill lunas. Pengembaliannya hanya ada di API (`room-charges/{id}/return`, setelah bill dibuka kembali). Laporkan ke supervisor atau administrator.
 - **Penyetuju salah memasukkan kata sandi?** Jendela tetap terbuka dengan pesan "Email atau kata sandi penyetuju salah.". Ulangi.
 - **"Aturan properti ini meminta penyetuju selain orang yang membuat perubahan."** berarti Anda tidak boleh menyetujui koreksi Anda sendiri. Minta orang lain. Aturan ini diatur di [Aturan persetujuan](../13-pengaturan/aturan-persetujuan.md).
 
