@@ -41,4 +41,32 @@ test.describe('Panduan pengguna: screenshot', () => {
   test('01 membatalkan check-in', async ({ page, loginAs }) => { await flows.flowBatalCheckIn(page, loginAs, readWorld()) })
   test('01 mengelola data tamu', async ({ page, loginAs }) => { await flows.flowDataTamu(page, loginAs, readWorld()) })
   test('01 bagan kamar dan ketersediaan', async ({ page, loginAs }) => { await flows.flowBaganKamar(page, loginAs, readWorld()) })
+
+  // --- 02-housekeeping
+  test('02 status kamar', async ({ page, loginAs }) => { await flows.flowStatusKamar(page, loginAs, readWorld()) })
+  test('02 mengubah status kebersihan', async ({ page, loginAs }) => { await flows.flowStatusKebersihan(page, loginAs) })
+  test('02 daftar pembersihan dan tugas saya', async ({ page, loginAs }) => { await flows.flowDaftarPembersihan(page, loginAs) })
+  test('02 blokir kamar', async ({ page, loginAs }) => { await flows.flowBlokirKamar(page, loginAs, readWorld()) })
+  test('02 laporan perawatan', async ({ page, loginAs }) => { await flows.flowPerawatan(page, loginAs, readWorld()) })
+  test('02 barang tertinggal', async ({ page, loginAs }) => { await flows.flowBarangTertinggal(page, loginAs, readWorld()) })
+
+  // --- 03-kasir-dan-pembayaran
+  test('03 posting biaya ke folio', async ({ page, loginAs }) => { await flows.flowPostingBiaya(page, loginAs, readWorld()) })
+  test('03 menerima pembayaran', async ({ page, loginAs }) => { await flows.flowPembayaran(page, loginAs, readWorld()) })
+  test('03 reverse dan penyesuaian', async ({ page, loginAs, seed }) => { await flows.flowKoreksi(page, loginAs, readWorld(), seed) })
+  test('03 void dan refund', async ({ page, loginAs, seed }) => { await flows.flowVoidRefund(page, loginAs, readWorld(), seed) })
+  test('03 transfer antar folio', async ({ page, loginAs, seed }) => { await flows.flowTransferFolio(page, loginAs, readWorld(), seed) })
+  test('03 grup tagihan dan cetak', async ({ page, loginAs }) => { await flows.flowGrupTagihan(page, loginAs, readWorld()) })
+  test('03 shift kasir', async ({ page, loginAs, seed }) => { await flows.flowShiftKasir(page, loginAs, readWorld(), seed) })
+  test('03 posting biaya kamar', async ({ page, loginAs }) => { await flows.flowBiayaKamar(page, loginAs) })
+  test('03 membuka folio untuk outlet', async ({ page, loginAs }) => { await flows.flowFolioOutlet(page, loginAs, readWorld()) })
+
+  // --- 04-pos
+  test('04 menyiapkan outlet', async ({ page, loginAs }) => { await flows.flowMenyiapkanOutlet(page, loginAs) })
+  test('04 mengambil pesanan', async ({ page, loginAs }) => { await flows.flowAmbilPesanan(page, loginAs) })
+  test('04 layar dapur', async ({ page, loginAs }) => { await flows.flowLayarDapur(page, loginAs) })
+  test('04 membayar bill', async ({ page, loginAs }) => { await flows.flowBayarBill(page, loginAs) })
+  test('04 bebankan ke kamar', async ({ page, loginAs }) => { await flows.flowBebankanKamar(page, loginAs, readWorld()) })
+  test('04 void diskon komplimen', async ({ page, loginAs, seed }) => { await flows.flowVoidPos(page, loginAs, seed) })
+  test('04 laporan outlet', async ({ page, loginAs }) => { await flows.flowLaporanOutlet(page, loginAs) })
 })

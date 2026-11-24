@@ -2,8 +2,8 @@ import { expect, type Locator, type Page } from 'playwright/test'
 import { addDays } from '../support/factories'
 import { TENANT, USER_PASSWORD } from '../support/env'
 import { tx } from '../support/i18n'
-import type { SeedState, UserKey } from '../support/state'
-import { chooseRoomType, pickFirstReadyRoom, setDate } from '../support/ui'
+import { ROLES, type SeedState, type UserKey } from '../support/state'
+import { chooseRoomType, pickCombo, pickFirstReadyRoom, setDate } from '../support/ui'
 import { shot, shotAround, shotPage } from './shot'
 import { MANAGER, type DocsWorld } from './world'
 
@@ -488,4 +488,658 @@ export async function flowBaganKamar(page: Page, loginAs: LoginAs, w: DocsWorld)
   await page.goto('/availability')
   await expect(page.getByTestId('calendar')).toBeVisible()
   await shotAround([page.locator('main h1').first(), page.getByTestId('calendar')], 'frontdesk-ketersediaan-06')
+}
+
+// =====================================================================================================================
+// 02-housekeeping
+
+/** The suites of the second and third floor: world.ts never puts a guest in a suite, so these rooms are free to block. */
+const SUITE_FLOOR_2 = '210'
+const SUITE_FLOOR_3 = '310'
+
+/** 02-housekeeping/status-kamar.md */
+export async function flowStatusKamar(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1: Kamar → Status kamar: the board by floor, with the count line and the filters
+  await loginAs('frontdesk', '/room-status')
+  await expect(page.getByTestId('counts')).toBeVisible()
+  await expect(page.getByTestId('tile-110')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('filters'), page.getByTestId('tile-110')], 'housekeeping-status-kamar-01')
+  // STEP 3: a filter (the reserved rooms), then all again
+  await page.getByTestId('filter-occ-RESERVED').click()
+  await page.getByTestId('filter-occ-ALL').click()
+  // STEP 4: a room opens the room panel (an occupied room: Made Wirawan)
+  await page.getByTestId(`tile-${w.inHouse.made.room}`).click()
+  const sheet = page.getByTestId('room-sheet')
+  await expect(sheet.getByTestId('rp-number')).toContainText(w.inHouse.made.room)
+  await shot(sheet, 'housekeeping-status-kamar-04', { pad: 0 })
+  await sheet.getByTestId('rp-close').click()
+  // STEP 5: Muat ulang
+  await page.getByTestId('refresh').click()
+}
+
+/** 02-housekeeping/mengubah-status-kebersihan.md */
+export async function flowStatusKebersihan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Kamar → Housekeeping, the chip Kotor
+  await loginAs('housekeeping', '/housekeeping')
+  await page.getByTestId('filter-DIRTY').click()
+  const rows = page.locator('main [data-testid^="room-"]')
+  await expect(rows.first()).toBeVisible()
+  // STEP 3: the next step of a dirty room is Mulai bersihkan
+  const row = rows.filter({ has: page.getByTestId('act-CLEANING') }).first()
+  await expect(row.getByTestId('act-CLEANING')).toBeVisible()
+  await shotAround([page.locator('main h1'), rows.nth(Math.min(5, (await rows.count()) - 1))], 'housekeeping-status-kebersihan-03')
+  // STEP 4: the room becomes Dibersihkan and leaves the filtered list
+  const number = ((await row.getAttribute('data-testid')) ?? '').replace('room-', '')
+  await row.getByTestId('act-CLEANING').click()
+  await expect(page.getByTestId(`room-${number}`)).toHaveCount(0)
+
+  // STEP 6: Status kamar: the supervisor ticks a whole floor
+  await loginAs('admin', '/room-status')
+  await page.getByTestId('pick-floor-1').click()
+  const bar = page.getByTestId('bulk-bar')
+  // STEP 7: the bulk bar with the count per action (the picture only: the floor is left as it is)
+  await expect(bar.getByTestId('bulk-count')).toBeVisible()
+  await shotPage(page, 'housekeeping-status-kebersihan-07')
+  await bar.getByTestId('bulk-cancel').click()
+  await expect(bar).toHaveCount(0)
+}
+
+/** 02-housekeeping/daftar-pembersihan-dan-tugas-saya.md */
+export async function flowDaftarPembersihan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Kamar → Daftar pembersihan → Buat daftar hari ini
+  await loginAs('admin', '/housekeeping/tasks')
+  await page.getByTestId('generate').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  await expect(page.getByTestId('tasks')).toBeVisible()
+  await shot(page.locator('main'), 'housekeeping-daftar-02', { pad: 0 })
+  // STEP 3: the open tasks of the second floor ticked
+  const floors = page.getByTestId('floors')
+  await floors.getByTestId('floor-2').click()
+  // STEP 4: given to the housekeeper
+  const form = page.getByTestId('assign-form')
+  await pickCombo(form, 'assign_to', ROLES.housekeeping.fullName)
+  await shotAround([floors, form], 'housekeeping-daftar-04')
+  await form.getByTestId('assign').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+
+  // STEP 6-7: the housekeeper's own cards on Tugas saya: Mulai bersihkan
+  await loginAs('housekeeping', '/housekeeping/my')
+  const card = page.locator('[data-testid^="card-"]').first()
+  await expect(card).toBeVisible()
+  const number = ((await card.getAttribute('data-testid')) ?? '').replace('card-', '')
+  await shotAround([page.locator('main h1'), card], 'housekeeping-daftar-07')
+  await page.getByTestId(`start-${number}`).click()
+  // STEP 8: Selesai: siap diperiksa
+  await page.getByTestId(`finish-${number}`).click()
+  await expect(page.getByTestId(`finish-${number}`)).toHaveCount(0)
+}
+
+/** 02-housekeeping/blokir-kamar-ooo-oos.md */
+export async function flowBlokirKamar(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  const from = addDays(w.businessDate, 1)
+  // STEP 1: Kamar → Blokir kamar
+  await loginAs('admin', '/room-blocks')
+  // STEP 2: the form Blokir baru
+  const form = page.getByTestId('block-form')
+  await pickCombo(form, 'room_id', SUITE_FLOOR_3)
+  await form.locator('select[name=block_type]').selectOption('OOS')
+  await setDate(form, 'start_date', from)
+  await setDate(form, 'end_date', addDays(from, 3))
+  await form.locator('input[name=reason]').fill('Pengecatan ulang dinding kamar')
+  await shot(form, 'housekeeping-blokir-02')
+  // STEP 3: Buat blokir: the bar on the calendar and the row of the table
+  await form.getByRole('button', { name: tx('roomBlocks.create'), exact: true }).click()
+  await expect(page.getByTestId(`cal-${SUITE_FLOOR_3}`).getByTestId('bar')).toBeVisible()
+  const table = page.locator('main [data-slot=card]').filter({ hasText: tx('roomBlocks.activeInView') }).last()
+  await expect(table.getByText('Pengecatan ulang dinding kamar')).toBeVisible()
+  await shot(table, 'housekeeping-blokir-03')
+}
+
+/** 02-housekeeping/laporan-perawatan.md */
+export async function flowPerawatan(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  const what = 'Keran wastafel bocor, air menetes terus'
+  // STEP 1: Kamar → Perawatan → Laporkan masalah (the housekeeper)
+  await loginAs('housekeeping', '/maintenance')
+  const newBtn = page.getByTestId('new-request')
+  const form = page.getByTestId('request-form')
+  await expect(newBtn.or(form).first()).toBeVisible()
+  if (!(await form.isVisible())) await newBtn.click()
+  // STEP 2: the form
+  await pickCombo(form, 'room_id', `${SUITE_FLOOR_2} ·`)
+  await form.locator('select[name=category]').selectOption('PLUMBING')
+  await form.locator('select[name=priority]').selectOption('HIGH')
+  await form.locator('input[name=description]').fill(what)
+  await shot(form, 'housekeeping-perawatan-02')
+  // STEP 3: Laporkan
+  await form.getByRole('button', { name: tx('maintenance.reportButton'), exact: true }).click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+
+  // STEP 4: the engineer opens the request
+  await loginAs('admin', '/maintenance')
+  const row = page.getByTestId('requests').locator('[data-testid^="request-"]').filter({ hasText: what }).first()
+  await row.locator('[data-testid^="select-"]').click()
+  const detail = page.getByTestId('detail')
+  // STEP 5: Ditugaskan ke → Simpan penugasan
+  await pickCombo(detail, 'assign_to', ROLES.housekeeping.fullName)
+  await detail.getByTestId('assign').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 6: Mulai dikerjakan
+  await detail.getByTestId('start').click()
+  await expect(detail.getByTestId('resolve')).toBeVisible()
+  // STEP 7: out of sale until the day after tomorrow
+  const block = detail.getByTestId('block-form')
+  await block.locator('select[name=block_type]').selectOption('OOO')
+  await setDate(block, 'block_end', addDays(w.businessDate, 2))
+  await shot(detail, 'housekeeping-perawatan-07')
+  await block.getByTestId('block-room').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 8: Selesaikan, with what was done; the block is released with it
+  await detail.getByTestId('resolve').click()
+  const close = page.getByTestId('close-form')
+  await close.locator('input[name=note]').fill('Seal keran diganti')
+  await shot(close, 'housekeeping-perawatan-08')
+  await close.getByTestId('close-submit').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+}
+
+/** 02-housekeeping/barang-tertinggal.md */
+export async function flowBarangTertinggal(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  const lina = w.inHouse.lina
+  const what = 'Kacamata hitam dalam kotak cokelat'
+  // STEP 1: Kamar → Barang tertinggal → Catat barang (the housekeeper, in the room of Lina Kusuma)
+  await loginAs('housekeeping', '/lost-found')
+  await page.getByTestId('new-item').click()
+  const form = page.getByTestId('item-form')
+  // STEP 2: the form
+  await pickCombo(form, 'room_id', `${lina.room} ·`)
+  await form.locator('select[name=category]').selectOption('OTHER')
+  await form.locator('input[name=storage_location]').fill('Brankas FO')
+  await form.locator('input[name=description]').fill(what)
+  await form.locator('input[name=possible_owner]').fill(`${lina.guest.first_name} ${lina.guest.last_name}`)
+  await shot(form, 'housekeeping-barang-02')
+  // STEP 3: Catat
+  await form.getByRole('button', { name: tx('lostFound.recordButton'), exact: true }).click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+
+  // STEP 4: the duty manager finds the item
+  await loginAs('admin', '/lost-found')
+  const q = page.getByTestId('filters').locator('input[name=q]')
+  await q.fill('Kacamata')
+  await q.press('Enter')
+  const row = page.getByTestId('items').locator('[data-testid^="item-"]').filter({ hasText: what }).first()
+  await row.locator('[data-testid^="select-"]').click()
+  // STEP 5: who stayed in the room
+  const detail = page.getByTestId('detail')
+  await expect(detail.getByTestId('owners')).toContainText(lina.guest.last_name)
+  await shot(detail, 'housekeeping-barang-05', { blur: ['[data-testid=owners] small'] }) // the guest's phone and e-mail
+  // STEP 6: Serahkan ke tamu ini
+  await detail.getByTestId(`owner-${lina.stayNumber}`).click()
+  // STEP 7: the hand-over
+  const ret = page.getByTestId('return-form')
+  await ret.locator('input[name=claimant_proof]').fill('KTP dicocokkan, isi kotak disebutkan dengan benar')
+  await ret.getByTestId('return-submit').click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+}
+
+// =====================================================================================================================
+// 03-kasir-dan-pembayaran
+
+/** Signs the approval dialog of a correction with the credentials of a user (the supervisor approves her own: the rule of the property is the default FREE). */
+async function approve(page: Page, email: string, password: string, file?: string): Promise<void> {
+  const dialog = page.getByTestId('approval-dialog')
+  await expect(dialog).toBeVisible()
+  await dialog.locator('input[name=approval_email]').fill(email)
+  await dialog.locator('input[name=approval_password]').fill(password)
+  if (file) await shot(dialog, file)
+  await dialog.getByTestId('approval-submit').click()
+  await expect(dialog).toHaveCount(0)
+}
+
+/** The balance of the folio on screen as a whole number (negative when the folio holds a credit). */
+async function folioBalance(page: Page): Promise<number> {
+  const text = await page.getByTestId('balance').first().innerText()
+  const digits = Number(text.replace(/[^\d]/g, '') || '0')
+  return /[-−]/.test(text) ? -digits : digits
+}
+
+/** The visible row of a folio line by its text (each row is drawn twice: a table row and a phone card). */
+function folioRow(page: Page, text: string): Locator {
+  return page.getByTestId('items').locator('[data-testid^="item-"]:visible').filter({ hasText: text }).last()
+}
+
+/** 03-kasir-dan-pembayaran/posting-biaya-ke-folio.md */
+export async function flowPostingBiaya(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1: the folio of Agus Pratama
+  await loginAs('frontdesk', `/folios/${w.inHouse.agus.folioId}`)
+  // STEP 2: the tab Biaya
+  await page.getByTestId('tab-charge').click()
+  // STEP 3: the form Posting biaya
+  const form = page.getByTestId('charge-form')
+  await pickCombo(form, 'charge_code', 'LAUNDRY ·')
+  await form.locator('input[name=quantity]').fill('2')
+  await form.locator('input[name=unit_price]').fill('35000')
+  await form.locator('input[name=description]').fill('Laundry 2 kemeja, nota 0457')
+  await shot(form, 'kasir-biaya-03')
+  // STEP 4: Posting biaya: the new line in the list
+  await form.getByRole('button', { name: tx('folio.postCharge'), exact: true }).click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  await expect(folioRow(page, 'nota 0457')).toBeVisible()
+  await shotAround([page.getByTestId('notice'), page.getByTestId('items')], 'kasir-biaya-04')
+}
+
+/** 03-kasir-dan-pembayaran/menerima-pembayaran.md */
+export async function flowPembayaran(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1-2: the folio of Agus Pratama, the tab Pembayaran
+  await loginAs('frontdesk', `/folios/${w.inHouse.agus.folioId}?tab=payment`)
+  // STEP 3: the form Terima pembayaran
+  const form = page.getByTestId('payment-form')
+  await form.locator('input[name=amount]').fill('500000')
+  await form.locator('select[name=payment_method]').selectOption('CARD')
+  await form.locator('input[name=reference]').fill('EDC 004512')
+  await shot(form, 'kasir-pembayaran-03')
+  // STEP 4: Posting pembayaran
+  await form.getByRole('button', { name: tx('folio.postPayment'), exact: true }).click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 5: the payment line with its button Kuitansi
+  const row = folioRow(page, '(Kartu)')
+  await expect(row.locator('[data-testid^="receipt-"]')).toBeVisible()
+  await shot(page.getByTestId('items'), 'kasir-pembayaran-05')
+}
+
+/** 03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md */
+export async function flowKoreksi(page: Page, loginAs: LoginAs, w: DocsWorld, seed: SeedState): Promise<void> {
+  const sari = seed.users.supervisor
+  // STEP 1-2: the laundry posted today on the folio of Agus Pratama: Reverse
+  await loginAs('supervisor', `/folios/${w.inHouse.agus.folioId}`)
+  await folioRow(page, 'nota 0457').locator('[data-testid^="reverse-"]').click()
+  // STEP 3: the reason, then Lanjut ke persetujuan
+  const form = page.getByTestId('correction-form')
+  await form.locator('input[name=reason]').fill('Salah kamar, seharusnya kamar 305')
+  await shot(form, 'kasir-koreksi-03')
+  await form.getByRole('button', { name: tx('folio.continueApproval'), exact: true }).click()
+  // STEP 4: Setujui reversal
+  await approve(page, sari.email, sari.password)
+  await expect(page.getByTestId('notice')).toBeVisible()
+
+  // STEP 5: the tab Penyesuaian
+  await page.getByTestId('tab-adjust').click()
+  // STEP 6: a credit on the room charge of last night
+  const adjust = page.getByTestId('adjust-form')
+  await pickCombo(adjust, 'adjust_code', 'ROOM ·')
+  await adjust.locator('input[name=adjust_amount]').fill('-100000')
+  await adjust.locator('input[name=adjust_reason]').fill('Kompensasi AC kamar tidak dingin semalam')
+  await shot(adjust, 'kasir-koreksi-06')
+  // STEP 7: Lanjut ke persetujuan → Setujui penyesuaian
+  await adjust.getByRole('button', { name: tx('folio.continueApproval'), exact: true }).click()
+  await approve(page, sari.email, sari.password)
+  await expect(page.getByTestId('notice')).toBeVisible()
+}
+
+/** 03-kasir-dan-pembayaran/void-dan-refund.md */
+export async function flowVoidRefund(page: Page, loginAs: LoginAs, w: DocsWorld, seed: SeedState): Promise<void> {
+  const sari = seed.users.supervisor
+  const made = w.inHouse.made
+  // (the money of the example: a QRIS payment taken by mistake, and a card payment above the balance that leaves a credit)
+  await loginAs('supervisor', `/folios/${made.folioId}?tab=payment`)
+  const owed = await folioBalance(page)
+  const pay = page.getByTestId('payment-form')
+  for (const [amount, method, ref] of [['150000', 'QRIS', 'QRIS salah input'], [String(Math.max(owed, 0) + 250000), 'CARD', 'EDC 009911']] as const) {
+    await pay.locator('input[name=amount]').fill(amount)
+    await pay.locator('select[name=payment_method]').selectOption(method)
+    await pay.locator('input[name=reference]').fill(ref)
+    await pay.getByRole('button', { name: tx('folio.postPayment'), exact: true }).click()
+    await expect(page.getByTestId('notice')).toBeVisible()
+  }
+  // STEP 1-2: Void on the payment of today
+  await folioRow(page, '(QRIS)').locator('[data-testid^="void-"]').click()
+  // STEP 3: the reason
+  const form = page.getByTestId('correction-form')
+  await form.locator('input[name=reason]').fill('Salah metode: tamu membayar dengan kartu, bukan QRIS')
+  await form.getByRole('button', { name: tx('folio.continueApproval'), exact: true }).click()
+  // STEP 4: Setujui void
+  await approve(page, sari.email, sari.password)
+  await expect(page.getByTestId('notice')).toBeVisible()
+
+  // a cash refund goes out of the supervisor's own drawer: her shift is opened first (Shift kasir)
+  await page.goto('/cashier/shifts')
+  const open = page.getByTestId('open-form')
+  await open.locator('input[name=drawer]').fill('FO2')
+  await open.locator('input[name=opening_float]').fill('500000')
+  await open.getByTestId('open-shift').click()
+  await expect(page.getByTestId('current-shift')).toBeVisible()
+  await page.goto(`/folios/${made.folioId}`)
+  // STEP 5: Refund on the card payment
+  await folioRow(page, '(Kartu)').locator('[data-testid^="refund-"]').click()
+  // STEP 6: the credit of the folio goes back in cash
+  const refund = page.getByTestId('correction-form')
+  await refund.locator('input[name=refund_amount]').fill('250000')
+  await refund.locator('input[name=refund_reference]').fill('Diserahkan tunai ke tamu')
+  await refund.locator('input[name=reason]').fill('Kelebihan bayar dikembalikan')
+  await shot(refund, 'kasir-void-refund-06')
+  // STEP 7: Setujui refund
+  await refund.getByRole('button', { name: tx('folio.continueApproval'), exact: true }).click()
+  await approve(page, sari.email, sari.password, 'kasir-void-refund-07')
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // the supervisor's drawer is closed again with the cash that is left
+  await page.goto('/cashier/shifts')
+  await page.getByTestId('start-close').click()
+  const close = page.getByTestId('close-form')
+  const expected = (await page.getByTestId('expected').innerText()).replace(/[^\d]/g, '')
+  await close.locator('input[name=counted_cash]').fill(expected)
+  await close.getByTestId('confirm-close').click()
+  await expect(page.getByTestId('closed-card')).toBeVisible()
+}
+
+/** 03-kasir-dan-pembayaran/transfer-antar-folio.md */
+export async function flowTransferFolio(page: Page, loginAs: LoginAs, w: DocsWorld, seed: SeedState): Promise<void> {
+  const sari = seed.users.supervisor
+  const { siti, andreas } = w.inHouse
+  // (the minibar of Siti Rahmawati's room, which Andreas Wijaya pays for)
+  await loginAs('supervisor', `/folios/${siti.folioId}`)
+  await page.getByTestId('tab-charge').click()
+  const charge = page.getByTestId('charge-form')
+  await pickCombo(charge, 'charge_code', 'MINIBAR ·')
+  await charge.locator('input[name=quantity]').fill('2')
+  await charge.locator('input[name=unit_price]').fill('45000')
+  await charge.locator('input[name=description]').fill('Minibar: 2 bir kaleng')
+  await charge.getByRole('button', { name: tx('folio.postCharge'), exact: true }).click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 1: the minibar line ticked
+  const row = folioRow(page, '2 bir kaleng')
+  await row.locator('[data-testid^="select-"]').check()
+  await expect(page.getByTestId('selection-summary')).toBeVisible()
+  await shotAround([page.getByTestId('transfer-bar'), row], 'kasir-transfer-01')
+  // STEP 2: Transfer…
+  await page.getByTestId('transfer-items-open').click()
+  const dialog = page.getByTestId('transfer-dialog')
+  // STEP 3: Folio tujuan and Alasan
+  await pickCombo(dialog, 'transfer_target', andreas.guest.last_name)
+  await dialog.locator('input[name=transfer_reason]').fill(`Minibar kamar ${siti.room} ditanggung tamu kamar ${andreas.room}`)
+  await expect(dialog.getByTestId('target-scope')).toBeVisible()
+  await shot(dialog, 'kasir-transfer-03')
+  // STEP 4: Lanjut ke persetujuan → Setujui transfer
+  await dialog.getByTestId('transfer-continue').click()
+  await approve(page, sari.email, sari.password)
+  await expect(page.getByTestId('notice')).toBeVisible()
+}
+
+/** 03-kasir-dan-pembayaran/grup-tagihan-dan-cetak.md */
+export async function flowGrupTagihan(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1: the folio of Agus Pratama
+  await loginAs('frontdesk', `/folios/${w.inHouse.agus.folioId}`)
+  // STEP 2: the card payment into Grup B
+  const row = folioRow(page, '(Kartu)')
+  await row.locator('select[name^="group_"]').selectOption('B')
+  await expect(page.getByTestId('group-B')).toContainText('1')
+  await shot(page.getByTestId('items'), 'kasir-grup-02')
+  // STEP 3: Grup B alone, then all again
+  await page.getByTestId('group-B').click()
+  await expect(page.getByTestId('group-note')).toBeVisible()
+  await page.getByTestId('group-ALL').click()
+  // STEP 4-5: Grup yang dicetak and Cetak tagihan (the picture only: the PDF opens in a new tab)
+  await page.getByTestId('print-group').selectOption('B')
+  await shot(page.getByTestId('summary'), 'kasir-grup-05')
+}
+
+/** 03-kasir-dan-pembayaran/shift-kasir.md */
+export async function flowShiftKasir(page: Page, loginAs: LoginAs, w: DocsWorld, seed: SeedState): Promise<void> {
+  const sari = seed.users.supervisor
+  // STEP 1: Tagihan → Shift kasir (the cashier Kevin)
+  await loginAs('cashier', '/cashier/shifts')
+  // STEP 2: Laci and Modal awal
+  const open = page.getByTestId('open-form')
+  await open.locator('input[name=drawer]').fill('FO1')
+  await open.locator('input[name=opening_float]').fill('1000000')
+  await shot(open, 'kasir-shift-02')
+  // STEP 3: Buka shift
+  await open.getByTestId('open-shift').click()
+  await expect(page.getByTestId('current-shift')).toBeVisible()
+  // STEP 4: a cash payment of the guest of room of Agus Pratama
+  await page.goto(`/folios/${w.inHouse.agus.folioId}?tab=payment`)
+  const pay = page.getByTestId('payment-form')
+  await pay.locator('input[name=amount]').fill('100000')
+  await pay.locator('select[name=payment_method]').selectOption('CASH')
+  await pay.getByRole('button', { name: tx('folio.postPayment'), exact: true }).click()
+  await expect(page.getByTestId('notice')).toBeVisible()
+  // STEP 7-8: Tutup shift… with 20 000 short
+  await page.goto('/cashier/shifts')
+  const expected = Number((await page.getByTestId('expected').innerText()).replace(/[^\d]/g, ''))
+  await page.getByTestId('start-close').click()
+  const close = page.getByTestId('close-form')
+  await close.locator('input[name=counted_cash]').fill(String(expected - 20000))
+  await close.locator('input[name=reason]').fill('Kembalian kurang Rp20.000 ke tamu kamar 204')
+  await expect(close.getByTestId('difference')).toBeVisible()
+  await shot(close, 'kasir-shift-08')
+  // STEP 9: Tutup shift → Setujui selisih by the supervisor
+  await close.getByTestId('confirm-close').click()
+  await approve(page, sari.email, sari.password)
+  // STEP 10: the shift is closed, with its Z report
+  await expect(page.getByTestId('closed-card')).toBeVisible()
+  await shotAround([page.getByTestId('notice'), page.getByTestId('closed-card')], 'kasir-shift-10')
+}
+
+/** 03-kasir-dan-pembayaran/posting-biaya-kamar.md */
+export async function flowBiayaKamar(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: Tagihan → Biaya kamar
+  await loginAs('frontdesk', '/room-charges')
+  await expect(page.getByTestId('items')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('items')], 'kasir-biaya-kamar-01')
+  // STEP 2-3: Posting biaya kamar
+  await expect(page.getByTestId('ready-count')).toBeVisible()
+  await page.getByTestId('post').click()
+  // STEP 4: the outcome
+  await expect(page.getByTestId('outcome')).toBeVisible()
+}
+
+/** 03-kasir-dan-pembayaran/membuka-folio-untuk-outlet.md */
+export async function flowFolioOutlet(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1: the folio of Made Wirawan (the duty manager: the seeded desks may not open folios for outlets)
+  await loginAs('admin', `/folios/${w.inHouse.made.folioId}`)
+  const card = page.locator('[data-testid=folio-outlet-lock], [data-testid=outlet-lock-card]').first()
+  await expect(card.getByTestId('lock-status')).toBeVisible()
+  // STEP 2: limit, until check-out, the restaurant and the bar
+  await card.locator('input[name=outlet_limit]').fill('2000000')
+  await card.getByTestId('lock-mode-until').check()
+  await card.getByTestId('lock-outlet-RESTO').check()
+  await card.getByTestId('lock-outlet-BAR').check()
+  await shot(card, 'kasir-folio-outlet-02')
+  // STEP 3: Buka untuk outlet
+  await card.getByTestId('lock-save').click()
+  await expect(card.getByTestId('lock-open-summary')).toBeVisible()
+  await shot(card, 'kasir-folio-outlet-03')
+}
+
+// =====================================================================================================================
+// 04-pos
+
+/** Chooses an outlet in a <select> by a part of its name (the ids differ between runs). */
+async function chooseOutlet(select: Locator, name: string): Promise<void> {
+  const value = await select.locator('option', { hasText: name }).first().getAttribute('value')
+  await select.selectOption(value ?? '')
+}
+
+const RESTO = 'Teratai'
+
+/** Adds a product to the open bill: its category tab first (the menu shows one category at a time), then the product. */
+async function addProduct(page: Page, category: string, product: RegExp): Promise<void> {
+  const menu = page.getByTestId('menu')
+  await menu.getByRole('tab', { name: category, exact: true }).click()
+  await menu.getByTestId('products').getByRole('button', { name: product }).first().click()
+}
+
+/** 04-pos/menyiapkan-outlet.md */
+export async function flowMenyiapkanOutlet(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 2-4: POS → Outlet: the outlets of the hotel (the demo of pms-seed pos)
+  await loginAs('admin', '/pos/outlets')
+  await expect(page.locator('[data-testid^="outlet-"]').first()).toBeVisible()
+  await shot(page.locator('main'), 'pos-outlet-03', { pad: 0 })
+  // STEP 5-8: POS → Stasiun dan printer: what the set-up still misses
+  await page.goto('/pos/stations')
+  const check = page.getByTestId('setup-check')
+  await expect(check).toBeVisible()
+  await shot(check, 'pos-outlet-08')
+}
+
+/** 04-pos/mengambil-pesanan.md */
+export async function flowAmbilPesanan(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: POS → Denah meja dan bill, the restaurant
+  await loginAs('pos', '/pos/floor')
+  await chooseOutlet(page.getByTestId('outlet-select'), RESTO)
+  await expect(page.getByTestId('table-3')).toBeVisible()
+  await shot(page.locator('main'), 'pos-pesanan-01', { pad: 0 })
+  // STEP 2: table 3 → Jumlah tamu → Bill baru
+  await page.getByTestId('table-3').click()
+  const table = page.getByTestId('table-dialog')
+  await table.getByTestId('guest-count').fill('2')
+  await table.getByTestId('open-table').click()
+  await expect(page).toHaveURL(/\/pos\/bills\/\d+$/)
+  // STEP 3-4: a fried rice with its choices, and an iced tea
+  await addProduct(page, 'Makanan utama', /Nasi Goreng Kampung/)
+  const options = page.getByTestId('options-dialog')
+  await options.getByTestId('options-note').fill('tanpa bawang')
+  await options.getByTestId('options-add').click()
+  await addProduct(page, 'Minuman', /Es Teh Manis/)
+  // STEP 5: the lines not sent yet
+  await expect(page.getByTestId('draft-lines')).toContainText('Es Teh Manis')
+  await shot(page.getByTestId('bill-panel'), 'pos-pesanan-05')
+  // STEP 6: Kirim ke dapur dan bar
+  await page.getByTestId('send').click()
+  await expect(page.getByTestId('round-1')).toBeVisible()
+  await shot(page.getByTestId('bill-panel'), 'pos-pesanan-06')
+}
+
+/** 04-pos/layar-dapur.md */
+export async function flowLayarDapur(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: POS → Layar dapur, the main kitchen
+  await loginAs('pos', '/pos/kds')
+  await page.locator('[data-testid^="station-"]').filter({ hasText: 'Dapur utama' }).first().click()
+  // STEP 2: the ticket of table 3 in Baru
+  const ticket = page.getByTestId('col-NEW').locator('[data-testid^="ticket-"]').filter({ hasText: 'Meja 3' }).first()
+  await expect(ticket).toBeVisible()
+  await shot(page.getByTestId('kds'), 'pos-dapur-02', { pad: 0 })
+  const id = ((await ticket.getAttribute('data-testid')) ?? '').replace('ticket-', '')
+  // STEP 3: Mulai
+  await page.getByTestId(`next-${id}`).click()
+  await expect(page.getByTestId('col-COOKING').getByTestId(`ticket-${id}`)).toBeVisible()
+  // STEP 4: Siap
+  await page.getByTestId(`next-${id}`).click()
+  await expect(page.getByTestId('col-READY').getByTestId(`ticket-${id}`)).toBeVisible()
+  // STEP 5: Sudah diambil
+  await page.getByTestId(`next-${id}`).click()
+  await expect(page.getByTestId(`ticket-${id}`)).toHaveCount(0)
+}
+
+/** Leaves the pay dialog with one row of the method (the dialog opens with a cash row for the whole bill). */
+async function onlyMethod(pay: Locator, method: 'CARD' | 'ROOM'): Promise<void> {
+  await expect(pay.locator('[data-testid^=pay-row-]').first()).toBeVisible()
+  const removes = pay.locator('[data-testid^=remove-]')
+  for (let n = await removes.count(); n > 0; n--) {
+    await removes.first().click()
+    await expect(removes).toHaveCount(n - 1)
+  }
+  await pay.getByTestId(`add-${method}`).click()
+  await expect(pay.getByTestId(`pay-row-${method}`)).toBeVisible()
+}
+
+/** 04-pos/membayar-bill.md */
+export async function flowBayarBill(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1: the bill of table 3
+  await loginAs('pos', '/pos/floor')
+  await chooseOutlet(page.getByTestId('outlet-select'), RESTO)
+  await page.getByTestId('table-3').click()
+  await expect(page).toHaveURL(/\/pos\/bills\/\d+$/)
+  // STEP 2-3: Bayar, by card for the whole bill
+  await page.getByTestId('pay').click()
+  const pay = page.getByTestId('pay-dialog')
+  await onlyMethod(pay, 'CARD')
+  await pay.getByTestId('exact-CARD').click()
+  await pay.getByTestId('pay-row-CARD').locator('input[name=reference]').fill('EDC 118822')
+  // STEP 4: Dimasukkan, Sisa
+  await expect(pay.getByTestId('pay-summary')).toBeVisible()
+  await shot(pay, 'pos-bayar-03')
+  // STEP 5: Bayar dan tutup
+  await pay.getByTestId('pay-submit').click()
+  await expect(page.getByTestId('bill-closed')).toBeVisible()
+  await shot(page.getByTestId('bill-panel'), 'pos-bayar-05')
+}
+
+/** 04-pos/bebankan-ke-kamar.md */
+export async function flowBebankanKamar(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  const made = w.inHouse.made
+  // (a room service order of Made Wirawan, whose folio is open for the restaurant: membuka-folio-untuk-outlet)
+  await loginAs('pos', '/pos/floor')
+  await chooseOutlet(page.getByTestId('outlet-select'), RESTO)
+  await page.getByTestId('new-takeaway').click()
+  const take = page.getByTestId('takeaway-dialog')
+  await take.locator('select[name=order_type]').selectOption('ROOM_SERVICE')
+  await take.locator('input[name=customer_name]').fill(`${made.guest.first_name} ${made.guest.last_name}`)
+  await take.getByTestId('open-takeaway').click()
+  await expect(page).toHaveURL(/\/pos\/bills\/\d+$/)
+  await addProduct(page, 'Minuman', /Kopi Bali/)
+  await page.getByTestId('send').click()
+  await expect(page.getByTestId('round-1')).toBeVisible()
+  // STEP 1-2: Bayar → + Bebankan ke kamar
+  await page.getByTestId('pay').click()
+  const pay = page.getByTestId('pay-dialog')
+  await onlyMethod(pay, 'ROOM')
+  // STEP 3: the room number → Cari
+  await pay.getByTestId('room-query').fill(made.room)
+  await pay.getByTestId('room-find').click()
+  // STEP 4: the guest, with the state of the folio
+  const result = pay.getByTestId(`room-${made.stayId}`)
+  await expect(result).toBeVisible()
+  await shot(pay, 'pos-kamar-04')
+  await result.click()
+  await expect(pay.getByTestId('room-chosen')).toContainText(made.room)
+  // STEP 5: Pas → Bayar dan tutup
+  await pay.getByTestId('exact-ROOM').click()
+  await pay.getByTestId('pay-submit').click()
+  await expect(page.getByTestId('bill-closed')).toBeVisible()
+  await expect(page.getByTestId('room-charges')).toContainText(made.room)
+}
+
+/** 04-pos/void-diskon-komplimen.md */
+export async function flowVoidPos(page: Page, loginAs: LoginAs, seed: SeedState): Promise<void> {
+  const admin = seed.users.admin
+  // (a table of the restaurant with a satay and an avocado juice sent to the kitchen; the duty manager holds void and approval)
+  await loginAs('admin', '/pos/floor')
+  await chooseOutlet(page.getByTestId('outlet-select'), RESTO)
+  await page.getByTestId('table-5').click()
+  const table = page.getByTestId('table-dialog')
+  await table.getByTestId('guest-count').fill('2')
+  await table.getByTestId('open-table').click()
+  await expect(page).toHaveURL(/\/pos\/bills\/\d+$/)
+  await addProduct(page, 'Makanan utama', /Sate Ayam Madura/)
+  await addProduct(page, 'Minuman', /Jus Alpukat/)
+  await page.getByTestId('send').click()
+  await expect(page.getByTestId('round-1')).toBeVisible()
+  // STEP 1: Void on the juice
+  await page.getByTestId('round-1').locator('li').filter({ hasText: 'Jus Alpukat' }).locator('[data-testid^="void-"]').click()
+  // STEP 2: the reason → Lanjut ke persetujuan
+  const sheet = page.getByTestId('reason-dialog')
+  await sheet.getByTestId('reason').fill('Tamu membatalkan, belum dibuat')
+  await shot(sheet, 'pos-void-02')
+  await sheet.getByTestId('reason-submit').click()
+  // STEP 3: the approval, then the voided line on the bill
+  await approve(page, admin.email, admin.password)
+  await expect(page.getByTestId('void-lines')).toContainText('Jus Alpukat')
+  await shot(page.getByTestId('bill-panel'), 'pos-void-03')
+  // the table is paid by card, so no open bill is left
+  await page.getByTestId('pay').click()
+  const pay = page.getByTestId('pay-dialog')
+  await onlyMethod(pay, 'CARD')
+  await pay.getByTestId('exact-CARD').click()
+  await pay.getByTestId('pay-submit').click()
+  await expect(page.getByTestId('bill-closed')).toBeVisible()
+}
+
+/** 04-pos/laporan-outlet.md */
+export async function flowLaporanOutlet(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: POS → Laporan outlet, the restaurant, today
+  await loginAs('pos', '/pos/report')
+  await chooseOutlet(page.getByTestId('report-outlet'), RESTO)
+  // STEP 3: the report
+  await expect(page.getByTestId('report-totals')).toBeVisible()
+  await expect(page.getByTestId('report-methods')).toBeVisible()
+  await shotAround([page.locator('main h1'), page.getByTestId('report-methods')], 'pos-laporan-03')
 }

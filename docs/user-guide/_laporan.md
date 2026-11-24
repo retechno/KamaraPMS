@@ -7,6 +7,7 @@ Laporan untuk pemilik dan tim pengembang, bukan untuk staf hotel. Laporan ini di
 | Batch | Isi | Halaman | Screenshot | Ukuran folder screenshot |
 |---|---|---|---|---|
 | 1 | 00-memulai, 01-front-desk, panduan-cepat/resepsionis | 23 | 46 | 1,6 MB (rata-rata 35,5 KB, terbesar 137 KB) |
+| 2 | 02-housekeeping, 03-kasir-dan-pembayaran, 04-pos | 22 | 44 (1,7 MB) | 3,3 MB untuk 90 gambar (rata-rata 37,1 KB, terbesar 180 KB) |
 
 ## 2. Tanda PERLU VERIFIKASI
 
@@ -39,6 +40,24 @@ Halaman panduan menuliskan teks ini persis seperti tampilannya, lalu memberi art
 | Pengaturan → Peran | grup `Inventory`, `Banquet`, `Fixed assets` | Tidak ada `permissionGroup.*` Indonesia |
 | Ketersediaan | `Tampilkan bed type` | Campuran Inggris |
 | Bagan kamar | `OOO`/`OOS`, `(upgrade)`, tombol `Minggu` | "Minggu" bisa dibaca sebagai hari Minggu |
+| Daftar pembersihan, tabel beban kerja | `Not assigned` | Nama dari server (`housekeeping/tasks.go:228`). Tugas saya sudah memakai "Belum ditugaskan" |
+| Panel kamar, bagian Hari ini | `Cleaning started (task)`, `Cleaning finished (task)` | Catatan bahasa Inggris dari server (`tasks.go:507`, `:551`) |
+| Perawatan dan Barang tertinggal, tanpa akses | izin `maintenance.report` / `lostfound.report` di dalam kalimat | Sebaiknya nama izinnya |
+| Blokir kamar, baris konflik | "Baris reservasi {id}" | Nomor internal baris, bukan nomor reservasi |
+| Blokir kamar dan Perawatan | "Rusak (out of order)" / "Tidak dipakai (out of service)" | Di tempat lain "Rusak (OOO)" / "Tidak dilayani (OOS)": istilahnya tidak seragam |
+| Tugas saya, label Dimulai | jam dengan format browser (`toLocaleTimeString`) | Bisa tampil "02:30 PM" di browser berbahasa Inggris |
+| Folio, rincian baris | `exclusive`/`inclusive`; tarif `10.0000%` | Mode harga dan tarif mentah |
+| Folio, baris void | `Void: Payment PAY000012 (CASH)` | Tidak diterjemahkan oleh `utils/folioDescription.ts` |
+| Folio, transfer ditolak | izin `cityledger.read atau reservation.read` | Kode izin mentah |
+| Biaya kamar, kolom alasan | `MISSING_NIGHTLY_RATE`, `NO_OPEN_FOLIO`, `STAY_CLOSED`, … | Kode mentah |
+| Shift kasir | kode laci `MAIN` di daftar shift dan placeholder; izin `cashier.shift` di teks tanpa akses | Judul shift aktif sudah menerjemahkan ("Laci utama") |
+| Folio dan shift, pesan isian | `only on the master folio of a group`, `at most 200 charges in a request`, `no such outlet in this property` | Tidak ada `fieldErrors.*` |
+| POS, struk komplimen di browser | `posPay.method_COMP` | Kunci i18n tidak ada |
+| Laporan outlet, daftar Diskon | `Discount: <item>` | Deskripsi bahasa Inggris dari server (`folios/outletbill.go:218`) |
+| Laporan outlet, CSV | `business_date,bills,net,service,tax,rounding,total` | Judul kolom bahasa Inggris, angka dan tanggal mentah |
+| POS, produk | perintah pendaftaran agen bahasa Inggris; label `Code page`, `X`, `Y`; pesan `HOLD_NOT_FOUND`, `TOO_DEEP`, `OPTION_GROUP_LIMIT` ("choose from 1 to 1") | Tidak ada teks Indonesia |
+| POS, impor CSV | "Baris {row}: <field> · <CODE> — <detail bahasa Inggris>" | Kode mentah |
+| POS, jenis pesanan DIRECT | "Kasir" di denah, "Kasir langsung" di layar dapur | Istilah tidak seragam |
 
 ## 4. Perbedaan antara desain (`docs/architecture`) dan kode
 
@@ -52,6 +71,11 @@ Diisi di Fase 6 dari `_inventory.md` bagian 9.3, ditambah temuan batch berikutny
 - **Profil tamu ganda tidak bisa digabung**, baik di UI maupun di API.
 - **Tidak ada tombol menambah kamar** ke reservasi yang sudah ada. Reservasi baru dari layar Reservasi selalu satu kamar.
 - **Walk-in** tidak punya langkah deposit dan isian identitas (berbeda dengan check-in biasa).
+- **Produk habis (sold out)** hanya bisa ditandai lewat API (`PUT /pos/outlets/{id}/sold-out/{productId}`). Tidak ada tombol di layar POS. Panduan menyarankan menghapus centang **Dijual** untuk sementara.
+- **Mengembalikan atau memindahkan beban POS ke kamar** (`POST /pos/room-charges/{id}/return|move`) tidak dipanggil layar mana pun. Baris transfernya di folio tamu juga tidak bisa di-reverse. Panduan menyarankan penyesuaian (kredit) di folio.
+- **Laporan outlet per kasir dan per pelayan:** API mengirimnya (`floor_state.go:374`), tetapi halaman tidak menampilkannya.
+- **Izin `folio.reopen` dan `folio.post_after_checkout`** ada di katalog izin, tetapi tidak ada layar atau layanan yang memakainya.
+- **Menutup shift kasir lain** (`cashier.shift_manage`) diizinkan API, tetapi halaman Shift kasir tidak punya tombolnya.
 
 ### 5.2 Celah UX: angka, tanggal, dan teks yang tidak terformat
 
@@ -59,6 +83,12 @@ Diisi di Fase 6 dari `_inventory.md` bagian 9.3, ditambah temuan batch berikutny
 - **Pesan deposit** menampilkan saldo tanpa pemisah ribuan: "Deposit PAY000001 diterima; saldo folio -1000000.". Pesan "Biaya {amount} diposting ke folio {folio}." kemungkinan sama (belum dilihat di layar).
 - **Kotak persetujuan Ubah tarif** selalu berbunyi "Malam yang sudah ditagih dikoreksi dengan adjustment…", juga saat yang diturunkan hanya malam yang belum ditagih.
 - **Halaman tanpa akses:** halaman Reservasi tetap menampilkan tombol **Bagan kamar** kepada pengguna yang tidak boleh melihat reservasi.
+- **Folio, Penyesuaian:** petunjuk "Terposting di folio ini: {net}" dan label "Jumlah (saldo folio {balance})" menampilkan angka tanpa pemisah ribuan (misalnya `90000`).
+- **Folio, Refund:** jumlah refund terisi dengan angka mentah dari server (misalnya `250000.000`).
+- **Shift kasir:** **Modal awal** dan batas selisih terisi dengan angka mentah tanpa pemisah ribuan. Waktu serah terima memakai `closed_at.slice(0, 10)` dari waktu UTC, jadi tanggalnya bisa bergeser sehari di sekitar tengah malam.
+- **Daftar pembersihan:** kolom **Tugas** diformat sebagai uang (angka bulat, jadi untuk saat ini tidak terlihat bedanya). Judul kolom **Kamar** muncul dua kali.
+- **Shift kasir, Tutup shift:** label **Departemen** tetap tampil tanpa isian kalau daftar departemen kosong untuk pengguna itu (`DepartmentSelect` disembunyikan saat daftarnya kosong, label `FormField` tidak). Terlihat untuk peran kasir E2E.
+- **Laporan outlet, daftar Komplimen:** baris tidak punya keterangan apa yang digratiskan ("<bill> · " lalu jumlahnya).
 
 ### 5.3 Celah UX: tombol yang tidak mencegah penolakan server
 
@@ -66,6 +96,9 @@ Diisi di Fase 6 dari `_inventory.md` bagian 9.3, ditambah temuan batch berikutny
 - **Menetapkan kamar dan check-in:** tipe lain yang ditandai "(naik kelas)" ditawarkan juga kepada pengguna tanpa `reservation.upgrade`. Server lalu menolak dengan PERMISSION_DENIED.
 - **Check-out:** folio perusahaan yang belum nol tidak menonaktifkan tombol **Check-out**. Server lalu menolak dengan FOLIO_NOT_BALANCED.
 - **Bagan kamar, jendela pindah:** LINE_NOT_CONFIRMED menampilkan teks tentang check-in ("Hanya kamar yang terkonfirmasi yang bisa check-in.").
+- **POS, Cetak:** tombol **Cetak** tampil untuk pelayan yang hanya punya `pos.order`, padahal server mewajibkan `pos.cashier`. Server lalu menolak dengan PERMISSION_DENIED.
+- **POS, membuka bill meja:** jumlah tamu yang kosong di outlet yang mewajibkannya hanya memberi "Ada isian yang tidak valid.", tanpa pesan di bawah isian.
+- **Folio, koreksi:** kesalahan isian pada reverse, penyesuaian, dan refund hanya tampil sebagai "Ada isian yang tidak valid." di jendela persetujuan, tidak di bawah isiannya.
 
 ## 6. Catatan screenshot
 
