@@ -49,7 +49,7 @@ Semua halaman yang menyuruh staf menghubungi tim KamaraPMS merujuk ke bagian itu
 | 2 | 02-housekeeping, 03-kasir-dan-pembayaran, 04-pos | 22 | 44 (1,7 MB) | 3,3 MB untuk 90 gambar (rata-rata 37,1 KB, terbesar 180 KB) |
 | 3 | 05-banquet, 06-corporate-group-city-ledger, 07-accounting, 08-keuangan-back-office | 23 | 57 (2,1 MB) | 5,4 MB untuk 147 gambar (rata-rata 37,3 KB, terbesar 179 KB) |
 | 4 | 09-inventory, 10-aset-tetap, 11-audit-malam, 12-laporan, 13-pengaturan, 14-admin-platform, 11 halaman panduan-cepat | 47 | 98 (5,7 MB) | 11,4 MB untuk 245 gambar (rata-rata 45,2 KB, terbesar 179 KB) |
-| 5 | faq (81 pertanyaan), troubleshooting (196 baris), glosarium (150 istilah), alur-harian, README (daftar isi lengkap, Bantuan dan kontak), 4 halaman celah route: daftar-kasir, pelayan, laporan-banquet, pengaturan-aset | 8 | 5 (0,26 MB); 6 gambar laporan banquet dan pengaturan aset belum diambil karena run dihentikan sistem (memori) | 11,6 MB untuk 250 gambar (rata-rata 45,3 KB, terbesar 180 KB) |
+| 5 | faq (81 pertanyaan), troubleshooting (196 baris), glosarium (150 istilah), alur-harian, README (daftar isi lengkap, Bantuan dan kontak), 4 halaman celah route: daftar-kasir, pelayan, laporan-banquet, pengaturan-aset | 8 | 11 (0,55 MB); run pertama dihentikan sistem karena memori, enam gambar sisanya diambil di run kedua | 12,0 MB untuk 256 gambar (rata-rata 45,5 KB, terbesar 180 KB) |
 
 ## 2. Tanda PERLU VERIFIKASI
 
@@ -94,7 +94,7 @@ Halaman panduan menandai perilaku yang sudah dikonfirmasi salah atau belum ada d
 | KD-19 | `09-inventory/menyiapkan-persediaan.md` | Formulir kategori terkunci begitu kategori berisi barang, walaupun belum punya stok | `web/src/views/inventory/InventoryCategoryFormView.vue:73` | tidak | |
 | KD-20 | `13-pengaturan/pengguna.md` | Baris akses yang belum lengkap dibuang tanpa peringatan | `web/src/views/setup/UserFormView.vue:49-51` | tidak | |
 | KD-21 | `11-audit-malam/menangani-penghalang.md` | Shift kasir milik orang lain tidak bisa ditutup dari layar; shift yang ditinggal terbuka menahan audit malam | Halaman Shift kasir (lihat 5.1) | tidak | |
-| KD-23 | `10-aset-tetap/pengaturan-aset.md` | **Matikan**/**Aktifkan** lokasi aset selalu gagal ("Ada isian yang tidak valid."): layar hanya mengirim saklar aktif, server menolak perubahan tanpa nama | Layar **Pengaturan aset**, kartu **Lokasi**; validasi ubah lokasi di `internal/assets` | tidak | Dari pembacaan kode; flow `10 pengaturan aset` mencatat hasilnya sebagai baris `[KD-23]` di log run, tetapi run itu belum selesai (dihentikan sistem karena memori) |
+| KD-23 | `10-aset-tetap/pengaturan-aset.md` | **Matikan**/**Aktifkan** lokasi aset selalu gagal ("Ada isian yang tidak valid."): layar hanya mengirim saklar aktif, server menolak perubahan tanpa nama | Layar **Pengaturan aset**, kartu **Lokasi**; validasi ubah lokasi di `internal/assets` | tidak | Terbukti di run (`[KD-23]`): setelah **Matikan** pada KOLAM, baris tetap **Aktif** dan muncul "Ada isian yang tidak valid. Perbaiki isian yang ditandai, lalu coba lagi." |
 | KD-24 | `10-aset-tetap/pengaturan-aset.md` | **Register mulai** terkunci begitu disimpan, padahal keterangannya "Terkunci setelah ada aset yang dimasukkan." | `web/src/views/assets/AssetSettingsView.vue:304-305` (`settings.started`); `internal/assets/setup.go:23` (`Started: r.RegisterFrom != nil`) | tidak | Diperiksa di kode: kunci layar mengikuti "register mulai sudah diisi", bukan "register sudah berisi aset" |
 | KD-25 | `03-kasir-dan-pembayaran/daftar-kasir.md` | Bill POS komplimen tampil dengan metode mentah `cashier.COMP` di kolom **Metode** dan kotak totalnya | `web/src/views/billing/CashierView.vue:44`; kunci `cashier.COMP` tidak ada di `web/src/i18n/locales/id.ts` (sekitar baris 959-964) | tidak | Diperiksa di kode; run hotel contoh tidak memuat bill komplimen di tanggal itu |
 | KD-22 | `10-aset-tetap/pelepasan-aset.md` | Untuk administrator tenant, pratinjau dan tombol (**Ajukan pelepasan**) menyebut penyetuju lain, padahal pelepasan langsung diposting (pengecualian administrator yang memang dirancang, `docs/architecture/32-distinct-approver.md` butir D) | `internal/iam/approval.go:135-137`; dialog pelepasan aset | tidak | |
@@ -219,7 +219,23 @@ Halaman panduan menuliskan teks ini persis seperti tampilannya, lalu memberi art
 
 ## 4. Perbedaan antara desain (`docs/architecture`) dan kode
 
-Diisi di Fase 6 dari `_inventory.md` bagian 9.3, ditambah temuan batch berikutnya.
+Dari `_inventory.md` bagian 9.3, ditambah temuan saat menulis Batch 1-5. Panduan mengikuti **kode** (yang tampil di layar), bukan desain. Kolom "Tindakan" menyebut apa yang perlu diputuskan: desain diperbarui, atau kode menyusul.
+
+| Area | Desain | Kode (yang ditulis di panduan) | Tindakan |
+|---|---|---|---|
+| POS (`34-pos.md`) | Void bill butuh persetujuan | Void bill hanya untuk draf, tanpa persetujuan | Putuskan; perbarui desain atau kode |
+| POS (`34-pos.md`) | Tandai menu habis, laporan per jam dan per kategori, ringkasan outlet di penutupan hari, mode offline | Belum ada di layar; panduan tidak menyebutnya | Tandai sebagai "belum dibangun" di desain |
+| Banquet (`36-banquet.md`) | Notifikasi `FEE_PROPOSED` | Tidak pernah ditulis | Kode atau desain |
+| Banquet (`36-banquet.md`) | Jam kalender dapat diatur | Kalender tetap 06:00–24:00 | Desain |
+| Aset (`37-fixed-assets.md`) §18 | Dialog persetujuan pelepasan | Administrator penyewa memposting langsung (sesuai `32-distinct-approver.md` butir D); labelnya tetap **Ajukan pelepasan** (KD-22) | Label di kode |
+| Aset (`37-fixed-assets.md`) | Usulan penghapusan dari opname "selalu permintaan" | Berbeda di kode | Desain |
+| Audit pasca implementasi (`19-post-implementation-audit.md:215`) | Biaya pembatalan dan no-show belum ada | Sudah ada di layar dan didokumentasikan | Perbarui dokumen desain |
+| Paket audit malam (`38-…`) | Arsip "no recipients" | Layar menulis "Tidak dikirim" / "E-mail mati" | Desain |
+| `39-…` §P1 dan §P6 | Lihat dokumennya | Berbeda dengan kode | Periksa bersama pemilik |
+| Anggaran (`11-…`) | Tahun anggaran dan statistik dijelaskan berbeda | Kode memakai `year_start`, dan statistik anggaran sudah ada | Perbarui desain |
+| Anggaran | Label `budget.approve` menyebut "sebagai orang kedua" | Aturan bawaan FREE mengizinkan pengaktif menyetujui sendiri | Label atau aturan bawaan |
+| Periode akuntansi | Tutup/buka kembali dengan persetujuan, seperti tahun buku dan rekening koran | Tutup dan buka kembali periode tidak butuh persetujuan | Putuskan |
+| Check-out (`03-financial-engines.md`, alur check-out) | Server tidak menagih malam ini untuk tamu yang pulang lebih awal pada siang hari | Server benar; wizard di layar tetap menghitung malam ini (KD-06) | Kode (prioritas 1) |
 
 ## 5. Fitur setengah jadi dan celah UX
 
@@ -414,3 +430,18 @@ Lima belas tugas yang paling terbantu oleh video pendek. Halaman-halamannya suda
 | 15 | [Invoice dan penerimaan piutang perusahaan](06-corporate-group-city-ledger/invoice-dan-penerimaan.md) | Akuntan piutang | Invoice dan pembayaran perusahaan; termasuk cara mencatat pembayaran ke invoice (KD-04) | 4 menit |
 
 Saran perekaman: pakai hotel contoh dari run screenshot (`E2E_DOCS=1 … scripts/e2e.sh docs-screenshots.spec.ts`), layar 1440×900 untuk meja depan dan back office, serta layar ponsel untuk housekeeping. Sebutkan nama menu persis seperti di layar berbahasa Indonesia.
+
+## 8. Ringkasan akhir (Fase 6)
+
+| Pemeriksaan | Hasil |
+|---|---|
+| Halaman panduan | 123 (termasuk README, FAQ, troubleshooting, glosarium, alur harian, 12 panduan cepat) |
+| Tautan dan anchor | 1.883 tautan relatif diperiksa, 0 rusak; tautan menunggu halaman di `_inventory.md`: kosong |
+| Screenshot | 256 gambar, 12,0 MB (rata-rata 45,5 KB, terbesar 180 KB), semua terpakai; tidak ada halaman dengan lebih dari 3 gambar |
+| Gambar yang belum bisa diambil | 8 tanda `<!-- SCREENSHOT: ... -->` di 6 halaman: surat peringatan, tutup periode, faktur pajak, settlement kartu, penghalang dan peringatan audit malam (2), console platform (2). Alasannya tertulis di setiap tanda dan di bagian 6 |
+| Cakupan route | 211 route; sebelum empat halaman baru, 199 tercakup penuh. Setelah halaman Kasir, Pelayan, Laporan banquet, dan Pengaturan aset ditambahkan, yang tersisa hanya laporan per-ruang, produksi penjualan, dan acara hilang, yang dijelaskan sebagai satu tabel di halaman Laporan banquet |
+| Sampel 10 halaman terhadap kode | 7 benar, 3 benar dengan catatan; 5 perbaikan diterapkan (pindah kamar, void/komplimen POS ×2, tentatif banquet, aturan persetujuan) |
+| Pemeriksaan kode | `npm run e2e:types` dan `npm run type-check` lolos; semua berkas di `docs/user-guide` dan `web/e2e/docs` ber-line ending LF |
+| 🐞 Kendala yang diketahui | **25** (KD-01 sampai KD-25); 7 berdampak uang |
+| PERLU VERIFIKASI | **0** |
+| Harus diisi pemilik sebelum dibagikan | 2 placeholder di README (lihat bagian "Harus diisi sebelum panduan dibagikan") |
