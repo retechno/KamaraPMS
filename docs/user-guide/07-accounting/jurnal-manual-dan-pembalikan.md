@@ -1,7 +1,5 @@
 # Jurnal manual dan pembalikan
 
-> 🎬 Video tutorial: menyusul
-
 **Siapa yang melakukan:** staf akuntansi yang perannya boleh memposting jurnal. Pembalikan disetujui oleh orang yang berwenang menyetujui koreksi.
 **Kapan dilakukan:** untuk mencatat transaksi yang tidak lewat modul lain, misalnya pengisian kas kecil dari bank, penyesuaian akhir bulan, atau koreksi salah akun.
 **Sebelum mulai:**

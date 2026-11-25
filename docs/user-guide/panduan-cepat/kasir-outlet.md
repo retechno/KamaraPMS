@@ -17,7 +17,7 @@ Ringkasan satu halaman untuk kasir dan pelayan outlet (restoran, bar, room servi
 | Pesanan bawa pulang atau room service | **Bawa pulang / bill tanpa meja** → pilih **Jenis pesanan** → **Bill baru**. | [Mengambil pesanan](../04-pos/mengambil-pesanan.md) |
 | Tamu memesan menu dengan pilihan, misalnya tingkat pedas | Klik produknya, pilih variannya, isi **Catatan untuk dapur**, klik **Tambahkan ke bill**. | [Mengambil pesanan](../04-pos/mengambil-pesanan.md) |
 | Pesanan siap dikirim | Klik **Kirim ke dapur dan bar**. | [Mengambil pesanan](../04-pos/mengambil-pesanan.md) |
-| Pelayan mencatat pesanan dari ponsel | **POS → Pelayan**: pilih meja, **Buka bill**, **Tambah**, lalu **Kirim ke dapur dan bar**. Pelayan tidak menerima pembayaran. | [Mengambil pesanan](../04-pos/mengambil-pesanan.md) |
+| Pelayan mencatat pesanan dari ponsel | **POS → Pelayan**: pilih meja, **Buka bill**, **Tambah**, lalu **Kirim ke dapur dan bar**. Pelayan tidak menerima pembayaran. | [Pelayan](../04-pos/pelayan.md) |
 | Ingin tahu apakah pesanan sudah siap | Lihat status item di bill: **Terkirim**, **Dimasak**, **Siap**, atau **Diantar**. | [Layar dapur](../04-pos/layar-dapur.md) |
 | Anda bertugas di dapur atau bar | **POS → Layar dapur**: **Mulai**, lalu **Siap**, lalu **Sudah diambil**. | [Layar dapur](../04-pos/layar-dapur.md) |
 | Tamu meminta bill | Klik **Minta bill**. Pra-tagihan tercetak kalau outlet punya printer struk. | [Mengambil pesanan](../04-pos/mengambil-pesanan.md) |

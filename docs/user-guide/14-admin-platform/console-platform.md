@@ -1,6 +1,6 @@
 # Console platform
 
-**Siapa yang melakukan:** operator platform, yaitu tim KamaraPMS yang mengelola penyewa (perusahaan hotel), paket, dan invoice langganan. Staf hotel, termasuk administrator hotel, tidak memakai console ini.
+**Siapa yang melakukan:** operator platform, yaitu tim dukungan KamaraPMS yang mengelola penyewa (perusahaan hotel), paket, dan invoice langganan. Staf hotel, termasuk administrator hotel, tidak memakai console ini.
 **Kapan dilakukan:** saat hotel baru mendaftar, saat hotel memperpanjang atau mengganti paket, saat invoice langganan diterbitkan atau dibayar, dan saat sebuah penyewa harus ditangguhkan.
 **Sebelum mulai:**
 - Akun operator Anda sudah dibuat oleh operator lain dengan perintah `pms-admin create-operator` di server. Akun operator tidak bisa dibuat dari layar.

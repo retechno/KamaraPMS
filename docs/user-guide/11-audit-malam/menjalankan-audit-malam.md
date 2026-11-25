@@ -1,5 +1,7 @@
 # Menjalankan audit malam
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** night auditor atau manajer jaga, yaitu pengguna yang perannya boleh menjalankan audit malam.
 **Kapan dilakukan:** sekali setiap malam, setelah semua kedatangan hari ini sudah check-in atau ditandai tidak datang dan semua tamu yang pulang hari ini sudah check-out. Paling cepat mulai **Jam paling awal audit malam** yang diatur untuk properti, atau kapan pun setelah tengah malam.
 **Sebelum mulai:**

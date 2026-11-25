@@ -8,10 +8,10 @@ Disusun dari kendala yang sudah dikonfirmasi lewat kode atau run screenshot. Uru
 
 | Prioritas | Temuan | Lokasi kode | Dampak | Usulan perbaikan singkat |
 |---|---|---|---|---|
+| 1 (uang) | **Check-out tamu pulang lebih awal menghitung malam ini** (KD-06, terbukti di run) | `web/src/components/CheckOutWizard.vue:39-66,89-95`; server benar: `internal/frontdesk/stayops.go:546-580` | Skenario harian front desk, dan berisiko menagih tamu satu malam lebih: staf tidak bisa check-out dari layar, dan kalau tamu membayar yang diminta, folio kelebihan bayar satu malam dan check-out ditolak | Saat **Konfirmasi keberangkatan lebih awal** dicentang dan tamu tiba sebelum hari ini, jangan tambahkan malam tanggal bisnis dari pratinjau biaya kamar |
 | 1 (uang) | **Pax aktual banquet diabaikan** (KD-03) | `web/src/components/banquet/BanquetPostDialog.vue:57` | Tamu yang hadir di atas pax garansi tidak tertagih | Kirim pax aktual yang diketik ke permintaan posting sesi, lalu tampilkan di **Ditagih** |
 | 1 (uang) | **Pembayaran perusahaan tanpa alokasi ke invoice** (KD-04) | `web/src/views/accounts/CityLedgerAccountView.vue:118-121` | Saldo piutang turun, tetapi invoice tetap **Belum dibayar** dan masuk daftar jatuh tempo, sehingga perusahaan bisa ditagih dua kali | Tambah layar alokasi penerimaan ke invoice, atau minta pilihan invoice di formulir **Catat pembayaran dari perusahaan** |
 | 1 (uang) | **Beban POS di folio tamu tidak bisa dibatalkan** (KD-01, KD-02) | `internal/folios/charges.go:310` (`FOLIO_TRANSFER_INVALID`), `internal/folios/posting.go:247-249` (`TRANSFER_CODE_NOT_MANUAL`); layanan pengembalian beban kamar POS ada di server, tanpa tombol di layar bill | Beban yang salah tetap ada di tagihan tamu; **Buka kembali** bill tidak menariknya | Tombol **Kembalikan beban kamar** di bill POS (setelah dibuka kembali), memakai layanan pengembalian yang sudah ada |
-| 1 (uang) | **Check-out tamu pulang lebih awal menghitung malam ini** (KD-06, terbukti di run) | `web/src/components/CheckOutWizard.vue:39-66,89-95`; server benar: `internal/frontdesk/stayops.go:546-580` | Staf tidak bisa check-out dari layar; kalau tamu membayar yang diminta, folio kelebihan bayar satu malam dan check-out ditolak | Saat **Konfirmasi keberangkatan lebih awal** dicentang dan tamu tiba sebelum hari ini, jangan tambahkan malam tanggal bisnis dari pratinjau biaya kamar |
 | 1 (uang) | **Settlement kartu tidak bisa dibatalkan** (KD-05) | `internal/bankrec/matching.go:40-70` | Settlement yang salah tetap di buku besar; baris rekening koran tidak bisa diselesaikan lagi setelah dilepas | Void settlement yang membalik jurnalnya dan membebaskan barisnya |
 | 1 (uang) | **Aturan mulai penyusutan mengabaikan pengaturan properti** (KD-10) | `web/src/views/assets/AssetMakeDialog.vue:30,123` | Aset bisa disusutkan sebulan lebih awal | Isi pilihan awal dari pengaturan aset properti |
 | 2 (penghalang) | **Shift kasir lain tidak bisa ditutup dari layar** (KD-21) | Halaman Shift kasir (lihat 5.1); izin `cashier.shift_manage` sudah ada di server | Audit malam tertahan kalau kasir pulang tanpa menutup shift | Tombol **Tutup shift** untuk pemegang `cashier.shift_manage` di daftar shift terbuka |
@@ -26,9 +26,20 @@ Disusun dari kendala yang sudah dikonfirmasi lewat kode atau run screenshot. Uru
 | 2 (penghalang) | **Opname terbuka selalu menahan audit malam** (`count_blocks_night_audit` tanpa kontrol) | `web/src/views/inventory/InventoryCostingView.vue:146` | Hotel tidak bisa memilih "hanya peringatan" | Tambah centangnya di pengaturan persediaan |
 | 2 (penghalang) | **Simpan pengguna bisa setengah tersimpan** (profil tersimpan, akses tidak) | `web/src/views/setup/UserFormView.vue:63-68` | Staf bisa tidak bisa masuk ke propertinya | Satu permintaan, atau pesan yang menyebut bagian yang sudah tersimpan |
 | 2 (penghalang) | **11 izin persediaan tanpa label Indonesia** | `web/src/i18n/locales/id.ts:4799` | Administrator menyusun peran pembelian dari kode Inggris; salah pilih membuat permintaan tertahan | Tambahkan labelnya |
+| 2 (penghalang) | **Register mulai aset terkunci setelah disimpan** (KD-24) | `web/src/views/assets/AssetSettingsView.vue:304-305` | Bulan awal register yang salah tidak bisa dibetulkan dari layar walaupun register masih kosong | Kunci hanya kalau register sudah berisi aset, sama seperti server |
+| 2 (penghalang) | **Lokasi aset tidak bisa dimatikan** (KD-23) | Kartu **Lokasi** di **Pengaturan aset** | Lokasi yang tidak dipakai tetap muncul di pilihan | Kirim nama lokasi bersama saklar aktif, atau terima perubahan tanpa nama di server |
 | 3 (kosmetik) | **Alasan biaya kamar dan `INVENTORY_BALANCE_DRIFT` mentah** | `NightAuditView.vue:406,414`; `internal/inventory/checks.go:243-249` | Staf harus mencari arti kode, dan ID barang alih-alih namanya | Teks Indonesia per alasan; sebutkan nama barang dan gudang |
 | 3 (angka) | **Penjumlahan float di Laporan Z dan Pembatalan** | `web/src/views/reports/day/ZReportsView.vue:66`; `CancellationsView.vue:37` | Total bisa punya sisa pembulatan | Jumlahkan dengan desimal tetap |
-| 3 (kosmetik) | Label "Simpan dan ajukan" di kotak pesanan (KD-18), bulatan **Bawaan beli/resep** (KD-13), tautan alasan audit malam (KD-14), baris Total umur utang (KD-07), pesan `CORRECTION_REQUIRES_ADJUSTMENT` (KD-08), riwayat aset `[object Object]` (KD-09), template CSV aset `FF&E` (KD-11), label **Ajukan pelepasan** untuk administrator (KD-22) | Lihat bagian 2a | Staf salah membaca layar atau berkas | Lihat bagian 2a dan bagian 3, 5.2, 5.3 |
+| 3 (kosmetik) | Label "Simpan dan ajukan" di kotak pesanan (KD-18), bulatan **Bawaan beli/resep** (KD-13), tautan alasan audit malam (KD-14), baris Total umur utang (KD-07), pesan `CORRECTION_REQUIRES_ADJUSTMENT` (KD-08), riwayat aset `[object Object]` (KD-09), template CSV aset `FF&E` (KD-11), label **Ajukan pelepasan** untuk administrator (KD-22), metode `cashier.COMP` di Kasir (KD-25) | Lihat bagian 2a | Staf salah membaca layar atau berkas | Lihat bagian 2a dan bagian 3, 5.2, 5.3 |
+
+## Harus diisi sebelum panduan dibagikan
+
+| Tempat | Isian | Keterangan |
+|---|---|---|
+| `README.md`, bagian **Bantuan dan kontak** | `[ISI: email dukungan]` | Alamat email tim dukungan KamaraPMS |
+| `README.md`, bagian **Bantuan dan kontak** | `[ISI: WhatsApp dukungan]` | Nomor WhatsApp tim dukungan KamaraPMS |
+
+Semua halaman yang menyuruh staf menghubungi tim KamaraPMS merujuk ke bagian itu, jadi cukup diisi di satu tempat. Cari sisa placeholder dengan `grep -rn "\[ISI:" docs/user-guide`.
 
 ## 1. Statistik per batch
 
@@ -38,6 +49,7 @@ Disusun dari kendala yang sudah dikonfirmasi lewat kode atau run screenshot. Uru
 | 2 | 02-housekeeping, 03-kasir-dan-pembayaran, 04-pos | 22 | 44 (1,7 MB) | 3,3 MB untuk 90 gambar (rata-rata 37,1 KB, terbesar 180 KB) |
 | 3 | 05-banquet, 06-corporate-group-city-ledger, 07-accounting, 08-keuangan-back-office | 23 | 57 (2,1 MB) | 5,4 MB untuk 147 gambar (rata-rata 37,3 KB, terbesar 179 KB) |
 | 4 | 09-inventory, 10-aset-tetap, 11-audit-malam, 12-laporan, 13-pengaturan, 14-admin-platform, 11 halaman panduan-cepat | 47 | 98 (5,7 MB) | 11,4 MB untuk 245 gambar (rata-rata 45,2 KB, terbesar 179 KB) |
+| 5 | faq (81 pertanyaan), troubleshooting (196 baris), glosarium (150 istilah), alur-harian, README (daftar isi lengkap, Bantuan dan kontak), 4 halaman celah route: daftar-kasir, pelayan, laporan-banquet, pengaturan-aset | 8 | 5 (0,26 MB); 6 gambar laporan banquet dan pengaturan aset belum diambil karena run dihentikan sistem (memori) | 11,6 MB untuk 250 gambar (rata-rata 45,3 KB, terbesar 180 KB) |
 
 ## 2. Tanda PERLU VERIFIKASI
 
@@ -59,30 +71,33 @@ Tanda yang sudah diselesaikan:
 
 Halaman panduan menandai perilaku yang sudah dikonfirmasi salah atau belum ada di layar dengan `> 🐞 Kendala yang diketahui (KD-xx):`. Setiap blok berisi apa yang terjadi, dampaknya bagi staf, dan jalan keluar yang benar-benar bisa dilakukan dari layar, atau siapa yang dihubungi. Tanda PERLU VERIFIKASI hanya dipakai untuk hal yang benar-benar belum pasti.
 
-| ID | Halaman | Ringkasan | Lokasi kode | Dampak uang? (ya/tidak) |
-|---|---|---|---|---|
-| KD-01 | `03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md` | Beban POS di folio tamu tidak bisa dibatalkan dari layar setelah bill lunas (baris `TRF` tidak bisa di-reverse atau disesuaikan) | `internal/folios/charges.go:310`, `internal/folios/posting.go:247-249`; pengembalian beban kamar POS tanpa tombol | ya |
-| KD-02 | `04-pos/bebankan-ke-kamar.md` | **Buka kembali** bill tidak menarik beban kamarnya dari folio tamu | Layar bill POS: tidak ada tombol pengembalian beban kamar | ya |
-| KD-03 | `05-banquet/posting-sesi-dan-penagihan.md` | **Pax aktual** diabaikan; sesi ditagih menurut pax garansi. Jalan keluar lewat penyesuaian positif di folio acara sudah diperiksa di kode: berlaku selama folio acara terbuka, butuh persetujuan, tidak masuk laporan pendapatan banquet dan tidak mengurangi stok | `web/src/components/banquet/BanquetPostDialog.vue:57` | ya |
-| KD-04 | `06-corporate-group-city-ledger/invoice-dan-penerimaan.md` | **Catat pembayaran dari perusahaan** tidak pernah terhubung ke invoice; invoice tetap **Belum dibayar** dan jatuh tempo | `web/src/views/accounts/CityLedgerAccountView.vue:118-121` | ya |
-| KD-05 | `08-keuangan-back-office/settlement-kartu.md` | Settlement kartu tidak bisa dibatalkan; melepas pasangan baris meninggalkan jurnalnya, dan baris itu tidak bisa diselesaikan lagi | `internal/bankrec/matching.go:40-70` | ya |
-| KD-06 | `01-front-desk/check-out.md` (dirujuk dari `06-corporate-group-city-ledger/transfer-ke-piutang-perusahaan.md`) | Wizard check-out menghitung biaya malam ini untuk tamu yang pulang lebih awal pada siang hari, padahal server tidak menagihnya. Terbukti di run: tombol mati walaupun saldo nol; membayar jumlah yang diminta membuat folio kredit −605.000 dan check-out ditolak. Jalan keluar terbukti di run: pengguna yang perannya boleh check-out tanpa `folio.post_charge` dan `nightaudit.run` bisa check-out dari layar ("Check-out dengan 0 biaya kamar diposting.") | `web/src/components/CheckOutWizard.vue:39-66,89-95`; `internal/frontdesk/stayops.go:546-580` | ya |
-| KD-07 | `08-keuangan-back-office/utang-usaha.md` | Baris **Total** umur utang usaha bergeser satu kolom | `web/src/views/payables/AgingView.vue:110-113` | tidak |
-| KD-08 | `03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md` | Pesan `CORRECTION_REQUIRES_ADJUSTMENT` menyebut tanda terima untuk biaya dan pembayaran hari sebelumnya | `web/src/i18n/locales/id.ts:8065`; `internal/folios/charges.go:322-324`; `internal/folios/payments.go:475` | tidak |
-| KD-09 | `10-aset-tetap/daftar-tunggu-dan-register.md` | Riwayat register aset menampilkan `[object Object] → [object Object]` | `web/src/views/assets/AssetView.vue:150-152` | tidak |
-| KD-10 | `10-aset-tetap/daftar-tunggu-dan-register.md` | **Mulai disusutkan** di **Jadikan aset** selalu **Bulan mulai pakai**, walaupun pengaturan properti berbeda | `web/src/views/assets/AssetMakeDialog.vue:30,123` | ya |
-| KD-11 | `10-aset-tetap/saldo-awal-aset.md` | Template CSV saldo awal memakai kategori `FF&E` yang ditolak | `web/src/views/assets/AssetOpeningView.vue:33` | tidak |
-| KD-12 | `13-pengaturan/pengguna.md` | Daftar pengguna menulis "Tanpa akses properti" untuk semua staf | `internal/iam/service.go:451,984-986` | tidak |
-| KD-13 | `09-inventory/barang-gudang-dan-saldo-awal.md` | Bulatan **Bawaan beli** dan **Bawaan resep** tidak tampil terisi setelah diklik (`@click.prevent` pada radio dengan `:checked`); pilihannya tetap tercatat | `web/src/views/inventory/InventoryItemFormView.vue:214-215,232-233` | tidak |
-| KD-14 | `11-audit-malam/menangani-penghalang.md` | Tautan di "Hari belum bisa ditutup karena:" tidak menggulir halaman (gulir hanya sekali saat halaman dibuka; router tanpa `scrollBehavior`) | `web/src/views/nightaudit/NightAuditView.vue:216-224,484` | tidak |
-| KD-15 | `13-pengaturan/pajak-dan-kode-biaya.md` | Kode biaya pembulatan POS tidak bisa diubah, dan jenisnya tampil sebagai kunci mentah | `internal/billingconfig/model.go:41,286` | tidak |
-| KD-16 | `09-inventory/rantai-persetujuan.md` | **Simpan rantai** butuh izin mengubah pengaturan properti, padahal halamannya terbuka dengan izin persediaan | `internal/inventory/approval.go:172` | tidak |
-| KD-17 | `09-inventory/rantai-persetujuan.md` | Penyetuju tanpa izin melihat persediaan dialihkan keluar dari permintaan yang harus diputuskannya | `web/src/router/index.ts:138,140` | tidak |
-| KD-18 | `09-inventory/permintaan-dan-pesanan-pembelian.md` | Kotak "Simpan dan ajukan" di kotak pesanan berarti "kirim ke pemasok sekarang" | `web/src/views/inventory/purchasing/PurchaseRequestView.vue:559` | tidak |
-| KD-19 | `09-inventory/menyiapkan-persediaan.md` | Formulir kategori terkunci begitu kategori berisi barang, walaupun belum punya stok | `web/src/views/inventory/InventoryCategoryFormView.vue:73` | tidak |
-| KD-20 | `13-pengaturan/pengguna.md` | Baris akses yang belum lengkap dibuang tanpa peringatan | `web/src/views/setup/UserFormView.vue:49-51` | tidak |
-| KD-21 | `11-audit-malam/menangani-penghalang.md` | Shift kasir milik orang lain tidak bisa ditutup dari layar; shift yang ditinggal terbuka menahan audit malam | Halaman Shift kasir (lihat 5.1) | tidak |
-| KD-22 | `10-aset-tetap/pelepasan-aset.md` | Untuk administrator tenant, pratinjau dan tombol (**Ajukan pelepasan**) menyebut penyetuju lain, padahal pelepasan langsung diposting (pengecualian administrator yang memang dirancang, `docs/architecture/32-distinct-approver.md` butir D) | `internal/iam/approval.go:135-137`; dialog pelepasan aset | tidak |
+| ID | Halaman | Ringkasan | Lokasi kode | Dampak uang? (ya/tidak) | Catatan |
+|---|---|---|---|---|---|
+| KD-01 | `03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md` | Beban POS di folio tamu tidak bisa dibatalkan dari layar setelah bill lunas (baris `TRF` tidak bisa di-reverse atau disesuaikan) | `internal/folios/charges.go:310`, `internal/folios/posting.go:247-249`; pengembalian beban kamar POS tanpa tombol | ya | |
+| KD-02 | `04-pos/bebankan-ke-kamar.md` | **Buka kembali** bill tidak menarik beban kamarnya dari folio tamu | Layar bill POS: tidak ada tombol pengembalian beban kamar | ya | |
+| KD-03 | `05-banquet/posting-sesi-dan-penagihan.md` | **Pax aktual** diabaikan; sesi ditagih menurut pax garansi. Jalan keluar lewat penyesuaian positif di folio acara sudah diperiksa di kode: berlaku selama folio acara terbuka, butuh persetujuan, tidak masuk laporan pendapatan banquet dan tidak mengurangi stok | `web/src/components/banquet/BanquetPostDialog.vue:57` | ya | |
+| KD-04 | `06-corporate-group-city-ledger/invoice-dan-penerimaan.md` | **Catat pembayaran dari perusahaan** tidak pernah terhubung ke invoice; invoice tetap **Belum dibayar** dan jatuh tempo | `web/src/views/accounts/CityLedgerAccountView.vue:118-121` | ya | |
+| KD-05 | `08-keuangan-back-office/settlement-kartu.md` | Settlement kartu tidak bisa dibatalkan; melepas pasangan baris meninggalkan jurnalnya, dan baris itu tidak bisa diselesaikan lagi | `internal/bankrec/matching.go:40-70` | ya | |
+| KD-06 | `01-front-desk/check-out.md` (dirujuk dari `06-corporate-group-city-ledger/transfer-ke-piutang-perusahaan.md`) | Wizard check-out menghitung biaya malam ini untuk tamu yang pulang lebih awal pada siang hari, padahal server tidak menagihnya. Terbukti di run: tombol mati walaupun saldo nol; membayar jumlah yang diminta membuat folio kredit −605.000 dan check-out ditolak. | `web/src/components/CheckOutWizard.vue:39-66,89-95`; `internal/frontdesk/stayops.go:546-580` | ya | Catatan teknis untuk supervisor dan administrator (tidak ditulis di panduan staf): check-out bisa diselesaikan dari layar oleh pengguna yang perannya punya `frontdesk.checkout` tetapi tidak punya `folio.post_charge` maupun `nightaudit.run`. Untuk peran itu wizard tidak memanggil pratinjau biaya kamar, jadi hanya meminta saldo hari ini; server lalu check-out tanpa biaya malam ini ("Check-out dengan 0 biaya kamar diposting."). Terbukti di run `[PULANGAWAL]`. Di panduan staf: terima pembayaran sebesar saldo folio, lalu supervisor menyelesaikan check-out sebelum audit malam. |
+| KD-07 | `08-keuangan-back-office/utang-usaha.md` | Baris **Total** umur utang usaha bergeser satu kolom | `web/src/views/payables/AgingView.vue:110-113` | tidak | |
+| KD-08 | `03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md` | Pesan `CORRECTION_REQUIRES_ADJUSTMENT` menyebut tanda terima untuk biaya dan pembayaran hari sebelumnya | `web/src/i18n/locales/id.ts:8065`; `internal/folios/charges.go:322-324`; `internal/folios/payments.go:475` | tidak | |
+| KD-09 | `10-aset-tetap/daftar-tunggu-dan-register.md` | Riwayat register aset menampilkan `[object Object] → [object Object]` | `web/src/views/assets/AssetView.vue:150-152` | tidak | |
+| KD-10 | `10-aset-tetap/daftar-tunggu-dan-register.md` | **Mulai disusutkan** di **Jadikan aset** selalu **Bulan mulai pakai**, walaupun pengaturan properti berbeda | `web/src/views/assets/AssetMakeDialog.vue:30,123` | ya | |
+| KD-11 | `10-aset-tetap/saldo-awal-aset.md` | Template CSV saldo awal memakai kategori `FF&E` yang ditolak | `web/src/views/assets/AssetOpeningView.vue:33` | tidak | |
+| KD-12 | `13-pengaturan/pengguna.md` | Daftar pengguna menulis "Tanpa akses properti" untuk semua staf | `internal/iam/service.go:451,984-986` | tidak | |
+| KD-13 | `09-inventory/barang-gudang-dan-saldo-awal.md` | Bulatan **Bawaan beli** dan **Bawaan resep** tidak tampil terisi setelah diklik (`@click.prevent` pada radio dengan `:checked`); pilihannya tetap tercatat | `web/src/views/inventory/InventoryItemFormView.vue:214-215,232-233` | tidak | |
+| KD-14 | `11-audit-malam/menangani-penghalang.md` | Tautan di "Hari belum bisa ditutup karena:" tidak menggulir halaman (gulir hanya sekali saat halaman dibuka; router tanpa `scrollBehavior`) | `web/src/views/nightaudit/NightAuditView.vue:216-224,484` | tidak | |
+| KD-15 | `13-pengaturan/pajak-dan-kode-biaya.md` | Kode biaya pembulatan POS tidak bisa diubah, dan jenisnya tampil sebagai kunci mentah | `internal/billingconfig/model.go:41,286` | tidak | |
+| KD-16 | `09-inventory/rantai-persetujuan.md` | **Simpan rantai** butuh izin mengubah pengaturan properti, padahal halamannya terbuka dengan izin persediaan | `internal/inventory/approval.go:172` | tidak | |
+| KD-17 | `09-inventory/rantai-persetujuan.md` | Penyetuju tanpa izin melihat persediaan dialihkan keluar dari permintaan yang harus diputuskannya | `web/src/router/index.ts:138,140` | tidak | |
+| KD-18 | `09-inventory/permintaan-dan-pesanan-pembelian.md` | Kotak "Simpan dan ajukan" di kotak pesanan berarti "kirim ke pemasok sekarang" | `web/src/views/inventory/purchasing/PurchaseRequestView.vue:559` | tidak | |
+| KD-19 | `09-inventory/menyiapkan-persediaan.md` | Formulir kategori terkunci begitu kategori berisi barang, walaupun belum punya stok | `web/src/views/inventory/InventoryCategoryFormView.vue:73` | tidak | |
+| KD-20 | `13-pengaturan/pengguna.md` | Baris akses yang belum lengkap dibuang tanpa peringatan | `web/src/views/setup/UserFormView.vue:49-51` | tidak | |
+| KD-21 | `11-audit-malam/menangani-penghalang.md` | Shift kasir milik orang lain tidak bisa ditutup dari layar; shift yang ditinggal terbuka menahan audit malam | Halaman Shift kasir (lihat 5.1) | tidak | |
+| KD-23 | `10-aset-tetap/pengaturan-aset.md` | **Matikan**/**Aktifkan** lokasi aset selalu gagal ("Ada isian yang tidak valid."): layar hanya mengirim saklar aktif, server menolak perubahan tanpa nama | Layar **Pengaturan aset**, kartu **Lokasi**; validasi ubah lokasi di `internal/assets` | tidak | Dari pembacaan kode; flow `10 pengaturan aset` mencatat hasilnya sebagai baris `[KD-23]` di log run, tetapi run itu belum selesai (dihentikan sistem karena memori) |
+| KD-24 | `10-aset-tetap/pengaturan-aset.md` | **Register mulai** terkunci begitu disimpan, padahal keterangannya "Terkunci setelah ada aset yang dimasukkan." | `web/src/views/assets/AssetSettingsView.vue:304-305` (`settings.started`); `internal/assets/setup.go:23` (`Started: r.RegisterFrom != nil`) | tidak | Diperiksa di kode: kunci layar mengikuti "register mulai sudah diisi", bukan "register sudah berisi aset" |
+| KD-25 | `03-kasir-dan-pembayaran/daftar-kasir.md` | Bill POS komplimen tampil dengan metode mentah `cashier.COMP` di kolom **Metode** dan kotak totalnya | `web/src/views/billing/CashierView.vue:44`; kunci `cashier.COMP` tidak ada di `web/src/i18n/locales/id.ts` (sekitar baris 959-964) | tidak | Diperiksa di kode; run hotel contoh tidak memuat bill komplimen di tanggal itu |
+| KD-22 | `10-aset-tetap/pelepasan-aset.md` | Untuk administrator tenant, pratinjau dan tombol (**Ajukan pelepasan**) menyebut penyetuju lain, padahal pelepasan langsung diposting (pengecualian administrator yang memang dirancang, `docs/architecture/32-distinct-approver.md` butir D) | `internal/iam/approval.go:135-137`; dialog pelepasan aset | tidak | |
 
 ## 3. Teks bahasa Inggris, kunci i18n mentah, dan kode mentah di layar
 
@@ -378,4 +393,24 @@ Diisi di Fase 6 dari `_inventory.md` bagian 9.3, ditambah temuan batch berikutny
 
 ## 7. Kandidat video
 
-Diisi di Fase 5.
+Lima belas tugas yang paling terbantu oleh video pendek. Halaman-halamannya sudah diberi tanda `> 🎬 Video tutorial: menyusul` di bawah judulnya. Tidak ada video yang dibuat di branch ini.
+
+| No | Halaman | Peran | Kenapa video membantu | Perkiraan durasi |
+|---|---|---|---|---|
+| 1 | [Masuk dan mengenal layar](00-memulai/login-dan-navigasi.md) | Semua staf | Orientasi layar, menu, dan pemilih properti lebih cepat ditangkap dengan melihat | 2 menit |
+| 2 | [Membuat reservasi](01-front-desk/membuat-reservasi.md) | Resepsionis | Formulir panjang dengan banyak pilihan tarif dan tipe kamar | 4 menit |
+| 3 | [Check-in](01-front-desk/check-in.md) | Resepsionis | Tugas harian dengan urutan wizard yang harus tepat | 3 menit |
+| 4 | [Walk-in](01-front-desk/walk-in.md) | Resepsionis | Gabungan reservasi, check-in, dan deposit dalam satu alur | 3 menit |
+| 5 | [Check-out](01-front-desk/check-out.md) | Resepsionis, kasir | Tugas harian yang menyangkut uang; termasuk cara menghadapi tamu pulang lebih awal (KD-06) | 3 menit |
+| 6 | [Shift kasir](03-kasir-dan-pembayaran/shift-kasir.md) | Kasir | Buka shift, hitung kas, tutup shift, dan laporan Z | 4 menit |
+| 7 | [Menerima pembayaran](03-kasir-dan-pembayaran/menerima-pembayaran.md) | Kasir | Metode pembayaran, deposit, dan pembayaran terpisah | 3 menit |
+| 8 | [Mengoreksi biaya: reverse dan penyesuaian](03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md) | Kasir, supervisor | Beda reverse dan penyesuaian, serta persetujuan atasan, sering membingungkan | 4 menit |
+| 9 | [Mengubah status kebersihan kamar](02-housekeeping/mengubah-status-kebersihan.md) | Housekeeping | Dipakai dari ponsel di lantai kamar; gerakan layar lebih mudah ditiru | 2 menit |
+| 10 | [Mengambil pesanan](04-pos/mengambil-pesanan.md) | Kasir dan pelayan outlet | Alur meja, bill, varian, dan kirim ke dapur | 4 menit |
+| 11 | [Membayar bill](04-pos/membayar-bill.md) | Kasir outlet | Bayar, pisah bill, dan bebankan ke kamar | 3 menit |
+| 12 | [Menjalankan audit malam](11-audit-malam/menjalankan-audit-malam.md) | Night auditor | Tugas sekali sehari yang menutup hari dan tidak bisa diulang | 5 menit |
+| 13 | [Membuat acara dan sesi](05-banquet/membuat-acara-dan-sesi.md) | Staf banquet | Acara, sesi, ruang, dan paket dalam beberapa layar | 5 menit |
+| 14 | [Permintaan pembelian dan pesanan pembelian](09-inventory/permintaan-dan-pesanan-pembelian.md) | Staf gudang, pembelian | Permintaan, rantai persetujuan, lalu pesanan ke pemasok | 5 menit |
+| 15 | [Invoice dan penerimaan piutang perusahaan](06-corporate-group-city-ledger/invoice-dan-penerimaan.md) | Akuntan piutang | Invoice dan pembayaran perusahaan; termasuk cara mencatat pembayaran ke invoice (KD-04) | 4 menit |
+
+Saran perekaman: pakai hotel contoh dari run screenshot (`E2E_DOCS=1 … scripts/e2e.sh docs-screenshots.spec.ts`), layar 1440×900 untuk meja depan dan back office, serta layar ponsel untuk housekeeping. Sebutkan nama menu persis seperti di layar berbahasa Indonesia.

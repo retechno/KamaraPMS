@@ -40,7 +40,7 @@ Anda menemukan siapa yang melakukan perubahan, kapan, dan apa yang berubah. Untu
 ## Perlu diperhatikan
 
 - **Lingkup.** Administrator hotel juga melihat pilihan **Lingkup**: **Properti ini** atau **Tingkat perusahaan**. Pengguna, peran, data tamu, dan langganan tercatat di **Tingkat perusahaan**.
-- **Kolom Pengguna** menulis "sistem" untuk perubahan otomatis, misalnya oleh audit malam, dan "KamaraPMS (operator)" untuk tindakan tim KamaraPMS.
+- **Kolom Pengguna** menulis "sistem" untuk perubahan otomatis, misalnya oleh audit malam, dan "KamaraPMS (operator)" untuk tindakan tim dukungan KamaraPMS.
 - **Isi Sebelum dan Sesudah** ditulis apa adanya dari sistem: nama field dan nilainya berbahasa Inggris, misalnya `"status": "NO_SHOW"` (tidak datang). Arahkan kursor ke nama aksi untuk melihat kodenya.
 - **"Ketik minimal 3 karakter untuk mencari."** muncul kalau Nomor dokumen kurang dari 3 karakter.
 - Kalau tidak ada yang cocok: "Tidak ada entri yang cocok.". Klik **Hapus saringan** untuk mulai lagi.

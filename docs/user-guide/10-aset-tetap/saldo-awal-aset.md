@@ -57,5 +57,6 @@
 ## Terkait
 
 - [Daftar tunggu dan register](daftar-tunggu-dan-register.md)
+- [Pengaturan aset](pengaturan-aset.md)
 - [Penyusutan bulanan](penyusutan-bulanan.md)
 - [Bagan akun dan akun sistem](../07-accounting/bagan-akun-dan-akun-sistem.md)

@@ -65,7 +65,7 @@
 - **Gudang yang sedang diopname** menolak penerimaan: "Opname sedang berjalan di gudang.". Tunggu opname disetujui.
 - **Terima tanpa pesanan** tidak tersedia di hotel dengan pengaturan bawaan ("Menerima tanpa pesanan tidak diizinkan di properti ini.").
 - **Kotak Terima dan tagih sekaligus** hanya tampil untuk peran yang boleh menagih dan memposting utang usaha.
-- **Draf tagihan tidak bisa dibuang** dari layar. Kalau sebuah draf memang tidak akan ditagih, hubungi tim KamaraPMS.
+- **Draf tagihan tidak bisa dibuang** dari layar. Kalau sebuah draf memang tidak akan ditagih, hubungi administrator hotel (lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak)). Administrator hotel akan meneruskannya ke tim dukungan KamaraPMS.
 - **Daftar Nota kredit** di halaman retur kosong untuk peran yang tidak boleh melihat utang usaha.
 - **Pesan bahasa Inggris** bisa muncul di bawah baris retur atau tagihan, misalnya jumlah yang melebihi penerimaan, atau penerimaan dari pemasok lain. Periksa jumlah dan pilihan penerimaannya.
 - **Penerimaan yang dibatalkan** menampilkan alasannya di bawah label kalimat panjang "Penerimaan hanya bisa dibatalkan pada hari diposting…", bukan "Alasan".

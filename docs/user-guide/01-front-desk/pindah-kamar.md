@@ -14,7 +14,7 @@
 
    | Field | Wajib? | Keterangan |
    |---|---|---|
-   | Tipe kamar | Ya | Sama dengan tipe sekarang, atau tipe lain kalau tamu pindah tipe. |
+   | Tipe kamar | Ya | Terisi tipe pertama dalam daftar, belum tentu tipe kamar tamu sekarang. Pilih tipe yang sama, atau tipe lain kalau tamu pindah tipe. |
    | Kamar | Ya | Kamar yang kosong dari hari ini sampai tanggal keberangkatan tamu. Kamar yang belum siap ditandai **(belum siap)**. |
    | Alasan | Ya | Misalnya `AC kamar tidak dingin`. Tersimpan di riwayat. |
 

@@ -34,7 +34,7 @@ Ringkasan satu halaman untuk staf penjualan dan operasional banquet. Setiap bari
 ## Akhir hari
 
 1. Buka **Banquet → Sesi belum diposting**. Sebabnya tertulis, misalnya **Tanpa pax** atau **Mode manual**. Sesi tanpa pax tidak diposting oleh audit malam. → [Posting sesi dan penagihan](../05-banquet/posting-sesi-dan-penagihan.md)
-2. Periksa jadwal besok di **Banquet → Laporan banquet → Jadwal harian**. → [BEO dan dokumen](../05-banquet/beo-dan-dokumen.md)
+2. Periksa jadwal besok di **Banquet → Laporan banquet → Jadwal harian**. → [BEO dan dokumen](../05-banquet/beo-dan-dokumen.md) → [Laporan banquet](../05-banquet/laporan-banquet.md)
 3. Klik inisial nama Anda → **Keluar**. → [Masuk dan mengenal layar](../00-memulai/login-dan-navigasi.md)
 
 ## Ingat

@@ -48,10 +48,11 @@
 - **Bagian tanpa departemen** atau departemen tanpa kepala tidak memberi tahu siapa pun. Bagian itu bertuliskan keterangannya.
 - **"E-mail belum diatur di server ini"**: dokumen tetap bisa dibuka dan dicetak, tetapi tidak bisa dikirim. Hubungi administrator.
 - **Pilihan Bahasa dokumen** tertulis `English` (bahasa Inggris) dan `Bahasa Indonesia`.
-- **PDF BEO per sesi** tersedia lewat **PDF sesi ini**. **Banquet → Laporan banquet → Jadwal harian** merangkum semua sesi satu hari.
+- **PDF BEO per sesi** tersedia lewat **PDF sesi ini**. **Banquet → Laporan banquet → Jadwal harian** merangkum semua sesi satu hari. Lihat [Laporan banquet](laporan-banquet.md).
 
 ## Terkait
 
 - [Tentatif dan konfirmasi](tentatif-dan-konfirmasi.md)
+- [Laporan banquet](laporan-banquet.md)
 - [Menyiapkan banquet](menyiapkan-banquet.md)
 - [Departemen](../07-accounting/departemen.md)

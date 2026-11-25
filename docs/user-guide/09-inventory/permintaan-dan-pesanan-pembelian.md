@@ -1,5 +1,7 @@
 # Permintaan pembelian dan pesanan pembelian
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:**
 - **Permintaan pembelian**: staf departemen (misalnya chef atau kepala housekeeping) yang perannya boleh membuat permintaan.
 - **Persetujuan**: kepala departemen, cost controller, dan penyetuju akhir menurut [Rantai persetujuan](rantai-persetujuan.md).

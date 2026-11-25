@@ -55,11 +55,11 @@ Item yang **belum dikirim** cukup dihapus dengan **Hapus**, tanpa alasan dan tan
 
 ## Perlu diperhatikan
 
-- **Tombol tidak muncul** kalau peran Anda tidak punya izinnya: **Void**, **Diskon**, dan **Komplimen** punya izin masing-masing. **Komplimen** juga hanya ada kalau outlet mencentang **Boleh memberi komplimen**.
+- **Tombol tidak muncul** kalau peran Anda tidak punya izinnya: **Void**, **Diskon**, dan **Komplimen** punya izin masing-masing, dan **Komplimen** juga butuh izin kasir. Kalau outlet tidak mencentang **Boleh memberi komplimen**, tombolnya tetap ada, tetapi komplimen ditolak: "Outlet ini tidak memberi bill komplimen."
 - **Penyetuju** harus punya izin menyetujui POS. Kalau aturan properti meminta orang lain, Anda tidak boleh menyetujui tindakan Anda sendiri: "Aturan properti ini meminta penyetuju selain orang yang membuat perubahan.".
 - **Diskon di bawah batas** outlet langsung diberikan tanpa jendela persetujuan. Batas `0` berarti setiap diskon perlu persetujuan.
 - **Void bill** (seluruh bill) hanya ada untuk bill yang belum mengirim apa pun dan belum dibayar. Bill yang sudah menjual sesuatu harus dibayar, atau item-itemnya di-void satu per satu.
-- **Void setelah dimasak:** di outlet bermode cetak tiket, item yang di-void setelah melewati batas menit yang diatur outlet dihitung sebagai waste di persediaan.
+- **Void setelah dimasak:** item yang di-void saat tiketnya di layar dapur sudah **Dimasak**, **Siap**, atau **Diantar** dihitung sebagai waste di persediaan. Di outlet bermode cetak tiket, item yang di-void setelah melewati batas menit yang diatur outlet juga dihitung sebagai waste.
 - **Perlakuan komplimen** diatur per outlet: sebagai pembayaran (pendapatan dan pajak tetap tercatat, nilainya masuk beban komplimen) atau sebagai diskon 100%. Konfirmasikan perlakuan pajaknya ke konsultan pajak hotel.
 - **"Bill berubah: coba lagi."** berarti rekan Anda mengubah bill yang sama. Muat ulang, lalu ulangi.
 

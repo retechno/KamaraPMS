@@ -1,5 +1,7 @@
 # Shift kasir
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** setiap kasir atau resepsionis yang menerima uang tunai.
 **Kapan dilakukan:**
 - membuka shift: di awal giliran kerja, sebelum menerima uang tunai pertama;

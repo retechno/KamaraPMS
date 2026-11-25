@@ -79,7 +79,7 @@ Koreksi yang ditandai "Tanpa jumlah" hanya punya pilihan **Siapa pun yang boleh 
 
 - **Administrator tenant dikecualikan.** Administrator boleh menyetujui koreksinya sendiri walaupun aturannya meminta orang lain, dan hal itu ditandai di jejak audit.
 - **Peringatan kuning** bukan larangan menyimpan. Tetapi kalau hanya satu orang yang memegang izin penyetujunya, koreksi orang itu sendiri hanya bisa disetujui administrator. Tambahkan izin penyetuju ke peran orang kedua, lihat [Peran](peran.md).
-- **Kesalahan isian** tidak tampil di bawah barisnya, hanya di kotak merah di atas daftar.
+- **Kesalahan dari server**, misalnya batas yang tidak valid, tidak tampil di bawah barisnya, tetapi di kotak merah di atas daftar. Hanya "Isi batasnya." yang tampil di bawah kotak **Batas**.
 - **Persetujuan berjenjang permintaan pembelian** (kepala departemen, cost control, persetujuan akhir) diatur di modul Persediaan, bukan di sini. Lihat [Rantai persetujuan](../09-inventory/rantai-persetujuan.md).
 
 ## Terkait

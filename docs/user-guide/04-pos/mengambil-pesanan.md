@@ -1,5 +1,7 @@
 # Mengambil pesanan
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** pelayan atau kasir outlet.
 **Kapan dilakukan:** saat tamu duduk di meja, memesan untuk dibawa pulang, atau memesan room service.
 **Sebelum mulai:** outlet sudah disiapkan. Lihat [Menyiapkan outlet](menyiapkan-outlet.md).
@@ -42,7 +44,7 @@
 
 - **Item yang sudah dikirim tidak bisa diubah atau dihapus**: "Item yang sudah dikirim tidak bisa diubah: void saja.". Pembatalannya butuh persetujuan. Lihat [Void, diskon, dan komplimen](void-diskon-komplimen.md).
 - **Item yang belum dikirim** bebas diubah dan dihapus tanpa persetujuan.
-- **Pelayan dengan ponsel** bisa memakai **POS → Pelayan**: pilih meja, isi jumlah tamu dengan **−** dan **+**, klik **Buka bill**, tambahkan menu dengan **Tambah**, lalu klik **Kirim ke dapur dan bar**. Pelayan tidak menerima pembayaran.
+- **Pelayan dengan ponsel** bisa memakai **POS → Pelayan**: pilih meja, isi jumlah tamu dengan **−** dan **+**, klik **Buka bill**, tambahkan menu dengan **Tambah**, lalu klik **Kirim ke dapur dan bar**. Pelayan tidak menerima pembayaran. Lihat [Mencatat pesanan dari ponsel pelayan](pelayan.md).
 - **Minta bill** menandai meja **Bill diminta** dan mencetak pra-tagihan bertanda "BUKAN STRUK" kalau outlet punya printer struk.
 - **"Printer belum terhubung ke agen: …"** di atas denah berarti tiket atau struk untuk printer itu belum bisa tercetak. Minta administrator memeriksanya. Lihat [Menyiapkan outlet](menyiapkan-outlet.md).
 - **Minuman dan makanan bisa pergi ke stasiun berbeda**: misalnya makanan ke dapur dan minuman ke bar. Setiap stasiun mendapat tiketnya sendiri.
@@ -54,5 +56,6 @@
 ## Terkait
 
 - [Layar dapur](layar-dapur.md)
+- [Mencatat pesanan dari ponsel pelayan](pelayan.md)
 - [Membayar bill](membayar-bill.md)
 - [Void, diskon, dan komplimen](void-diskon-komplimen.md)

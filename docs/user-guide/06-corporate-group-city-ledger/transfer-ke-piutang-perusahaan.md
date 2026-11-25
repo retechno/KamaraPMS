@@ -1,7 +1,5 @@
 # Transfer ke piutang perusahaan
 
-> 🎬 Video tutorial: menyusul
-
 **Siapa yang melakukan:** kasir front office, supervisor, atau staf keuangan yang perannya boleh memindahkan saldo ke piutang perusahaan.
 **Kapan dilakukan:** saat tagihan tamu ditanggung perusahaan, biasanya sebelum tamu check-out.
 **Sebelum mulai:**

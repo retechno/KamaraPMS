@@ -1,5 +1,7 @@
 # Mengubah status kebersihan kamar
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** petugas kebersihan (room attendant) dan supervisor housekeeping.
 **Kapan dilakukan:** saat mulai membersihkan kamar, saat selesai, dan saat supervisor sudah memeriksanya.
 **Sebelum mulai:**

@@ -53,7 +53,7 @@
 ## Perlu diperhatikan
 
 - **Aset yang salah dibuat** bisa dibatalkan selama belum pernah disusutkan atau diubah. Buka asetnya, klik **Batalkan aset**, isi alasan, lalu klik **Batalkan aset**. Barisnya kembali ke daftar tunggu. Pembatalan tidak bisa diurungkan.
-- **Biaya di bawah batas kapitalisasi** hanya diberi peringatan, tidak diblokir. Batasnya diatur di **Aset tetap → Pengaturan aset**.
+- **Biaya di bawah batas kapitalisasi** hanya diberi peringatan, tidak diblokir. Batasnya diatur di **Aset tetap → Pengaturan aset**. Lihat [Pengaturan aset](pengaturan-aset.md).
 - **Ekspor CSV** mengunduh register yang tampil. **Cetak label QR** mencetak label aset yang dicentang. Lihat [Opname aset dan label QR](opname-aset-dan-label-qr.md).
 - **Pilihan Mulai disusutkan:**
 

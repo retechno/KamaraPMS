@@ -40,5 +40,6 @@ Ringkasan satu halaman untuk resepsionis. Setiap baris menunjuk ke halaman pandu
 
 - Draf tidak menahan kamar. Konfirmasi pesanan yang sudah pasti.
 - Check-out hanya bisa dilakukan kalau semua folio tamu bersaldo nol.
+- Tamu pulang lebih awal dan tombol **Check-out** tidak bisa diklik: jangan menerima pembayaran sebesar yang diminta wizard. Terima sebesar saldo di halaman folio, lalu minta supervisor menyelesaikan check-out sebelum audit malam. → [Check-out](../01-front-desk/check-out.md)
 - Tombol merah **Batal** di kotak pembatalan **membatalkan** reservasi. Untuk menutup kotak, klik **Pertahankan**.
 - Kalau menu atau tombol tidak ada, peran Anda tidak mencakupnya. Tanyakan ke administrator. → [Peran dan hak akses](../00-memulai/peran-dan-hak-akses.md)

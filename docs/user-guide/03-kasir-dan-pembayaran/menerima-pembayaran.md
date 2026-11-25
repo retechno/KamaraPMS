@@ -1,5 +1,7 @@
 # Menerima pembayaran
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** kasir atau resepsionis yang perannya boleh menerima pembayaran.
 **Kapan dilakukan:** saat tamu membayar sebagian atau seluruh tagihannya, misalnya di tengah masa menginap atau saat check-out.
 **Sebelum mulai:**
@@ -30,7 +32,7 @@ Deposit sebelum tamu tiba diterima di halaman reservasi. Lihat [Menerima deposit
 ## Hasilnya
 
 - Pembayaran tercatat sebagai kredit di folio, dengan nomor seperti `PAY000014`.
-- Pembayaran muncul di **Tagihan → Kasir**, yang merekap semua pembayaran per tanggal bisnis dan per metode.
+- Pembayaran muncul di **Tagihan → Kasir**, yang merekap semua pembayaran per tanggal bisnis dan per metode. Lihat [Daftar pembayaran di Kasir](daftar-kasir.md).
 - Pembayaran tunai menambah kas yang seharusnya ada di laci shift Anda.
 
 ## Perlu diperhatikan
@@ -46,4 +48,5 @@ Deposit sebelum tamu tiba diterima di halaman reservasi. Lihat [Menerima deposit
 
 - [Shift kasir](shift-kasir.md)
 - [Void dan refund](void-dan-refund.md)
+- [Daftar pembayaran di Kasir](daftar-kasir.md)
 - [Check-out](../01-front-desk/check-out.md)

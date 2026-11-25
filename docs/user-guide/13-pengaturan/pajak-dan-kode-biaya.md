@@ -77,7 +77,7 @@
 - **Kode TRF** (Transfer antar folio) tidak punya tombol **Ubah**. Kode ini dipakai sistem untuk pemindahan antar folio.
 - **Kode biaya pembulatan POS (`POS_ROUNDING`):**
 
-  > 🐞 Kendala yang diketahui (KD-15): kolom **Jenis** kode ini menampilkan teks mentah `chargeCodes.type_ROUNDING`, dan setiap perubahan pada kode ini gagal disimpan dengan "Ada isian yang tidak valid.". **Dampaknya:** nama, akun, atau departemen kode pembulatan tidak bisa diubah. **Sementara ini:** biarkan kode ini apa adanya. Kalau akunnya perlu diubah, laporkan ke tim KamaraPMS.
+  > 🐞 Kendala yang diketahui (KD-15): kolom **Jenis** kode ini menampilkan teks mentah `chargeCodes.type_ROUNDING`, dan setiap perubahan pada kode ini gagal disimpan dengan "Ada isian yang tidak valid.". **Dampaknya:** nama, akun, atau departemen kode pembulatan tidak bisa diubah. **Sementara ini:** biarkan kode ini apa adanya. Kalau akunnya perlu diubah, hubungi tim dukungan KamaraPMS (lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak)).
 - **Tarif berdesimal** tampil dengan titik, misalnya `10.5%` untuk 10,5%.
 - **Petunjuk akun** di bawah kolom akun bisa memuat jenis akun dalam bahasa Inggris, misalnya `liability` (kewajiban) atau `revenue` (pendapatan).
 

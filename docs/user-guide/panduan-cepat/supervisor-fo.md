@@ -47,4 +47,5 @@ Ringkasan satu halaman untuk supervisor front office. Setiap baris menunjuk ke h
 - Void dan refund tidak bisa dibatalkan. Kalau keliru, posting pembayaran baru.
 - Check-in yang dibatalkan membuat kamar **Kotor**. Setelah audit malam, check-in tidak bisa dibatalkan lagi.
 - Setiap grup hanya punya satu master folio.
+- Resepsionis meminta Anda menyelesaikan check-out tamu yang pulang lebih awal: pastikan tamu hanya membayar saldo di halaman folio, bukan biaya malam ini yang diminta wizard. Kalau tombol **Check-out** tetap tidak bisa diklik, hubungi administrator hotel sebelum audit malam (lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak)). → [Check-out](../01-front-desk/check-out.md)
 - Kalau menu atau tombol tidak ada, peran Anda tidak mencakupnya. Tanyakan ke administrator. → [Peran dan hak akses](../00-memulai/peran-dan-hak-akses.md)

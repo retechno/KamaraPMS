@@ -1,5 +1,7 @@
 # Membayar bill
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** kasir outlet.
 **Kapan dilakukan:** saat tamu meminta bill dan membayar.
 **Sebelum mulai:**

@@ -1,5 +1,7 @@
 # Mengoreksi biaya: reverse dan penyesuaian
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** supervisor front office atau pengguna lain yang perannya boleh mengoreksi folio. Setiap koreksi disetujui oleh orang yang berwenang menyetujui koreksi.
 **Kapan dilakukan:** saat biaya di folio salah, misalnya salah kamar, salah jumlah, atau tamu komplain dan diberi potongan.
 **Sebelum mulai:**

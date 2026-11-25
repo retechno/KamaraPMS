@@ -60,6 +60,7 @@ test.describe('Panduan pengguna: screenshot', () => {
   test('03 shift kasir', async ({ page, loginAs, seed }) => { await flows.flowShiftKasir(page, loginAs, readWorld(), seed) })
   test('03 posting biaya kamar', async ({ page, loginAs }) => { await flows.flowBiayaKamar(page, loginAs) })
   test('03 membuka folio untuk outlet', async ({ page, loginAs }) => { await flows.flowFolioOutlet(page, loginAs, readWorld()) })
+  test('03 daftar kasir', async ({ page, loginAs }) => { await flows.flowDaftarKasir(page, loginAs) })
 
   // --- 04-pos
   test('04 menyiapkan outlet', async ({ page, loginAs }) => { await flows.flowMenyiapkanOutlet(page, loginAs) })
@@ -69,6 +70,7 @@ test.describe('Panduan pengguna: screenshot', () => {
   test('04 bebankan ke kamar', async ({ page, loginAs }) => { await flows.flowBebankanKamar(page, loginAs, readWorld()) })
   test('04 void diskon komplimen', async ({ page, loginAs, seed }) => { await flows.flowVoidPos(page, loginAs, seed) })
   test('04 laporan outlet', async ({ page, loginAs }) => { await flows.flowLaporanOutlet(page, loginAs) })
+  test('04 pelayan', async ({ page, loginAs }) => { await flows.flowPelayan(page, loginAs) })
 
   // --- 05-banquet (the tests after "05 membuat acara dan sesi" use its event)
   test('05 menyiapkan banquet', async ({ page, loginAs }) => { await flows.flowMenyiapkanBanquet(page, loginAs) })
@@ -78,6 +80,7 @@ test.describe('Panduan pengguna: screenshot', () => {
   test('05 posting sesi', async ({ page, loginAs, data }) => { await flows.flowPostingSesi(page, loginAs, data) })
   test('05 beo dan dokumen', async ({ page, loginAs, data }) => { await flows.flowBeoDokumen(page, loginAs, data) })
   test('05 membatalkan acara', async ({ page, loginAs, data }) => { await flows.flowBatalAcara(page, loginAs, readWorld(), data) })
+  test('05 laporan banquet', async ({ page, loginAs }) => { await flows.flowLaporanBanquet(page, loginAs, readWorld()) })
 
   // --- 06-corporate-group-city-ledger (the tests after "06 perusahaan" use its company, in this order)
   test('06 perusahaan', async ({ page, loginAs }) => { await flows.flowPerusahaan(page, loginAs) })
@@ -122,6 +125,7 @@ test.describe('Panduan pengguna: screenshot', () => {
   test('10 pelepasan aset', async ({ page, loginAs }) => { await flows.flowPelepasanAset(page, loginAs) })
   test('10 opname aset dan label QR', async ({ page, loginAs }) => { await flows.flowOpnameAset(page, loginAs) })
   test('10 laporan aset', async ({ page, loginAs }) => { await flows.flowLaporanAset(page, loginAs) })
+  test('10 pengaturan aset', async ({ page, loginAs, data }) => { await flows.flowPengaturanAset(page, loginAs, data) })
 
   // --- 13-pengaturan and 14-admin-platform (before 11/12: the night audit run closes the day)
 

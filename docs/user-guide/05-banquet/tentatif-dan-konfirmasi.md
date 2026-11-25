@@ -8,7 +8,7 @@
 - **Tentatif**: saat pemesan serius tetapi belum memutuskan, dan ruangnya perlu ditahan sementara.
 - **Konfirmasi**: saat pemesan sudah setuju, biasanya setelah proposal ditandatangani.
 
-**Sebelum mulai:** acara sudah punya sedikitnya satu sesi dengan ruang, tanggal, dan jam. Lihat [Membuat acara dan sesi](membuat-acara-dan-sesi.md).
+**Sebelum mulai:** setiap sesi acara yang aktif sudah punya ruang, tanggal, dan jam. Satu sesi tanpa ruang membuat penahanan ditolak. Lihat [Membuat acara dan sesi](membuat-acara-dan-sesi.md).
 
 Status acara berjalan: **Inquiry** → **Tentatif** → **Definit** → **Selesai**.
 

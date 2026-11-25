@@ -1,5 +1,7 @@
 # Invoice dan penerimaan piutang perusahaan
 
+> 🎬 Video tutorial: menyusul
+
 **Siapa yang melakukan:** staf keuangan (account receivable) yang perannya boleh membuat invoice dan mencatat penerimaan piutang perusahaan.
 **Kapan dilakukan:**
 - **Invoice**: berkala, misalnya setiap minggu atau setelah tamu perusahaan check-out.

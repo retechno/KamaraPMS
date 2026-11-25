@@ -3255,3 +3255,222 @@ export async function flowConsolePlatform(page: Page): Promise<void> {
   await step.locator('input[name=email]').fill('operator@kamarapms.example')
   await shot(page.locator('main > div').first(), 'platform-login-01', { pad: 24 })
 }
+
+
+// =====================================================================================================================
+// The screens the route coverage of 2026-11-26 found without a page of their own: 03 Kasir (the list of payments), 04 Pelayan (the waiter's phone),
+// 05 Laporan banquet, 10 Pengaturan aset. They use the helpers above (chooseOutlet, RESTO, onlyMethod, BQ_EVENT, selectContaining, closeToasts, tallWindow).
+// Where they go in docs-screenshots.spec.ts: "03 daftar kasir" after "03 membuka folio untuk outlet" (it shows the QRIS payment that "03 void dan refund"
+// voids); "04 pelayan" after "04 laporan outlet"; "05 laporan banquet" after "05 membatalkan acara" (the event of "05 membuat acara dan sesi" and the
+// cancellation of "05 membatalkan acara"); "10 pengaturan aset" after "10 laporan aset".
+
+/** 03-kasir-dan-pembayaran/daftar-kasir.md */
+export async function flowDaftarKasir(page: Page, loginAs: LoginAs): Promise<void> {
+  // STEP 1-2: Tagihan → Kasir (the cashier Kevin): the payments of the business date, the totals per method
+  await loginAs('cashier', '/cashier')
+  await expect(page.getByTestId('totals')).toBeVisible()
+  const rows = page.locator('[data-testid^="payment-"]:visible')
+  await expect(rows.first()).toBeVisible()
+  await shotPage(page, 'kasir-daftar-01')
+  // STEP 3: Metode QRIS → Tampilkan: the QRIS payment taken by mistake in "03 void dan refund", struck through
+  await page.locator('select[name=method]').selectOption('QRIS')
+  await page.getByRole('button', { name: tx('cashier.show'), exact: true }).click()
+  await expect(rows.first()).toContainText(tx('cashier.QRIS'))
+  await expect(rows.filter({ hasText: tx('status.VOIDED') }).first()).toBeVisible()
+  await closeToasts(page)
+  await shotAround([page.locator('[data-slot=filter-bar]:visible').first(), page.locator('main table').first()], 'kasir-daftar-03')
+  // STEP 4: the columns of a row (the order by a heading is not clicked: the picture of step 3 shows the list newest first)
+  await expect(rows.first()).toContainText(tx('cashier.PAYMENT'))
+  // STEP 5: Kuitansi (the PDF opens in a new tab: the picture run only checks the button)
+  await expect(rows.first().locator('[data-testid^="receipt-"]')).toBeVisible()
+  // STEP 6: the folio of the payment, from the column Folio
+  await rows.first().getByRole('link').first().click()
+  await expect(page).toHaveURL(/\/folios\/\d+/)
+}
+
+/** The waiter's phone (the shell answers the width: no sidebar, the cards of the waiter screen). */
+const PHONE = { width: 390, height: 844 }
+
+/** 04-pos/pelayan.md */
+export async function flowPelayan(page: Page, loginAs: LoginAs): Promise<void> {
+  const desk = page.viewportSize() ?? { width: 1440, height: 900 }
+  let billId = ''
+  // the waiter Putu signs in, then the window becomes a phone
+  await loginAs('pos', '/pos/waiter')
+  await page.setViewportSize(PHONE)
+  try {
+    // STEP 1: POS → Pelayan, the restaurant: the tables of Dalam ruangan
+    await expect(page.getByTestId('waiter-floor')).toBeVisible()
+    const outlets = page.getByTestId('outlet-select')
+    await expect(outlets).toBeVisible()
+    await chooseOutlet(outlets, RESTO)
+    const table = page.getByTestId('waiter-tables').getByTestId('table-7')
+    await expect(table).toHaveAttribute('data-status', 'FREE')
+    await closeToasts(page)
+    await shotPage(page, 'pos-pelayan-01')
+    // STEP 2: table 7 → three guests → Buka bill
+    await table.click()
+    const guests = page.getByTestId('guests-dialog')
+    await expect(guests.getByTestId('guests-count')).toHaveText('2')
+    await guests.getByTestId('guests-more').click()
+    await expect(guests.getByTestId('guests-count')).toHaveText('3')
+    await guests.getByTestId('guests-open').click()
+    await expect(page).toHaveURL(/\/pos\/waiter\/bills\/\d+$/)
+    billId = page.url().match(/\/bills\/(\d+)$/)?.[1] ?? ''
+    // STEP 3: the order screen: the table and the guests in the title, the categories under Cari menu
+    const order = page.getByTestId('waiter-order')
+    await expect(page.getByTestId('waiter-title')).toContainText('7')
+    const menu = page.getByTestId('waiter-menu')
+    // STEP 4: a fried rice with its choices (Makanan utama), then two iced teas (Tambah, +) and a Bali coffee (Minuman)
+    await order.getByRole('tab', { name: 'Makanan utama', exact: true }).click()
+    await menu.locator('li').filter({ hasText: 'Nasi Goreng Kampung' }).locator('[data-testid^="add-"]').click()
+    const options = page.getByTestId('options-dialog')
+    await options.getByTestId('options-note').fill('tanpa bawang')
+    await options.getByTestId('options-add').click()
+    await expect(options).toHaveCount(0)
+    await order.getByRole('tab', { name: 'Minuman', exact: true }).click()
+    const tea = menu.locator('li').filter({ hasText: 'Es Teh Manis' })
+    await tea.locator('[data-testid^="add-"]').click()
+    await expect(tea.getByTestId('stepper')).toBeVisible()
+    await tea.locator('[data-testid^="more-"]').click()
+    await expect(tea.locator('[data-testid^="qty-"]')).toHaveText('2')
+    await menu.locator('li').filter({ hasText: 'Kopi Bali' }).locator('[data-testid^="add-"]').click()
+    await expect(page.getByTestId('draft-summary')).toContainText(tx('posWaiter.draftSummary', { n: 4, total: '' }).split(' · ')[0]!)
+    await shotPage(page, 'pos-pelayan-04')
+    // STEP 5: Lihat bill (read only), then back
+    await page.getByTestId('view-bill').click()
+    const bill = page.getByTestId('bill-dialog')
+    await expect(bill).toContainText('Es Teh Manis')
+    await expect(bill).toContainText(tx('posBill.drafts'))
+    await page.keyboard.press('Escape')
+    await expect(bill).toHaveCount(0)
+    // STEP 6: Kirim ke dapur dan bar: "sudah dipesan" on the menu
+    await page.getByTestId('waiter-send').click()
+    await expect(page.getByTestId('waiter-notice')).toHaveText(tx('posBill.sent'))
+    await expect(tea.getByTestId('ordered')).toBeVisible()
+    await shotPage(page, 'pos-pelayan-06')
+    // STEP 7: ‹ back to the tables: table 7 is taken
+    await page.getByTestId('waiter-back').click()
+    await expect(page.getByTestId('waiter-tables').getByTestId('table-7')).toHaveAttribute('data-status', 'OCCUPIED')
+  } finally {
+    await page.setViewportSize(desk)
+  }
+  // (not a step: the waiter takes no money) the cashier of the outlet takes a card for table 7, so no open bill is left for the night audit
+  if (!billId) return
+  await page.goto(`/pos/bills/${billId}`)
+  await page.getByTestId('pay').click()
+  const pay = page.getByTestId('pay-dialog')
+  await onlyMethod(pay, 'CARD')
+  await pay.getByTestId('exact-CARD').click()
+  await pay.getByTestId('pay-submit').click()
+  await expect(page.getByTestId('bill-closed')).toBeVisible()
+}
+
+/** 05-banquet/laporan-banquet.md */
+export async function flowLaporanBanquet(page: Page, loginAs: LoginAs, w: DocsWorld): Promise<void> {
+  // STEP 1: Banquet → Laporan banquet: one card per report
+  await loginAs('admin', '/banquet/reports')
+  await expect(page.getByTestId('report-card-schedule')).toBeVisible()
+  await shotPage(page, 'banquet-laporan-01')
+  // STEP 5: Jadwal harian of the business date: the first day of the meeting of "05 membuat acara dan sesi"
+  await page.getByTestId('report-card-schedule').click()
+  await expect(page).toHaveURL(/\/banquet\/reports\/schedule$/)
+  await setDate(page.getByTestId('report-period'), 'day', w.businessDate)
+  await page.getByTestId('report-show').click()
+  const schedule = page.getByTestId('schedule-table')
+  await expect(schedule).toContainText(BQ_EVENT)
+  await shotAround([page.locator('main h1').first(), schedule], 'banquet-laporan-05')
+  // STEP 6: Cetak (the print dialog of the browser: the picture run only checks the button)
+  await expect(page.getByTestId('report-print')).toBeVisible()
+  // STEP 7: Perkiraan pendapatan, six months from the first of this month, with service and tax
+  await page.goto('/banquet/reports/forecast')
+  await expect(page.getByTestId('forecast-kpi')).toBeVisible()
+  await page.getByTestId('forecast-tax').check()
+  await expect(page.getByTestId('forecast-months')).toBeVisible()
+  await closeToasts(page)
+  await shotAround([page.locator('main h1').first(), page.getByTestId('forecast-months')], 'banquet-laporan-07')
+  // STEP 8: the other reports open on the month of the business date (a table, or "Tidak ada data pada periode ini.")
+  for (const kind of ['rooms', 'guests', 'sales', 'lost'] as const) {
+    await page.goto('/banquet/reports')
+    await page.getByTestId(`report-card-${kind}`).click()
+    await expect(page.getByTestId('report-period')).toBeVisible()
+    await expect(page.locator(`[data-testid=${kind}-table], [data-testid=${kind}-empty]`).first()).toBeVisible()
+  }
+  // the cancelled seminar of "05 membatalkan acara" is in the report of lost and cancelled events
+  await expect(page.getByTestId('lost-table')).toContainText('Seminar Keuangan Daerah')
+}
+
+/** The account of the example category of pengaturan-aset (a new asset account that no category uses): made once, through the API. */
+async function kitchenAccount(data: Factories): Promise<boolean> {
+  const find = async (code: string) => (await data.api.get<{ data: { id: number; code: string }[] }>(`${data.P}/accounting/accounts`, { q: code })).data.find((a) => a.code === code)
+  if (await find('1580')) return true
+  const parent = await find('1500')
+  const made = await data.api.soft('POST', `${data.P}/accounting/accounts`, { code: '1580', name: 'Peralatan dapur', account_type: 'ASSET', parent_id: parent?.id ?? null, statement_group: 'FIXED_ASSETS' })
+  if (!made) console.warn('[docs] the account 1580 Peralatan dapur could not be made: the picture of the new category keeps Akun harga empty')
+  return made !== null
+}
+
+/** 10-aset-tetap/pengaturan-aset.md */
+export async function flowPengaturanAset(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
+  const account = await kitchenAccount(data)
+  // STEP 1: Aset tetap → Pengaturan aset: the categories of the hotel
+  await loginAs('admin', '/assets/settings')
+  await expect(page.getByTestId('categories-table')).toBeVisible()
+  await expect(page.getByTestId('category-FFE')).toBeVisible()
+  // STEP 2: Kategori baru
+  await page.getByTestId('category-new').click()
+  const dlg = page.getByTestId('category-dialog')
+  // STEP 3: kitchen equipment, five years straight line (filled and cancelled: the later pages keep the seven categories of the hotel)
+  await dlg.locator('input[name=code]').fill('DAPUR')
+  await dlg.locator('input[name=name]').fill('Peralatan dapur')
+  await dlg.locator('select[name=kind]').selectOption('FFE')
+  if (account) {
+    await expect(dlg.locator('select[name=cost_account_id] option', { hasText: '1580' }).first()).toBeAttached()
+    await selectContaining(dlg.locator('select[name=cost_account_id]'), '1580')
+  }
+  await selectContaining(dlg.locator('select[name=accumulated_account_id]'), '1592')
+  await selectContaining(dlg.locator('select[name=expense_account_id]'), '7520')
+  await dlg.locator('select[name=method]').selectOption('SL')
+  await dlg.locator('input[name=life_months]').fill('60')
+  await dlg.locator('select[name=fiscal_group]').selectOption('G2')
+  await dlg.locator('select[name=fiscal_method]').selectOption('SL')
+  await tallWindow(page, 1200, () => shot(dlg, 'aset-pengaturan-03', { pad: 0 }))
+  // STEP 4: Simpan is the step of the page; the picture run cancels
+  await dlg.getByRole('button', { name: tx('common.cancel'), exact: true }).click()
+  await expect(dlg).toHaveCount(0)
+  // STEP 5: Pengaturan properti: the capitalisation threshold of the example (typed, not saved)
+  const settings = page.getByTestId('settings-card')
+  await settings.locator('input[name=capitalization_threshold]').fill('2500000')
+  await shot(settings, 'aset-pengaturan-05')
+  // STEP 6: Simpan is not pressed: the page is read again, so the typed threshold goes
+  await page.reload()
+  const locations = page.getByTestId('locations-card')
+  await expect(locations.getByTestId('location-LOBI')).toBeVisible()
+  // STEP 7: Area bebas baru: the pool area (a new location, made once)
+  if (!(await page.getByTestId('location-KOLAM').count())) {
+    await page.getByTestId('location-new').click()
+    const ldlg = page.getByTestId('location-dialog')
+    await ldlg.locator('input[name=code]').fill('KOLAM')
+    await ldlg.locator('input[name=name]').fill('Area kolam renang')
+    await ldlg.getByTestId('location-save').click()
+    await expect(ldlg).toHaveCount(0)
+  }
+  await expect(page.getByTestId('location-KOLAM')).toBeVisible()
+  // STEP 8: Buat lokasi dari → Ruang pertemuan → Yang mana: Saraswati (chosen, not made)
+  const ensure = page.getByTestId('ensure-form')
+  await ensure.locator('select[name=kind]').selectOption('BANQUET_ROOM')
+  await expect(ensure.locator('select[name=ref_id] option', { hasText: 'Saraswati' }).first()).toBeAttached()
+  await selectContaining(ensure.locator('select[name=ref_id]'), 'Saraswati')
+  await closeToasts(page)
+  await shot(locations, 'aset-pengaturan-08')
+  // STEP 9: Pemeriksaan register
+  await expect(page.getByTestId('check-card')).toBeVisible()
+  // KD-23 (not a step): Matikan on the new pool area. The page sends the switch without the name and the server wants a name, so the location is
+  // expected to stay on with "Ada isian yang tidak valid." over the page. The outcome goes to the run log ([KD-23] lines) and never fails the test.
+  await page.getByTestId('location-toggle-KOLAM').click()
+  await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined)
+  const banner = page.getByTestId('form-error')
+  const said = (await banner.count()) ? (await banner.first().innerText()).replace(/\s+/g, ' ').trim().slice(0, 200) : '(no banner)'
+  const row = (await page.getByTestId('location-KOLAM').innerText()).replace(/\s+/g, ' ').trim()
+  console.log(`[KD-23] after Matikan on KOLAM: row "${row}" · banner "${said}"`)
+}
