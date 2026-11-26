@@ -60,4 +60,36 @@ test.describe('Banquet', () => {
     await expect(page.getByTestId('calendar-day').or(page.getByTestId('calendar-week')).first()).toBeVisible()
     await expect(page.getByTestId(`room-head-${rooms[0]!.code}`).first()).toBeVisible()
   })
+
+  test('BQ-04 pax aktual yang diketik saat posting sesi ditagih bila melebihi garansi (KD-03)', async ({ page, loginAs, data }) => {
+    // a definite event today with lunch per guest (150,000) for 40 guaranteed: 42 came
+    const P = `${data.P}/banquet`
+    const bd = await data.businessDate()
+    const company = await data.company()
+    const rooms = await data.api.all<{ id: number }>(`${P}/rooms`)
+    const items = await data.api.all<{ id: number; code: string }>(`${P}/items`)
+    const tpls = await data.api.all<{ id: number; code: string }>(`${P}/policy-templates`)
+    const ev = await data.api.post<{ id: number }>(`${P}/events`, { name: `Makan siang ${Date.now().toString(36)}`, booker_company_id: company.id, contact_name: 'Ibu Sari' })
+    const withS = await data.api.post<{ sessions: { id: number }[] }>(`${P}/events/${ev.id}/sessions`, {
+      name: 'Makan siang', room_id: rooms[rooms.length - 1]!.id, session_date: bd, start_time: '19:00', end_time: '22:00', pax_estimated: 45, pax_guaranteed: 40, accept_capacity: true,
+    })
+    const sid = withS.sessions[0]!.id
+    await data.api.post(`${P}/events/${ev.id}/lines`, { session_id: sid, item_id: items.find((i) => i.code === 'LUNCH')!.id })
+    await data.api.post(`${P}/events/${ev.id}/tentative`, { option_until: bd })
+    await data.api.post(`${P}/events/${ev.id}/confirm`, { policy_template_id: tpls.find((t) => t.code === 'STANDARD')!.id })
+
+    await loginAs('admin', `/banquet/events/${ev.id}?tab=folio`)
+    await page.getByTestId(`folio-post-${sid}`).click()
+    const d = page.getByTestId('post-dialog')
+    await expect(d.getByTestId('post-billed')).toHaveText('40')
+    await d.locator('input[name=pax_actual]').fill('42')
+    await expect(d.getByTestId('post-billed')).toHaveText('42')
+    await d.getByTestId('post-save').click()
+    await expect(page.getByTestId(`folio-posted-${sid}`)).toBeVisible()
+
+    const money = await data.api.get<{ postings: { session_id: number; pax_billed: number; pax_basis: string }[] }>(`${P}/events/${ev.id}/money`)
+    expect(money.postings.find((x) => x.session_id === sid)).toMatchObject({ pax_billed: 42, pax_basis: 'ACTUAL' })
+    const got = await data.api.get<{ sessions: { id: number; pax_actual: number | null }[] }>(`${P}/events/${ev.id}`)
+    expect(got.sessions.find((x) => x.id === sid)?.pax_actual).toBe(42)
+  })
 })

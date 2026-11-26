@@ -247,9 +247,9 @@ Shift harus terbuka pada laci outlet ini. Shift di laci lain tidak dihitung. Buk
 
 ## Banquet
 
-### Tamu yang hadir lebih banyak dari garansi. Kenapa Pax aktual tidak ikut ditagih?
+### Tamu yang hadir lebih banyak dari garansi. Berapa yang ditagih?
 
-Angka di **Pax aktual** belum terbaca: **Ditagih** tetap menunjukkan pax garansi, dan sesi ditagih menurut pax garansi (kendala yang diketahui). Periksa **Ditagih** sebelum memposting. Setelah posting, selama folio acara masih terbuka, tambahkan selisihnya dengan **Penyesuaian** (angka positif) di folio acara, pada kode biaya yang sama dengan baris sesinya, misalnya `BQT_FB`. Penyesuaian butuh persetujuan, tercatat pada tanggal bisnis hari ini, tidak masuk laporan pendapatan banquet, dan tidak mengurangi stok; kalau biaya sesi diarahkan ke master folio grup, buat penyesuaiannya di master folio itu.
+Ketik jumlah yang hadir di **Pax aktual** pada jendela **Posting sesi**. Yang ditagih adalah yang lebih besar dari pax garansi dan pax aktual, dan **Ditagih** menunjukkannya sebelum Anda memposting. Garansi 40 dengan 42 yang hadir ditagih 42; garansi 40 dengan 35 yang hadir tetap ditagih 40.
 → [Posting sesi dan penagihan acara](05-banquet/posting-sesi-dan-penagihan.md)
 
 ### Sesi sudah diposting, lalu jumlah tamunya berubah. Bisakah sesi diposting ulang?

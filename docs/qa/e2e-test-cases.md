@@ -156,6 +156,7 @@ Aturan menulis test baru:
 | BQ-01 | Perusahaan ada | /banquet/events → Baru → nama, jenis, pemesan perusahaan, kontak → Simpan; tab Sesi → tambah (ruang, tanggal H+21, 09:00–17:00, pax 12/10) | Event INQUIRY untuk perusahaan itu; sesi tampil |
 | BQ-02 | Event dengan sesi H+30 | Tentative → batas opsi H+7 → Simpan | Status TENTATIVE; batas opsi tampil |
 | BQ-03 | Ruang meeting seed | /banquet | Kalender dan kepala kolom ruang tampil |
+| BQ-04 | Event definit hari ini, makan siang per pax, garansi 40 (KD-03) | Tab Folio → Posting sesi → Pax aktual 42 → Posting sesi | Ditagih berubah dari 40 ke 42; posting pax_billed 42 dasar ACTUAL; pax aktual sesi 42 |
 
 ### 10 Akuntansi dan back office (`10-accounting.spec.ts`)
 

@@ -134,7 +134,6 @@ Cari pesan yang muncul di layar pada tabel di bawah, baca penyebabnya, lalu kerj
 | "Sesi sudah diposting: koreksinya lewat penyesuaian folio." | Sesi yang sudah diposting tidak bisa diubah atau dibatalkan. | Minta supervisor membuat penyesuaian di folio acara (butuh persetujuan). → [Reverse dan penyesuaian](03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md) |
 | "Masih ada sesi yang belum diposting ke tagihan. Posting atau batalkan dulu sebelum menyelesaikan acara." | Ada sesi yang belum ditagih. | Posting atau batalkan sesi itu dulu, lalu selesaikan acaranya. → [Posting sesi dan penagihan](05-banquet/posting-sesi-dan-penagihan.md) |
 | "E-mail belum diatur di server ini: dokumen bisa dibuka dan dicetak, tidak bisa dikirim." | Pengiriman e-mail belum diatur. | Buka dan cetak dokumennya, lalu kirim dengan cara lain. Hubungi administrator. → [BEO dan dokumen](05-banquet/beo-dan-dokumen.md) |
-| (tidak ada pesan) **Ditagih** di jendela **Posting sesi** tetap menurut pax garansi walaupun **Pax aktual** sudah diisi | Angka **Pax aktual** tidak terbaca (KD-03). | Periksa **Ditagih** sebelum memposting. Setelah posting, selama folio acara masih terbuka, tambahkan selisihnya dengan **Penyesuaian** (angka positif) pada kode biaya yang sama dengan baris sesinya (misalnya `BQT_FB`). Butuh persetujuan. → [Posting sesi dan penagihan](05-banquet/posting-sesi-dan-penagihan.md) |
 
 ## Perusahaan dan piutang
 

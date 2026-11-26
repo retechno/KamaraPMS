@@ -1390,11 +1390,12 @@ export async function flowItemDeposit(page: Page, loginAs: LoginAs, data: Factor
 export async function flowPostingSesi(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
   const ev = await bqEvent(data, BQ_EVENT)
   const sid = ev.sessions[0]!.id
-  // STEP 1-3: tab Folio → Posting sesi. Pax aktual is left empty: typing in it throws in BanquetPostDialog.vue:57 (the number input
-  // gives a number, the code calls trim), and the session is billed at the guaranteed pax anyway (_laporan.md 5.1)
+  // STEP 1-3: tab Folio → Posting sesi, 42 came for 40 guaranteed: Ditagih follows the number typed (KD-03)
   await loginAs('admin', `/banquet/events/${ev.id}?tab=folio`)
   await page.getByTestId(`folio-post-${sid}`).click()
   const d = page.getByTestId('post-dialog')
+  await d.locator('input[name=pax_actual]').fill('42')
+  await expect(d.getByTestId('post-billed')).toHaveText('42')
   await shot(d, 'banquet-posting-03')
   // STEP 4-5: Posting sesi, the folio card
   await page.getByTestId('post-save').click()
