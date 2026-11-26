@@ -600,10 +600,16 @@ describe('FolioView', () => {
   })
   describe('check-out from the folio', () => {
     const detail = (balance: string) => ({ stay: { id: 11, status: 'OPEN', departure_date: '2026-09-30', version: 2 }, folios: [{ id: 3, folio_number: 'FOL000001', status: 'OPEN', balance }] })
+    // The wizard asks the server what the check-out will charge (KD-06): nothing more than the balance here
+    const preview = (balance: string) => ({
+      business_date: '2026-09-30', departure_date: '2026-09-30', early_departure: false, room_charges: [],
+      folios: [{ folio_id: 3, folio_number: 'FOL000001', folio_type: 'GUEST', balance, room_charges: '0', due: balance }],
+    })
     function withStay(balance: string, f: object = folio({ stay_id: 11, balance }), permissions = [...ALL, 'frontdesk.checkout']) {
       const w = mountView(f, permissions)
       const base = GET
-      GET = vi.fn(async (path: string, init?: unknown) => (path.endsWith('/stays/{id}') ? { data: detail(balance) } : base(path, init)))
+      GET = vi.fn(async (path: string, init?: unknown) => (path.endsWith('/stays/{id}') ? { data: detail(balance) }
+        : path.endsWith('/check-out/preview') ? { data: preview(balance) } : base(path, init)))
       return w
     }
 
