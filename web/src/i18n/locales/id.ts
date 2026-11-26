@@ -9244,7 +9244,7 @@ export const id: Messages = {
     bank_card_fee_rule_added: 'Aturan biaya kartu ditambahkan',
     bank_cleared: 'Baris dikliring',
     bank_settled: 'Pembayaran kartu diselesaikan',
-    bank_settlement_voided: 'Settlement kartu dibatalkan',
+    bank_settlement_voided: 'Settlement kartu di-void',
     bank_statement_deleted: 'Mutasi bank dihapus',
     bank_statement_imported: 'Mutasi bank diimpor',
     bank_statement_reconciled: 'Mutasi bank direkonsiliasi',
