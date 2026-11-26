@@ -27,6 +27,7 @@ import { newIdempotencyKey } from '@/utils/reservations'
 import { listAccounts } from '@/views/accounting/accountApi'
 import { fromMilli, toMilli } from '@/views/accounting/accountMeta'
 import { guardForm } from '@/utils/forms'
+import { sumAmounts } from '@/views/budget/budgetMath'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuthStore()
@@ -362,7 +363,13 @@ function startVoidAdjustment(adj: CityLedgerAdjustment): void {
 
 const invoiceable = computed(() => candidates.value.filter((c) => c.invoiceable))
 const waiting = computed(() => candidates.value.filter((c) => !c.invoiceable))
-const pickedTotal = computed(() => candidates.value.filter((c) => picked.value.includes(c.payment_id)).reduce((sum, c) => sum + Number(c.amount), 0))
+/** The transfers picked together, added in thousandths, not as floats (0.1 + 0.2 is 0.3). */
+const pickedTotal = computed(() => sumAmounts(candidates.value.filter((c) => picked.value.includes(c.payment_id)).map((c) => c.amount)) ?? '0')
+/** What credit notes and write-offs took off an invoice, added in thousandths; empty when nothing was. */
+const takenOff = (i: { credited: string; written_off: string }): string => {
+  const sum = sumAmounts([i.credited, i.written_off])
+  return sum === null || sum === '0' ? '' : sum
+}
 
 function toggleAll(on: boolean): void {
   picked.value = on ? invoiceable.value.map((c) => c.payment_id) : []
@@ -688,7 +695,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
         <p v-if="!invoices.length" class="m-0 text-sm text-muted-foreground" data-testid="no-invoices">{{ t('clAccount.noInvoices') }}</p>
         <DataTable v-else :columns="invoiceColumns" :rows="invoices" row-key="id" :row-test-id="(i) => `invoice-${i.invoice_number}`" :row-class="(i) => (i.status === 'VOIDED' ? 'text-muted-foreground line-through' : undefined)" :caption="t('clAccount.invoices')">
           <template #cell-payment_status="{ row }"><Badge variant="outline">{{ statusText(row.payment_status) }}</Badge></template>
-          <template #cell-taken="{ row }">{{ Number(row.credited) + Number(row.written_off) ? $money(String(Number(row.credited) + Number(row.written_off))) : '' }}<small v-if="row.attached_credits?.length" class="block text-muted-foreground">{{ t('clAccount.attached', { n: row.attached_credits.length }) }}</small></template>
+          <template #cell-taken="{ row }">{{ takenOff(row) ? $money(takenOff(row)) : '' }}<small v-if="row.attached_credits?.length" class="block text-muted-foreground">{{ t('clAccount.attached', { n: row.attached_credits.length }) }}</small></template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-1.5">
               <Button v-if="row.status === 'ISSUED' && Number(row.outstanding) > 0 && can('cityledger.receive')" type="button" variant="outline" size="sm" :data-testid="`pay-${row.invoice_number}`" @click="startPay(row)">{{ t('clAccount.pay') }}</Button>
