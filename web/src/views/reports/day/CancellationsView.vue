@@ -15,6 +15,7 @@ import { t } from '@/i18n'
 import { addDays } from '@/utils/dates'
 import { formatDate, formatDateShort, formatDateTime, formatMoney } from '@/utils/format'
 import { money } from '@/views/accounting/reportApi'
+import { sumAmounts } from '@/views/budget/budgetMath'
 import { guardForm } from '@/utils/forms'
 import DayReportActions from './DayReportActions.vue'
 import { sourceName } from './dayLabels'
@@ -34,7 +35,8 @@ watch([allowed, businessDate], ([ok, bd]) => {
 
 const report = computed(() => data.value)
 const nights = computed(() => (report.value?.events ?? []).reduce((n, e) => n + (e.nights ?? 0) * e.rooms, 0))
-const valueLost = computed(() => (report.value?.by_kind ?? []).reduce((s, g) => s + Number(g.value), 0))
+// added in thousandths, not as floats (0.1 + 0.2 is 0.3)
+const valueLost = computed(() => sumAmounts((report.value?.by_kind ?? []).map((g) => g.value)) ?? '')
 const withFee = computed(() => (report.value?.events ?? []).filter((e) => e.fee_net !== null).length)
 /** The name of a group: the reason, the source (named, not its code) or the company; the empty key says what is missing. */
 const groupKey = (g: 'by_reason' | 'by_source' | 'by_company', key: string): string => {
@@ -73,7 +75,7 @@ const th = 'whitespace-nowrap px-2 py-2 text-left text-[12px] font-medium upperc
       <template v-if="report">
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="cx-summary">
           <Card class="p-4"><div class="text-xs uppercase text-muted-foreground">{{ t('dayReports.cancellations.events') }}</div><div class="text-xl font-semibold tabular-nums" data-testid="cx-events">{{ report.events.length }}</div></Card>
-          <Card class="p-4"><div class="text-xs uppercase text-muted-foreground">{{ t('dayReports.cancellations.nightsLost') }}</div><div class="text-xl font-semibold tabular-nums" data-testid="cx-nights">{{ nights }}</div><div class="text-xs text-muted-foreground">{{ t('dayReports.cancellations.valueLost') }} {{ formatMoney(String(valueLost)) }}</div></Card>
+          <Card class="p-4"><div class="text-xs uppercase text-muted-foreground">{{ t('dayReports.cancellations.nightsLost') }}</div><div class="text-xl font-semibold tabular-nums" data-testid="cx-nights">{{ nights }}</div><div class="text-xs text-muted-foreground">{{ t('dayReports.cancellations.valueLost') }} {{ formatMoney(valueLost) }}</div></Card>
           <Card class="p-4"><div class="text-xs uppercase text-muted-foreground">{{ t('dayReports.cancellations.feesPosted') }}</div><div class="text-xl font-semibold tabular-nums" data-testid="cx-fees">{{ formatMoney(report.fees_posted) }}</div><div class="text-xs text-muted-foreground">{{ t('dayReports.cancellations.feeCount', { n: withFee, total: report.events.length }) }}</div></Card>
           <Card class="p-4"><div class="text-xs uppercase text-muted-foreground">{{ t('dayReports.cancellations.depositsHeld') }}</div><div class="text-xl font-semibold tabular-nums" data-testid="cx-deposits">{{ formatMoney(report.deposits_held) }}</div></Card>
         </div>
