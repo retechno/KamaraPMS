@@ -202,6 +202,7 @@ Aturan menulis test baru:
 | NA-01 | Semua modul selesai; ada tamu in-house dan kedatangan yang tidak datang; tidak ada opname terbuka (setup menjalankan `pms-seed inventory -no-open-count`; opname terbuka membekukan gudang dan menahan penutupan hari) | /night-audit → pilih semua kedatangan → alasan → konfirmasi → Tandai no-show; centang konfirmasi → Jalankan | Line menjadi NO_SHOW; tidak ada blok "cannot run" (kalau ada, alasannya menjadi pesan gagal); tanggal bisnis +1; malam tamu in-house terposting di folio |
 | NA-02 | NA-01 | /night-audit/archive | Baris paket untuk hari yang ditutup |
 | NA-03 | NA-01 | Posting charge setelah night audit | Charge tercatat di tanggal bisnis baru; top bar menampilkan tanggal bisnis |
+| NA-04 | NA-01; tamu in-house 3 malam sejak sebelum hari ini (KD-06) | Bayar saldo folio lewat API → /stays/:id → Check-out → centang konfirmasi keberangkatan lebih awal → Check-out | Wizard tidak meminta biaya malam ini (tidak ada alasan "Bayar dulu saldo"); stay CHECKED_OUT dengan keberangkatan = tanggal bisnis; tidak ada CHARGE bertanggal hari ini; saldo folio 0 |
 
 ## Status
 
