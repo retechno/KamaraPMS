@@ -37,7 +37,7 @@ Beban ke kamar ditarik dari bill-nya, bukan dari folio tamu. Di folio tamu, bari
 - **Tombol tidak muncul** kalau bill belum dibuka kembali, kalau bebannya sudah dikembalikan, atau kalau peran Anda tidak memegang izin kasir dan izin **Membalik posting hari yang sama dan memindahkan tagihan ke folio lain**.
 - **Bill yang dibayar sebagian ke kamar dan sebagian tunai**: hanya bagian kamar yang dikembalikan. Pembayaran lainnya tetap.
 - **"Bill sudah tidak terbuka: sudah dibayar atau ditutup. Muat ulang."**: bill-nya belum dibuka kembali. Buka kembali dulu.
-- **Folio tamu sudah tertutup** (tamu sudah check-out): pengembalian ditolak. Laporkan ke supervisor atau administrator, beserta nomor kamar, nomor bill, dan jumlahnya.
+- **Folio tamu sudah tertutup** (tamu sudah check-out): pengembalian ditolak, dan belum ada layar lain untuk mengembalikannya (kendala KD-26). Laporkan ke supervisor atau administrator, beserta nomor kamar, nomor bill, dan jumlahnya.
 - **Penyetuju** mengikuti aturan **Pemindahan antar folio** di [Aturan persetujuan](../13-pengaturan/aturan-persetujuan.md). Kalau aturannya meminta orang lain, Anda tidak boleh menyetujui pengembalian Anda sendiri.
 
 ## Terkait
