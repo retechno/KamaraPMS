@@ -44,6 +44,12 @@ export default defineConfig({
     { name: 'setup', testMatch: /setup\/.*\.setup\.ts/, teardown: 'final' },
     { name: 'modules', testMatch: /modules\/.*\.spec\.ts/, dependencies: ['setup'], use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'final', testMatch: /final\/.*\.spec\.ts/, fullyParallel: false, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    // The screenshots of the user guide (docs/user-guide/screenshots): only with E2E_DOCS=1, so the other projects, CI and a plain run are unchanged.
+    // It starts from the world of setup and adds its own Indonesian demo data (e2e/docs/world.ts); keep the day open with E2E_SKIP_NIGHT_AUDIT=1:
+    //   E2E_DOCS=1 E2E_SKIP_NIGHT_AUDIT=1 scripts/e2e.sh docs-screenshots.spec.ts
+    ...(process.env.E2E_DOCS
+      ? [{ name: 'docs', testMatch: /docs\/.*\.spec\.ts/, dependencies: ['setup'], fullyParallel: false, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, colorScheme: 'light' as const } }]
+      : []),
   ],
   webServer: [
     {
