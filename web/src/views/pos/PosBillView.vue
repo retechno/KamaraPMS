@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, PosBill, PosBillLine, PosBillSummary, PosCatalog, PosOutlet } from '@/api/types'
+import type { Approval, PosBill, PosBillLine, PosBillRoomCharge, PosBillSummary, PosCatalog, PosOutlet } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
@@ -279,6 +279,7 @@ type Sheet =
   | { kind: 'discount' }
   | { kind: 'comp' }
   | { kind: 'reopen' }
+  | { kind: 'returnCharge'; charge: PosBillRoomCharge }
   | { kind: 'table' }
   | { kind: 'merge' }
   | { kind: 'split' }
@@ -339,6 +340,11 @@ async function approved(approval: Approval | undefined): Promise<void> {
       ;({ data } = await api.POST('/api/v1/properties/{propertyId}/pos/bills/{id}/reopen', {
         params: { path: { propertyId, id: billId.value } }, body: { reason: reason.value.trim(), ...(approval ? { approval } : {}) },
       }))
+    } else if (s.kind === 'returnCharge') {
+      // KD-01, KD-02: the charge goes back from the guest folio to this bill (a reversal on the folio, the limit of the outlets used goes back down)
+      ;({ data } = await api.POST('/api/v1/properties/{propertyId}/pos/room-charges/{id}/return', {
+        params: { path: { propertyId, id: s.charge.id } }, body: { reason: reason.value.trim(), ...(approval ? { approval } : {}) },
+      }))
     }
     if (data) bill.value = data
     sheet.value = null
@@ -367,6 +373,7 @@ const approvalKind = computed(() => {
     case 'void': return 'POS_VOID' as const
     case 'discount': return 'POS_DISCOUNT' as const
     case 'comp': return 'POS_COMP' as const
+    case 'returnCharge': return 'FOLIO_TRANSFER' as const
     default: return 'POS_REOPEN' as const
   }
 })
@@ -374,6 +381,7 @@ const approvalAmount = computed(() => {
   const s = sheet.value
   if (s?.kind === 'void') return String(Math.abs(Number(s.line.total)))
   if (s?.kind === 'reopen') return totals.value?.sold ?? '0'
+  if (s?.kind === 'returnCharge') return s.charge.amount
   if (s?.kind === 'comp') return totals.value?.payable ?? '0'
   return mode.value === 'amount' && figure.value ? figure.value : undefined
 })
@@ -459,6 +467,8 @@ function paid(next: PosBill, message: string): void {
 const statusKey = (l: PosBillLine): string => (l.ticket_status ? `posBill.ticket_${l.ticket_status}` : '')
 const optionsText = (l: PosBillLine): string => l.options.map((o) => (o.qty > 1 ? `${o.name} ×${o.qty}` : o.name)).join(', ')
 const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.returned_at) ?? [])
+// A charge to a room goes back to its bill only while the bill is open (a paid bill is reopened first), with folio.reverse (34-pos.md, the return of document 30 4.5)
+const canReturnCharge = computed(() => isOpen.value && can('pos.cashier') && can('folio.reverse'))
 </script>
 
 <template>
@@ -572,7 +582,10 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
         <dd class="m-0 text-right text-base font-semibold tabular-nums" data-testid="payable">{{ formatMoney(isOpen ? totals.payable : totals.sold) }}</dd>
       </dl>
       <ul v-if="roomChargeLine.length > 0" class="m-0 mt-2 list-none p-0 text-xs text-muted-foreground" data-testid="room-charges">
-        <li v-for="c in roomChargeLine" :key="c.id">{{ t('posBill.chargedTo', { room: c.room || '', amount: formatMoney(c.amount) }) }}</li>
+        <li v-for="c in roomChargeLine" :key="c.id" class="flex flex-wrap items-center gap-x-2" :data-testid="`room-charge-${c.id}`">
+          <span>{{ t('posBill.chargedTo', { room: c.room || '', amount: formatMoney(c.amount) }) }}</span>
+          <Button v-if="canReturnCharge" type="button" size="sm" variant="outline" :disabled="busy" :data-testid="`return-charge-${c.id}`" @click="openSheet({ kind: 'returnCharge', charge: c })">{{ t('posBill.returnCharge') }}</Button>
+        </li>
       </ul>
 
       <!-- actions -->
@@ -649,12 +662,12 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
     </DialogContent>
   </Dialog>
 
-  <!-- reason (and the approval) of a void, a discount, a complimentary and a reopening -->
-  <Dialog v-if="sheet && ['void', 'discount', 'comp', 'reopen'].includes(sheet.kind) && stage === 'form'" :open="true" @update:open="(v) => { if (!v) closeSheet() }">
+  <!-- reason (and the approval) of a void, a discount, a complimentary, a reopening and the return of a charge to a room -->
+  <Dialog v-if="sheet && ['void', 'discount', 'comp', 'reopen', 'returnCharge'].includes(sheet.kind) && stage === 'form'" :open="true" @update:open="(v) => { if (!v) closeSheet() }">
     <DialogContent class="max-w-md p-5" data-testid="reason-dialog" @interact-outside.prevent>
       <form novalidate @submit.prevent="submitForm">
         <DialogTitle>{{ t(`posBill.sheet_${sheet.kind}`) }}</DialogTitle>
-        <DialogDescription class="mb-3 mt-1">{{ t(`posBill.sheetHint_${sheet.kind}`) }}</DialogDescription>
+        <DialogDescription class="mb-3 mt-1">{{ sheet.kind === 'returnCharge' ? t('posBill.sheetHint_returnCharge', { room: sheet.charge.room || '', amount: formatMoney(sheet.charge.amount) }) : t(`posBill.sheetHint_${sheet.kind}`) }}</DialogDescription>
         <ErrorNotice v-if="dialogError" :error="dialogError" inline data-testid="reason-error" />
         <div class="flex flex-col gap-3">
           <template v-if="sheet.kind === 'discount'">
@@ -706,7 +719,7 @@ const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.
     </DialogContent>
   </Dialog>
   <ApprovalDialog
-    v-if="sheet && ['void', 'discount', 'comp', 'reopen'].includes(sheet.kind) && stage === 'approval'" :title="t(`posBill.sheet_${sheet.kind}`)" :kind="approvalKind" :amount="approvalAmount"
+    v-if="sheet && ['void', 'discount', 'comp', 'reopen', 'returnCharge'].includes(sheet.kind) && stage === 'approval'" :title="t(`posBill.sheet_${sheet.kind}`)" :kind="approvalKind" :amount="approvalAmount"
     :busy="busy" :error="dialogError" @approve="approved" @cancel="closeSheet"
   />
 

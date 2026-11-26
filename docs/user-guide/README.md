@@ -97,6 +97,7 @@ Ringkasan satu halaman untuk setiap peran, dengan tautan ke halaman lengkapnya:
 - [Layar dapur](04-pos/layar-dapur.md)
 - [Membayar bill](04-pos/membayar-bill.md)
 - [Membebankan bill ke kamar](04-pos/bebankan-ke-kamar.md)
+- [Mengembalikan beban kamar dari bill POS](04-pos/mengembalikan-beban-kamar.md)
 - [Void, diskon, komplimen, dan membuka kembali bill](04-pos/void-diskon-komplimen.md)
 - [Laporan outlet](04-pos/laporan-outlet.md)
 

@@ -148,6 +148,7 @@ Aturan menulis test baru:
 | POS-02 | Tamu in-house, folio dibuka untuk outlet (limit 2 juta) | Takeaway → produk → Kirim → Bayar → Kamar → cari nomor kamar → pilih → pas → Bayar | Bill CLOSED; saldo folio tamu naik |
 | POS-03 | Tamu in-house, folio belum dibuka untuk outlet | Bayar → Kamar → cari | Kamar ditandai terkunci (`open=false`); bill lalu dibayar kartu supaya tidak menahan night audit |
 | POS-04 | — | /pos/report | Total atau keadaan kosong tampil |
+| POS-05 | Tamu in-house dengan folio dibuka untuk outlet (batas 2.000.000); shift kasir admin di laci outlet (KD-01, KD-02) | Bill dibebankan ke kamar → **Buka kembali** + persetujuan → **Kembalikan beban kamar** + alasan + persetujuan → Bayar tunai | Saldo folio tamu kembali seperti semula; batas terpakai 0; bill CLOSED dengan pembayaran CASH |
 
 ### 09 Banquet (`09-banquet.spec.ts`)
 

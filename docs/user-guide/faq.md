@@ -227,13 +227,13 @@ Biasanya folio tamu terkunci untuk beban outlet ("Folio ini terkunci untuk beban
 
 ### Bill restoran terlanjur dibebankan ke kamar yang salah. Bisakah dibatalkan?
 
-Belum bisa dari layar (kendala yang diketahui). Beban POS yang sudah masuk folio tamu tidak bisa di-reverse, tidak muncul di **Kembalikan**, dan tidak bisa dikoreksi dengan **Penyesuaian**. Laporkan ke supervisor atau administrator sebelum tamu check-out, beserta nomor kamar, nomor bill, dan jumlahnya. Karena itu, periksa bill sebelum memilih **Bebankan ke kamar**.
-→ [Membebankan bill ke kamar](04-pos/bebankan-ke-kamar.md) · [Mengoreksi biaya: reverse dan penyesuaian](03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md)
+Bisa, selama folio tamu masih terbuka. Buka kembali bill-nya, lalu klik **Kembalikan beban kamar** di baris "Dibebankan ke kamar". Keduanya butuh alasan dan persetujuan. Beban dibatalkan di folio tamu, batas outlet pulih, lalu bill dibayar dengan cara lain atau dibebankan ke kamar yang benar. Di folio tamu sendiri, beban POS tidak bisa di-reverse atau dikoreksi dengan **Penyesuaian**.
+→ [Mengembalikan beban kamar dari bill POS](04-pos/mengembalikan-beban-kamar.md)
 
 ### Saya sudah memakai Buka kembali pada bill, tetapi bebannya masih ada di tagihan tamu. Kenapa?
 
-**Buka kembali** membuka bill lagi, tetapi tidak menarik beban kamarnya dari folio tamu, dan layar bill tidak punya tombol untuk itu (kendala yang diketahui). Laporkan ke supervisor atau administrator, beserta nomor kamar, nomor bill, dan jumlahnya.
-→ [Membebankan bill ke kamar](04-pos/bebankan-ke-kamar.md)
+**Buka kembali** hanya membuka bill. Beban kamarnya ditarik dengan **Kembalikan beban kamar** di bill yang sudah terbuka itu.
+→ [Mengembalikan beban kamar dari bill POS](04-pos/mengembalikan-beban-kamar.md)
 
 ### Item sudah dikirim ke dapur, lalu tamu membatalkannya. Bisakah item itu dihapus?
 

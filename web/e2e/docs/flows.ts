@@ -1098,6 +1098,58 @@ export async function flowBebankanKamar(page: Page, loginAs: LoginAs, w: DocsWor
   await expect(page.getByTestId('room-charges')).toContainText(made.room)
 }
 
+/** 04-pos/mengembalikan-beban-kamar.md (KD-01, KD-02) */
+export async function flowKembalikanBebanKamar(page: Page, loginAs: LoginAs, w: DocsWorld, seed: SeedState): Promise<void> {
+  const made = w.inHouse.made
+  const admin = seed.users.admin
+  // (a coffee charged by mistake to the room of Made Wirawan, whose folio is open for the restaurant; the duty manager holds the reopening, the return and the approval)
+  await loginAs('admin', '/pos/floor')
+  await chooseOutlet(page.getByTestId('outlet-select'), RESTO)
+  await page.getByTestId('new-takeaway').click()
+  const take = page.getByTestId('takeaway-dialog')
+  await take.locator('input[name=customer_name]').fill('Tamu restoran')
+  await take.getByTestId('open-takeaway').click()
+  await expect(page).toHaveURL(/\/pos\/bills\/\d+$/)
+  await addProduct(page, 'Minuman', /Kopi Bali/)
+  await page.getByTestId('send').click()
+  await expect(page.getByTestId('round-1')).toBeVisible()
+  await page.getByTestId('pay').click()
+  const pay = page.getByTestId('pay-dialog')
+  await onlyMethod(pay, 'ROOM')
+  await pay.getByTestId('room-query').fill(made.room)
+  await pay.getByTestId('room-find').click()
+  await pay.getByTestId(`room-${made.stayId}`).click()
+  await pay.getByTestId('exact-ROOM').click()
+  await pay.getByTestId('pay-submit').click()
+  await expect(page.getByTestId('bill-closed')).toBeVisible()
+  // STEP 1: Buka kembali, the reason and the approval
+  await page.getByTestId('reopen').click()
+  await page.getByTestId('reason-dialog').getByTestId('reason').fill('Salah kamar: tamu restoran, bukan tamu kamar')
+  await page.getByTestId('reason-dialog').getByTestId('reason-submit').click()
+  await approve(page, admin.email, admin.password)
+  await expect(page.getByTestId('actions')).toBeVisible()
+  // STEP 2: the charge to the room with Kembalikan beban kamar
+  const charges = page.getByTestId('room-charges')
+  await expect(charges.locator('[data-testid^=return-charge-]')).toBeVisible()
+  await shot(page.getByTestId('bill-panel'), 'pos-kembalikan-02')
+  // STEP 3: the reason → Lanjut ke persetujuan
+  await charges.locator('[data-testid^=return-charge-]').click()
+  const sheet = page.getByTestId('reason-dialog')
+  await sheet.getByTestId('reason').fill('Salah kamar: tamu restoran, bukan tamu kamar')
+  await shot(sheet, 'pos-kembalikan-03')
+  await sheet.getByTestId('reason-submit').click()
+  // STEP 4: the approval; the charge is gone and the bill is to pay again
+  await approve(page, admin.email, admin.password)
+  await expect(page.getByTestId('room-charges')).toHaveCount(0)
+  await shot(page.getByTestId('bill-panel'), 'pos-kembalikan-04')
+  // STEP 5: paid another way (by card)
+  await page.getByTestId('pay').click()
+  await onlyMethod(pay, 'CARD')
+  await pay.getByTestId('exact-CARD').click()
+  await pay.getByTestId('pay-submit').click()
+  await expect(page.getByTestId('bill-closed')).toBeVisible()
+}
+
 /** 04-pos/void-diskon-komplimen.md */
 export async function flowVoidPos(page: Page, loginAs: LoginAs, seed: SeedState): Promise<void> {
   const admin = seed.users.admin

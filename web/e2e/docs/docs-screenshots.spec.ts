@@ -68,6 +68,7 @@ test.describe('Panduan pengguna: screenshot', () => {
   test('04 layar dapur', async ({ page, loginAs }) => { await flows.flowLayarDapur(page, loginAs) })
   test('04 membayar bill', async ({ page, loginAs }) => { await flows.flowBayarBill(page, loginAs) })
   test('04 bebankan ke kamar', async ({ page, loginAs }) => { await flows.flowBebankanKamar(page, loginAs, readWorld()) })
+  test('04 kembalikan beban kamar', async ({ page, loginAs, seed }) => { await flows.flowKembalikanBebanKamar(page, loginAs, readWorld(), seed) })
   test('04 void diskon komplimen', async ({ page, loginAs, seed }) => { await flows.flowVoidPos(page, loginAs, seed) })
   test('04 laporan outlet', async ({ page, loginAs }) => { await flows.flowLaporanOutlet(page, loginAs) })
   test('04 pelayan', async ({ page, loginAs }) => { await flows.flowPelayan(page, loginAs) })

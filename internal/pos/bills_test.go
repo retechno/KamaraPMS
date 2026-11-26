@@ -810,6 +810,70 @@ func TestASplitBillNetsTheSameInEveryAccountAndTheRevenueIsNotDoubled(t *testing
 	wantNet(t, net, "2410", "-22000")
 }
 
+// KD-01, KD-02 (docs/user-guide/_laporan.md): a charge to the wrong room is taken back from the reopened bill, and the bill is then paid in cash.
+// The guest folio is cleared by the return (the TRF pair, never a reversal of the outlet's revenue), the limit is free again, and the return is audited.
+func TestAChargeToTheWrongRoomIsReturnedFromTheReopenedBillAndPaidInCash(t *testing.T) {
+	b := newBillFx(t)
+	b.shift(t)
+	stay, guest := b.room(t, "321", "100000")
+	bill := b.open(t, b.cashier, nil)
+	bill = b.add(t, b.cashier, bill, b.nasi, "1")
+	bill = b.send(t, b.cashier, bill) // 60,500
+	b.pay(t, b.cashier, bill, "wrongroom-key-01", pos.PayLine{Method: "ROOM", Amount: dec("60500"), StayID: &stay})
+	var chargeID int64
+	must(t, b.Pool.QueryRow(context.Background(), `SELECT id FROM pos_room_charges WHERE bill_id = $1`, bill.ID).Scan(&chargeID))
+	in := pos.RoomChargeCorrectionInput{Reason: "charged to the wrong room", Approval: b.superIn}
+
+	// the bill is paid: reopen it first
+	reopener := b.User(t, b.tenantID, b.propID, auth.PermPOSCashier, auth.PermFolioReopen, auth.PermFolioReverse)
+	_, err := b.svc.ReturnRoomCharge(reopener, b.propID, chargeID, in)
+	wantCode(t, err, "BILL_NOT_OPEN")
+	_, err = b.svc.ReopenBill(reopener, b.propID, bill.ID, pos.ReopenInput{Reason: "charged to the wrong room", Approval: b.superIn})
+	must(t, err)
+	// a cashier without folio.reverse may not take it back, and a reason is needed
+	_, err = b.svc.ReturnRoomCharge(b.cashier, b.propID, chargeID, in)
+	wantCode(t, err, "PERMISSION_DENIED")
+	_, err = b.svc.ReturnRoomCharge(reopener, b.propID, chargeID, pos.RoomChargeCorrectionInput{Reason: " ", Approval: b.superIn})
+	wantCode(t, err, "VALIDATION_FAILED")
+
+	out, err := b.svc.ReturnRoomCharge(reopener, b.propID, chargeID, in)
+	must(t, err)
+	eq(t, "the bill owes again", out.Totals.Balance, "60500")
+	if len(out.RoomCharges) != 1 || out.RoomCharges[0].ReturnedAt == nil {
+		t.Fatalf("the charge is not returned on the bill: %+v", out.RoomCharges)
+	}
+	// the guest folio: the charge is cancelled by its return
+	var roomBal, back decimal.Decimal
+	must(t, b.Pool.QueryRow(context.Background(), `SELECT COALESCE(sum(debit - credit), 0) FROM folio_items WHERE folio_id = $1`, guest).Scan(&roomBal))
+	eq(t, "the guest folio", roomBal, "0")
+	must(t, b.Pool.QueryRow(context.Background(), `SELECT COALESCE(sum(credit - debit), 0) FROM folio_items WHERE folio_id = $1 AND business_date = $2 AND (debit - credit) < 0`, guest, roomstest.BD.String()).Scan(&back))
+	eq(t, "the line that cancels the charge", back, "60500")
+	// the limit of the outlets is free again: the whole 100,000 can be charged
+	adv, err := b.svc.RoomLookup(b.cashier, b.propID, b.resto.ID, "321")
+	must(t, err)
+	if len(adv) != 1 || !adv[0].Used.IsZero() || !adv[0].Remaining.Equal(dec("100000")) {
+		t.Fatalf("the limit after the return: %+v", adv)
+	}
+	// the bill is paid another way and closes
+	res := b.pay(t, b.cashier, out, "wrongroom-key-02", pos.PayLine{Method: "CASH", Amount: dec("60500")})
+	if !res.Closed {
+		t.Fatalf("the bill is not closed after the cash: %+v", res)
+	}
+	// audited in the same transaction: the return on the bill, and the reopening
+	for _, action := range []string{"pos.room_charge_returned", "pos.bill_reopened"} {
+		var n int
+		must(t, b.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action = $1 AND entity_type = 'pos_bill' AND entity_id = $2`, action, bill.ID).Scan(&n))
+		if n != 1 {
+			t.Fatalf("%s: %d audit entries", action, n)
+		}
+	}
+	// a second return is refused
+	_, err = b.svc.ReopenBill(reopener, b.propID, bill.ID, pos.ReopenInput{Reason: "again", Approval: b.superIn})
+	must(t, err)
+	_, err = b.svc.ReturnRoomCharge(reopener, b.propID, chargeID, in)
+	wantCode(t, err, "ALREADY_RETURNED")
+}
+
 // A bill charged to a room and returned the next day: the revenue is counted once and the transfer account is zero on both days.
 func TestAReturnedChargeToARoomCountsTheRevenueOnce(t *testing.T) {
 	b := newBillFx(t)

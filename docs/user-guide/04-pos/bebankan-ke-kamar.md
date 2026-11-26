@@ -35,13 +35,12 @@
   Setiap penolakan tercatat di **Tagihan → Beban outlet**, sehingga resepsionis bisa melihat dan membuka folionya kalau tamu memang boleh.
 - **Folio terkunci lagi dengan sendirinya** saat batasnya tercapai, saat tamu check-out, atau (kalau dibuka untuk satu hari) saat audit malam.
 - **Tamu grup** yang tagihannya diarahkan ke master folio: beban masuk ke master folio grup. Hasil pencarian menampilkan "ditagihkan ke grup …".
-- **Membatalkan beban ke kamar** setelah bill lunas belum bisa dilakukan dari layar. Di folio tamu, keterangan barisnya berisi nama outlet dan nomor bill, dan kodenya kode transfer `TRF`. Baris itu tidak bisa di-reverse, tidak muncul di **Kembalikan**, dan tidak bisa dikoreksi dengan **Penyesuaian** ("Kode TRF diposting oleh transfer saldo, bukan manual."). Periksa bill sebelum memilih **Bebankan ke kamar**. Kalau sudah terlanjur, laporkan ke supervisor atau administrator. Lihat [Reverse dan penyesuaian](../03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md).
-
-  > 🐞 Kendala yang diketahui (KD-02): **Buka kembali** (lihat [Void, diskon, dan komplimen](void-diskon-komplimen.md)) membuka bill lagi, tetapi tidak menarik beban kamarnya dari folio tamu, dan layar bill tidak punya tombol untuk itu. **Dampaknya:** beban yang salah tetap ada di tagihan tamu walaupun billnya sudah dibuka kembali. **Sementara ini:** belum bisa dilakukan dari layar. Laporkan ke supervisor atau administrator, beserta nomor kamar, nomor bill, dan jumlahnya.
+- **Membatalkan beban ke kamar** setelah bill lunas: buka kembali bill-nya, lalu klik **Kembalikan beban kamar** di baris "Dibebankan ke kamar". Beban dibatalkan di folio tamu, batas outlet pulih, dan bill dibayar dengan cara lain. Lihat [Mengembalikan beban kamar dari bill POS](mengembalikan-beban-kamar.md). Di folio tamu sendiri, baris beban POS berkode `TRF` tidak bisa di-reverse atau dikoreksi dengan **Penyesuaian** ("Kode TRF diposting oleh transfer saldo, bukan manual.").
 - Hanya tamu yang sedang menginap yang muncul di pencarian.
 
 ## Terkait
 
 - [Membuka folio untuk outlet](../03-kasir-dan-pembayaran/membuka-folio-untuk-outlet.md)
 - [Membayar bill](membayar-bill.md)
+- [Mengembalikan beban kamar dari bill POS](mengembalikan-beban-kamar.md)
 - [Check-out](../01-front-desk/check-out.md)

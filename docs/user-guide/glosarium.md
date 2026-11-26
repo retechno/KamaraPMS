@@ -148,6 +148,8 @@ Daftar istilah hotel dan istilah KamaraPMS yang dipakai di panduan ini, urut abj
 
 **KDS**: lihat **Layar dapur**.
 
+**Kembalikan beban kamar**: tombol di bill POS yang sudah dibuka kembali, yang menarik beban bill itu dari folio tamu. Batas outlet pulih, dan bill dibayar dengan cara lain. → [Mengembalikan beban kamar dari bill POS](04-pos/mengembalikan-beban-kamar.md)
+
 **Kebersihan**: status kamar yang diubah petugas: **Kotor**, **Dibersihkan**, **Bersih**, atau **Sudah diperiksa**. Pemeriksaan (**Sudah diperiksa**) adalah tugas supervisor. → [Mengubah status kebersihan](02-housekeeping/mengubah-status-kebersihan.md)
 
 **Ketersediaan**: jumlah kamar yang masih bisa dijual per tipe kamar dan per malam. → [Bagan kamar dan ketersediaan](01-front-desk/bagan-kamar-dan-ketersediaan.md)

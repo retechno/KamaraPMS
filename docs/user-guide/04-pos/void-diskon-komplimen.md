@@ -44,7 +44,7 @@ Item yang **belum dikirim** cukup dihapus dengan **Hapus**, tanpa alasan dan tan
 
 ### Membuka kembali bill yang sudah lunas
 
-7. Buka bill yang lunas, klik **Buka kembali**, isi **Alasan**, lalu minta persetujuan. Bill terbuka lagi. Koreksi isinya, lalu bayar lagi seperti biasa.
+7. Buka bill yang lunas, klik **Buka kembali**, isi **Alasan**, lalu minta persetujuan. Bill terbuka lagi. Koreksi isinya, lalu bayar lagi seperti biasa. Kalau bill itu dibebankan ke kamar, **Buka kembali** tidak menarik bebannya dari folio tamu: klik **Kembalikan beban kamar** di bill. Lihat [Mengembalikan beban kamar dari bill POS](mengembalikan-beban-kamar.md).
 
 ## Hasilnya
 
