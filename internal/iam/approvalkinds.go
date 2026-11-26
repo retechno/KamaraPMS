@@ -23,11 +23,13 @@ const (
 	KindJournal          ApprovalKind = "JOURNAL"
 	KindFiscalYear       ApprovalKind = "FISCAL_YEAR"
 	KindBank             ApprovalKind = "BANK"
-	KindBudget           ApprovalKind = "BUDGET"
-	KindPayables         ApprovalKind = "PAYABLES"
-	KindTaxDocument      ApprovalKind = "TAX_DOCUMENT"
-	KindTaxSettings      ApprovalKind = "TAX_SETTINGS"
-	KindShiftVariance    ApprovalKind = "SHIFT_VARIANCE"
+	// KindBankSettlementVoid is the void of a card, e-wallet or QRIS settlement (docs/architecture/40-card-settlement-void.md 6): it reverses a journal of real money, so it has an amount, the gross.
+	KindBankSettlementVoid ApprovalKind = "BANK_SETTLEMENT_VOID"
+	KindBudget             ApprovalKind = "BUDGET"
+	KindPayables           ApprovalKind = "PAYABLES"
+	KindTaxDocument        ApprovalKind = "TAX_DOCUMENT"
+	KindTaxSettings        ApprovalKind = "TAX_SETTINGS"
+	KindShiftVariance      ApprovalKind = "SHIFT_VARIANCE"
 	// The kinds of the point of sale (docs/architecture/34-pos.md 8.2): the void of a sold line, a discount, a complimentary bill and the reopening of a bill.
 	KindPOSVoid     ApprovalKind = "POS_VOID"
 	KindPOSDiscount ApprovalKind = "POS_DISCOUNT"
@@ -66,6 +68,7 @@ var approvalKinds = []KindInfo{
 	{KindJournal, true, auth.PermCorrectionApprove},
 	{KindFiscalYear, false, auth.PermCorrectionApprove},
 	{KindBank, false, auth.PermCorrectionApprove},
+	{KindBankSettlementVoid, true, auth.PermCorrectionApprove},
 	{KindBudget, false, auth.PermBudgetApprove},
 	{KindPayables, true, auth.PermCorrectionApprove},
 	{KindTaxDocument, true, auth.PermCorrectionApprove},

@@ -205,7 +205,7 @@ SELECT s.id, j.journal_number, COALESCE(s.reference, '')::text AS reference, COA
 FROM card_settlements s
 JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
 LEFT JOIN bank_accounts b ON b.property_id = s.property_id AND b.id = s.bank_account_id
-WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.vat_treatment = 'CREDITABLE' AND s.vat_amount > 0 AND j.journal_date <= $3::date
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.vat_treatment = 'CREDITABLE' AND s.vat_amount > 0 AND j.journal_date <= $3::date AND s.status = 'POSTED'
   AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims x WHERE x.property_id = s.property_id AND x.settlement_id = s.id AND x.released_at IS NULL)
 ORDER BY j.journal_date, s.id
 `
@@ -225,7 +225,7 @@ type ClaimableSettlementsRow struct {
 	VatAmount     decimal.Decimal
 }
 
-// Card settlements whose VAT is creditable, dated (the date of the statement line) up to the end of the month, and not claimed by a live return yet. A settlement is final: it has no reversal.
+// Card settlements whose VAT is creditable, dated (the date of the statement line) up to the end of the month, not voided, and not claimed by a live return yet.
 func (q *Queries) ClaimableSettlements(ctx context.Context, arg ClaimableSettlementsParams) ([]ClaimableSettlementsRow, error) {
 	rows, err := q.db.Query(ctx, claimableSettlements, arg.TenantID, arg.PropertyID, arg.ToDate)
 	if err != nil {
@@ -1070,8 +1070,11 @@ const listReturnClaims = `-- name: ListReturnClaims :many
 SELECT c.id, COALESCE(c.bill_id, 0)::bigint AS bill_id, COALESCE(c.line_no, 0)::bigint AS line_no, COALESCE(c.credit_id, 0)::bigint AS credit_id, COALESCE(c.credit_line_no, 0)::bigint AS credit_line_no,
        COALESCE(c.settlement_id, 0)::bigint AS settlement_id, c.amount, c.reverses_claim_id,
        COALESCE(b.bill_number, cn.credit_number, sj.journal_number)::text AS document_number, COALESCE(b.supplier_invoice_number, cn.supplier_credit_number, ss.reference, '')::text AS supplier_document_number,
-       COALESCE(bs.name, cs.name, sb.name, '')::text AS supplier_name, COALESCE(b.bill_date, cn.credit_date, sj.journal_date)::date AS document_date
+       COALESCE(bs.name, cs.name, sb.name, '')::text AS supplier_name, COALESCE(b.bill_date, cn.credit_date, sj.journal_date)::date AS document_date,
+       orr.period_start AS reverses_period, orr.return_number AS reverses_return_number
 FROM tax_return_input_claims c
+LEFT JOIN tax_return_input_claims oc ON oc.property_id = c.property_id AND oc.id = c.reverses_claim_id
+LEFT JOIN tax_returns orr ON orr.property_id = oc.property_id AND orr.id = oc.return_id
 LEFT JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
 LEFT JOIN suppliers bs ON bs.property_id = b.property_id AND bs.id = b.supplier_id
 LEFT JOIN supplier_credit_notes cn ON cn.property_id = c.property_id AND cn.id = c.credit_id
@@ -1102,6 +1105,8 @@ type ListReturnClaimsRow struct {
 	SupplierDocumentNumber string
 	SupplierName           string
 	DocumentDate           civil.Date
+	ReversesPeriod         *civil.Date
+	ReversesReturnNumber   *string
 }
 
 // A claim is of a bill line, of a credit note line (a negative one, or the positive reversal of it) or of a card settlement.
@@ -1127,6 +1132,8 @@ func (q *Queries) ListReturnClaims(ctx context.Context, arg ListReturnClaimsPara
 			&i.SupplierDocumentNumber,
 			&i.SupplierName,
 			&i.DocumentDate,
+			&i.ReversesPeriod,
+			&i.ReversesReturnNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1771,6 +1778,77 @@ func (q *Queries) ReversibleCreditClaims(ctx context.Context, arg ReversibleCred
 			&i.SupplierCreditNumber,
 			&i.SupplierName,
 			&i.CreditDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reversibleSettlementClaims = `-- name: ReversibleSettlementClaims :many
+SELECT x.id, x.settlement_id::bigint AS settlement_id, x.amount, j.journal_number, COALESCE(s.reference, '')::text AS reference, COALESCE(b.name, '')::text AS bank_name, j.journal_date,
+       r.period_start AS reverses_period, r.return_number AS reverses_return_number
+FROM tax_return_input_claims x
+JOIN tax_returns r ON r.property_id = x.property_id AND r.id = x.return_id
+JOIN card_settlements s ON s.property_id = x.property_id AND s.id = x.settlement_id
+JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+JOIN gl_journals vj ON vj.property_id = s.property_id AND vj.id = s.void_journal_id
+LEFT JOIN bank_accounts b ON b.property_id = s.property_id AND b.id = s.bank_account_id
+WHERE x.tenant_id = $1 AND x.property_id = $2 AND r.tax_id = $3 AND x.released_at IS NULL AND x.reverses_claim_id IS NULL AND x.settlement_id IS NOT NULL
+  AND s.status = 'VOIDED' AND vj.journal_date <= $4::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims y WHERE y.property_id = x.property_id AND y.reverses_claim_id = x.id AND y.released_at IS NULL)
+ORDER BY j.journal_date, s.id
+`
+
+type ReversibleSettlementClaimsParams struct {
+	TenantID   int64
+	PropertyID int64
+	TaxID      int64
+	ToDate     civil.Date
+}
+
+type ReversibleSettlementClaimsRow struct {
+	ID                   int64
+	SettlementID         int64
+	Amount               decimal.Decimal
+	JournalNumber        string
+	Reference            string
+	BankName             string
+	JournalDate          civil.Date
+	ReversesPeriod       civil.Date
+	ReversesReturnNumber string
+}
+
+// Live claims of card settlements of this tax whose settlement was voided (its reversal dated) on or before the end of the month and that no live return reverses yet,
+// with the month and the number of the return that holds the claim (docs/architecture/40-card-settlement-void.md 5).
+func (q *Queries) ReversibleSettlementClaims(ctx context.Context, arg ReversibleSettlementClaimsParams) ([]ReversibleSettlementClaimsRow, error) {
+	rows, err := q.db.Query(ctx, reversibleSettlementClaims,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.TaxID,
+		arg.ToDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReversibleSettlementClaimsRow{}
+	for rows.Next() {
+		var i ReversibleSettlementClaimsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SettlementID,
+			&i.Amount,
+			&i.JournalNumber,
+			&i.Reference,
+			&i.BankName,
+			&i.JournalDate,
+			&i.ReversesPeriod,
+			&i.ReversesReturnNumber,
 		); err != nil {
 			return nil, err
 		}

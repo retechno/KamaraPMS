@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 	"kamarapms/internal/platform/civil"
 )
@@ -262,6 +263,57 @@ func (q *Queries) GetJournalLine(ctx context.Context, arg GetJournalLineParams) 
 		&i.JournalDate,
 		&i.JournalNumber,
 		&i.Cleared,
+	)
+	return i, err
+}
+
+const getSettlement = `-- name: GetSettlement :one
+
+SELECT s.id, s.bank_account_id, s.account_key, s.status, s.journal_id, s.gross, s.net, s.fee, s.vat_amount, s.vat_treatment, j.journal_date, j.journal_number
+FROM card_settlements s
+JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id = $3
+`
+
+type GetSettlementParams struct {
+	TenantID   int64
+	PropertyID int64
+	ID         int64
+}
+
+type GetSettlementRow struct {
+	ID            int64
+	BankAccountID int64
+	AccountKey    string
+	Status        string
+	JournalID     int64
+	Gross         decimal.Decimal
+	Net           decimal.Decimal
+	Fee           decimal.Decimal
+	VatAmount     decimal.Decimal
+	VatTreatment  *string
+	JournalDate   civil.Date
+	JournalNumber string
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Voiding a settlement (docs/architecture/40-card-settlement-void.md)
+func (q *Queries) GetSettlement(ctx context.Context, arg GetSettlementParams) (GetSettlementRow, error) {
+	row := q.db.QueryRow(ctx, getSettlement, arg.TenantID, arg.PropertyID, arg.ID)
+	var i GetSettlementRow
+	err := row.Scan(
+		&i.ID,
+		&i.BankAccountID,
+		&i.AccountKey,
+		&i.Status,
+		&i.JournalID,
+		&i.Gross,
+		&i.Net,
+		&i.Fee,
+		&i.VatAmount,
+		&i.VatTreatment,
+		&i.JournalDate,
+		&i.JournalNumber,
 	)
 	return i, err
 }
@@ -562,7 +614,9 @@ func (q *Queries) InsertStatementLine(ctx context.Context, arg InsertStatementLi
 }
 
 const isSettledOrSettling = `-- name: IsSettledOrSettling :one
-SELECT EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = $1 OR settling_line_id = $1)::boolean
+SELECT (EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = $1 AND released_at IS NULL)
+        OR EXISTS (SELECT 1 FROM gl_journal_lines l JOIN card_settlements s ON s.property_id = l.property_id AND (s.journal_id = l.journal_id OR s.void_journal_id = l.journal_id)
+                   WHERE l.id = $1))::boolean
 `
 
 func (q *Queries) IsSettledOrSettling(ctx context.Context, lineID int64) (bool, error) {
@@ -786,10 +840,12 @@ func (q *Queries) ListCardFeeRules(ctx context.Context, arg ListCardFeeRulesPara
 }
 
 const listClearings = `-- name: ListClearings :many
-SELECT c.id, c.statement_line_id, c.journal_line_id, c.amount, j.journal_date, j.journal_number, j.journal_type, COALESCE(l.description, j.description) AS description
+SELECT c.id, c.statement_line_id, c.journal_line_id, c.amount, j.journal_date, j.journal_number, j.journal_type, COALESCE(l.description, j.description) AS description,
+       cs.id AS settlement_id
 FROM bank_clearings c
 JOIN gl_journal_lines l ON l.id = c.journal_line_id
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+LEFT JOIN card_settlements cs ON cs.property_id = j.property_id AND cs.journal_id = j.id AND cs.status = 'POSTED'
 WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.statement_id = $3
 ORDER BY j.journal_date, c.id
 `
@@ -809,8 +865,10 @@ type ListClearingsRow struct {
 	JournalNumber   string
 	JournalType     string
 	Description     string
+	SettlementID    *int64
 }
 
+// The clearings of a statement; settlement_id names the live settlement whose journal the journal line is of (its matching is undone by voiding it).
 func (q *Queries) ListClearings(ctx context.Context, arg ListClearingsParams) ([]ListClearingsRow, error) {
 	rows, err := q.db.Query(ctx, listClearings, arg.TenantID, arg.PropertyID, arg.StatementID)
 	if err != nil {
@@ -829,6 +887,7 @@ func (q *Queries) ListClearings(ctx context.Context, arg ListClearingsParams) ([
 			&i.JournalNumber,
 			&i.JournalType,
 			&i.Description,
+			&i.SettlementID,
 		); err != nil {
 			return nil, err
 		}
@@ -843,9 +902,18 @@ func (q *Queries) ListClearings(ctx context.Context, arg ListClearingsParams) ([
 const listSettlements = `-- name: ListSettlements :many
 SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.mdr_amount::numeric AS mdr_amount, s.vat_amount, s.vat_treatment, s.expected_mdr, s.expected_vat, s.proposed_vat, s.mdr_rate, s.vat_rate,
        s.payments_without_vat_rate, s.reference, s.created_at, j.journal_date, j.journal_number,
-       (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments
+       (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments,
+       s.status, s.voided_at, s.void_reason, vj.journal_number AS void_journal_number, COALESCE(m.statement_id, 0)::bigint AS statement_id, COALESCE(m.line_no, 0)::int AS statement_line_no
 FROM card_settlements s
 JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+LEFT JOIN gl_journals vj ON vj.property_id = s.property_id AND vj.id = s.void_journal_id
+LEFT JOIN LATERAL (
+    SELECT c.statement_id, sl.line_no FROM bank_clearings c
+    JOIN gl_journal_lines bl ON bl.id = c.journal_line_id
+    JOIN bank_statement_lines sl ON sl.id = c.statement_line_id
+    WHERE bl.property_id = s.property_id AND bl.journal_id = s.journal_id
+    ORDER BY c.id LIMIT 1
+) m ON true
 WHERE s.tenant_id = $1 AND s.property_id = $2 AND s.id < $3
 ORDER BY s.id DESC
 LIMIT $4
@@ -879,6 +947,12 @@ type ListSettlementsRow struct {
 	JournalDate            civil.Date
 	JournalNumber          string
 	Payments               int32
+	Status                 string
+	VoidedAt               *time.Time
+	VoidReason             *string
+	VoidJournalNumber      *string
+	StatementID            int64
+	StatementLineNo        int32
 }
 
 func (q *Queries) ListSettlements(ctx context.Context, arg ListSettlementsParams) ([]ListSettlementsRow, error) {
@@ -916,6 +990,12 @@ func (q *Queries) ListSettlements(ctx context.Context, arg ListSettlementsParams
 			&i.JournalDate,
 			&i.JournalNumber,
 			&i.Payments,
+			&i.Status,
+			&i.VoidedAt,
+			&i.VoidReason,
+			&i.VoidJournalNumber,
+			&i.StatementID,
+			&i.StatementLineNo,
 		); err != nil {
 			return nil, err
 		}
@@ -1071,6 +1151,26 @@ func (q *Queries) ListStatements(ctx context.Context, arg ListStatementsParams) 
 	return items, nil
 }
 
+const liveSettlementOfJournalLine = `-- name: LiveSettlementOfJournalLine :one
+SELECT s.id FROM gl_journal_lines l
+JOIN card_settlements s ON s.property_id = l.property_id AND s.journal_id = l.journal_id
+WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.id = $3 AND s.status = 'POSTED'
+`
+
+type LiveSettlementOfJournalLineParams struct {
+	TenantID      int64
+	PropertyID    int64
+	JournalLineID int64
+}
+
+// The live settlement a journal line belongs to, if any: the matching of its bank line is undone by voiding it, not by Unclear.
+func (q *Queries) LiveSettlementOfJournalLine(ctx context.Context, arg LiveSettlementOfJournalLineParams) (int64, error) {
+	row := q.db.QueryRow(ctx, liveSettlementOfJournalLine, arg.TenantID, arg.PropertyID, arg.JournalLineID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const mapAccount = `-- name: MapAccount :one
 SELECT account_id FROM gl_account_map WHERE tenant_id = $1 AND property_id = $2 AND map_key = $3
 `
@@ -1137,6 +1237,39 @@ func (q *Queries) MarkReopened(ctx context.Context, arg MarkReopenedParams) erro
 		arg.ID,
 	)
 	return err
+}
+
+const markSettlementVoided = `-- name: MarkSettlementVoided :execrows
+UPDATE card_settlements SET status = 'VOIDED', voided_at = $1, voided_by = $2, void_reason = $3, void_approved_by = $4, void_journal_id = $5
+WHERE tenant_id = $6 AND property_id = $7 AND id = $8 AND status = 'POSTED'
+`
+
+type MarkSettlementVoidedParams struct {
+	Now           *time.Time
+	ActorID       *int64
+	Reason        *string
+	ApprovedBy    *int64
+	VoidJournalID *int64
+	TenantID      int64
+	PropertyID    int64
+	ID            int64
+}
+
+func (q *Queries) MarkSettlementVoided(ctx context.Context, arg MarkSettlementVoidedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markSettlementVoided,
+		arg.Now,
+		arg.ActorID,
+		arg.Reason,
+		arg.ApprovedBy,
+		arg.VoidJournalID,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const nextStatementExists = `-- name: NextStatementExists :one
@@ -1297,6 +1430,31 @@ func (q *Queries) ReceiptFeeSnapshots(ctx context.Context, arg ReceiptFeeSnapsho
 	return items, nil
 }
 
+const releaseSettlementItems = `-- name: ReleaseSettlementItems :execrows
+UPDATE card_settlement_items SET released_at = $1
+WHERE tenant_id = $2 AND property_id = $3 AND settlement_id = $4 AND released_at IS NULL
+`
+
+type ReleaseSettlementItemsParams struct {
+	Now          *time.Time
+	TenantID     int64
+	PropertyID   int64
+	SettlementID int64
+}
+
+func (q *Queries) ReleaseSettlementItems(ctx context.Context, arg ReleaseSettlementItemsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseSettlementItems,
+		arg.Now,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.SettlementID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const settlementCandidates = `-- name: SettlementCandidates :many
 
 SELECT l.id, j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.description, l.source_ref,
@@ -1304,7 +1462,8 @@ SELECT l.id, j.journal_date, j.id AS journal_id, j.journal_number, j.journal_typ
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 WHERE l.tenant_id = $1 AND l.property_id = $2 AND l.account_id = $3 AND j.journal_date <= $4::date
-  AND NOT EXISTS (SELECT 1 FROM card_settlement_items i WHERE i.settled_line_id = l.id OR i.settling_line_id = l.id)
+  AND NOT EXISTS (SELECT 1 FROM card_settlement_items i WHERE i.settled_line_id = l.id AND i.released_at IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM card_settlements s WHERE s.property_id = l.property_id AND (s.journal_id = l.journal_id OR s.void_journal_id = l.journal_id))
 ORDER BY j.journal_date, l.id
 LIMIT $5
 `
@@ -1331,8 +1490,8 @@ type SettlementCandidatesRow struct {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Card and e-wallet settlements
-// The lines of a clearing account (card, e-wallet) up to a date that no settlement has settled and that are not the
-// credit of a settlement themselves.
+// The lines of a clearing account (card, e-wallet) up to a date that no live settlement has settled and that are not a line of
+// a settlement journal or of the reversal of one themselves (the credit of a settlement, and the debit of its void).
 func (q *Queries) SettlementCandidates(ctx context.Context, arg SettlementCandidatesParams) ([]SettlementCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, settlementCandidates,
 		arg.TenantID,
@@ -1358,6 +1517,65 @@ func (q *Queries) SettlementCandidates(ctx context.Context, arg SettlementCandid
 			&i.Description,
 			&i.SourceRef,
 			&i.Amount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const settlementClearings = `-- name: SettlementClearings :many
+SELECT c.id, c.statement_id, c.statement_line_id, sl.line_no, c.amount, st.status AS statement_status
+FROM bank_clearings c
+JOIN gl_journal_lines l ON l.id = c.journal_line_id
+JOIN bank_statements st ON st.property_id = c.property_id AND st.id = c.statement_id
+LEFT JOIN bank_statement_lines sl ON sl.id = c.statement_line_id
+WHERE c.tenant_id = $1 AND c.property_id = $2 AND l.journal_id = $3 AND l.account_id = $4
+ORDER BY c.id
+`
+
+type SettlementClearingsParams struct {
+	TenantID   int64
+	PropertyID int64
+	JournalID  int64
+	AccountID  int64
+}
+
+type SettlementClearingsRow struct {
+	ID              int64
+	StatementID     int64
+	StatementLineID *int64
+	LineNo          pgtype.Int4
+	Amount          decimal.Decimal
+	StatementStatus string
+}
+
+// The clearings of the bank line of a settlement journal, with the statement each is in.
+func (q *Queries) SettlementClearings(ctx context.Context, arg SettlementClearingsParams) ([]SettlementClearingsRow, error) {
+	rows, err := q.db.Query(ctx, settlementClearings,
+		arg.TenantID,
+		arg.PropertyID,
+		arg.JournalID,
+		arg.AccountID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SettlementClearingsRow{}
+	for rows.Next() {
+		var i SettlementClearingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StatementID,
+			&i.StatementLineID,
+			&i.LineNo,
+			&i.Amount,
+			&i.StatementStatus,
 		); err != nil {
 			return nil, err
 		}

@@ -17,6 +17,17 @@ test.describe('Night audit', () => {
   let earlyLeaver: CheckedIn | undefined
   // NA-05: a company with two invoices issued today on terms of 0 days, so they are overdue once the audit has closed the day
   let debtor: { id: number; code: string; invoices: string[] } | undefined
+  // NA-06: two card payments of today, waiting for their settlement once the audit has closed the day
+  let cards: { day: string; payments: string[] } | undefined
+
+  /** Two card payments (300,000 and 500,000) of a guest in house: their journal lines wait for the acquirer once the day is closed. */
+  async function cardPayments(data: Factories): Promise<{ day: string; payments: string[] }> {
+    const ih = await data.inHouse({ nights: 2 })
+    await data.postCharge(ih.folio.id, 'FOOD_BEVERAGE', '800000', 'Jamuan dibayar kartu (E2E)')
+    const a = await data.pay(ih.folio.id, '300000', 'CARD')
+    const b = await data.pay(ih.folio.id, '500000', 'CARD')
+    return { day: await data.businessDate(), payments: [a.payment.payment_number, b.payment.payment_number] }
+  }
 
   /** A company that owes two invoices of today (terms 0): each holds the transfer of a guest who checked out. */
   async function companyWithTwoInvoices(data: Factories): Promise<{ id: number; code: string; invoices: string[] }> {
@@ -50,6 +61,7 @@ test.describe('Night audit', () => {
     const noShow = await data.reservation({ nights: 1 }) // an arrival that never comes
     earlyLeaver = await data.inHouse({ nights: 3 }) // NA-04: in house over the audit, booked two nights past it
     debtor = await companyWithTwoInvoices(data) // NA-05: due today, overdue after the audit
+    cards = await cardPayments(data) // NA-06: settled from the bank after the audit
 
     // an open count freezes its warehouse and holds the close of the day: setup runs pms-seed inventory with -no-open-count, and no module leaves one
     const open = (await data.api.get<{ data: { cnt_number: string }[] }>(`${data.P}/inventory/counts`, { status: 'OPEN' })).data
@@ -165,5 +177,61 @@ test.describe('Night audit', () => {
     await page.goto('/city-ledger/overdue')
     await expect(page.getByTestId('overdue-summary')).toBeVisible()
     await expect(page.getByTestId(`overdue-${company.code}`)).toHaveCount(0)
+  })
+
+  // KD-05 (docs/architecture/40-card-settlement-void.md): a card settlement made with the wrong payment is voided with an approval, the payments are
+  // settled again correctly, and the statement reconciles.
+  test('NA-06 settlement kartu yang salah dibatalkan dengan persetujuan, diselesaikan ulang, lalu rekening koran direkonsiliasi', async ({ page, loginAs, data, seed }) => {
+    expect(cards, 'NA-01 took the card payments').toBeDefined()
+    const { day, payments } = cards!
+    const P = data.P
+    // a bank account of its own, so its first statement can reconcile whatever the other tests left in the other bank accounts
+    const ledger = await data.api.post<{ id: number }>(`${P}/accounting/accounts`, { code: '1199', name: 'Bank settlement kartu (E2E)', account_type: 'ASSET', normal_side: 'DEBIT', statement_group: 'CASH', is_postable: true })
+    const bank = await data.api.post<{ id: number }>(`${P}/bank/accounts`, { account_id: ledger.id, name: `Bank kartu ${uid()}`, account_number: `9${Date.now().toString().slice(-8)}` })
+    const st = await data.api.post<{ id: number; lines: { id: number; line_no: number }[] }>(`${P}/bank/statements`, {
+      bank_account_id: bank.id, period_from: day, period_to: day, opening_balance: '0', closing_balance: '800000',
+      csv: `date,description,reference,amount\n${day},Settlement kartu A,SETT-A,300000\n${day},Settlement kartu B,SETT-B,500000\n`,
+    })
+    const [lineA, lineB] = [st.lines.find((l) => l.line_no === 1)!.id, st.lines.find((l) => l.line_no === 2)!.id]
+    const expected = await data.api.get<{ lines: { journal_line_id: number; reference?: string }[] }>(`${P}/bank/card-settlements/expected`, { account_key: 'CARD' })
+    const paymentLine = (n: string) => expected.lines.find((l) => l.reference === n)?.journal_line_id
+    const [payA, payB] = [paymentLine(payments[0]!), paymentLine(payments[1]!)]
+    expect(payA && payB, 'the card payments wait for their settlement').toBeTruthy()
+    const commission = (await data.api.get<{ data: { id: number; code: string }[] }>(`${P}/accounting/accounts`, { account_type: 'EXPENSE', postable: true, active: true })).data.find((a) => a.code === '6130')!
+    const settle = (line: number, payment: number, fee?: number) =>
+      data.api.post(`${P}/bank/statements/${st.id}/lines/${line}/settle`, { account_key: 'CARD', journal_line_ids: [payment], fee_account_id: fee })
+
+    // the wrong settlement: the 300,000 paid by the bank is taken for the payment of 500,000, with 200,000 of "commission"
+    await settle(lineA, payB!, commission.id)
+    const wrong = (await data.api.get<{ data: { journal_number: string; status: string }[] }>(`${P}/bank/card-settlements`, { limit: 1 })).data[0]!
+    expect(wrong.status).toBe('POSTED')
+
+    // its matching is not undone on the reconcile page: the link goes to the void
+    await loginAs('accounting', `/bank/statements/${st.id}`)
+    await expect(page.getByTestId('line-1').locator('[data-testid^="void-settlement-"]')).toBeVisible()
+    await expect(page.getByTestId('line-1').locator('[data-testid^="unmatch-"]')).toHaveCount(0)
+
+    // Void settlement, with a reason and the approval of someone who may approve corrections
+    await page.goto('/bank/cards')
+    await page.getByTestId(`void-${wrong.journal_number}`).click()
+    const form = page.getByTestId('void-form')
+    await form.locator('input[name=reason]').fill('Pembayaran yang dipilih salah (E2E)')
+    await form.getByTestId('void-ask').click()
+    const dialog = page.getByTestId('approval-dialog')
+    await dialog.locator('input[name=approval_email]').fill(seed.users.admin.email)
+    await dialog.locator('input[name=approval_password]').fill(seed.users.admin.password)
+    await dialog.getByTestId('approval-submit').click()
+    await expect(page.getByTestId('notice')).toHaveText(tx('cards.voided', { number: wrong.journal_number }))
+    await expect(page.getByTestId(`voided-${wrong.journal_number}`)).toHaveText(tx('cards.statusVoided'))
+
+    // the payments are released: settled again correctly, each with its own line, and the statement reconciles
+    await settle(lineA, payA!)
+    await settle(lineB, payB!)
+    await page.goto(`/bank/statements/${st.id}`)
+    await expect(page.getByTestId('ready')).toBeVisible()
+    await page.getByTestId('reconcile').click()
+    await expect(page.getByTestId('reconciled')).toBeVisible()
+    const after = await data.api.get<{ status: string }>(`${P}/bank/statements/${st.id}`)
+    expect(after.status).toBe('RECONCILED')
   })
 })

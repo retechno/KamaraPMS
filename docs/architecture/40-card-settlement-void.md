@@ -1,7 +1,7 @@
 # 40. Voiding a card settlement (KD-05)
 
-Status: **APPROVED by the owner on 2026-11-27, with the conditions written into §3, §4.3, §5 and §8; to be built with
-migration 00101.** It answers KD-05 of the user guide report (`docs/user-guide/_laporan.md`): a wrong card, e-wallet or QRIS settlement
+Status: **built** (migration 00101, `internal/bankrec/void.go`, the Void action on the card settlements page). Approved by the
+owner on 2026-11-27, with the conditions written into §3, §4.3, §5 and §8. It answers KD-05 of the user guide report (`docs/user-guide/_laporan.md`): a wrong card, e-wallet or QRIS settlement
 cannot be undone, and unmatching its statement line (`internal/bankrec/matching.go:40-70`, `Unclear`) leaves the journal
 behind. It replaces the rule "a settlement is final" of `15-card-fee-vat.md` §5, which named this feature as separate work and
 kept room for it (the reversing claim of the VAT return). The decisions of the owner are in §11. **R** marks what was a
@@ -345,9 +345,12 @@ Everything runs on real PostgreSQL (`dbtest`).
 
 11. **Voided before any return:** never claimed.
 12. **Claimed by a filed return, then voided:**
-    - the next return has the reversing claim −VAT;
-    - voiding that return releases it, and the following return reverses it again;
-    - the correct settlement is claimed as a new one.
+    - the worksheet of the next month has the reversing claim −VAT, naming the month and the number of the return of the claim;
+    - the correct settlement, made again, is claimed as a new one next to it;
+    - voiding the return of the claim releases it: nothing is left to reverse, and that month filed again claims only the new
+      settlement;
+    - the database takes a reversing claim of a settlement only of the same settlement, for the same amount, negative (rows
+      inserted in a transaction that is rolled back: filing the next month in a test needs every day of it closed).
 
 **Schema** (`scripts/db-test.sh` and the module tests):
 
@@ -370,8 +373,8 @@ Everything runs on real PostgreSQL (`dbtest`).
     loser gets a clean error.
 19. **A void and a VAT filing** of the same month, in order 3 of §5: the filing has read the settlement as `POSTED` and is held
     (the test holds the row of the return's number sequence) while the void commits; then the filing commits. The return holds
-    the claim, the next month's worksheet and return reverse it, and the input VAT account is back at zero. Never a live claim
-    of a voided settlement that no return will reverse.
+    the claim, the next month's worksheet reverses it (the credit carried out of September is used up), and the input VAT
+    account is back at zero. Never a live claim of a voided settlement that no return will reverse.
 
 **Web and end to end:**
 

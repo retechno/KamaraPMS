@@ -374,6 +374,18 @@ describe('bank views', () => {
     expect(POST.mock.calls.at(-1)?.[1].body).toEqual({ statement_line_id: null, journal_line_ids: [102] })
   })
 
+  it('sends the matching of a card settlement to its void instead of undoing it', async () => {
+    const w = await mountView(BankReconcileView, undefined, { id: '5' })
+    const settled = detail({ lines: [{ id: 11, line_no: 1, line_date: '2026-09-30', description: 'Card settlement', reference: 'SETT-1', amount: '977800', cleared: '977800', matched: true,
+      clearings: [{ id: 22, statement_line_id: 11, journal_line_id: 105, amount: '977800', journal_date: '2026-09-30', journal_number: 'JV000005', journal_type: 'BANK', settlement_id: 3 }] }] })
+    GET.mockImplementation(async (p: string) => (p.endsWith('/uncleared') ? { data: { data: [] } } : { data: settled }))
+    await (w as unknown as { setProps: (p: object) => Promise<void> }).setProps({ id: '6' })
+    await flushPromises()
+    expect(w.find('[data-testid=unmatch-22]').exists()).toBe(false)
+    expect(w.get('[data-testid=void-settlement-22]').text()).toBe('void settlement')
+    expect(w.get('[data-testid=void-settlement-22]').attributes('href')).toBe('/bank/cards')
+  })
+
   it('reconciles when ready, and reopens a reconciled statement with an approval', async () => {
     const ready = detail({ summary: summary({ blockers: [], can_reconcile: true, unmatched_lines: 0, difference: '0' }) })
     const w = await mountView(BankReconcileView, undefined, { id: '5' })

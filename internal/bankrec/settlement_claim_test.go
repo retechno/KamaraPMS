@@ -18,8 +18,8 @@ func (g *guestFx) vatReturn(t *testing.T, claims bool) billingconfig.Tax {
 	return vat
 }
 
-// settleOnDay pays 1,000,000 by card on the first day, closes it, and settles it from a statement line of 30 Sep (the bank kept 22,200 of which 2,200 VAT).
-func (g *guestFx) settleCardOn30Sep(t *testing.T) {
+// settleCardOn30Sep pays 1,000,000 by card on the first day, closes it, and settles it from a statement line of 30 Sep (the bank kept 22,200 of which 2,200 VAT). It returns the statement.
+func (g *guestFx) settleCardOn30Sep(t *testing.T) bankrec.StatementDetail {
 	t.Helper()
 	g.ruleVAT(t, "CARD", "2", "11", 1, "2026-09-01")
 	g.pay(t, "k1", "CARD", "1000000", "AUTH-1")
@@ -30,6 +30,7 @@ func (g *guestFx) settleCardOn30Sep(t *testing.T) {
 	must(t, err)
 	_, err = g.BankRec.Settle(g.admin, g.propID, st.ID, line.ID, bankrec.SettleInput{AccountKey: "CARD", JournalLineIDs: []int64{exp.Lines[0].JournalLineID}, FeeAccountID: g.acc["6130"]})
 	must(t, err)
+	return st
 }
 
 func TestTheCreditableVATOfASettlementIsClaimedOnTheReturn(t *testing.T) {

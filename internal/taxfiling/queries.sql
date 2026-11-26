@@ -280,8 +280,11 @@ VALUES (@tenant_id, @property_id, @return_id, sqlc.narg(bill_id), sqlc.narg(line
 SELECT c.id, COALESCE(c.bill_id, 0)::bigint AS bill_id, COALESCE(c.line_no, 0)::bigint AS line_no, COALESCE(c.credit_id, 0)::bigint AS credit_id, COALESCE(c.credit_line_no, 0)::bigint AS credit_line_no,
        COALESCE(c.settlement_id, 0)::bigint AS settlement_id, c.amount, c.reverses_claim_id,
        COALESCE(b.bill_number, cn.credit_number, sj.journal_number)::text AS document_number, COALESCE(b.supplier_invoice_number, cn.supplier_credit_number, ss.reference, '')::text AS supplier_document_number,
-       COALESCE(bs.name, cs.name, sb.name, '')::text AS supplier_name, COALESCE(b.bill_date, cn.credit_date, sj.journal_date)::date AS document_date
+       COALESCE(bs.name, cs.name, sb.name, '')::text AS supplier_name, COALESCE(b.bill_date, cn.credit_date, sj.journal_date)::date AS document_date,
+       orr.period_start AS reverses_period, orr.return_number AS reverses_return_number
 FROM tax_return_input_claims c
+LEFT JOIN tax_return_input_claims oc ON oc.property_id = c.property_id AND oc.id = c.reverses_claim_id
+LEFT JOIN tax_returns orr ON orr.property_id = oc.property_id AND orr.id = oc.return_id
 LEFT JOIN supplier_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
 LEFT JOIN suppliers bs ON bs.property_id = b.property_id AND bs.id = b.supplier_id
 LEFT JOIN supplier_credit_notes cn ON cn.property_id = c.property_id AND cn.id = c.credit_id
@@ -317,14 +320,30 @@ WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND r.tax_id = @
   AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims y WHERE y.property_id = x.property_id AND y.reverses_claim_id = x.id AND y.released_at IS NULL)
 ORDER BY c.credit_date, c.id, x.credit_line_no;
 
--- Card settlements whose VAT is creditable, dated (the date of the statement line) up to the end of the month, and not claimed by a live return yet. A settlement is final: it has no reversal.
+-- Card settlements whose VAT is creditable, dated (the date of the statement line) up to the end of the month, not voided, and not claimed by a live return yet.
 -- name: ClaimableSettlements :many
 SELECT s.id, j.journal_number, COALESCE(s.reference, '')::text AS reference, COALESCE(b.name, '')::text AS bank_name, j.journal_date, s.vat_amount
 FROM card_settlements s
 JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
 LEFT JOIN bank_accounts b ON b.property_id = s.property_id AND b.id = s.bank_account_id
-WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.vat_treatment = 'CREDITABLE' AND s.vat_amount > 0 AND j.journal_date <= @to_date::date
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.vat_treatment = 'CREDITABLE' AND s.vat_amount > 0 AND j.journal_date <= @to_date::date AND s.status = 'POSTED'
   AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims x WHERE x.property_id = s.property_id AND x.settlement_id = s.id AND x.released_at IS NULL)
+ORDER BY j.journal_date, s.id;
+
+-- Live claims of card settlements of this tax whose settlement was voided (its reversal dated) on or before the end of the month and that no live return reverses yet,
+-- with the month and the number of the return that holds the claim (docs/architecture/40-card-settlement-void.md 5).
+-- name: ReversibleSettlementClaims :many
+SELECT x.id, x.settlement_id::bigint AS settlement_id, x.amount, j.journal_number, COALESCE(s.reference, '')::text AS reference, COALESCE(b.name, '')::text AS bank_name, j.journal_date,
+       r.period_start AS reverses_period, r.return_number AS reverses_return_number
+FROM tax_return_input_claims x
+JOIN tax_returns r ON r.property_id = x.property_id AND r.id = x.return_id
+JOIN card_settlements s ON s.property_id = x.property_id AND s.id = x.settlement_id
+JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+JOIN gl_journals vj ON vj.property_id = s.property_id AND vj.id = s.void_journal_id
+LEFT JOIN bank_accounts b ON b.property_id = s.property_id AND b.id = s.bank_account_id
+WHERE x.tenant_id = @tenant_id AND x.property_id = @property_id AND r.tax_id = @tax_id AND x.released_at IS NULL AND x.reverses_claim_id IS NULL AND x.settlement_id IS NOT NULL
+  AND s.status = 'VOIDED' AND vj.journal_date <= @to_date::date
+  AND NOT EXISTS (SELECT 1 FROM tax_return_input_claims y WHERE y.property_id = x.property_id AND y.reverses_claim_id = x.id AND y.released_at IS NULL)
 ORDER BY j.journal_date, s.id;
 
 -- name: ReleaseClaims :exec

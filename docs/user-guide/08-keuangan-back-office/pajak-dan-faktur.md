@@ -72,6 +72,11 @@
 - **Bulan baru bisa dilaporkan** setelah bulan itu berakhir, setiap hari bisnisnya ditutup dengan jurnalnya, pajak di folio sama dengan buku besar, dan bulan sebelumnya sudah dilaporkan. Alasan yang menghalangi tampil dalam bahasa Inggris, misalnya `The month is not over yet.` (bulan belum berakhir).
 - **Membatalkan SPT** hanya bisa kalau belum ada pembayaran dan tidak ada SPT bulan yang lebih baru: klik **Batalkan SPT…**, isi **Alasan**, lalu **Lanjutkan** ke persetujuan.
 - **Faktur pajak yang salah** di-void (**Void…**, dengan persetujuan), lalu klik **Terbitkan faktur pengganti**.
+- **PPN komisi kartu dari settlement yang dibatalkan:**
+  - Kalau settlement dibatalkan sebelum SPT bulannya dilaporkan, PPN komisinya tidak pernah diklaim.
+  - Kalau settlement dibatalkan setelah SPT yang mengklaimnya dilaporkan, SPT itu tidak diubah. SPT bulan berikutnya memuat baris pembalik bernilai minus, dengan label "Pembalik klaim masa {bulan} ({nomor SPT}) – void settlement {nomor jurnal}". Settlement yang dicatat ulang diklaim sebagai klaim baru. Lihat [Settlement kartu, e-wallet, dan QRIS](settlement-kartu.md).
+
+  > ⚠️ Penting: perlakuan ini, yaitu menarik kembali klaim di SPT berikutnya dan bukan membetulkan SPT bulan asalnya, perlu dikonfirmasi oleh konsultan pajak hotel. Sistem tidak memutuskan pembetulan SPT. Kalau konsultan meminta pembetulan SPT bulan asal, lakukan di luar sistem sesuai arahannya.
 - **Hotel bukan PKP** hanya melihat "Properti bukan PKP pada tanggal ini." di kartu faktur pajak.
 - **Judul "SPT Masa PPN"** juga dipakai untuk PB1.
 - **Lembar kerja dan faktur** menampilkan kode biaya mentah, misalnya `ROOM`.

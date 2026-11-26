@@ -23,9 +23,11 @@ const rule = { id: 1, payment_method: 'CARD', mdr_rate: '2', vat_rate: '11', set
 const settlement = {
   id: 3, bank_account_id: 1, account_key: 'CARD', journal_date: '2026-10-01', journal_number: 'JV9', gross: '1000000', net: '976000', fee: '24000', mdr_amount: '21800', vat_amount: '2200', vat_treatment: 'CREDITABLE',
   expected_mdr: '20000', expected_vat: '2200', proposed_vat: '2200', mdr_rate: '2', vat_rate: '11', payments_without_vat_rate: 0, mdr_variance: '1800', vat_variance: '0', payments: 1, created_at: '2026-10-01T00:00:00Z',
+  status: 'POSTED', voided_at: null, void_reason: null, void_journal_number: null, statement_id: 4, statement_line_no: 1,
 }
+const voidedSettlement = { ...settlement, id: 2, journal_number: 'JV8', status: 'VOIDED', voided_at: '2026-10-02T00:00:00Z', void_reason: 'wrong batch', void_journal_number: 'JV10', statement_id: 0, statement_line_no: 0 }
 
-function mountView(permissions = ['bank.view', 'bank.manage']) {
+function mountView(permissions = ['bank.view', 'bank.manage', 'bank.reconcile']) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -33,7 +35,7 @@ function mountView(permissions = ['bank.view', 'bank.manage']) {
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/expected')) return { data: expected }
     if (path.endsWith('/card-fee-rules')) return { data: { data: [rule] } }
-    return { data: { data: [settlement] } }
+    return { data: { data: [settlement, voidedSettlement] } }
   })
   POST = vi.fn().mockResolvedValue({ data: rule })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -129,6 +131,57 @@ describe('BankCardsView', () => {
     await w.get('[data-testid=rule-form]').trigger('submit')
     await flushPromises()
     expect(POST.mock.calls[0]?.[1].body).toEqual({ payment_method: 'CARD', mdr_rate: '0.7', vat_rate: '11', settlement_days: 1, effective_from: '2026-10-15' })
+  })
+
+  it('voids a settlement with a reason and an approval for its gross', async () => {
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('[data-testid=voided-JV8]').text()).toBe('Voided')
+    expect(w.get('[data-testid=settlement-JV8]').text()).toContain('JV10 · wrong batch')
+    expect(w.find('[data-testid=void-JV8]').exists()).toBe(false)
+    await w.get('[data-testid=void-JV9]').trigger('click')
+    expect(w.get('[data-testid=void-form]').text()).toContain('1,000,000')
+    expect((w.get('[data-testid=void-ask]').element as HTMLButtonElement).disabled).toBe(true)
+    await w.get('input[name=reason]').setValue('  wrong batch  ')
+    await w.get('[data-testid=void-form]').trigger('submit')
+    const dialog = w.findComponent({ name: 'ApprovalDialog' })
+    expect(dialog.props('kind')).toBe('BANK_SETTLEMENT_VOID')
+    expect(dialog.props('amount')).toBe('1000000')
+    POST = vi.fn().mockResolvedValue({ data: { ...settlement, status: 'VOIDED' } })
+    dialog.vm.$emit('approve', { email: 'a@b.c', password: 'pw' })
+    await flushPromises()
+    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/bank/card-settlements/{id}/void', {
+      params: { path: { propertyId: 7, id: 3 } },
+      body: { reason: 'wrong batch', approval: { email: 'a@b.c', password: 'pw' } },
+    })
+    expect(w.get('[data-testid=notice]').text()).toContain('Settlement JV9 is voided')
+    expect(w.findComponent({ name: 'ApprovalDialog' }).exists()).toBe(false)
+  })
+
+  it('says what reopening the month means when the void is in a closed month, and points to a manual journal', async () => {
+    const w = mountView()
+    await flushPromises()
+    await w.get('[data-testid=void-JV9]').trigger('click')
+    await w.get('input[name=reason]').setValue('wrong')
+    await w.get('[data-testid=void-form]').trigger('submit')
+    const { ApiError } = await import('@/api/problem')
+    POST = vi.fn().mockRejectedValue(new ApiError({ status: 409, code: 'PERIOD_CLOSED', title: 'closed', detail: 'the books of 2026-09 are closed', context: { period: '2026-09-01', month: '2026-09' } } as never))
+    w.findComponent({ name: 'ApprovalDialog' }).vm.$emit('approve', { email: 'a@b.c', password: 'pw' })
+    await flushPromises()
+    const alert = w.get('[data-testid=void-period-closed]').text()
+    expect(alert).toContain('The books of Sep 2026 are closed')
+    expect(alert).toContain("changes the figures of that month's reports")
+    expect(alert).toContain('accountant')
+    expect(alert).toContain('Manual journals')
+    expect(w.get('[data-testid=void-period-closed] a').attributes('href')).toBe('/accounting/journals')
+    expect(w.findComponent({ name: 'ApprovalDialog' }).exists()).toBe(false)
+  })
+
+  it('offers the void only with bank.reconcile', async () => {
+    const w = mountView(['bank.view', 'bank.manage'])
+    await flushPromises()
+    expect(w.find('[data-testid=void-JV9]').exists()).toBe(false)
+    expect(w.get('[data-testid=settlement-JV9]').text()).toContain('Posted')
   })
 
   it('hides the rule form without bank.manage and needs bank.view', async () => {

@@ -39,6 +39,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/card-fee-rules", httpx.HandlerFunc(h.createFeeRule))
 	mux.Handle("GET "+p+"/card-settlements/expected", httpx.HandlerFunc(h.expectedSettlements))
 	mux.Handle("GET "+p+"/card-settlements", httpx.HandlerFunc(h.settlements))
+	mux.Handle("POST "+p+"/card-settlements/{id}/void", httpx.HandlerFunc(h.voidSettlement))
 	mux.Handle("POST "+p+"/statements/{id}/lines/{lineId}/settle", httpx.HandlerFunc(h.settle))
 	mux.Handle("POST "+p+"/statements/{id}/reconcile", httpx.HandlerFunc(h.reconcile))
 	mux.Handle("POST "+p+"/statements/{id}/reopen", httpx.HandlerFunc(h.reopen))
@@ -288,6 +289,26 @@ func (h *Handler) reopen(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, d)
+}
+
+func (h *Handler) voidSettlement(w http.ResponseWriter, r *http.Request) error {
+	pid, err := tenancy.PropertyID(r)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(r, "id", errSettlementNotFound())
+	if err != nil {
+		return err
+	}
+	var in VoidSettlementInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	row, err := h.svc.VoidSettlement(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, row)
 }
 
 func (h *Handler) settlementLines(w http.ResponseWriter, r *http.Request) error {
