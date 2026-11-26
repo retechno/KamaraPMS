@@ -34,10 +34,10 @@ Disusun dari kendala yang sudah dikonfirmasi lewat kode atau run screenshot. Uru
 
 ## Harus diisi sebelum panduan dibagikan
 
-| Tempat | Isian | Keterangan |
-|---|---|---|
-| `README.md`, bagian **Bantuan dan kontak** | `[ISI: email dukungan]` | Alamat email tim dukungan KamaraPMS |
-| `README.md`, bagian **Bantuan dan kontak** | `[ISI: WhatsApp dukungan]` | Nomor WhatsApp tim dukungan KamaraPMS |
+| Tempat | Isian | Keterangan | Status |
+|---|---|---|---|
+| `README.md`, bagian **Bantuan dan kontak** | `[ISI: email dukungan]` | Alamat email tim dukungan KamaraPMS | Belum diisi: nilainya belum diberikan pemilik (2026-11-26) |
+| `README.md`, bagian **Bantuan dan kontak** | `[ISI: WhatsApp dukungan]` | Nomor WhatsApp tim dukungan KamaraPMS | Belum diisi: nilainya belum diberikan pemilik (2026-11-26) |
 
 Semua halaman yang menyuruh staf menghubungi tim KamaraPMS merujuk ke bagian itu, jadi cukup diisi di satu tempat. Cari sisa placeholder dengan `grep -rn "\[ISI:" docs/user-guide`.
 
@@ -444,4 +444,4 @@ Saran perekaman: pakai hotel contoh dari run screenshot (`E2E_DOCS=1 … scripts
 | Pemeriksaan kode | `npm run e2e:types` dan `npm run type-check` lolos; semua berkas di `docs/user-guide` dan `web/e2e/docs` ber-line ending LF |
 | 🐞 Kendala yang diketahui | **25** (KD-01 sampai KD-25); 7 berdampak uang |
 | PERLU VERIFIKASI | **0** |
-| Harus diisi pemilik sebelum dibagikan | 2 placeholder di README (lihat bagian "Harus diisi sebelum panduan dibagikan") |
+| Harus diisi pemilik sebelum dibagikan | 2 placeholder di README, belum diisi (lihat bagian "Harus diisi sebelum panduan dibagikan") |
