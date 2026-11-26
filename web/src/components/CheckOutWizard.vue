@@ -42,7 +42,6 @@ const isCompany = (f: Folio): boolean => (f as { folio_type?: string }).folio_ty
 // must be paid or refunded first. Before, the wizard added the night audit's dry run of the booked stay, so an early
 // leaver who arrived before today was asked for tonight, which the check-out never posts.
 const preview = ref<CheckOutPreview | null>(null)
-const decimals = computed(() => property.current?.currency_decimals ?? 0)
 const previewOf = (f: Folio) => preview.value?.folios.find((p) => p.folio_id === f.id)
 // The amount still to settle on a folio, as the server says it (a decimal string); without a preview, its balance.
 const dueText = (f: Folio): string => previewOf(f)?.due ?? f.balance
