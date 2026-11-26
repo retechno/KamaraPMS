@@ -1,11 +1,11 @@
 # 40. Voiding a card settlement (KD-05)
 
-Status: **PLAN, awaiting the owner's approval (2026-11-26).** Nothing is built; this document has no code and no migration.
-It answers KD-05 of the user guide report (`docs/user-guide/_laporan.md`): a wrong card, e-wallet or QRIS settlement cannot be
-undone, and unmatching its statement line (`internal/bankrec/matching.go:40-70`, `Unclear`) leaves the journal behind. It
-replaces the rule "a settlement is final" of `15-card-fee-vat.md` §5, which named this feature as separate work and kept room
-for it (the reversing claim of the VAT return). The questions for the owner are in §11. **R** marks a recommendation that
-waits for an answer.
+Status: **APPROVED by the owner on 2026-11-27, with the conditions written into §3, §4.3, §5 and §8; to be built with
+migration 00101.** It answers KD-05 of the user guide report (`docs/user-guide/_laporan.md`): a wrong card, e-wallet or QRIS settlement
+cannot be undone, and unmatching its statement line (`internal/bankrec/matching.go:40-70`, `Unclear`) leaves the journal
+behind. It replaces the rule "a settlement is final" of `15-card-fee-vat.md` §5, which named this feature as separate work and
+kept room for it (the reversing claim of the VAT return). The decisions of the owner are in §11. **R** marks what was a
+recommendation; each one was approved.
 
 ## 1. What exists, and what goes wrong
 
@@ -76,7 +76,12 @@ So for gross 1,000,000, net 977,800, MDR 20,000 and VAT 2,200 (CREDITABLE):
   - or leave the settlement and post a manual journal in an open month, as today.
 
   The void does not reopen a month by itself.
-- The alternative the owner may prefer is in V1: reverse on the business date, and let `Settle` take a date too.
+- **The message of that refusal** (condition of V1) is the void's own, in English and Indonesian. It names the month, and it
+  says that reopening the month changes the figures of that month's reports, so the accountant decides it. The server writes
+  it (`PERIOD_CLOSED`, context `period` with the first day of the month and `month` as `2026-09`), and the void dialog shows its
+  own text for that code. The guide page `settlement-kartu.md` says the same in the words of the staff and gives the other
+  way out: a manual journal in the current month, with a link to the page on manual journals.
+- The alternative of V1 that was not chosen: reverse on the business date, and let `Settle` take a date too.
 
 The posting itself follows the rules of every module journal:
 - `RequireOpenBusinessDay(ForShare)` first;
@@ -134,6 +139,10 @@ with its statement line.
   - matched with something else;
   - adjusted.
 
+**The trail of what is deleted** (owner's addition): the audit row of the void (§8) lists every clearing it deletes, each with
+its id, its statement, the number of its statement line and its amount. The deleted rows are therefore never lost from the
+audit, even though `bank_clearings` itself keeps no history.
+
 Then the original bank debit (+net) and the mirror's bank credit (−net) are **cleared on their own** (`statement_line_id` NULL,
 as `Clear` already does) in the statement whose matching was removed. They add up to zero, so:
 - they leave the uncleared list;
@@ -167,11 +176,29 @@ For the last row:
 - **Migration:** the check `tax_return_input_claims_settlement_ck` is redefined to allow a reversing settlement claim
   (`reverses_claim_id NOT NULL AND amount < 0`). The live unique index stays as it is.
 - **The correct settlement made afterwards** is claimed as a new one.
-- **No refusal is needed and no tax lock is taken.** A void that races a filing either:
-  - lands before it: the filing does not see the settlement;
-  - or lands after it: the next return reverses the claim.
+- **The reversing claim names the claim it takes back** (condition of V3). It is a claim with `reverses_claim_id`, so the
+  original claim, its return and its month are always reachable. The return and the worksheet show it with the month and the
+  number of that return and the number of the settlement, as "Reversal of the claim of September 2026 (TXR-…) – void of
+  settlement JV-…" / "Pembalik klaim masa September 2026 (TXR-…) – void settlement JV-…".
+- **The tax treatment is to be confirmed by the hotel's tax consultant** (condition of V3). The system takes the claim back in
+  the next return (a reduction in a later month). Whether the law asks for that or for an amended return of the original month
+  (*pembetulan SPT*) is the consultant's call; the system does not decide on, nor make, an amended return. The guide page
+  `pajak-dan-faktur.md` says so.
+- **No refusal is needed and no tax lock is taken.** A void and a filing that run at the same time end in one of three orders,
+  and each one is right:
+  1. **The void commits before the filing reads the settlements.** The filing does not see the settlement
+     (`status = 'POSTED'`) and claims nothing for it.
+  2. **The filing commits before the void starts.** The return holds the claim; the next return reverses it.
+  3. **The filing reads the settlement while it is still `POSTED`, the void commits, and only then does the filing commit.**
+     Both run under READ COMMITTED and take no lock in common that would order them: the void holds the bank account (48), the
+     filing the tax profile (49), and both share the business day and the accounting settings. So the filing writes a claim of a
+     settlement that is `VOIDED` by the time it commits. Nothing refuses it: the claim is a row of the return, and its total
+     matches the return, as the deferred check `tax_returns_claims_match_input` asks. The result is the same as order 2: the
+     claim stands in this return, and the next return finds a live claim of a `VOIDED` settlement that no live return reverses,
+     and reverses it. The input VAT account ends at zero over the two months: the settlement debits it, the void credits it,
+     the offset of this return credits it, and the offset of the next return debits it back.
 
-  The order of locks therefore does not grow.
+  The order of locks therefore does not grow. Test 19 runs order 3 on purpose (§9).
 
 ## 6. Permissions and approval
 
@@ -264,7 +291,8 @@ Existing codes that also apply:
 **Audit** (in the same transaction): `bank.settlement_voided` on the statement, with:
 - the settlement, gross, net, fee, VAT and its treatment;
 - the original and reversal journal numbers;
-- the reason, `approved_by`, and the statement lines unmatched.
+- the reason, `approved_by`;
+- every clearing deleted, with its id, statement, statement line number and amount (§4.3).
 
 **Screens** (Tailwind and `components/ui`, i18n EN and ID):
 - **Settlements made** (`Settlement yang dibuat`):
@@ -340,8 +368,10 @@ Everything runs on real PostgreSQL (`dbtest`).
     - one reversal journal, one audit row, the items released once.
 18. **A void and a re-settle** of the same payment lines on another bank account's statement: never two live items, and the
     loser gets a clean error.
-19. **A void and a VAT filing** of the same month at the same time: the claim either does not exist or is reversed by the next
-    return. Never a live claim of a voided settlement that no return will reverse.
+19. **A void and a VAT filing** of the same month, in order 3 of §5: the filing has read the settlement as `POSTED` and is held
+    (the test holds the row of the return's number sequence) while the void commits; then the filing commits. The return holds
+    the claim, the next month's worksheet and return reverse it, and the input VAT account is back at zero. Never a live claim
+    of a voided settlement that no return will reverse.
 
 **Web and end to end:**
 
@@ -365,11 +395,16 @@ Everything runs on real PostgreSQL (`dbtest`).
 - Voiding in a closed month without reopening it.
 - Undoing a void.
 
-## 11. Questions for the owner
+## 11. Decisions of the owner
 
-| # | Question | Recommendation |
+All four were **approved by the owner on 2026-11-27** (*disetujui pemilik*), as recommended, with the conditions below.
+
+| # | Question | Decision |
 |---|---|---|
-| V1 | The date of the reversal: the date of the settlement (its month must be open), or the business date? | **The date of the settlement** (§3). The corrected settlement is dated the statement line anyway, and the month of the statement stays right. The alternative, the business date, would also need a date on `Settle` and leaves the bank book of the statement's month wrong. |
-| V2 | The approval: a new kind `BANK_SETTLEMENT_VOID` with the gross as its amount, or the existing `BANK` without an amount? | **The new kind** (§6). |
-| V3 | A VAT claim already filed: reverse it in the next return, or refuse the void while it is claimed? | **Reverse it in the next return** (§5). A refusal would block every settlement whose return was filed and paid (a paid return cannot be voided), so most voids would be impossible. |
-| V4 | Unclear of a settlement's matching: refuse it (void instead), or keep it allowed? | **Refuse it** (§4.4). It is the source of the KD-05 trap. |
+| V1 | The date of the reversal: the date of the settlement (its month must be open), or the business date? | **The date of the settlement**, the date of the statement line, with `PERIOD_CLOSED` when its month is closed (§3). Condition: the message names the month and says that reopening it changes that month's reports, so the accountant decides; the guide explains it and gives the manual journal in the current month as the other way, with a link. |
+| V2 | The approval: a new kind `BANK_SETTLEMENT_VOID` with the gross as its amount, or the existing `BANK` without an amount? | **The new kind** `BANK_SETTLEMENT_VOID`, the gross as its amount, approved with `correction.approve`, a reason required (§6). |
+| V3 | A VAT claim already filed: reverse it in the next return, or refuse the void while it is claimed? | **Reverse it in the next return** (`ReversibleSettlementClaims`, §5). Conditions: the reversing claim keeps and shows the claim it reverses (the month and the return), labelled as the reversal of that month's claim for the void of the settlement; §5 and `pajak-dan-faktur.md` say that the treatment is for the hotel's tax consultant to confirm, and that the system does not decide on an amended return. |
+| V4 | Unclear of a settlement's matching: refuse it (void instead), or keep it allowed? | **Refuse it** with `CLEARING_IS_SETTLEMENT` (§4.4). Condition: the message, in English and Indonesian, sends the user to Void settlement. |
+
+The owner also asked, before the build: the audit of the void lists the clearings it deletes (§4.3, §8); §5 spells out the
+race of a filing that reads the settlement before the void commits, and test 19 runs that order (§9).
