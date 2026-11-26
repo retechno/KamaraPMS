@@ -6845,7 +6845,7 @@ export const id: Messages = {
     },
     make: {
       title: 'Jadikan aset', titleBatch: 'Jadikan batch peralatan operasional', account: 'akun {account}', cost: 'biaya {cost}', units: 'Jumlah unit', inServiceDate: 'Tanggal mulai pakai',
-      startRule: 'Mulai disusutkan', startInService: 'Bulan mulai pakai ({month}) · bawaan properti', startNext: 'Bulan berikutnya ({month})',
+      startRule: 'Mulai disusutkan', startInService: 'Bulan mulai pakai ({month})', startNext: 'Bulan berikutnya ({month})', propertyDefault: '· bawaan properti',
       startHint: 'Bisa diubah di halaman aset selama aset ini belum pernah disusutkan; setelah penyusutan pertama terposting, terkunci.',
       batchHint: 'Jumlah set dalam batch ini (satu aset).', unit: 'Unit', perMonth: 'Per bulan', splitHint: 'Biaya dibagi rata; selisih pembulatan masuk ke unit terakhir.',
       belowThreshold: 'Biayanya di bawah batas kapitalisasi {threshold}. Tetap boleh dijadikan aset.',

@@ -201,6 +201,22 @@ describe('the waiting list', () => {
     expect(callTo(POST, '/assets/from-line')?.[1].body.start_rule).toBe('NEXT_MONTH')
   })
 
+  // KD-10: the dialog started on the month in service whatever the settings said (37-fixed-assets.md 4.2.4, A8: the start rule of a new asset defaults to the property's)
+  for (const rule of ['NEXT_MONTH', 'IN_SERVICE_MONTH'] as const) {
+    it(`KD-10: starts a new asset with the start rule of the property settings (${rule})`, async () => {
+      const settings = { register_from: '2026-10-01', capitalization_threshold: '2500000', start_rule: rule, oe_policy: 'EXPENSE', oe_default_months: 36 }
+      await at(MANAGE, (path) => (path.endsWith('/assets/settings') ? { data: settings } : ok(path)))
+      await click('[data-testid=make-1]')
+      expect((document.body.querySelector(`input[name=start_rule][value=${rule}]`) as HTMLInputElement).checked).toBe(true)
+      // "the default of the property" stands by the option the settings name, not always by the month in use
+      const other = rule === 'NEXT_MONTH' ? 'IN_SERVICE_MONTH' : 'NEXT_MONTH'
+      expect(body(`[data-testid=start-rule-${rule}]`).text()).toContain('the default of the property')
+      expect(body(`[data-testid=start-rule-${other}]`).text()).not.toContain('the default of the property')
+      await click('[data-testid=make-confirm]')
+      expect(callTo(POST, '/assets/from-line')?.[1].body.start_rule).toBe(rule)
+    })
+  }
+
   it('dismisses a line with a reason', async () => {
     await at()
     await click('[data-testid=dismiss-1]')

@@ -6848,7 +6848,7 @@ export const en = {
     },
     make: {
       title: 'Make an asset', titleBatch: 'Make a batch of operating equipment', account: 'account {account}', cost: 'cost {cost}', units: 'Number of units', inServiceDate: 'Date in service',
-      startRule: 'Depreciation starts', startInService: 'The month it is put in use ({month}) · the default of the property', startNext: 'The month after ({month})',
+      startRule: 'Depreciation starts', startInService: 'The month it is put in use ({month})', startNext: 'The month after ({month})', propertyDefault: '· the default of the property',
       startHint: 'It can be changed on the asset page until it has been depreciated; after the first depreciation it is locked.',
       batchHint: 'The sets in this batch (one asset).', unit: 'Unit', perMonth: 'Per month', splitHint: 'The cost is divided equally; the rounding difference goes to the last unit.',
       belowThreshold: 'The cost is below the capitalisation threshold {threshold}. You can still make it an asset.',

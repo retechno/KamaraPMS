@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AssetCategory, AssetLocation, AssetWaitingLine, AssetWaitingPage } from '@/api/types'
+import type { AssetCategory, AssetLocation, AssetSettings, AssetWaitingLine, AssetWaitingPage } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -27,6 +27,8 @@ const page = ref<AssetWaitingPage | null>(null)
 const rows = ref<AssetWaitingLine[]>([])
 const categories = ref<AssetCategory[]>([])
 const locations = ref<AssetLocation[]>([])
+// KD-10: the start rule a new asset takes by default is the property's (37-fixed-assets.md 4.2.4, A8)
+const startRule = ref<AssetSettings['start_rule']>('IN_SERVICE_MONTH')
 const loaded = ref(false)
 const loadingMore = ref(false)
 const error = ref<ApiError | null>(null)
@@ -79,6 +81,12 @@ async function loadMasters(): Promise<void> {
     locations.value = l.data?.data ?? []
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  }
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/settings', { params: { path: { propertyId } } })
+    if (data?.start_rule === 'IN_SERVICE_MONTH' || data?.start_rule === 'NEXT_MONTH') startRule.value = data.start_rule
+  } catch {
+    // without the settings the dialog starts on the month in service, the default of a property that has none
   }
 }
 watch(pid, () => { void loadMasters(); void load() }, { immediate: true })
@@ -211,7 +219,7 @@ async function made(): Promise<void> {
     <p class="m-0 text-xs text-muted-foreground">{{ t('assets.waiting.note') }}</p>
   </template>
 
-  <AssetMakeDialog v-if="pid !== null" :line="making" :categories="categories" :locations="locations" :threshold="page?.capitalization_threshold ?? '0'" :property-id="pid" @close="making = null" @done="made" />
+  <AssetMakeDialog v-if="pid !== null" :line="making" :categories="categories" :locations="locations" :threshold="page?.capitalization_threshold ?? '0'" :start-rule="startRule" :property-id="pid" @close="making = null" @done="made" />
 
   <AssetAddValueDialog v-if="pid !== null" :line="adding" :property-id="pid" :preset-asset-id="addTo" @close="adding = null" @done="made" />
 
