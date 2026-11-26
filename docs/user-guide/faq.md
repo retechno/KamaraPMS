@@ -122,9 +122,9 @@ Klik **Batalkan check-in** pada hari yang sama, sebelum ada biaya di folio dan s
 Semua folio tamu harus bersaldo nol, termasuk folio yang ditagihkan ke perusahaan. Di samping tombol **Check-out** tertulis alasannya, misalnya "Bayar dulu saldo 828.850.". Kalau tamu kelebihan bayar, muncul "Kembalikan … ke tamu dulu.": klik **Buka folio**, lakukan refund, lalu kembali ke check-out.
 → [Check-out](01-front-desk/check-out.md)
 
-### Tamu pulang lebih awal, kenapa tombol Check-out tidak bisa diklik?
+### Tamu pulang lebih awal. Berapa yang harus dibayar?
 
-Untuk tamu yang sudah menginap sejak sebelum hari ini lalu pulang lebih awal, wizard check-out meminta biaya kamar malam ini, padahal malam itu tidak ditagih (kendala yang diketahui). Jangan menerima pembayaran sebesar yang diminta wizard. Terima pembayaran sebesar saldo di halaman folio, lalu minta supervisor menyelesaikan check-out sebelum audit malam. Kalau supervisor tidak bisa, hubungi administrator hotel (lihat [Bantuan dan kontak](README.md#bantuan-dan-kontak)).
+Centang **Konfirmasi keberangkatan lebih awal** di kotak **Check-out**, lalu terima jumlah yang diminta di sana. Tamu yang sudah menginap sejak sebelum hari ini dan pulang pada siang hari tidak ditagih untuk malam ini, jadi yang dibayar cukup saldo folionya. Tamu yang tiba hari ini tetap membayar malam ini.
 → [Check-out](01-front-desk/check-out.md)
 
 ### Tagihan tamu dibayar perusahaan. Apakah check-out memindahkannya ke perusahaan?

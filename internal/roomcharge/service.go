@@ -297,8 +297,38 @@ func (s *Service) dryRun(ctx context.Context, p auth.Principal, propertyID int64
 	if err != nil {
 		return Report{}, err
 	}
+	return s.calculate(ctx, propertyID, snap, day.BusinessDate, decimals)
+}
+
+// PreviewDeparture is the dry run of one stay as if it ended on departure: the room charges a check-out on the
+// open business date bd posts once it has settled the departure there (frontdesk.CheckOut). Nothing is written.
+// It authorizes nothing: the caller has (frontdesk.checkout).
+func (s *Service) PreviewDeparture(ctx context.Context, p auth.Principal, propertyID int64, bd civil.Date, stayID int64, departure civil.Date) ([]Result, error) {
+	decimals, err := s.decimals(ctx, propertyID)
+	if err != nil {
+		return nil, err
+	}
+	snap, err := s.loader.Load(ctx, p.TenantID, propertyID, []int64{stayID})
+	if err != nil {
+		return nil, err
+	}
+	for i := range snap.Stays {
+		if snap.Stays[i].ID == stayID {
+			snap.Stays[i].Departure = departure
+		}
+	}
+	rep, err := s.calculate(ctx, propertyID, snap, bd, decimals)
+	if rep.Items == nil {
+		rep.Items = []Result{}
+	}
+	return rep.Items, err
+}
+
+// calculate evaluates a snapshot up to the business date and prices the READY nights with the charge calculation
+// service: the amounts a posting run would post, nothing written.
+func (s *Service) calculate(ctx context.Context, propertyID int64, snap expected.Snapshot, bd civil.Date, decimals int32) (Report, error) {
 	var rep Report
-	for _, c := range expected.Evaluate(snap, expected.Scope{UpToDate: day.BusinessDate}) {
+	for _, c := range expected.Evaluate(snap, expected.Scope{UpToDate: bd}) {
 		r := resultOf(c, decimals)
 		if c.Status == expected.StatusReady {
 			mode := chargecalc.PriceMode(c.PriceMode)

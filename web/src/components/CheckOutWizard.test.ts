@@ -34,6 +34,7 @@ describe('CheckOutWizard', () => {
     POST = vi.fn().mockResolvedValue({ data: result })
     GET = vi.fn(async (path: string) => {
       if (path.endsWith('/cashier/settings')) return { data: { require_shift_for_cash: false } }
+      if (path.endsWith('/check-out/preview')) return { data: null } // no preview: the wizard shows the balances
       return { data: detail('2026-09-30', '0') }
     })
   })
@@ -210,34 +211,64 @@ describe('CheckOutWizard', () => {
     expect(w.emitted('paid')).toHaveLength(1)
   })
 
-  describe('the room charges the check-out posts itself', () => {
-    const desk = ['payment.post', 'frontdesk.checkout', 'folio.post_charge']
-    const preview = (total: string, status = 'READY') => ({ data: { business_date: '2026-09-30', items: [{ stay_id: 5, folio_id: 8, service_date: '2026-09-30', total, status }], totals: { ready_count: 1, ready_total: total } } })
-    const previewCalls = () => POST.mock.calls.filter((c) => String(c[0]).endsWith('/room-charges/preview'))
+  describe('what the check-out preview of the server says', () => {
+    // GET /stays/{id}/check-out/preview: the departure the check-out settles, and per folio balance + room charges = due
+    const pv = (o: { balance?: string; rooms?: string; due?: string; early?: boolean; departure?: string } = {}) => ({
+      data: {
+        business_date: '2026-09-30', departure_date: o.departure ?? '2026-09-30', early_departure: o.early ?? false, room_charges: [],
+        folios: [{ folio_id: 8, folio_number: 'FOL000001', folio_type: 'GUEST', balance: o.balance ?? '0', room_charges: o.rooms ?? '0', due: o.due ?? o.balance ?? '0' }],
+      },
+    })
+    const previewCalls = () => GET.mock.calls.filter((c) => String(c[0]).endsWith('/check-out/preview'))
+    const serve = (preview: () => unknown, stay: () => unknown) => vi.fn(async (path: string) => {
+      if (path.endsWith('/cashier/settings')) return { data: { require_shift_for_cash: false } }
+      if (path.endsWith('/check-out/preview')) return preview()
+      return { data: stay() }
+    })
 
-    it('asks for tonight\'s room charge on a folio that is at zero today', async () => {
-      POST = vi.fn(async (path: string) => (path.endsWith('/room-charges/preview') ? preview('550000') : { data: { id: 1 } }))
-      const w = mountWizard(owing('0'), desk)
+    it('asks for the room charges the check-out posts on a folio that is at zero today', async () => {
+      GET = serve(() => pv({ balance: '0', rooms: '550000', due: '550000' }), () => owing('0'))
+      POST = vi.fn().mockResolvedValue({ data: { id: 1 } })
+      const w = mountWizard(owing('0'))
       await flushPromises()
-      expect(previewCalls()[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7 } }, body: { business_date: '2026-09-30', stay_ids: [5] } })
+      expect(previewCalls()[0]?.[1]).toMatchObject({ params: { path: { propertyId: 7, id: 5 } } })
       expect(w.get('[data-testid=tonight-charge-8]').text()).toContain('550')
       expect((w.get('input[name=pay_amount]').element as HTMLInputElement).value).toBe('550000')
       expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
       expect(w.get('[data-testid=checkout-due-reason]').text()).toContain('550')
+      expect(POST.mock.calls.some((c) => String(c[0]).includes('/night-audit/'))).toBe(false) // the night audit's dry run is not read any more
     })
 
-    it('adds the charge to a balance and lets the check-out go once both are paid', async () => {
+    it('KD-06: an early leaver who arrived before today pays the balance only, and the check-out goes on', async () => {
+      // the guest is booked to 3 Oct and leaves on 1 Oct in the daytime: the check-out cuts the stay to today and posts nothing for tonight
+      const stay = { ...(owing('605000') as object), stay: { id: 5, stay_number: 'STY000001', arrival_date: '2026-09-29', departure_date: '2026-10-03', status: 'OPEN', version: 3 } }
+      GET = serve(() => pv({ balance: '605000', early: true, departure: '2026-10-01' }), () => stay)
+      const w = mountWizard(stay as never)
+      await flushPromises()
+      expect(w.find('[data-testid=tonight-charge-8]').exists()).toBe(false)
+      expect((w.get('input[name=pay_amount]').element as HTMLInputElement).value).toBe('605000')
+      expect(w.get('[data-testid=step-departure]').text()).toContain('2026') // the stay ends on the date the server says
+      GET = serve(() => pv({ balance: '0', early: true, departure: '2026-10-01' }), () => ({ ...stay, folios: [{ id: 8, folio_number: 'FOL000001', folio_type: 'GUEST', status: 'OPEN', balance: '0' }] }))
+      POST = vi.fn(async (path: string) => (path.endsWith('/payments') ? { data: { id: 1 } } : { data: result }))
+      await w.get('select[name=pay_method]').setValue('CARD')
+      await w.get('[data-testid=checkout-pay-submit]').trigger('click')
+      await flushPromises()
+      await w.get('input[name=confirm_early]').setValue(true)
+      expect(w.find('[data-testid=checkout-due-reason]').exists()).toBe(false)
+      expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeUndefined()
+      await w.get('[data-testid=checkout-submit]').trigger('click')
+      await flushPromises()
+      expect(POST.mock.calls.find((c) => String(c[0]).endsWith('/check-out'))?.[1]).toMatchObject({ body: { confirm_early_departure: true } })
+    })
+
+    it('reads the preview again after a payment and lets the check-out go once the folio is at zero', async () => {
       let balance = '150000'
+      GET = serve(() => pv({ balance, rooms: '550000', due: balance === '150000' ? '700000' : '0' }), () => owing(balance))
       POST = vi.fn(async (path: string) => {
-        if (path.endsWith('/room-charges/preview')) return preview('550000')
         if (path.endsWith('/payments')) { balance = '-550000'; return { data: { id: 1 } } }
         return { data: result }
       })
-      GET = vi.fn(async (path: string) => {
-        if (path.endsWith('/cashier/settings')) return { data: { require_shift_for_cash: false } }
-        return { data: owing(balance) }
-      })
-      const w = mountWizard(owing('150000'), desk)
+      const w = mountWizard(owing('150000'))
       await flushPromises()
       expect((w.get('input[name=pay_amount]').element as HTMLInputElement).value).toBe('700000')
       await w.get('select[name=pay_method]').setValue('CARD')
@@ -249,28 +280,25 @@ describe('CheckOutWizard', () => {
       expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeUndefined()
     })
 
-    it('keeps today\'s balance when the dry run is refused or the desk may not ask for it', async () => {
-      POST = vi.fn(async (path: string) => {
-        if (path.endsWith('/room-charges/preview')) throw new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'BUSINESS_DATE_MISMATCH', detail: 'stale' })
-        return { data: { id: 1 } }
-      })
-      const w = mountWizard(owing('250000'), desk)
+    it('asks every role that may check out, and keeps the balance when the preview fails', async () => {
+      GET = serve(() => pv({ balance: '0', rooms: '550000', due: '550000' }), () => owing('0'))
+      mountWizard(owing('0'), ['frontdesk.checkout']) // no folio.post_charge, no nightaudit.run: the same amounts
+      await flushPromises()
+      expect(previewCalls()).toHaveLength(1)
+
+      GET = serve(() => { throw new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'STAY_NOT_OPEN', detail: 'gone' }) }, () => owing('250000'))
+      const w = mountWizard(owing('250000'))
       await flushPromises()
       expect((w.get('input[name=pay_amount]').element as HTMLInputElement).value).toBe('250000')
       expect(w.find('[data-testid=tonight-charge-8]').exists()).toBe(false)
-
-      POST = vi.fn().mockResolvedValue({ data: { id: 1 } })
-      mountWizard(owing('250000')) // no folio.post_charge, no nightaudit.run
-      await flushPromises()
-      expect(previewCalls()).toHaveLength(0)
     })
 
-    it('a night already posted is not counted again', async () => {
-      POST = vi.fn(async (path: string) => (path.endsWith('/room-charges/preview') ? preview('550000', 'ALREADY_POSTED') : { data: { id: 1 } }))
-      const w = mountWizard(owing('0'), desk)
+    it('a folio in credit after the room charges is refunded first, with the amount the server says', async () => {
+      GET = serve(() => pv({ balance: '-700000', rooms: '550000', due: '-150000' }), () => owing('-700000'))
+      const w = mountWizard(owing('-700000'))
       await flushPromises()
-      expect(w.find('[data-testid=checkout-pay]').exists()).toBe(false)
-      expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeUndefined()
+      expect(w.get('[data-testid=refund-first-8]').text()).toContain('150')
+      expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
     })
   })
 })

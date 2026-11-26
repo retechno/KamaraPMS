@@ -2379,8 +2379,8 @@ export async function flowLaporanPersediaan(page: Page, loginAs: LoginAs): Promi
 // 11-audit-malam and 12-laporan. No seeded role holds nightaudit.* or audit.read: the administrator works the night audit, its pack and the
 // audit trail; the supervisor (report.view, cashier.shift_manage) reads the reports. The order of the tests (docs-screenshots.spec.ts) matters:
 //   (A) on 2026-11-24, before the run: the reports, the pack archive and its recipients, the screen with its blockers, then the no-shows;
-//   (B) flowJalankanAuditMalam clears what still holds the day, checks in the guest of (C) and closes 2026-11-24;
-//   (C) flowCekPulangLebihAwal, on 2026-11-25: the check-out wizard of an early departure, facts written to the run log ([PULANGAWAL]).
+//   (B) flowJalankanAuditMalam clears what still holds the day, checks in a guest who stays over the audit and closes 2026-11-24.
+//   The early departure of that guest after the audit (KD-06) is the permanent test NA-04 in e2e/final/night-audit.spec.ts.
 
 /** The preview of the night audit as far as these flows read it. */
 interface NaPreview {
@@ -2726,7 +2726,7 @@ async function cancelOpenCounts(data: Factories): Promise<void> {
 /** 11-audit-malam/menjalankan-audit-malam.md: closes 2026-11-24 from the screen. Runs after every other docs flow of that day. */
 export async function flowJalankanAuditMalam(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
   const bd = await data.businessDate()
-  // the guest of flowCekPulangLebihAwal: in house tonight, three nights from today
+  // a guest in house over the audit, three nights from today (the pictures of the run show a guest in house)
   await checkInPulangAwal(data)
   await cancelOpenCounts(data)
   await closeOpenShifts(data, await naPreview(data))
@@ -2766,146 +2766,6 @@ export async function flowJalankanAuditMalam(page: Page, loginAs: LoginAs, data:
   expect(next).toBe(addDays(bd, 1))
   console.log(`[docs] night audit closed ${bd}; the business date is ${next}`)
 }
-
-// --- 11-audit-malam (C): after the run
-
-/**
- * Verifies a suspected bug of the check-out wizard (not a page of the guide): a daytime early departure of a guest who arrived before today.
- * The wizard adds the room charge of tonight (the dry run of the room charges) to what is due, while the check-out cuts the stay to today and posts
- * no charge for tonight (frontdesk/stayops.go settleDeparture). The facts go to the run log as [PULANGAWAL] lines; the outcome never fails the test.
- */
-export async function flowCekPulangLebihAwal(page: Page, loginAs: LoginAs, data: Factories): Promise<void> {
-  const log = (s: string) => console.log(`[PULANGAWAL] ${s}`)
-  const textOf = async (l: Locator): Promise<string> => ((await l.count()) ? (await l.first().innerText()).replace(/\s+/g, ' ').trim().slice(0, 300) : '(none)')
-  const bd = await data.businessDate()
-  const guest = await findPulangAwal(data)
-  if (!guest) {
-    log(`no stay of the guest ${PULANG_AWAL.last_name} found on ${bd}: the test "11 menjalankan audit malam" did not check him in`)
-    return
-  }
-  const before = await data.stay(guest.stayId)
-  const folio0 = await data.folio(guest.folioId)
-  log(`business date ${bd}; stay ${guest.stayId} ${before.stay.status}, departure ${before.stay.departure_date}; folio ${folio0.folio_number} balance (API) ${folio0.balance}`)
-  const dry = await data.api.soft<{ items?: { service_date: string; status: string; total: string; folio_id: number | null; reason?: string }[] }>(
-    'POST', `${data.P}/night-audit/room-charges/preview`, { business_date: bd, stay_ids: [guest.stayId] })
-  log(`room-charge dry run the wizard reads: ${JSON.stringify((dry?.items ?? []).map((i) => ({ night: i.service_date, status: i.status, total: i.total })))}`)
-
-  const wizard = page.getByTestId('checkout-wizard')
-  async function openWizard(): Promise<void> {
-    await page.getByTestId('checkout').click()
-    await expect(wizard.getByTestId('step-departure')).toBeVisible()
-    const early = wizard.locator('input[name=confirm_early]')
-    const shown = (await early.count()) > 0
-    if (shown) await early.check()
-    log(`wizard: "Konfirmasi keberangkatan lebih awal" ${shown ? 'shown and ticked' : 'NOT shown'}`)
-    await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined) // the dry run of the wizard
-  }
-  async function readWizard(when: string): Promise<boolean> {
-    const enabled = await wizard.getByTestId('checkout-submit').isEnabled().catch(() => false)
-    log(`${when}: Check-out button ${enabled ? 'ENABLED' : 'DISABLED'}`)
-    log(`${when}: due reason "${await textOf(wizard.getByTestId('checkout-due-reason'))}"`)
-    log(`${when}: tonight line "${await textOf(wizard.locator('[data-testid^="tonight-charge-"]'))}"`)
-    log(`${when}: folio line "${await textOf(wizard.locator('[data-testid^="open-folio-"]'))}" ${await textOf(wizard.getByTestId('step-folios'))}`)
-    return enabled
-  }
-
-  // STEP 1: the stay page → Check-out, the early departure confirmed
-  await loginAs('admin', `/stays/${guest.stayId}`)
-  await openWizard()
-  await readWizard('first look')
-
-  // the real balance of the folio is paid through the API, then the check-out is tried from the screen
-  const folio = await data.folio(guest.folioId)
-  log(`folio ${folio.folio_number} balance (API) before paying: ${folio.balance}`)
-  if (Number(folio.balance) > 0) {
-    await data.pay(guest.folioId, folio.balance, 'CARD')
-    log(`paid ${folio.balance} by card through the API; balance now ${(await data.folio(guest.folioId)).balance}`)
-  } else if (Number(folio.balance) < 0) {
-    log(`the folio holds a credit of ${folio.balance}: nothing paid`)
-  }
-  await page.reload()
-  await expect(page.getByTestId('checkout')).toBeVisible()
-  await openWizard()
-  const enabled = await readWizard('after paying the folio balance')
-  if (enabled) {
-    await wizard.getByTestId('checkout-submit').click()
-    const done = page.getByTestId('notice').or(wizard.getByTestId('checkout-done')).or(wizard.getByTestId('checkout-error'))
-    try {
-      await expect(done.first()).toBeVisible({ timeout: 15_000 })
-    } catch {
-      log('the check-out click gave no notice and no error within 15 s')
-    }
-    const error = wizard.getByTestId('checkout-error')
-    if (await error.count()) log(`check-out from the screen REFUSED: "${await textOf(error)}"`)
-    else log(`check-out from the screen: SUCCESS "${await textOf(page.getByTestId('notice'))}"`)
-  } else {
-    log('check-out from the screen: NOT POSSIBLE, the button stays disabled')
-    // the way round tried from the screen: a user whose role may check out but holds neither folio.post_charge nor nightaudit.run
-    // (the wizard then has no dry run of tonight's charge and asks only for the balance of today)
-    const roleName = 'Check-out tanpa posting'
-    const roles = (await data.api.get<{ data: { id: number; name: string }[] }>('/roles')).data
-    const role = roles.find((r) => r.name === roleName)
-      ?? await data.api.post<{ id: number }>('/roles', { name: roleName, description: 'Check-out tanpa izin memposting tagihan', permissions: ['reservation.read', 'guest.read', 'frontdesk.checkout', 'folio.read', 'payment.post'] })
-    const email = 'checkout.saja@hotelkamara.example'
-    const pwd = 'lampu-teras-menyala-malam'
-    if (!(await data.api.all<{ email: string }>('/users')).some((u) => u.email.toLowerCase() === email)) {
-      const propertyId = Number(data.P.split('/').pop())
-      await data.api.post('/users', { email, full_name: 'Petugas Check-out', password: pwd, grants: [{ property_id: propertyId, role_id: role.id }] })
-    }
-    await page.context().clearCookies()
-    const r = await page.request.post('/api/v1/auth/login', { data: { tenant_code: TENANT, email, password: pwd } })
-    log(`login of the user without posting rights: ${r.status()}`)
-    await page.goto(`/stays/${guest.stayId}`)
-    await expect(page.getByTestId('checkout')).toBeVisible()
-    await openWizard()
-    if (await readWizard('user without posting rights')) {
-      await wizard.getByTestId('checkout-submit').click()
-      const done = page.getByTestId('notice').or(wizard.getByTestId('checkout-done')).or(wizard.getByTestId('checkout-error'))
-      await expect(done.first()).toBeVisible({ timeout: 15_000 }).catch(() => log('no notice and no error within 15 s'))
-      const error = wizard.getByTestId('checkout-error')
-      if (await error.count()) log(`check-out by the user without posting rights REFUSED: "${await textOf(error)}"`)
-      else log(`check-out by the user without posting rights: SUCCESS "${await textOf(page.getByTestId('notice'))}"`)
-      const mid = await data.stay(guest.stayId)
-      log(`after that click: stay ${mid.stay.status}, departure ${mid.stay.departure_date}, folios ${mid.folios.map((f) => `${f.id}:${f.balance ?? '?'}`).join(', ')}`)
-      if (mid.stay.status !== 'OPEN') return
-    }
-    await loginAs('admin', `/stays/${guest.stayId}`)
-    await openWizard()
-    // what staff would try next: pay what the wizard asks for (tonight's charge on top), then click Check-out
-    const asked = await textOf(wizard.getByTestId('checkout-due-reason'))
-    const extra = (asked.match(/[\d.]+(?=\.?$)/)?.[0] ?? '').replace(/\./g, '')
-    if (extra && Number(extra) > 0) {
-      await data.pay(guest.folioId, extra, 'CARD')
-      log(`paid the extra ${extra} the wizard asks for; folio balance (API) now ${(await data.folio(guest.folioId)).balance}`)
-      await page.reload()
-      await expect(page.getByTestId('checkout')).toBeVisible()
-      await openWizard()
-      if (await readWizard('after paying what the wizard asks')) {
-        await wizard.getByTestId('checkout-submit').click()
-        const done = page.getByTestId('notice').or(wizard.getByTestId('checkout-done')).or(wizard.getByTestId('checkout-error'))
-        await expect(done.first()).toBeVisible({ timeout: 15_000 }).catch(() => log('no notice and no error within 15 s'))
-        const error = wizard.getByTestId('checkout-error')
-        if (await error.count()) log(`check-out after paying the extra REFUSED: "${await textOf(error)}"`)
-        else log(`check-out after paying the extra: SUCCESS "${await textOf(page.getByTestId('notice'))}"`)
-        const mid = await data.stay(guest.stayId)
-        log(`after that click: stay ${mid.stay.status}, departure ${mid.stay.departure_date}, folios ${mid.folios.map((f) => `${f.id}:${f.balance ?? '?'}`).join(', ')}`)
-        if (mid.stay.status !== 'IN_HOUSE' && mid.stay.status !== 'OPEN') return
-      }
-    }
-    // what the server says to the same request as the button (the stay is checked out if it accepts)
-    const st = await data.stay(guest.stayId)
-    try {
-      const r = await data.api.post<{ stay?: { departure_date?: string }; posted_room_charges?: unknown[] }>(`${data.P}/stays/${guest.stayId}/check-out`,
-        { version: st.stay.version, confirm_early_departure: true })
-      log(`server check-out (API, the request of the button): ACCEPTED, departure ${r.stay?.departure_date}, room charges posted ${r.posted_room_charges?.length ?? 0}`)
-    } catch (e) {
-      log(`server check-out (API, the request of the button): REFUSED ${e instanceof Error ? e.message.slice(0, 400) : String(e)}`)
-    }
-  }
-  const after = await data.stay(guest.stayId)
-  log(`end: stay ${after.stay.status}, departure ${after.stay.departure_date}, folios ${after.folios.map((f) => `${f.id}:${f.balance ?? '?'}`).join(', ')}`)
-}
-
 
 // =====================================================================================================================
 // 13-pengaturan and 14-admin-platform. The tenant administrator: no E2E role holds room.manage, billing_config.manage, rate.manage or

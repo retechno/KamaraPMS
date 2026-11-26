@@ -1,5 +1,5 @@
 import { test, expect } from '../support/fixtures'
-import { addDays } from '../support/factories'
+import { addDays, type CheckedIn } from '../support/factories'
 
 /**
  * The night audit closes the business day, so it runs last (the project "final", the teardown of setup) and alone.
@@ -12,11 +12,15 @@ test.describe.configure({ mode: 'serial' })
 test.describe('Night audit', () => {
   test.skip(!!process.env.E2E_SKIP_NIGHT_AUDIT, 'E2E_SKIP_NIGHT_AUDIT is set')
 
+  // NA-04: a guest checked in before the audit and booked past the new business date, who then leaves early in the daytime
+  let earlyLeaver: CheckedIn | undefined
+
   test('NA-01 menandai no-show, menjalankan night audit, dan tanggal bisnis maju satu hari', async ({ page, loginAs, data }) => {
     test.setTimeout(180_000)
     const bd = await data.businessDate()
     const ih = await data.inHouse({ nights: 2 }) // a guest in house tonight: the audit posts the night
     const noShow = await data.reservation({ nights: 1 }) // an arrival that never comes
+    earlyLeaver = await data.inHouse({ nights: 3 }) // NA-04: in house over the audit, booked two nights past it
 
     // an open count freezes its warehouse and holds the close of the day: setup runs pms-seed inventory with -no-open-count, and no module leaves one
     const open = (await data.api.get<{ data: { cnt_number: string }[] }>(`${data.P}/inventory/counts`, { status: 'OPEN' })).data
@@ -67,5 +71,36 @@ test.describe('Night audit', () => {
     expect(folio.items.find((i) => i.id === item.id)?.business_date).toBe(bd)
     await loginAs('admin', '/')
     await expect(page.getByTestId('business-date')).toBeVisible()
+  })
+
+  // KD-06 (docs/user-guide/_laporan.md): the check-out wizard asked an early leaver who arrived before today for tonight's room charge,
+  // which the check-out never posts in the daytime (the stay is cut to today), so the button stayed disabled. The wizard now asks
+  // for what the check-out preview of the server says: the balance of the folio, nothing for tonight.
+  test('NA-04 tamu yang pulang lebih awal setelah audit malam bisa check-out dengan membayar saldo folio saja', async ({ page, loginAs, data }) => {
+    expect(earlyLeaver, 'NA-01 checked the guest in').toBeDefined()
+    const guest = earlyLeaver!
+    const bd = await data.businessDate()
+    const before = await data.stay(guest.stay.id)
+    expect(before.stay.departure_date > bd, 'booked past today').toBe(true)
+    const folio = await data.folio(guest.folio.id)
+    expect(Number(folio.balance)).toBeGreaterThan(0) // the night the audit posted
+    await data.pay(guest.folio.id, folio.balance) // what the desk takes: the balance of the folio page
+
+    await loginAs('admin', `/stays/${guest.stay.id}`)
+    await page.getByTestId('checkout').click()
+    const wizard = page.getByTestId('checkout-wizard')
+    await expect(wizard.getByTestId('step-departure')).toBeVisible()
+    await wizard.locator('input[name=confirm_early]').check()
+    await expect(wizard.getByTestId('checkout-due-reason')).toHaveCount(0) // nothing more is asked for
+    await expect(wizard.getByTestId('checkout-submit')).toBeEnabled()
+    await wizard.getByTestId('checkout-submit').click()
+    await expect(wizard.getByTestId('checkout-done')).toBeVisible()
+
+    const after = await data.stay(guest.stay.id)
+    expect(after.stay.status).toBe('CHECKED_OUT')
+    expect(after.stay.departure_date).toBe(bd)
+    const items = (await data.api.get<{ items: { transaction_type: string; service_date: string }[] }>(`${data.P}/folios/${guest.folio.id}`)).items
+    expect(items.some((i) => i.transaction_type === 'CHARGE' && i.service_date === bd), 'tonight is not charged').toBe(false)
+    expect((await data.folio(guest.folio.id)).balance).toMatch(/^0(\.0+)?$/)
   })
 })

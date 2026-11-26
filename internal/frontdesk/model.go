@@ -430,3 +430,45 @@ type CheckOutResult struct {
 	// OpenOutletBills are the bills of the outlets still open for this room (room service, a bar tab): a warning, never a block; the room is locked for outlets now, so they are paid another way.
 	OpenOutletBills []folios.OpenBillOfStay `json:"open_outlet_bills"`
 }
+
+// checkOutDeparture is the departure date a check-out on business date bd ends a stay with, when the property's
+// calendar date is local (04-operations.md, check-out: departure handling). On the business date itself nothing past
+// today was consumed, so the stay ends today at the latest; after midnight and before the audit the night of the
+// business date was consumed, so it ends tomorrow at the latest. A stay is at least one night: the night of arrival
+// is a night. The check-out and its preview both use it, so the wizard asks for what the check-out will post.
+func checkOutDeparture(bd, local, arrival, booked civil.Date) civil.Date {
+	limit := bd
+	if local.After(bd) {
+		limit = bd.AddDays(1)
+	}
+	dep := booked
+	if dep.After(limit) {
+		dep = limit
+	}
+	if !dep.After(arrival) {
+		dep = arrival.AddDays(1)
+	}
+	return dep
+}
+
+// CheckOutPreview is what a check-out now would do (frontdesk.checkout): the departure the stay would end with,
+// whether that is earlier than booked (the check-out then needs the confirmation), the room charges it would
+// post (READY) or could not (ERROR), and, for every open folio of the stay, the balance, the room charges that
+// would be added and what has to be paid or refunded (due = balance + room charges) before every folio is at zero.
+type CheckOutPreview struct {
+	BusinessDate   civil.Date          `json:"business_date"`
+	DepartureDate  civil.Date          `json:"departure_date"`
+	EarlyDeparture bool                `json:"early_departure"`
+	RoomCharges    []roomcharge.Result `json:"room_charges"`
+	Folios         []CheckOutFolio     `json:"folios"`
+}
+
+// CheckOutFolio is an open folio of the stay in a check-out preview. Amounts are decimal strings.
+type CheckOutFolio struct {
+	FolioID     int64  `json:"folio_id"`
+	FolioNumber string `json:"folio_number"`
+	FolioType   string `json:"folio_type"`
+	Balance     string `json:"balance"`
+	RoomCharges string `json:"room_charges"`
+	Due         string `json:"due"`
+}

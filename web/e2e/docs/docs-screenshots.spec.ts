@@ -158,6 +158,4 @@ test.describe('Panduan pengguna: screenshot', () => {
     test.setTimeout(300_000)
     await flows.flowJalankanAuditMalam(page, loginAs, data)
   })
-  // (C) after the run (2026-11-25): the early departure of a guest who arrived the day before ([PULANGAWAL] lines in the run log)
-  test('11 cek pulang lebih awal setelah audit malam', async ({ page, loginAs, data }) => { await flows.flowCekPulangLebihAwal(page, loginAs, data) })
 })

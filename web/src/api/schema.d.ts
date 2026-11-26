@@ -2667,6 +2667,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/stays/{id}/check-out/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What a check-out of the stay now would do (frontdesk.checkout)
+         * @description Applies the departure handling of the check-out itself (an early departure counted as confirmed): the departure the stay would end with, whether it is earlier than booked (`early_departure`: the check-out then needs `confirm_early_departure`), the room charges the check-out would post (`READY`) or cannot post (`ERROR`), and for every open folio of the stay its balance, the room charges that would be added and what must be paid (positive) or refunded (negative) before it is at zero. The check-out wizard asks for these amounts. Reads only: no locks, nothing written.
+         */
+        get: operations["previewCheckOut"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/dashboard": {
         parameters: {
             query?: never;
@@ -17076,6 +17099,28 @@ export interface components {
             folio_number: string;
             /** @enum {string} */
             status: "OPEN" | "CLOSED";
+        };
+        CheckOutPreview: {
+            business_date: components["schemas"]["Date"];
+            /** @description The departure the check-out would end the stay with. */
+            departure_date: components["schemas"]["Date"];
+            /** @description The stay would end before its booked departure; the check-out needs confirm_early_departure. */
+            early_departure: boolean;
+            /** @description Every night of the stay up to the business date as the check-out would see it; READY nights are the ones it posts. */
+            room_charges: components["schemas"]["RoomChargeItem"][];
+            folios: {
+                /** Format: int64 */
+                folio_id: number;
+                folio_number: string;
+                /** @enum {string} */
+                folio_type: "GUEST" | "COMPANY";
+                /** @description The balance of the folio now. */
+                balance: string;
+                /** @description The room charges the check-out would add to it. */
+                room_charges: string;
+                /** @description balance + room_charges: to pay when positive, to refund when negative, before the check-out. */
+                due: string;
+            }[];
         };
         CheckOutResult: {
             stay: components["schemas"]["Stay"];
@@ -33076,6 +33121,32 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    previewCheckOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckOutPreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getDashboard: {
