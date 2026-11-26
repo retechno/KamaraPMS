@@ -104,7 +104,7 @@ Aturan menulis test baru:
 | FD-05 | Tamu in-house, ada kamar bersih lain di tipenya | Stay → Pindah kamar → pilih tipe kamar tamu, lalu kamar pertama yang ditawarkan **siap** (tanpa tanda "belum siap"), alasan → Pindahkan | Respons pindah 200 (kalau ditolak, pesan server jadi pesan gagal); segmen stay berisi kamar baru |
 | FD-06 | Tamu in-house 1 malam | Stay → Perpanjang → tanggal +1 → Simpan | departure_date maju satu hari |
 | FD-07 | Tamu in-house | Admin: Stay → Batalkan check-in → alasan | Stay tidak OPEN; line reservasi kembali CONFIRMED |
-| FD-08 | Tamu in-house (tiba hari ini) dengan charge minibar 150.000 | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Wizard menampilkan biaya kamar malam ini dan meminta saldo + biaya itu; check-out selesai; stay CHECKED_OUT; saldo folio 0 |
+| FD-08 | Tamu in-house (tiba hari ini) dengan charge minibar 150.000 | Stay → Check-out → bayar kartu di langkah folio → Check-out | Wizard tidak meminta konfirmasi pulang lebih awal (keberangkatan = kedatangan + 1, tanggal pesanannya); wizard menampilkan biaya kamar malam ini dan meminta saldo + biaya itu; check-out selesai; stay CHECKED_OUT; saldo folio 0 |
 | FD-09 | Tamu pulang besok | /departures → tanggal besok | Baris `departure-<stay>` tampil |
 
 ### 05 Folio dan kasir (`05-folio-cashier.spec.ts`)

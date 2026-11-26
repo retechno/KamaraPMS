@@ -42,6 +42,8 @@ const isCompany = (f: Folio): boolean => (f as { folio_type?: string }).folio_ty
 // must be paid or refunded first. Before, the wizard added the night audit's dry run of the booked stay, so an early
 // leaver who arrived before today was asked for tonight, which the check-out never posts.
 const preview = ref<CheckOutPreview | null>(null)
+// Until the first preview has answered, the wizard does not guess the departure (it asks nothing and the check-out waits).
+const previewSettled = ref(false)
 const previewOf = (f: Folio) => preview.value?.folios.find((p) => p.folio_id === f.id)
 // The amount still to settle on a folio, as the server says it (a decimal string); without a preview, its balance.
 const dueText = (f: Folio): string => previewOf(f)?.due ?? f.balance
@@ -64,6 +66,8 @@ async function loadPending(): Promise<void> {
     preview.value = data ?? null
   } catch {
     preview.value = null // without the preview the wizard shows the balances; the check-out still decides
+  } finally {
+    previewSettled.value = true
   }
 }
 onMounted(loadPending)
@@ -84,7 +88,9 @@ async function reload(): Promise<void> {
 }
 
 const businessDate = computed(() => property.clock?.business_date ?? '')
-const early = computed(() => preview.value?.early_departure ?? live.value.stay.departure_date > businessDate.value)
+// The server says whether the stay ends early; only when its preview failed does the wizard compare the booked departure itself.
+const early = computed(() => preview.value ? preview.value.early_departure
+  : previewSettled.value && live.value.stay.departure_date > businessDate.value)
 const endsOn = computed(() => preview.value?.departure_date ?? businessDate.value)
 const unbalanced = computed(() => live.value.folios.filter((f) => f.status === 'OPEN' && sign(dueText(f)) !== 0))
 // What is owed is what the preview says (`dueText`): the balance plus the room charges the check-out will post.
@@ -95,7 +101,7 @@ const dueReason = computed(() => {
   if (!f) return ''
   return owesMoney(f) ? t('checkout.payFirst', { amount: formatMoney(dueText(f)) }) : t('checkout.refundCreditFirst', { amount: formatMoney(refundText(f)) })
 })
-const blocked = computed(() => (early.value && !confirmEarly.value) || busy.value || guestDue.value.length > 0)
+const blocked = computed(() => !previewSettled.value || (early.value && !confirmEarly.value) || busy.value || guestDue.value.length > 0)
 
 async function submit(): Promise<void> {
   const propertyId = property.currentId
@@ -137,13 +143,13 @@ async function submit(): Promise<void> {
 
       <template v-if="step === 'review'">
         <ol class="m-0 grid gap-2 pl-5">
-          <li :class="{ 'marker:text-primary': !early || confirmEarly }" data-testid="step-departure">
+          <li :class="{ 'marker:text-primary': !early || confirmEarly }" data-testid="step-departure" :data-settled="previewSettled ? 'true' : 'false'">
             {{ t('checkout.departure', { date: $date(detail.stay.departure_date) }) }}
             <template v-if="early">
               {{ t('checkout.early', { date: $date(endsOn) }) }}
               <Checkbox v-model="confirmEarly" name="confirm_early" label-class="ml-2 text-sm">{{ t('checkout.confirmEarly') }}</Checkbox>
             </template>
-            <template v-else>{{ t('checkout.matches') }}</template>
+            <template v-else-if="previewSettled">{{ t('checkout.matches') }}</template>
           </li>
           <li :class="{ 'marker:text-primary': !unbalanced.length }" data-testid="step-folios">
             <template v-if="!unbalanced.length">{{ t('checkout.balanced') }}</template>

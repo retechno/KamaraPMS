@@ -41,6 +41,7 @@ describe('CheckOutWizard', () => {
 
   it('checks out on the departure day with the stay version and an idempotency key', async () => {
     const w = mountWizard(detail('2026-09-30'))
+    await flushPromises() // the check-out waits for the preview
     await w.get('[data-testid=checkout-submit]').trigger('click')
     await flushPromises()
     const call = POST.mock.calls[0]
@@ -53,6 +54,7 @@ describe('CheckOutWizard', () => {
 
   it('needs an explicit confirmation for an early departure', async () => {
     const w = mountWizard(detail('2026-10-03'))
+    await flushPromises() // no preview here: the booked departure after today is an early departure
     expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
     await w.get('input[name=confirm_early]').setValue(true)
     await w.get('[data-testid=checkout-submit]').trigger('click')
@@ -63,6 +65,7 @@ describe('CheckOutWizard', () => {
   it('points to the folios that still have a balance and keeps the dialog open on a refusal', async () => {
     // a company folio is not held back by the button (the server decides); a guest folio that is not at zero is, see below
     const w = mountWizard(owing('500000', 'COMPANY'))
+    await flushPromises()
     expect(w.get('[data-testid=open-folio-8]').attributes('href')).toBe('/folios/8')
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'FOLIO_NOT_BALANCED', detail: 'not balanced' }))
     await w.get('[data-testid=checkout-submit]').trigger('click')
@@ -173,6 +176,7 @@ describe('CheckOutWizard', () => {
     expect(credit.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
     expect(credit.get('[data-testid=checkout-due-reason]').text()).toBe('Refund the credit of 80,000 first.')
     const zero = mountWizard(owing('0'))
+    await flushPromises()
     expect(zero.get('[data-testid=checkout-submit]').attributes('disabled')).toBeUndefined()
     expect(zero.find('[data-testid=checkout-due-reason]').exists()).toBe(false)
   })
@@ -200,6 +204,7 @@ describe('CheckOutWizard', () => {
     })
     GET = vi.fn(async () => ({ data: both('0') }))
     const w = mountWizard(both('0'))
+    await flushPromises()
     await w.get('[data-testid=checkout-submit]').trigger('click')
     await flushPromises()
     expect(w.find('[data-testid=checkout-error]').exists()).toBe(true)
@@ -299,6 +304,26 @@ describe('CheckOutWizard', () => {
       await flushPromises()
       expect(w.get('[data-testid=refund-first-8]').text()).toContain('150')
       expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
+    })
+
+    it('KD-06: waits for the preview before it asks about an early departure; a night that ends tomorrow is not early', async () => {
+      // one night, arrived today, booked to leave tomorrow: the check-out ends the stay on arrival + 1, its booked date.
+      // The departure date is after the business date, which the wizard used to read as an early departure until the server answered.
+      const stay = { ...(owing('0') as object), stay: { id: 5, stay_number: 'STY000001', arrival_date: '2026-09-30', departure_date: '2026-10-01', status: 'OPEN', version: 3 } }
+      let answer: (v: unknown) => void = () => {}
+      GET = serve(() => new Promise((r) => { answer = r }), () => stay)
+      const w = mountWizard(stay as never)
+      await flushPromises()
+      expect(w.find('input[name=confirm_early]').exists()).toBe(false) // not asked before the server says
+      expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeDefined()
+      answer(pv({ balance: '0', early: false, departure: '2026-10-01' }))
+      await flushPromises()
+      expect(w.find('input[name=confirm_early]').exists()).toBe(false)
+      expect(w.get('[data-testid=step-departure]').text()).toContain('matches the business date')
+      expect(w.get('[data-testid=checkout-submit]').attributes('disabled')).toBeUndefined()
+      await w.get('[data-testid=checkout-submit]').trigger('click')
+      await flushPromises()
+      expect(POST.mock.calls.find((c) => String(c[0]).endsWith('/check-out'))?.[1]).toMatchObject({ body: { confirm_early_departure: false } })
     })
   })
 })

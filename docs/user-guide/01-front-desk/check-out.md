@@ -46,9 +46,9 @@
 - **Semua folio harus nol.** Check-out tidak bisa dilakukan selama tamu masih berutang. Di samping tombol **Check-out** tertulis alasannya, misalnya "Bayar dulu saldo 828.850.".
 - **Tamu kelebihan bayar (saldo kredit).** Contohnya deposit lebih besar dari tagihan. Muncul "Kembalikan … ke tamu dulu.". Klik **Buka folio**, lakukan refund, lalu kembali ke check-out.
 - **Tagihan perusahaan.** Folio yang ditagihkan ke perusahaan juga harus nol sebelum check-out. Selesaikan di folio itu, misalnya dengan transfer ke piutang perusahaan. Tombol **Check-out** tetap bisa diklik, tetapi check-out ditolak dengan pesan "Semua folio menginap harus bersaldo nol untuk check-out.".
-- **Tamu pulang lebih awal.** Kalau tanggal keberangkatan setelah hari ini, kotak **Check-out** menyebut tanggal masa menginap berakhir. Centang **Konfirmasi keberangkatan lebih awal**. Malam-malam setelahnya tidak ditagih:
+- **Tamu pulang lebih awal.** Kalau masa menginap berakhir sebelum tanggal keberangkatan yang dipesan, kotak **Check-out** menyebut tanggal masa menginap berakhir. Centang **Konfirmasi keberangkatan lebih awal**. Malam-malam setelahnya tidak ditagih:
   - Tamu yang sudah menginap sejak sebelum hari ini dan pulang pada siang hari tidak ditagih untuk malam ini. Yang dibayar cukup saldo folionya.
-  - Tamu yang tiba hari ini tetap ditagih untuk malam ini.
+  - Tamu yang tiba hari ini tetap ditagih untuk malam ini, karena masa menginapnya paling sedikit satu malam. Untuk tamu satu malam, itu memang tanggal pesanannya, jadi kotak **Check-out** tidak meminta konfirmasi.
   - Check-out setelah tengah malam, sebelum audit malam, menagih malam tanggal bisnis yang sedang berjalan, karena malam itu sudah terpakai.
 
   Jumlah yang diminta kotak **Check-out** selalu sama dengan yang ditagih saat check-out, apa pun peran Anda.

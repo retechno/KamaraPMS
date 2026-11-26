@@ -136,8 +136,9 @@ test.describe('Front office', () => {
     await loginAs('frontdesk', `/stays/${ih.stay.id}`)
     await page.getByTestId('checkout').click()
     const wizard = page.getByTestId('checkout-wizard')
-    await expect(wizard.getByTestId('step-departure')).toBeVisible()
-    await wizard.locator('input[name=confirm_early]').check() // the stay leaves before its departure date
+    // one night from today: the check-out ends the stay on arrival + 1, its booked departure, so it is not early (KD-06: the server says so)
+    await expect(wizard.getByTestId('step-departure')).toHaveAttribute('data-settled', 'true')
+    await expect(wizard.locator('input[name=confirm_early]')).toHaveCount(0)
     await expect(wizard.getByTestId(`tonight-charge-${ih.folio.id}`)).toBeVisible()
     const pay = wizard.getByTestId('checkout-pay').first()
     await expect(pay.locator('input[name=pay_amount]')).toHaveValue(String(due))

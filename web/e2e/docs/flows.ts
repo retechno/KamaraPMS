@@ -412,7 +412,7 @@ export async function flowCheckOut(page: Page, loginAs: LoginAs, w: DocsWorld): 
   // STEP 2: Bayar & check-out
   await panel.getByTestId(`checkOut-${putri.stayNumber}`).click()
   const wizard = page.getByTestId('checkout-wizard')
-  await expect(wizard.getByTestId('step-departure')).toBeVisible()
+  await expect(wizard.getByTestId('step-departure')).toHaveAttribute('data-settled', 'true') // the server's preview has said whether it is early
   const early = wizard.locator('input[name=confirm_early]')
   if (await early.count()) await early.check() // only when the day of setup is still open (world.audited false)
   // STEP 3: pay the balance: Jumlah is filled, Metode, Referensi
@@ -2717,7 +2717,7 @@ async function checkOutDepartures(page: Page, data: Factories): Promise<void> {
     await page.getByTestId(`check-out-${stayId}`).click()
     const sheet = page.getByTestId('departure-sheet')
     const wizard = sheet.getByTestId('checkout-wizard')
-    await expect(wizard).toBeVisible()
+    await expect(wizard.getByTestId('step-departure')).toHaveAttribute('data-settled', 'true') // the server's preview has said whether it is early
     const early = wizard.locator('input[name=confirm_early]')
     if (await early.count()) await early.check()
     // each guest folio that owes money: Bayar by card, then the wizard reads the stay again

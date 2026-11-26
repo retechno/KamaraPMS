@@ -1,5 +1,6 @@
 import { test, expect } from '../support/fixtures'
 import { addDays, type CheckedIn } from '../support/factories'
+import { tx } from '../support/i18n'
 
 /**
  * The night audit closes the business day, so it runs last (the project "final", the teardown of setup) and alone.
@@ -89,12 +90,17 @@ test.describe('Night audit', () => {
     await loginAs('admin', `/stays/${guest.stay.id}`)
     await page.getByTestId('checkout').click()
     const wizard = page.getByTestId('checkout-wizard')
-    await expect(wizard.getByTestId('step-departure')).toBeVisible()
+    await expect(wizard.getByTestId('step-departure')).toHaveAttribute('data-settled', 'true') // the server's preview has answered
     await wizard.locator('input[name=confirm_early]').check()
     await expect(wizard.getByTestId('checkout-due-reason')).toHaveCount(0) // nothing more is asked for
     await expect(wizard.getByTestId('checkout-submit')).toBeEnabled()
+    const answer = page.waitForResponse((r) => r.url().endsWith(`/stays/${guest.stay.id}/check-out`) && r.request().method() === 'POST')
     await wizard.getByTestId('checkout-submit').click()
-    await expect(wizard.getByTestId('checkout-done')).toBeVisible()
+    const r = await answer
+    expect(r.status(), `the check-out was refused: ${await r.text()}`).toBe(200)
+    // the stay page reads the stay again and closes the wizard (its done step may show only for a moment), see FD-08
+    await expect(page.getByTestId('notice')).toContainText(tx('stay.checkedOut', { n: 0 }))
+    await expect(wizard).toHaveCount(0)
 
     const after = await data.stay(guest.stay.id)
     expect(after.stay.status).toBe('CHECKED_OUT')
