@@ -21,6 +21,7 @@ import { t } from '@/i18n'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { formatMoney } from '@/utils/format'
 import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { listAccounts } from '@/views/accounting/accountApi'
@@ -113,16 +114,66 @@ async function load(): Promise<void> {
   }
 }
 
+// KD-04: a payment from the company pays its open invoices. The amount is split over them from the oldest (the clerk may change
+// the split); what no invoice takes stays on account. Amounts are thousandths (bigint), never floats.
+const allocs = reactive<Record<number, string>>({})
+const allocTouched = ref(false)
+const openInvoices = computed(() => invoices.value
+  .filter((i) => i.status === 'ISSUED' && (toMilli(i.outstanding) ?? 0n) > 0n)
+  .sort((a, b) => a.invoice_date.localeCompare(b.invoice_date) || a.id - b.id))
+function allocateOldest(): void {
+  const amount = toMilli(receipt.amount) ?? 0n
+  let left = amount > 0n ? amount : 0n
+  for (const inv of openInvoices.value) {
+    const owes = toMilli(inv.outstanding) ?? 0n
+    const take = left < owes ? left : owes
+    allocs[inv.id] = take > 0n ? fromMilli(take) : ''
+    left -= take
+  }
+}
+function splitFromOldest(): void {
+  allocTouched.value = false
+  allocateOldest()
+}
+function setAlloc(id: number, value: string): void {
+  allocs[id] = value
+  allocTouched.value = true // what the clerk typed is kept when the amount changes
+}
+watch(() => receipt.amount, () => { if (!allocTouched.value) allocateOldest() })
+watch(openInvoices, (list) => {
+  for (const id of Object.keys(allocs).map(Number)) if (!list.some((i) => i.id === id)) delete allocs[id]
+  if (!allocTouched.value) allocateOldest()
+})
+const allocLines = computed(() => openInvoices.value.map((inv) => {
+  const value = (allocs[inv.id] ?? '').trim()
+  const milli = value === '' ? 0n : toMilli(value)
+  return { inv, milli, bad: milli === null || milli < 0n, over: milli !== null && milli > (toMilli(inv.outstanding) ?? 0n) }
+}))
+const allocated = computed(() => allocLines.value.reduce((sum, l) => sum + (l.milli !== null && l.milli > 0n ? l.milli : 0n), 0n))
+const unallocated = computed(() => (toMilli(receipt.amount) ?? 0n) - allocated.value)
+const allocProblem = computed(() => {
+  if (allocLines.value.some((l) => l.bad)) return t('clAccount.allocInvalid')
+  const over = allocLines.value.find((l) => l.over)
+  if (over) return t('clAccount.allocExceedsInvoice', { number: over.inv.invoice_number, amount: formatMoney(over.inv.outstanding) })
+  if (unallocated.value < 0n) return t('clAccount.allocExceedsAmount')
+  return ''
+})
+
 async function receive(): Promise<void> {
   busy.value = true
   error.value = null
   notice.value = ''
+  const allocations = allocLines.value.filter((l) => l.milli !== null && l.milli > 0n).map((l) => ({ invoice_id: l.inv.id, amount: fromMilli(l.milli as bigint) }))
   try {
     await api.POST('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts', {
       params: { ...base(), header: { 'Idempotency-Key': receiptKey } },
-      body: { amount: receipt.amount, payment_method: receipt.method, reference_number: receipt.reference || undefined, remarks: receipt.remarks || undefined },
+      body: {
+        amount: receipt.amount, payment_method: receipt.method, reference_number: receipt.reference || undefined, remarks: receipt.remarks || undefined,
+        allocations: allocations.length ? allocations : undefined,
+      },
     })
     receiptKey = newIdempotencyKey()
+    allocTouched.value = false
     receipt.amount = ''
     receipt.reference = ''
     receipt.remarks = ''
@@ -467,8 +518,49 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               <template #default="{ id }"><Input :id="id" v-model="receipt.remarks" name="remarks" /></template>
             </FormField>
           </div>
+          <div v-if="openInvoices.length" class="mt-4" data-testid="allocations">
+            <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <p class="m-0 text-sm font-medium">{{ t('clAccount.allocTitle') }}</p>
+              <Button type="button" variant="outline" size="sm" data-testid="allocate-oldest" @click="splitFromOldest">{{ t('clAccount.allocateOldest') }}</Button>
+            </div>
+            <p class="m-0 mb-2 text-sm text-muted-foreground">{{ t('clAccount.allocHint') }}</p>
+            <div class="overflow-x-auto">
+              <table class="w-full border-collapse text-sm">
+                <thead>
+                  <tr class="border-b border-border text-left text-xs text-muted-foreground">
+                    <th class="py-1 pr-3 font-medium">{{ t('clAccount.number') }}</th>
+                    <th class="px-3 font-medium">{{ t('clAccount.date') }}</th>
+                    <th class="px-3 font-medium">{{ t('clAccount.due') }}</th>
+                    <th class="px-3 text-right font-medium">{{ t('clAccount.outstanding') }}</th>
+                    <th class="pl-3 text-right font-medium">{{ t('clAccount.allocAmount') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="l in allocLines" :key="l.inv.id" class="border-b border-border" :data-testid="`alloc-row-${l.inv.invoice_number}`">
+                    <td class="py-1.5 pr-3">{{ l.inv.invoice_number }}</td>
+                    <td class="px-3">{{ $date(l.inv.invoice_date) }}</td>
+                    <td class="px-3">{{ $date(l.inv.due_date) }}</td>
+                    <td class="px-3 text-right tabular-nums">{{ $money(l.inv.outstanding) }}</td>
+                    <td class="py-1 pl-3">
+                      <Input
+                        class="ml-auto w-36 text-right"
+                        :model-value="allocs[l.inv.id] ?? ''"
+                        :name="`alloc_${l.inv.id}`"
+                        inputmode="decimal"
+                        :aria-label="t('clAccount.allocFor', { number: l.inv.invoice_number })"
+                        :aria-invalid="l.bad || l.over"
+                        @update:model-value="(v) => setAlloc(l.inv.id, String(v ?? ''))"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="m-0 mt-2 text-right text-sm" data-testid="unallocated">{{ t('clAccount.unallocated', { amount: $money(fromMilli(unallocated > 0n ? unallocated : 0n)) }) }}</p>
+            <p v-if="allocProblem" role="alert" class="m-0 mt-1 text-right text-sm text-destructive" data-testid="alloc-error">{{ allocProblem }}</p>
+          </div>
           <ShiftRequiredNotice class="mt-4" :method="receipt.method" />
-          <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy">{{ t('clAccount.recordReceipt') }}</Button></div>
+          <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy || !!allocProblem" data-testid="receipt-submit">{{ t('clAccount.recordReceipt') }}</Button></div>
         </CardContent>
       </form>
     </Card>

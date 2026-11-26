@@ -205,6 +205,7 @@ Aturan menulis test baru:
 | NA-02 | NA-01 | /night-audit/archive | Baris paket untuk hari yang ditutup |
 | NA-03 | NA-01 | Posting charge setelah night audit | Charge tercatat di tanggal bisnis baru; top bar menampilkan tanggal bisnis |
 | NA-04 | NA-01; tamu in-house 3 malam sejak sebelum hari ini (KD-06) | Bayar saldo folio lewat API → /stays/:id → Check-out → centang konfirmasi keberangkatan lebih awal → Check-out | Wizard tidak meminta biaya malam ini (tidak ada alasan "Bayar dulu saldo"); stay CHECKED_OUT dengan keberangkatan = tanggal bisnis; tidak ada CHARGE bertanggal hari ini; saldo folio 0 |
+| NA-05 | NA-01; perusahaan dengan termin 0 hari dan dua invoice hari itu, masing-masing satu pemindahan tamu yang sudah check-out (KD-04) | Setelah audit malam: /city-ledger/overdue → akun perusahaan → **Catat pembayaran dari perusahaan** sebesar saldonya → Transfer bank → Catat penerimaan | Sebelum: kedua invoice di **Invoice jatuh tempo**. Formulir menampilkan kedua invoice dengan alokasi terisi dari yang tertua; setelah dicatat keduanya **Lunas** dan perusahaan hilang dari **Invoice jatuh tempo** |
 
 ## Status
 

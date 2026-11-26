@@ -48,6 +48,8 @@ const invoices = [
 /** What the mock answers for the credit notes and write-offs of the company; a test that needs some sets it before it mounts. */
 let adjustmentList: unknown[] = []
 let reminderList: unknown[] = []
+/** The invoices the mock answers; a test that needs others sets it before it mounts. */
+let invoiceList: unknown[] = invoices
 
 function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'cityledger.invoice']) {
   const pinia = createPinia()
@@ -63,7 +65,7 @@ function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'city
     if (path.endsWith('/statement')) return { data: statement }
     if (path.endsWith('/receipts')) return { data: { data: receipts } }
     if (path.endsWith('/invoice-candidates')) return { data: { data: candidates } }
-    if (path.endsWith('/invoices')) return { data: { data: invoices } }
+    if (path.endsWith('/invoices')) return { data: { data: invoiceList } }
     return { data: account }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
@@ -77,6 +79,7 @@ describe('CityLedgerAccountView', () => {
     GET = vi.fn()
     POST = vi.fn()
     adjustmentList = []
+    invoiceList = invoices
     openPdf = vi.fn().mockResolvedValue(undefined)
     document.body.innerHTML = ''
   })
@@ -102,7 +105,8 @@ describe('CityLedgerAccountView', () => {
     const [path, opts] = POST.mock.calls[0] as [string, { params: { header: Record<string, string> }; body: unknown }]
     expect(path).toBe('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts')
     expect(opts.params.header['Idempotency-Key']).toBeTruthy()
-    expect(opts.body).toEqual({ amount: '50000', payment_method: 'BANK_TRANSFER', reference_number: 'TRX-9', remarks: undefined })
+    // KD-04: the receipt pays the open invoice of the company (CINV000001 still owes 400,000)
+    expect(opts.body).toEqual({ amount: '50000', payment_method: 'BANK_TRANSFER', reference_number: 'TRX-9', remarks: undefined, allocations: [{ invoice_id: 51, amount: '50000' }] })
     expect(w.get('[data-testid=notice]').text()).toContain('Receipt recorded')
 
     POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'RECEIPT_EXCEEDS_BALANCE', detail: 'more than the company owes' }))
@@ -111,6 +115,79 @@ describe('CityLedgerAccountView', () => {
     await flushPromises()
     expect(w.get('[data-testid=form-error]').text()).toContain('RECEIPT_EXCEEDS_BALANCE')
     expect(POST.mock.calls[1]?.[1].params.header['Idempotency-Key']).not.toBe(opts.params.header['Idempotency-Key']) // a new attempt after an answer
+  })
+
+  describe('KD-04: a payment from the company pays its open invoices', () => {
+    // two open invoices: CINV000061 (25 Sep, owes 300,000) is older than CINV000001 (30 Sep, owes 400,000); a paid and a voided one are not offered
+    const older = { id: 61, invoice_number: 'CINV000061', company_id: 1, invoice_date: '2026-09-25', due_date: '2026-10-25', total: '300000', paid: '0', outstanding: '300000', payment_status: 'UNPAID', status: 'ISSUED' }
+    const alloc = (w: ReturnType<typeof mountView>, id: number) => (w.get(`input[name=alloc_${id}]`).element as HTMLInputElement).value
+    const sent = () => (POST.mock.calls[0] as [string, { body: { allocations?: unknown } }])[1].body.allocations
+
+    it('lists the open invoices oldest first and fills the allocations from the oldest', async () => {
+      invoiceList = [...invoices, older]
+      const w = mountView()
+      await flushPromises()
+      const rows = w.findAll('[data-testid^=alloc-row-]').map((r) => r.attributes('data-testid'))
+      expect(rows).toEqual(['alloc-row-CINV000061', 'alloc-row-CINV000001'])
+      expect(w.get('[data-testid=alloc-row-CINV000061]').text()).toContain('300,000') // what it still owes
+      await w.get('input[name=amount]').setValue('500000')
+      expect(alloc(w, 61)).toBe('300000')
+      expect(alloc(w, 51)).toBe('200000')
+      expect(w.get('[data-testid=unallocated]').text()).toContain('0')
+      await w.get('input[name=amount]').setValue('800000')
+      expect(alloc(w, 51)).toBe('400000')
+      expect(w.get('[data-testid=unallocated]').text()).toContain('100,000') // more than the invoices owe: on account
+      await w.get('[data-testid=receipt-form]').trigger('submit')
+      await flushPromises()
+      expect(sent()).toEqual([{ invoice_id: 61, amount: '300000' }, { invoice_id: 51, amount: '400000' }])
+    })
+
+    it('keeps what the clerk changed, and splits again from the oldest on request', async () => {
+      invoiceList = [...invoices, older]
+      const w = mountView()
+      await flushPromises()
+      await w.get('input[name=amount]').setValue('500000')
+      await w.get('input[name=alloc_61]').setValue('')
+      await w.get('input[name=alloc_51]').setValue('400000')
+      expect(w.get('[data-testid=unallocated]').text()).toContain('100,000')
+      await w.get('input[name=amount]').setValue('450000') // the amount changes: the split the clerk made stays
+      expect(alloc(w, 51)).toBe('400000')
+      expect(alloc(w, 61)).toBe('')
+      await w.get('[data-testid=allocate-oldest]').trigger('click') // split again from the oldest
+      expect(alloc(w, 61)).toBe('300000')
+      expect(alloc(w, 51)).toBe('150000')
+      await w.get('input[name=alloc_61]').setValue('')
+      await w.get('input[name=alloc_51]').setValue('400000')
+      await w.get('[data-testid=receipt-form]').trigger('submit')
+      await flushPromises()
+      expect(sent()).toEqual([{ invoice_id: 51, amount: '400000' }]) // an empty line pays nothing
+    })
+
+    it('does not send more than the amount or more than an invoice owes, and says why', async () => {
+      invoiceList = [...invoices, older]
+      const w = mountView()
+      await flushPromises()
+      await w.get('input[name=amount]').setValue('100000')
+      await w.get('input[name=alloc_61]').setValue('350000')
+      expect(w.get('input[name=alloc_61]').attributes('aria-invalid')).toBe('true')
+      expect(w.get('[data-testid=alloc-error]').text()).toContain('more than')
+      expect(w.get('[data-testid=receipt-submit]').attributes('disabled')).toBeDefined()
+      await w.get('input[name=alloc_61]').setValue('100000.5') // three decimals are taken, the sum is exact
+      await w.get('input[name=amount]').setValue('100000.5')
+      expect(w.get('[data-testid=receipt-submit]').attributes('disabled')).toBeUndefined()
+      expect(w.find('[data-testid=alloc-error]').exists()).toBe(false)
+    })
+
+    it('records a payment on account when the company has no open invoice', async () => {
+      invoiceList = invoices.filter((i) => i.id !== 51)
+      const w = mountView()
+      await flushPromises()
+      expect(w.find('[data-testid=allocations]').exists()).toBe(false)
+      await w.get('input[name=amount]').setValue('50000')
+      await w.get('[data-testid=receipt-form]').trigger('submit')
+      await flushPromises()
+      expect(sent()).toBeUndefined()
+    })
   })
 
   it('voids only a posted receipt of today, with a reason and an approval', async () => {

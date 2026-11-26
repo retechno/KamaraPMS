@@ -1618,6 +1618,14 @@ export async function flowInvoice(page: Page, loginAs: LoginAs, data: Factories)
   await pf.getByTestId('pay-submit').click()
   await expect(page.getByTestId('notice')).toContainText(inv)
   await shot(page.getByTestId('invoices'), 'piutang-invoice-09')
+  // Catat pembayaran dari perusahaan: the open invoices, and what the payment pays of each from the oldest (KD-04). Not recorded:
+  // the pictures of the next chapters keep their balances.
+  const rf = page.getByTestId('receipt-form')
+  await rf.locator('input[name=amount]').fill('200000')
+  await rf.locator('input[name=reference]').fill('TRF-SWB-1201')
+  await expect(rf.getByTestId('allocations')).toContainText(inv)
+  await shot(rf, 'piutang-penerimaan-03')
+  await rf.locator('input[name=amount]').fill('')
 }
 
 /** 06-corporate-group-city-ledger/nota-kredit-dan-penghapusan-piutang.md */

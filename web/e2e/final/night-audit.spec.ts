@@ -1,5 +1,5 @@
 import { test, expect } from '../support/fixtures'
-import { addDays, type CheckedIn } from '../support/factories'
+import { addDays, uid, type CheckedIn, type Factories } from '../support/factories'
 import { tx } from '../support/i18n'
 
 /**
@@ -15,6 +15,33 @@ test.describe('Night audit', () => {
 
   // NA-04: a guest checked in before the audit and booked past the new business date, who then leaves early in the daytime
   let earlyLeaver: CheckedIn | undefined
+  // NA-05: a company with two invoices issued today on terms of 0 days, so they are overdue once the audit has closed the day
+  let debtor: { id: number; code: string; invoices: string[] } | undefined
+
+  /** A company that owes two invoices of today (terms 0): each holds the transfer of a guest who checked out. */
+  async function companyWithTwoInvoices(data: Factories): Promise<{ id: number; code: string; invoices: string[] }> {
+    const u = uid()
+    const company = await data.api.post<{ id: number; code: string }>(`${data.P}/companies`, {
+      code: `OD${u}`.slice(0, 10), name: `PT Telat Bayar ${u}`, contact_name: 'Ibu Uji', email: `ar.${u.toLowerCase()}@e2e.example`, credit_limit: '50000000', payment_terms_days: 0,
+    })
+    const invoices: string[] = []
+    for (const amount of ['200000', '300000']) {
+      const ih = await data.inHouse({ nights: 1, companyId: company.id })
+      await data.postCharge(ih.folio.id, 'FOOD_BEVERAGE', amount, 'Jamuan perusahaan (E2E)')
+      const balance = (await data.folio(ih.folio.id)).balance
+      await data.api.post(`${data.P}/folios/${ih.folio.id}/city-ledger-transfers`, { company_id: company.id, amount: balance, reference_number: `PO-${uid()}` })
+      // the check-out posts tonight's room charge: the preview says what to pay first
+      const pv = await data.api.get<{ folios: { folio_id: number; due: string }[] }>(`${data.P}/stays/${ih.stay.id}/check-out/preview`)
+      const due = pv.folios.find((f) => f.folio_id === ih.folio.id)?.due ?? '0'
+      if (Number(due) > 0) await data.pay(ih.folio.id, due)
+      const st = await data.stay(ih.stay.id)
+      await data.api.post(`${data.P}/stays/${ih.stay.id}/check-out`, { version: st.stay.version, confirm_early_departure: false })
+      const candidates = (await data.api.get<{ data: { payment_id: number; invoiceable: boolean }[] }>(`${data.P}/city-ledger/accounts/${company.id}/invoice-candidates`)).data
+      const inv = await data.api.post<{ invoice_number: string }>(`${data.P}/city-ledger/accounts/${company.id}/invoices`, { payment_ids: candidates.filter((c) => c.invoiceable).map((c) => c.payment_id) })
+      invoices.push(inv.invoice_number)
+    }
+    return { ...company, invoices }
+  }
 
   test('NA-01 menandai no-show, menjalankan night audit, dan tanggal bisnis maju satu hari', async ({ page, loginAs, data }) => {
     test.setTimeout(180_000)
@@ -22,6 +49,7 @@ test.describe('Night audit', () => {
     const ih = await data.inHouse({ nights: 2 }) // a guest in house tonight: the audit posts the night
     const noShow = await data.reservation({ nights: 1 }) // an arrival that never comes
     earlyLeaver = await data.inHouse({ nights: 3 }) // NA-04: in house over the audit, booked two nights past it
+    debtor = await companyWithTwoInvoices(data) // NA-05: due today, overdue after the audit
 
     // an open count freezes its warehouse and holds the close of the day: setup runs pms-seed inventory with -no-open-count, and no module leaves one
     const open = (await data.api.get<{ data: { cnt_number: string }[] }>(`${data.P}/inventory/counts`, { status: 'OPEN' })).data
@@ -108,5 +136,34 @@ test.describe('Night audit', () => {
     const items = (await data.api.get<{ items: { transaction_type: string; service_date: string }[] }>(`${data.P}/folios/${guest.folio.id}`)).items
     expect(items.some((i) => i.transaction_type === 'CHARGE' && i.service_date === bd), 'tonight is not charged').toBe(false)
     expect((await data.folio(guest.folio.id)).balance).toMatch(/^0(\.0+)?$/)
+  })
+
+  // KD-04 (docs/user-guide/_laporan.md): "Record a payment from the company" never paid an invoice, so an invoice the company had paid
+  // stayed unpaid and overdue. The form now splits the amount over the open invoices from the oldest.
+  test('NA-05 pembayaran dari perusahaan melunasi invoice jatuh temponya, dari yang tertua, dan invoice hilang dari daftar jatuh tempo', async ({ page, loginAs, data }) => {
+    expect(debtor, 'NA-01 issued the invoices').toBeDefined()
+    const company = debtor!
+    await loginAs('admin', '/city-ledger/overdue')
+    const overdue = page.getByTestId(`overdue-${company.code}`)
+    for (const inv of company.invoices) await expect(overdue).toContainText(inv)
+
+    const account = await data.api.get<{ balance: string }>(`${data.P}/city-ledger/accounts/${company.id}`)
+    await page.goto(`/city-ledger/${company.id}`)
+    const form = page.getByTestId('receipt-form')
+    await form.locator('input[name=amount]').fill(account.balance) // one payment for both invoices
+    const alloc = form.getByTestId('allocations')
+    await expect(alloc.locator('[data-testid^=alloc-row-]')).toHaveCount(2)
+    const rows = await data.api.get<{ data: { id: number; invoice_number: string; outstanding: string }[] }>(`${data.P}/city-ledger/accounts/${company.id}/invoices`)
+    for (const inv of rows.data) await expect(form.locator(`input[name=alloc_${inv.id}]`)).toHaveValue(inv.outstanding.replace(/\.0+$/, ''))
+    await form.locator('select[name=payment_method]').selectOption('BANK_TRANSFER')
+    await form.locator('input[name=reference]').fill(`TRF-${uid()}`)
+    await form.getByTestId('receipt-submit').click()
+    await expect(page.getByTestId('notice')).toHaveText(tx('clAccount.receiptRecorded'))
+
+    const after = await data.api.get<{ data: { invoice_number: string; payment_status: string; outstanding: string }[] }>(`${data.P}/city-ledger/accounts/${company.id}/invoices`)
+    for (const inv of company.invoices) expect(after.data.find((i) => i.invoice_number === inv)?.payment_status, inv).toBe('PAID')
+    await page.goto('/city-ledger/overdue')
+    await expect(page.getByTestId('overdue-summary')).toBeVisible()
+    await expect(page.getByTestId(`overdue-${company.code}`)).toHaveCount(0)
   })
 })
