@@ -122,9 +122,9 @@ Klik **Batalkan check-in** pada hari yang sama, sebelum ada biaya di folio dan s
 Semua folio tamu harus bersaldo nol, termasuk folio yang ditagihkan ke perusahaan. Di samping tombol **Check-out** tertulis alasannya, misalnya "Bayar dulu saldo 828.850.". Kalau tamu kelebihan bayar, muncul "Kembalikan … ke tamu dulu.": klik **Buka folio**, lakukan refund, lalu kembali ke check-out.
 → [Check-out](01-front-desk/check-out.md)
 
-### Tamu pulang lebih awal, kenapa tombol Check-out tidak bisa diklik?
+### Tamu pulang lebih awal. Berapa yang harus dibayar?
 
-Untuk tamu yang sudah menginap sejak sebelum hari ini lalu pulang lebih awal, wizard check-out meminta biaya kamar malam ini, padahal malam itu tidak ditagih (kendala yang diketahui). Jangan menerima pembayaran sebesar yang diminta wizard. Terima pembayaran sebesar saldo di halaman folio, lalu minta supervisor menyelesaikan check-out sebelum audit malam. Kalau supervisor tidak bisa, hubungi administrator hotel (lihat [Bantuan dan kontak](README.md#bantuan-dan-kontak)).
+Centang **Konfirmasi keberangkatan lebih awal** di kotak **Check-out**, lalu terima jumlah yang diminta di sana. Tamu yang sudah menginap sejak sebelum hari ini dan pulang pada siang hari tidak ditagih untuk malam ini, jadi yang dibayar cukup saldo folionya. Tamu yang tiba hari ini tetap membayar malam ini.
 → [Check-out](01-front-desk/check-out.md)
 
 ### Tagihan tamu dibayar perusahaan. Apakah check-out memindahkannya ke perusahaan?
@@ -227,13 +227,13 @@ Biasanya folio tamu terkunci untuk beban outlet ("Folio ini terkunci untuk beban
 
 ### Bill restoran terlanjur dibebankan ke kamar yang salah. Bisakah dibatalkan?
 
-Belum bisa dari layar (kendala yang diketahui). Beban POS yang sudah masuk folio tamu tidak bisa di-reverse, tidak muncul di **Kembalikan**, dan tidak bisa dikoreksi dengan **Penyesuaian**. Laporkan ke supervisor atau administrator sebelum tamu check-out, beserta nomor kamar, nomor bill, dan jumlahnya. Karena itu, periksa bill sebelum memilih **Bebankan ke kamar**.
-→ [Membebankan bill ke kamar](04-pos/bebankan-ke-kamar.md) · [Mengoreksi biaya: reverse dan penyesuaian](03-kasir-dan-pembayaran/reverse-dan-penyesuaian.md)
+Bisa, selama folio tamu masih terbuka. Buka kembali bill-nya, lalu klik **Kembalikan beban kamar** di baris "Dibebankan ke kamar". Keduanya butuh alasan dan persetujuan. Beban dibatalkan di folio tamu, batas outlet pulih, lalu bill dibayar dengan cara lain atau dibebankan ke kamar yang benar. Di folio tamu sendiri, beban POS tidak bisa di-reverse atau dikoreksi dengan **Penyesuaian**.
+→ [Mengembalikan beban kamar dari bill POS](04-pos/mengembalikan-beban-kamar.md)
 
 ### Saya sudah memakai Buka kembali pada bill, tetapi bebannya masih ada di tagihan tamu. Kenapa?
 
-**Buka kembali** membuka bill lagi, tetapi tidak menarik beban kamarnya dari folio tamu, dan layar bill tidak punya tombol untuk itu (kendala yang diketahui). Laporkan ke supervisor atau administrator, beserta nomor kamar, nomor bill, dan jumlahnya.
-→ [Membebankan bill ke kamar](04-pos/bebankan-ke-kamar.md)
+**Buka kembali** hanya membuka bill. Beban kamarnya ditarik dengan **Kembalikan beban kamar** di bill yang sudah terbuka itu.
+→ [Mengembalikan beban kamar dari bill POS](04-pos/mengembalikan-beban-kamar.md)
 
 ### Item sudah dikirim ke dapur, lalu tamu membatalkannya. Bisakah item itu dihapus?
 
@@ -247,9 +247,9 @@ Shift harus terbuka pada laci outlet ini. Shift di laci lain tidak dihitung. Buk
 
 ## Banquet
 
-### Tamu yang hadir lebih banyak dari garansi. Kenapa Pax aktual tidak ikut ditagih?
+### Tamu yang hadir lebih banyak dari garansi. Berapa yang ditagih?
 
-Angka di **Pax aktual** belum terbaca: **Ditagih** tetap menunjukkan pax garansi, dan sesi ditagih menurut pax garansi (kendala yang diketahui). Periksa **Ditagih** sebelum memposting. Setelah posting, selama folio acara masih terbuka, tambahkan selisihnya dengan **Penyesuaian** (angka positif) di folio acara, pada kode biaya yang sama dengan baris sesinya, misalnya `BQT_FB`. Penyesuaian butuh persetujuan, tercatat pada tanggal bisnis hari ini, tidak masuk laporan pendapatan banquet, dan tidak mengurangi stok; kalau biaya sesi diarahkan ke master folio grup, buat penyesuaiannya di master folio itu.
+Ketik jumlah yang hadir di **Pax aktual** pada jendela **Posting sesi**. Yang ditagih adalah yang lebih besar dari pax garansi dan pax aktual, dan **Ditagih** menunjukkannya sebelum Anda memposting. Garansi 40 dengan 42 yang hadir ditagih 42; garansi 40 dengan 35 yang hadir tetap ditagih 40.
 → [Posting sesi dan penagihan acara](05-banquet/posting-sesi-dan-penagihan.md)
 
 ### Sesi sudah diposting, lalu jumlah tamunya berubah. Bisakah sesi diposting ulang?

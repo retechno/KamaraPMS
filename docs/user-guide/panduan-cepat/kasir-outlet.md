@@ -30,6 +30,7 @@ Ringkasan satu halaman untuk kasir dan pelayan outlet (restoran, bar, room servi
 | Tamu mendapat potongan harga | Klik **Diskon**, isi jendela, klik **Beri diskon**. Diskon di atas batas outlet butuh persetujuan. | [Void, diskon, dan komplimen](../04-pos/void-diskon-komplimen.md) |
 | Bill digratiskan, misalnya jamuan manajer | Klik **Komplimen**, isi **Tamu atau manajer** dan **Alasan**, **Lanjut ke persetujuan**. | [Void, diskon, dan komplimen](../04-pos/void-diskon-komplimen.md) |
 | Bill yang sudah lunas harus dikoreksi | Klik **Buka kembali**, isi **Alasan**, minta persetujuan. Koreksi isinya, lalu bayar lagi. | [Void, diskon, dan komplimen](../04-pos/void-diskon-komplimen.md) |
+| Bill terlanjur dibebankan ke kamar yang salah | Klik **Buka kembali** dan minta persetujuan, lalu klik **Kembalikan beban kamar** di baris "Dibebankan ke kamar", isi **Alasan**, dan minta persetujuan. Bayar bill dengan cara lain. | [Mengembalikan beban kamar](../04-pos/mengembalikan-beban-kamar.md) |
 | Tamu meminta salinan struk | Klik **Cetak ulang struk** dan isi alasannya. | [Membayar bill](../04-pos/membayar-bill.md) |
 
 ## Akhir shift
@@ -41,7 +42,7 @@ Ringkasan satu halaman untuk kasir dan pelayan outlet (restoran, bar, room servi
 
 ## Ingat
 
-- Periksa bill dengan teliti sebelum memilih **Bebankan ke kamar**. Setelah bill lunas, beban ke kamar belum bisa dibatalkan dari layar. Kalau terlanjur salah, laporkan ke supervisor dengan nomor kamar, nomor bill, dan jumlahnya.
+- Periksa bill dengan teliti sebelum memilih **Bebankan ke kamar**. Beban yang terlanjur salah ditarik dari bill-nya (**Buka kembali**, lalu **Kembalikan beban kamar**) selama tamu belum check-out. → [Mengembalikan beban kamar](../04-pos/mengembalikan-beban-kamar.md)
 - Item yang sudah dikirim tidak bisa diubah atau dihapus. Pembatalannya lewat **Void** dengan persetujuan.
 - Uang tunai hanya bisa diterima kalau shift Anda terbuka di laci outlet ini. Shift di laci lain tidak dihitung.
 - Item bertulisan **DIBATALKAN** di layar dapur jangan dimasak.

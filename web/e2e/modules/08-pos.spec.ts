@@ -2,9 +2,9 @@ import { test, expect } from '../support/fixtures'
 import type { Factories } from '../support/factories'
 import type { Locator, Page } from 'playwright/test'
 
-/** The POS of the outlets (demo of pms-seed pos): a takeaway paid by card, a charge to the room of a guest in house, and the outlet report. */
+/** The POS of the outlets (demo of pms-seed pos): a takeaway paid by card, a charge to the room of a guest in house and its return from the reopened bill, and the outlet report. */
 
-interface Outlet { id: number; code: string; name: string; allow_room_charge: boolean; uses_tables: boolean }
+interface Outlet { id: number; code: string; name: string; allow_room_charge: boolean; uses_tables: boolean; drawer?: string | null }
 interface Product { id: number; name: string; option_groups?: { min_select: number }[]; prices?: { price: string }[] }
 
 async function outletAndProduct(data: Factories, roomCharge = false): Promise<{ outlet: Outlet; product: Product }> {
@@ -105,6 +105,71 @@ test.describe('POS outlet', () => {
     await pay.getByTestId('exact-CARD').click()
     await pay.getByTestId('pay-submit').click()
     await expect(page.getByTestId('bill-closed')).toBeVisible()
+  })
+
+  test('POS-05 beban kamar dari bill yang dibuka kembali dikembalikan, lalu bill dibayar tunai (KD-01, KD-02)', async ({ page, loginAs, data, seed }) => {
+    const { outlet, product } = await outletAndProduct(data, true)
+    const ih = await data.inHouse()
+    const lock = await data.api.get<{ version: number }>(`${data.P}/folios/${ih.folio.id}/outlet-lock`)
+    await data.api.put(`${data.P}/folios/${ih.folio.id}/outlet-lock`, { limit_amount: '2000000', valid_mode: 'UNTIL_CLOSE', outlet_ids: [outlet.id], version: lock.version })
+    const before = (await data.folio(ih.folio.id)).balance
+    const lookup = async () => (await data.api.get<{ data: { stay_id: number; used: string | null; remaining: string | null }[] }>(`${data.P}/pos/outlets/${outlet.id}/room-lookup`, { q: ih.room.number })).data.find((r) => r.stay_id === ih.stay.id)
+    expect(outlet.drawer).toBeTruthy()
+    await data.openShift(data.api, outlet.drawer!) // the cash at the end goes to a shift of the administrator on the drawer of the outlet
+    const approve = async () => {
+      const dialog = page.getByTestId('approval-dialog')
+      await dialog.locator('input[name=approval_email]').fill(seed.users.admin.email)
+      await dialog.locator('input[name=approval_password]').fill(seed.users.admin.password)
+      await dialog.getByTestId('approval-submit').click()
+      await expect(dialog).toHaveCount(0)
+    }
+
+    // charged to the room by mistake
+    await loginAs('admin', '/pos/floor')
+    const billId = await takeawayWithProduct(page, outlet, product, `Salah kamar ${ih.room.number}`)
+    await page.getByTestId('pay').click()
+    const pay = page.getByTestId('pay-dialog')
+    await onlyMethod(pay, 'ROOM')
+    await pay.getByTestId('room-query').fill(ih.room.number)
+    await pay.getByTestId('room-find').click()
+    await pay.getByTestId(`room-${ih.stay.id}`).click()
+    await pay.getByTestId('exact-ROOM').click()
+    await pay.getByTestId('pay-submit').click()
+    await expect(page.getByTestId('bill-closed')).toBeVisible()
+    await expect.poll(async () => (await data.folio(ih.folio.id)).balance).not.toBe(before)
+    expect(Number((await lookup())?.used ?? 0)).toBeGreaterThan(0)
+
+    // reopen the bill, then return its charge to the room
+    await page.getByTestId('reopen').click()
+    await page.getByTestId('reason').fill('Salah kamar (E2E)')
+    await page.getByTestId('reason-submit').click()
+    await approve()
+    await expect(page.getByTestId('actions')).toBeVisible()
+    const charges = page.getByTestId('room-charges')
+    await expect(charges).toContainText(ih.room.number)
+    await charges.locator('[data-testid^=return-charge-]').click()
+    await expect(page.getByTestId('reason-dialog')).toContainText(ih.room.number)
+    await page.getByTestId('reason').fill('Salah kamar (E2E)')
+    await page.getByTestId('reason-submit').click()
+    await approve()
+    await expect(page.getByTestId('room-charges')).toHaveCount(0)
+    const owed = await data.api.get<{ totals: { payable: string } }>(`${data.P}/pos/bills/${billId}`)
+    expect(Number(owed.totals.payable)).toBeGreaterThan(0)
+    await expect.poll(async () => (await data.folio(ih.folio.id)).balance).toBe(before) // the guest folio line is cancelled
+    expect(Number((await lookup())?.used ?? 0)).toBe(0) // the limit of the outlets is free again
+
+    // paid in cash
+    await page.getByTestId('pay').click()
+    await expect(pay.getByTestId('pay-row-CASH')).toBeVisible()
+    await pay.getByTestId('exact-CASH').click()
+    await pay.getByTestId('tendered').fill(String(Number(owed.totals.payable)))
+    await pay.getByTestId('pay-submit').click()
+    await expect(page.getByTestId('bill-closed')).toBeVisible()
+    const done = await data.api.get<{ status: string; payments: { method: string }[] }>(`${data.P}/pos/bills/${billId}`)
+    expect(done.status).toBe('CLOSED')
+    expect(done.payments.map((x) => x.method)).toContain('CASH')
+    expect((await data.folio(ih.folio.id)).balance).toBe(before)
+    await data.closeShift() // an open shift would hold the night audit
   })
 
   test('POS-04 laporan outlet menampilkan total penjualan', async ({ page, loginAs }) => {

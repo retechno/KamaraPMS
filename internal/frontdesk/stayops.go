@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/shopspring/decimal"
+
 	"kamarapms/internal/auditlabel"
 	"kamarapms/internal/availability"
 	"kamarapms/internal/expected"
@@ -542,19 +544,67 @@ func (s *Service) CheckOut(ctx context.Context, propertyID, stayID int64, in Che
 	return out, err
 }
 
+// CheckOutPreview says what a check-out now would do (frontdesk.checkout), with the rules of CheckOut itself: the
+// departure it settles (checkOutDeparture, as if an early departure were confirmed), the room charges it then posts
+// (the dry run of the posting service for that departure) and what every open folio of the stay must be paid or
+// refunded to reach zero. The check-out wizard asks for these amounts, so a desk is never asked for a night the
+// check-out does not post (KD-06), whatever its other permissions. It reads only: no locks, nothing written.
+func (s *Service) CheckOutPreview(ctx context.Context, propertyID, stayID int64) (CheckOutPreview, error) {
+	p, err := s.actor(ctx, propertyID, auth.PermFrontdeskCheckout)
+	if err != nil {
+		return CheckOutPreview{}, err
+	}
+	day, err := s.days.CurrentBusinessDay(ctx, propertyID)
+	if err != nil {
+		return CheckOutPreview{}, err
+	}
+	bd := day.BusinessDate
+	pre, err := s.readStay(ctx, p, propertyID, stayID)
+	if err != nil {
+		return CheckOutPreview{}, err
+	}
+	prop, err := s.days.GetProperty(ctx, propertyID)
+	if err != nil {
+		return CheckOutPreview{}, err
+	}
+	dep := checkOutDeparture(bd, civil.DateOf(s.clock.Now().In(prop.Location())), pre.stay.ArrivalDate, pre.stay.DepartureDate)
+	nights, err := s.charges.PreviewDeparture(ctx, p, propertyID, bd, stayID, dep)
+	if err != nil {
+		return CheckOutPreview{}, err
+	}
+	added := map[int64]decimal.Decimal{}
+	for _, r := range nights {
+		if r.Status == expected.StatusReady && r.FolioID != nil {
+			total, err := decimal.NewFromString(r.Total)
+			if err != nil {
+				return CheckOutPreview{}, err
+			}
+			added[*r.FolioID] = added[*r.FolioID].Add(total)
+		}
+	}
+	fs, err := s.folios.StayFolios(ctx, p.TenantID, propertyID, stayID)
+	if err != nil {
+		return CheckOutPreview{}, err
+	}
+	out := CheckOutPreview{BusinessDate: bd, DepartureDate: dep, EarlyDeparture: !dep.Equal(pre.stay.DepartureDate), RoomCharges: nights, Folios: []CheckOutFolio{}}
+	for _, f := range fs {
+		if f.Status != "OPEN" {
+			continue
+		}
+		bal, err := decimal.NewFromString(f.Balance)
+		if err != nil {
+			return CheckOutPreview{}, err
+		}
+		add := added[f.ID]
+		out.Folios = append(out.Folios, CheckOutFolio{FolioID: f.ID, FolioNumber: f.FolioNumber, FolioType: f.FolioType,
+			Balance: bal.StringFixed(prop.CurrencyDecimals), RoomCharges: add.StringFixed(prop.CurrencyDecimals), Due: bal.Add(add).StringFixed(prop.CurrencyDecimals)})
+	}
+	return out, nil
+}
+
 // settleDeparture applies the departure handling of a check-out and returns the departure date the stay ends with.
 func (s *Service) settleDeparture(ctx context.Context, p auth.Principal, propertyID int64, bd, localDate civil.Date, st frontdeskdb.Stay, pre stayCtx, confirmEarly bool) (civil.Date, error) {
-	limit := bd // the local date is the business date: nothing past today has been consumed
-	if localDate.After(bd) {
-		limit = bd.AddDays(1) // after midnight, before the audit: the night of the business date was consumed
-	}
-	newDep := st.DepartureDate
-	if newDep.After(limit) {
-		newDep = limit
-	}
-	if !newDep.After(st.ArrivalDate) {
-		newDep = st.ArrivalDate.AddDays(1) // no day-use: the night of arrival is a night
-	}
+	newDep := checkOutDeparture(bd, localDate, st.ArrivalDate, st.DepartureDate)
 	if newDep.Equal(st.DepartureDate) {
 		return newDep, nil
 	}

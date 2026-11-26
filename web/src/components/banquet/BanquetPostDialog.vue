@@ -30,7 +30,8 @@ export interface PostTarget {
 const props = defineProps<{ open: boolean; propertyId: number; target: PostTarget | null; businessDate: string | null }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; posted: [total: string] }>()
 
-const actual = ref('')
+// v-model on an input of type number holds a number once something is typed (an empty field is '')
+const actual = ref<string | number>('')
 const useEstimate = ref(false)
 const error = ref<ApiError | null>(null)
 const busy = ref(false)
@@ -54,8 +55,14 @@ watch(() => props.open, (open) => {
   useEstimate.value = false
   actual.value = props.target?.pax_actual != null ? String(props.target.pax_actual) : ''
 })
-const entered = computed(() => (actual.value.trim() === '' ? null : Number(actual.value)))
-const billed = computed(() => billedPax(props.target?.pax_guaranteed ?? null, Number.isInteger(entered.value) ? entered.value : null))
+// KD-03: the number typed is read whatever its type (a `.trim()` on the number threw, and the guests that came were dropped)
+const typed = computed(() => String(actual.value ?? '').trim())
+const entered = computed<number | null>(() => {
+  const n = Number(typed.value)
+  return typed.value !== '' && Number.isInteger(n) && n >= 0 ? n : null
+})
+const actualInvalid = computed(() => typed.value !== '' && entered.value === null) // not a whole number: nothing is posted
+const billed = computed(() => billedPax(props.target?.pax_guaranteed ?? null, entered.value))
 const noNumber = computed(() => billed.value.basis === 'NONE')
 
 async function post(): Promise<void> {
@@ -89,7 +96,7 @@ async function post(): Promise<void> {
           <div><dt class="text-muted-foreground">{{ t('banquet.post.guaranteed') }}</dt><dd class="m-0 font-medium" data-testid="post-guaranteed">{{ target.pax_guaranteed ?? '–' }}</dd></div>
           <div>
             <dt class="text-muted-foreground">{{ t('banquet.post.actual') }}</dt>
-            <dd class="m-0"><Input v-model="actual" name="pax_actual" type="number" min="0" :aria-label="t('banquet.post.actual')" /></dd>
+            <dd class="m-0"><Input v-model="actual" name="pax_actual" type="number" min="0" step="1" :aria-label="t('banquet.post.actual')" :aria-invalid="actualInvalid || undefined" /></dd>
           </div>
           <div><dt class="text-muted-foreground">{{ t('banquet.post.billed') }}</dt><dd class="m-0 font-medium" data-testid="post-billed">{{ noNumber ? '–' : billed.pax }}</dd></div>
         </dl>
@@ -103,7 +110,7 @@ async function post(): Promise<void> {
         <p class="m-0 text-xs text-muted-foreground">{{ t('banquet.post.once') }}</p>
         <div class="flex justify-end gap-2">
           <Button type="button" variant="outline" @click="emit('update:open', false)">{{ t('common.cancel') }}</Button>
-          <Button type="submit" :disabled="busy || (noNumber && !useEstimate)" data-testid="post-save">{{ t('banquet.post.action') }}</Button>
+          <Button type="submit" :disabled="busy || actualInvalid || (noNumber && !useEstimate)" data-testid="post-save">{{ t('banquet.post.action') }}</Button>
         </div>
       </form>
     </DialogContent>

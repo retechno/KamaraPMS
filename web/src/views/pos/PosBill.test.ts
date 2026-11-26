@@ -211,6 +211,47 @@ describe('the order and the bill', () => {
     expect(w.find('[data-testid=send]').exists()).toBe(false)
   })
 
+  // KD-01, KD-02 (docs/user-guide/_laporan.md): a charge to a room could not be taken back from the screen. A reopened bill offers it now: the
+  // return of the server (POST /pos/room-charges/{id}/return, folio.reverse, a reason and an approval of the kind FOLIO_TRANSFER).
+  it('returns the charge to a room of a reopened bill with a reason and the approval, and then the bill can be paid', async () => {
+    const charged = { id: 41, amount: '121000', to_folio_id: 9, stay_id: 3, room: '305', returned_at: null }
+    const reopened = bill({ lines: [line({ id: 2, status: 'SENT', round: 1 })], room_charges: [charged], totals: totals({ sold: '121000', drafts: '0', transferred: '121000', balance: '0', payable: '0' }) })
+    const back = bill({ lines: [line({ id: 2, status: 'SENT', round: 1 })], room_charges: [{ ...charged, returned_at: '2026-10-15T09:00:00Z' }], totals: totals({ sold: '121000', drafts: '0', transferred: '0', balance: '121000', payable: '121000' }) })
+    const w = await setup(reopened, ['pos.order', 'pos.cashier', 'folio.reopen', 'folio.reverse'])
+    await flushPromises()
+    expect(w.get('[data-testid=room-charges]').text()).toContain('305')
+    await w.get('[data-testid=return-charge-41]').trigger('click')
+    expect(body('[data-testid=reason-dialog]').text()).toContain('305')
+    await body('[data-testid=reason]').setValue('charged to the wrong room')
+    await body('[data-testid=reason-dialog] form').trigger('submit')
+    await flushPromises()
+    expect(has('[data-testid=approval-dialog]')).toBe(true)
+    await body('input[name=approval_email]').setValue('boss@hotel.test')
+    await body('input[name=approval_password]').setValue('secret-pass')
+    POST = vi.fn(async () => ({ data: back }))
+    await body('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    const call = POST.mock.calls.find((c) => String(c[0]).endsWith('/room-charges/{id}/return'))!
+    expect(call[1]).toEqual({ params: { path: { propertyId: 7, id: 41 } }, body: { reason: 'charged to the wrong room', approval: { email: 'boss@hotel.test', password: 'secret-pass' } } })
+    expect(w.find('[data-testid=return-charge-41]').exists()).toBe(false) // returned: the line is gone
+    expect(w.get('[data-testid=payable]').text()).toBe('121,000')
+    expect(w.find('[data-testid=pay]').exists()).toBe(true)
+  })
+
+  it('offers the return only on an open bill, to a holder of folio.reverse and of the cashier', async () => {
+    const charged = { id: 41, amount: '121000', to_folio_id: 9, stay_id: 3, room: '305', returned_at: null }
+    const closed = bill({ status: 'CLOSED', lines: [line({ id: 2, status: 'SENT', round: 1 })], room_charges: [charged], totals: totals({ sold: '121000', drafts: '0', transferred: '121000', payable: '0' }) })
+    let w = await setup(closed, ['pos.order', 'pos.cashier', 'folio.reopen', 'folio.reverse'])
+    await flushPromises()
+    expect(w.find('[data-testid=return-charge-41]').exists()).toBe(false) // reopen it first
+    expect(w.find('[data-testid=reopen]').exists()).toBe(true)
+    const open = bill({ lines: [line({ id: 2, status: 'SENT', round: 1 })], room_charges: [charged], totals: totals({ sold: '121000', drafts: '0', transferred: '121000', payable: '0' }) })
+    w = await setup(open, ['pos.order', 'pos.cashier', 'folio.reopen'])
+    await flushPromises()
+    expect(w.get('[data-testid=room-charges]').text()).toContain('305')
+    expect(w.find('[data-testid=return-charge-41]').exists()).toBe(false) // no folio.reverse
+  })
+
   it('prints an open bill at the receipt printer of the outlet, and keeps the browser as a second way', async () => {
     outletOver = { receipt_printer_id: 3 }
     const w = await setup()

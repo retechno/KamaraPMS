@@ -17,7 +17,7 @@
 2. Pada baris tamu, klik **Bayar & check-out**. Kalau tagihannya sudah lunas, tombolnya bernama **Check-out**. Halaman **Menginap** tamu terbuka dengan kotak **Check-out**.
 3. Periksa daftar di kotak **Check-out**:
    - Keberangkatan **sesuai dengan tanggal bisnis**, atau peringatan bahwa tamu pulang lebih awal.
-   - **Folio dengan saldo:** nomor folio dan jumlah yang harus dibayar. Biaya kamar malam ini yang belum diposting sudah ikut dihitung.
+   - **Folio dengan saldo:** nomor folio dan jumlah yang harus dibayar. Biaya kamar yang akan diposting saat check-out sudah ikut dihitung, dan disebut di bawah nomor folionya, misalnya "Termasuk biaya kamar 605.000 yang diposting saat check-out.". Jumlah ini sama dengan yang ditagih saat check-out.
 
    Isi formulir pembayaran:
 
@@ -46,9 +46,12 @@
 - **Semua folio harus nol.** Check-out tidak bisa dilakukan selama tamu masih berutang. Di samping tombol **Check-out** tertulis alasannya, misalnya "Bayar dulu saldo 828.850.".
 - **Tamu kelebihan bayar (saldo kredit).** Contohnya deposit lebih besar dari tagihan. Muncul "Kembalikan … ke tamu dulu.". Klik **Buka folio**, lakukan refund, lalu kembali ke check-out.
 - **Tagihan perusahaan.** Folio yang ditagihkan ke perusahaan juga harus nol sebelum check-out. Selesaikan di folio itu, misalnya dengan transfer ke piutang perusahaan. Tombol **Check-out** tetap bisa diklik, tetapi check-out ditolak dengan pesan "Semua folio menginap harus bersaldo nol untuk check-out.".
-- **Tamu pulang lebih awal.** Kalau tanggal keberangkatan setelah hari ini, centang **Konfirmasi keberangkatan lebih awal**. Masa menginap dipendekkan sampai hari ini, dan malam-malam berikutnya tidak ditagih. Tamu yang tiba hari ini tetap ditagih untuk malam ini.
+- **Tamu pulang lebih awal.** Kalau masa menginap berakhir sebelum tanggal keberangkatan yang dipesan, kotak **Check-out** menyebut tanggal masa menginap berakhir. Centang **Konfirmasi keberangkatan lebih awal**. Malam-malam setelahnya tidak ditagih:
+  - Tamu yang sudah menginap sejak sebelum hari ini dan pulang pada siang hari tidak ditagih untuk malam ini. Yang dibayar cukup saldo folionya.
+  - Tamu yang tiba hari ini tetap ditagih untuk malam ini, karena masa menginapnya paling sedikit satu malam. Untuk tamu satu malam, itu memang tanggal pesanannya, jadi kotak **Check-out** tidak meminta konfirmasi.
+  - Check-out setelah tengah malam, sebelum audit malam, menagih malam tanggal bisnis yang sedang berjalan, karena malam itu sudah terpakai.
 
-  > 🐞 Kendala yang diketahui (KD-06): untuk tamu yang sudah menginap sejak sebelum hari ini lalu pulang lebih awal, wizard check-out meminta biaya kamar malam ini, padahal malam itu tidak ditagih, sehingga tombol **Check-out** tidak bisa diklik. Jangan menerima pembayaran sebesar yang diminta wizard. Terima pembayaran sebesar saldo di halaman folio, lalu minta supervisor menyelesaikan check-out sebelum audit malam. Kalau supervisor tidak bisa, hubungi administrator hotel (lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak)).
+  Jumlah yang diminta kotak **Check-out** selalu sama dengan yang ditagih saat check-out, apa pun peran Anda.
 - **Pembayaran tunai** butuh shift kasir yang terbuka. Lihat [Menerima deposit](menerima-deposit.md) untuk cara membuka shift dari layar ini.
 - **Koneksi terputus saat membayar?** Layar menampilkan "Koneksi terputus. Pembayaran mungkin sudah tercatat. Tekan Bayar lagi, tidak akan tercatat dua kali."
 - **Mencetak tagihan (folio) untuk tamu:** sebelum membayar, klik nomor folio di kotak **Check-out**, lalu klik **Cetak tagihan** di halaman folio. Setelah check-out, tombol yang sama bernama **Cetak invoice**.

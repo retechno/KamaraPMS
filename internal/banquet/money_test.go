@@ -373,6 +373,49 @@ func TestTheBilledGuestsAreTheLargerNumberAndAFutureSessionIsNotPosted(t *testin
 	_ = code(t, err, "SESSION_NOT_DUE")
 }
 
+// KD-03 (docs/user-guide/_laporan.md): the guests that came, sent with the posting, are billed when they are more than the guarantee
+// and kept on the session when they are fewer (36 10.5: billed = max(guaranteed, actual)). The net is the guests x the price of lunch.
+func TestThePostingBillsTheGuestsThatCameAboveTheGuaranteeAndTheGuaranteeAboveThem(t *testing.T) {
+	cases := []struct {
+		name           string
+		actual, billed int
+		basis          string
+	}{
+		{"More came", 42, 42, banquet.BasisActual},
+		{"Fewer came", 35, 40, banquet.BasisGuaranteed},
+	}
+	for _, c := range cases {
+		f := setup(t) // one event per database: the two would hold the same room at the same time
+		m := f.money(t)
+		ev, sid := m.eventOn(t, c.name, "2026-09-30", 40)
+		_, err := f.svc.AddLine(f.office, f.propID, ev.ID, banquet.LineInput{SessionID: sid, ItemID: &m.lunch.ID})
+		must(t, err)
+		m.confirm(t, ev.ID)
+		res, err := f.svc.PostSession(f.office, f.propID, ev.ID, sid, banquet.PostInput{PaxActual: ptr(c.actual)})
+		must(t, err)
+		if res.Posting.PaxBilled != c.billed || res.Posting.PaxBasis != c.basis || res.Posting.OnGuarantee {
+			t.Fatalf("%s: posting %+v, want %d on %s", c.name, res.Posting, c.billed, c.basis)
+		}
+		net := decimal.Zero
+		for _, ch := range res.Charges {
+			net = net.Add(ch.Net)
+		}
+		if want := dec("150000").Mul(decimal.NewFromInt(int64(c.billed))); !net.Equal(want) {
+			t.Fatalf("%s: net %s, want %s", c.name, net, want)
+		}
+		var onFolio string
+		must(t, f.Pool.QueryRow(context.Background(), `SELECT COALESCE(sum(debit - credit), 0)::text FROM folio_items WHERE folio_id = $1`, m.folioOf(t, ev.ID).ID).Scan(&onFolio))
+		if !dec(onFolio).Equal(res.Total) {
+			t.Fatalf("%s: the folio carries %s, the posting says %s", c.name, onFolio, res.Total)
+		}
+		var kept int
+		must(t, f.Pool.QueryRow(context.Background(), `SELECT pax_actual FROM banquet_sessions WHERE id = $1`, sid).Scan(&kept))
+		if kept != c.actual {
+			t.Fatalf("%s: the session keeps %d guests that came, want %d", c.name, kept, c.actual)
+		}
+	}
+}
+
 func TestASessionWithNoGuestsIsBlockedForTheCloseAndPostedByAPersonOnTheEstimate(t *testing.T) {
 	f := setup(t)
 	m := f.money(t)

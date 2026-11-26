@@ -3297,6 +3297,24 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/stays/{id}/check-out/preview:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: previewCheckOut
+      summary: What a check-out of the stay now would do (frontdesk.checkout)
+      description: "Applies the departure handling of the check-out itself (an early departure counted as confirmed): the departure the stay would end with, whether it is earlier than booked (`early_departure`: the check-out then needs `confirm_early_departure`), the room charges the check-out would post (`READY`) or cannot post (`ERROR`), and for every open folio of the stay its balance, the room charges that would be added and what must be paid (positive) or refunded (negative) before it is at zero. The check-out wizard asks for these amounts. Reads only: no locks, nothing written."
+      tags: [frontdesk]
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CheckOutPreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/dashboard:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -19198,6 +19216,29 @@ components:
         id: { type: integer, format: int64 }
         folio_number: { type: string }
         status: { type: string, enum: [OPEN, CLOSED] }
+    CheckOutPreview:
+      type: object
+      required: [business_date, departure_date, early_departure, room_charges, folios]
+      properties:
+        business_date: { $ref: "#/components/schemas/Date" }
+        departure_date: { $ref: "#/components/schemas/Date", description: The departure the check-out would end the stay with. }
+        early_departure: { type: boolean, description: The stay would end before its booked departure; the check-out needs confirm_early_departure. }
+        room_charges:
+          type: array
+          description: Every night of the stay up to the business date as the check-out would see it; READY nights are the ones it posts.
+          items: { $ref: "#/components/schemas/RoomChargeItem" }
+        folios:
+          type: array
+          items:
+            type: object
+            required: [folio_id, folio_number, folio_type, balance, room_charges, due]
+            properties:
+              folio_id: { type: integer, format: int64 }
+              folio_number: { type: string }
+              folio_type: { type: string, enum: [GUEST, COMPANY] }
+              balance: { type: string, description: The balance of the folio now. }
+              room_charges: { type: string, description: The room charges the check-out would add to it. }
+              due: { type: string, description: "balance + room_charges: to pay when positive, to refund when negative, before the check-out." }
     CheckOutResult:
       type: object
       required: [stay, posted_room_charges, folios, housekeeping]

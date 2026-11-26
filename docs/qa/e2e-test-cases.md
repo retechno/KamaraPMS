@@ -104,7 +104,7 @@ Aturan menulis test baru:
 | FD-05 | Tamu in-house, ada kamar bersih lain di tipenya | Stay → Pindah kamar → pilih tipe kamar tamu, lalu kamar pertama yang ditawarkan **siap** (tanpa tanda "belum siap"), alasan → Pindahkan | Respons pindah 200 (kalau ditolak, pesan server jadi pesan gagal); segmen stay berisi kamar baru |
 | FD-06 | Tamu in-house 1 malam | Stay → Perpanjang → tanggal +1 → Simpan | departure_date maju satu hari |
 | FD-07 | Tamu in-house | Admin: Stay → Batalkan check-in → alasan | Stay tidak OPEN; line reservasi kembali CONFIRMED |
-| FD-08 | Tamu in-house (tiba hari ini) dengan charge minibar 150.000 | Stay → Check-out → konfirmasi pulang lebih awal → bayar kartu di langkah folio → Check-out | Wizard menampilkan biaya kamar malam ini dan meminta saldo + biaya itu; check-out selesai; stay CHECKED_OUT; saldo folio 0 |
+| FD-08 | Tamu in-house (tiba hari ini) dengan charge minibar 150.000 | Stay → Check-out → bayar kartu di langkah folio → Check-out | Wizard tidak meminta konfirmasi pulang lebih awal (keberangkatan = kedatangan + 1, tanggal pesanannya); wizard menampilkan biaya kamar malam ini dan meminta saldo + biaya itu; check-out selesai; stay CHECKED_OUT; saldo folio 0 |
 | FD-09 | Tamu pulang besok | /departures → tanggal besok | Baris `departure-<stay>` tampil |
 
 ### 05 Folio dan kasir (`05-folio-cashier.spec.ts`)
@@ -148,6 +148,7 @@ Aturan menulis test baru:
 | POS-02 | Tamu in-house, folio dibuka untuk outlet (limit 2 juta) | Takeaway → produk → Kirim → Bayar → Kamar → cari nomor kamar → pilih → pas → Bayar | Bill CLOSED; saldo folio tamu naik |
 | POS-03 | Tamu in-house, folio belum dibuka untuk outlet | Bayar → Kamar → cari | Kamar ditandai terkunci (`open=false`); bill lalu dibayar kartu supaya tidak menahan night audit |
 | POS-04 | — | /pos/report | Total atau keadaan kosong tampil |
+| POS-05 | Tamu in-house dengan folio dibuka untuk outlet (batas 2.000.000); shift kasir admin di laci outlet (KD-01, KD-02) | Bill dibebankan ke kamar → **Buka kembali** + persetujuan → **Kembalikan beban kamar** + alasan + persetujuan → Bayar tunai | Saldo folio tamu kembali seperti semula; batas terpakai 0; bill CLOSED dengan pembayaran CASH |
 
 ### 09 Banquet (`09-banquet.spec.ts`)
 
@@ -156,6 +157,7 @@ Aturan menulis test baru:
 | BQ-01 | Perusahaan ada | /banquet/events → Baru → nama, jenis, pemesan perusahaan, kontak → Simpan; tab Sesi → tambah (ruang, tanggal H+21, 09:00–17:00, pax 12/10) | Event INQUIRY untuk perusahaan itu; sesi tampil |
 | BQ-02 | Event dengan sesi H+30 | Tentative → batas opsi H+7 → Simpan | Status TENTATIVE; batas opsi tampil |
 | BQ-03 | Ruang meeting seed | /banquet | Kalender dan kepala kolom ruang tampil |
+| BQ-04 | Event definit hari ini, makan siang per pax, garansi 40 (KD-03) | Tab Folio → Posting sesi → Pax aktual 42 → Posting sesi | Ditagih berubah dari 40 ke 42; posting pax_billed 42 dasar ACTUAL; pax aktual sesi 42 |
 
 ### 10 Akuntansi dan back office (`10-accounting.spec.ts`)
 
@@ -202,6 +204,7 @@ Aturan menulis test baru:
 | NA-01 | Semua modul selesai; ada tamu in-house dan kedatangan yang tidak datang; tidak ada opname terbuka (setup menjalankan `pms-seed inventory -no-open-count`; opname terbuka membekukan gudang dan menahan penutupan hari) | /night-audit → pilih semua kedatangan → alasan → konfirmasi → Tandai no-show; centang konfirmasi → Jalankan | Line menjadi NO_SHOW; tidak ada blok "cannot run" (kalau ada, alasannya menjadi pesan gagal); tanggal bisnis +1; malam tamu in-house terposting di folio |
 | NA-02 | NA-01 | /night-audit/archive | Baris paket untuk hari yang ditutup |
 | NA-03 | NA-01 | Posting charge setelah night audit | Charge tercatat di tanggal bisnis baru; top bar menampilkan tanggal bisnis |
+| NA-04 | NA-01; tamu in-house 3 malam sejak sebelum hari ini (KD-06) | Bayar saldo folio lewat API → /stays/:id → Check-out → centang konfirmasi keberangkatan lebih awal → Check-out | Wizard tidak meminta biaya malam ini (tidak ada alasan "Bayar dulu saldo"); stay CHECKED_OUT dengan keberangkatan = tanggal bisnis; tidak ada CHARGE bertanggal hari ini; saldo folio 0 |
 
 ## Status
 

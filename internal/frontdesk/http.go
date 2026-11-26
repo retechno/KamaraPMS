@@ -33,6 +33,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/stays/{id}/rates", httpx.HandlerFunc(h.changeRates))
 	mux.Handle("POST "+p+"/stays/{id}/guests", httpx.HandlerFunc(h.addGuest))
 	mux.Handle("POST "+p+"/stays/{id}/check-out", httpx.HandlerFunc(h.checkOut))
+	mux.Handle("GET "+p+"/stays/{id}/check-out/preview", httpx.HandlerFunc(h.checkOutPreview))
 }
 
 func pathID(r *http.Request, name string) (int64, error) {
@@ -387,6 +388,18 @@ func (h *Handler) checkOut(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	res, err := h.svc.CheckOut(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) checkOutPreview(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := stayRoute(r)
+	if err != nil {
+		return err
+	}
+	res, err := h.svc.CheckOutPreview(r.Context(), pid, id)
 	if err != nil {
 		return err
 	}

@@ -479,6 +479,12 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Rules:** §14.3 "Check-out" (departure handling for local date = BD vs local date > BD, then RoomChargePostingService, then balance = 0). Errors: `EARLY_DEPARTURE_NOT_CONFIRMED`, `REQUIRED_CHARGES_NOT_POSTED` (with the ERROR items) and `FOLIO_NOT_BALANCED` (with the balances).
 - **TX:** see Step 15 #7
 
+**GET `{P}/stays/{id}/check-out/preview`** (`frontdesk.checkout`)
+- **Purpose:** what a check-out now would do, for the check-out wizard (KD-06 of `docs/user-guide/_laporan.md`).
+- **Response:** `{ business_date, departure_date, early_departure, room_charges: [RoomChargeItem], folios: [{ folio_id, folio_number, folio_type, balance, room_charges, due }] }`
+- **Rules:** the same departure handling as the check-out (one function, `checkOutDeparture`), an early departure counted as confirmed; the room charges are the dry run of the posting service for that departure; `due = balance + room_charges` per open folio. The wizard asks for `due` and does not work out its own rule, so every role that may check out sees the same amounts.
+- **TX:** none (reads only, no locks).
+
 **POST `{P}/stays/{id}/reverse-check-in`** (`frontdesk.reverse_checkin`)
 - **Purpose:** undo a check-in.
 - **Request:** `{ version, reason }`
