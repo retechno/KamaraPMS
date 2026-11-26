@@ -575,7 +575,11 @@ func (s *Service) CheckOutPreview(ctx context.Context, propertyID, stayID int64)
 	added := map[int64]decimal.Decimal{}
 	for _, r := range nights {
 		if r.Status == expected.StatusReady && r.FolioID != nil {
-			added[*r.FolioID] = added[*r.FolioID].Add(decimal.RequireFromString(r.Total))
+			total, err := decimal.NewFromString(r.Total)
+			if err != nil {
+				return CheckOutPreview{}, err
+			}
+			added[*r.FolioID] = added[*r.FolioID].Add(total)
 		}
 	}
 	fs, err := s.folios.StayFolios(ctx, p.TenantID, propertyID, stayID)
