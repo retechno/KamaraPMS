@@ -83,9 +83,7 @@ Halaman **Kategori dan pengaturan aset** punya lima bagian: **Kategori**, **Peng
 - **Akun beban yang mewajibkan departemen:** isi **Departemen bawaan** kategorinya. Kalau tidak, **Pemeriksaan register** memperingatkan, dan penyusutan tertahan untuk aset tanpa departemen. Lihat [Penyusutan bulanan](penyusutan-bulanan.md).
 - **Peralatan operasional:** perubahan pilihan berlaku untuk pembelian sesudahnya. Batch yang sudah ada tetap diamortisasi.
 - **Tarif fiskal** menunjukkan **Umur (tahun)**, tarif **Garis lurus**, dan tarif **Saldo menurun** setiap kelompok fiskal. Ubah angkanya, lalu klik **Simpan** di baris itu. Tarif ini hanya dipakai laporan fiskal, dan perlu dikonfirmasi konsultan pajak. Lihat [Laporan aset](laporan-aset.md).
-- **Mematikan lokasi:**
-
-  > 🐞 Kendala yang diketahui (KD-23): tombol **Matikan** (dan **Aktifkan**) pada baris lokasi tidak berhasil. Di atas halaman muncul "Ada isian yang tidak valid.", dan lokasinya tetap aktif. **Dampaknya:** lokasi yang tidak dipakai lagi tidak bisa dimatikan dari layar dan tetap muncul di pilihan lokasi. **Sementara ini:** biarkan lokasinya aktif dan jangan pilih lokasi itu untuk aset. Kalau lokasinya harus dimatikan, minta administrator hotel menghubungi tim dukungan KamaraPMS. Lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak).
+- **Mematikan lokasi:** klik **Matikan** di baris lokasi. Lokasi itu menjadi **Nonaktif** dan tidak lagi ditawarkan di pilihan lokasi, misalnya di **Jadikan aset** dan **Pindahkan**. Aset yang sudah ada di lokasi itu tetap di sana. Klik **Aktifkan** untuk memakainya lagi.
 
 - **Register mulai:**
 

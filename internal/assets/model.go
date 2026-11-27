@@ -248,8 +248,8 @@ type LocationInput struct {
 
 // LocationPatch renames a location or switches it off.
 type LocationPatch struct {
-	Name     string `json:"name"`
-	IsActive *bool  `json:"is_active"`
+	Name     *string `json:"name"` // nil keeps the name (the switch of the screen sends only is_active, KD-23)
+	IsActive *bool   `json:"is_active"`
 }
 
 // EnsureLocationInput names a room, a banquet room or a warehouse whose location is wanted (made on first use).

@@ -374,9 +374,12 @@ func (s *Service) UpdateLocation(ctx context.Context, propertyID, id int64, in L
 	if err != nil {
 		return Location{}, err
 	}
-	in.Name = trimmed(in.Name)
-	if n := len([]rune(in.Name)); n < 1 || n > 100 {
-		return Location{}, invalid("location", fieldErr("name", "INVALID_VALUE", "1 to 100 characters"))
+	if in.Name != nil {
+		name := trimmed(*in.Name)
+		if n := len([]rune(name)); n < 1 || n > 100 {
+			return Location{}, invalid("location", fieldErr("name", "INVALID_VALUE", "1 to 100 characters"))
+		}
+		in.Name = &name
 	}
 	err = s.write(ctx, propertyID, func(ctx context.Context, day civil.Date) error {
 		if _, err := s.lockSettings(ctx, p, propertyID, db.ForShare); err != nil {
@@ -387,15 +390,18 @@ func (s *Service) UpdateLocation(ctx context.Context, propertyID, id int64, in L
 		if err != nil {
 			return orNotFound(err, notFound("LOCATION_NOT_FOUND", "location"))
 		}
-		act := cur.IsActive
+		act, name := cur.IsActive, cur.Name
 		if in.IsActive != nil {
 			act = *in.IsActive
 		}
-		if _, err := q.UpdateLocation(ctx, assetsdb.UpdateLocationParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: in.Name, IsActive: act, ActorID: p.ActorID()}); err != nil {
+		if in.Name != nil {
+			name = *in.Name
+		}
+		if _, err := q.UpdateLocation(ctx, assetsdb.UpdateLocationParams{TenantID: p.TenantID, PropertyID: propertyID, ID: id, Name: name, IsActive: act, ActorID: p.ActorID()}); err != nil {
 			return err
 		}
 		return s.audit.Write(ctx, s.entry(p, propertyID, day, "asset.location_updated", "fa_location", id, cur.Code,
-			map[string]any{"name": cur.Name, "is_active": cur.IsActive}, map[string]any{"name": in.Name, "is_active": act}))
+			map[string]any{"name": cur.Name, "is_active": cur.IsActive}, map[string]any{"name": name, "is_active": act}))
 	})
 	if err != nil {
 		return Location{}, err
