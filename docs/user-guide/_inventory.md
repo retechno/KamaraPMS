@@ -590,7 +590,7 @@ Tautan dari halaman yang sudah ditulis ke halaman yang belum ada. Halaman yang d
 ### 9.1 Teks yang tampil dalam bahasa Inggris atau sebagai kode mentah
 
 **Izin dan peran**
-- 20 izin tidak punya `permissionLabel` Indonesia: semua `asset.*`, semua `banquet.*`, dan 11 izin `inventory.*` (request, purchase, receive, bill, approve, cost_control, final_approve, move, count, dept_approve, sr_final_approve).
+- 9 izin tidak punya `permissionLabel` Indonesia: semua `asset.*` dan semua `banquet.*`. *Diperbaiki (PR C2):* ke-11 izin `inventory.*` yang dulu tanpa label (request, purchase, receive, bill, approve, cost_control, final_approve, move, count, dept_approve, sr_final_approve) sekarang berlabel.
 - Grup izin "Inventory", "Fixed assets", dan "Banquet" tampil dalam bahasa Inggris di form Peran.
 
 **Error dan temuan tanpa teks Indonesia**
