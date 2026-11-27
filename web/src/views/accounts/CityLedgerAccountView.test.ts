@@ -50,6 +50,9 @@ let adjustmentList: unknown[] = []
 let reminderList: unknown[] = []
 /** The invoices the mock answers; a test that needs others sets it before it mounts. */
 let invoiceList: unknown[] = invoices
+/** The receipts and what the account adds to the fixture; the KD-27 tests set them before they mount. */
+let receiptList: unknown[] = receipts
+let accountExtra: Record<string, unknown> = {}
 
 function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'cityledger.invoice']) {
   const pinia = createPinia()
@@ -63,10 +66,10 @@ function mountView(permissions = ['cityledger.read', 'cityledger.receive', 'city
     if (path.endsWith('/reminders')) return { data: { data: reminderList } }
     if (path.endsWith('/aging')) return { data: aging }
     if (path.endsWith('/statement')) return { data: statement }
-    if (path.endsWith('/receipts')) return { data: { data: receipts } }
+    if (path.endsWith('/receipts')) return { data: { data: receiptList } }
     if (path.endsWith('/invoice-candidates')) return { data: { data: candidates } }
     if (path.endsWith('/invoices')) return { data: { data: invoiceList } }
-    return { data: account }
+    return { data: { ...account, ...accountExtra } }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div />' } }] })
@@ -80,6 +83,8 @@ describe('CityLedgerAccountView', () => {
     POST = vi.fn()
     adjustmentList = []
     invoiceList = invoices
+    receiptList = receipts
+    accountExtra = {}
     openPdf = vi.fn().mockResolvedValue(undefined)
     document.body.innerHTML = ''
   })
@@ -187,6 +192,97 @@ describe('CityLedgerAccountView', () => {
       await w.get('[data-testid=receipt-form]').trigger('submit')
       await flushPromises()
       expect(sent()).toBeUndefined()
+    })
+  })
+
+  describe('KD-27: a recorded receipt is allocated later, and a wrong allocation is released', () => {
+    // CLR000001 (100,000) pays 40,000 of CINV000001 since the 29th; 60,000 of it is still on account
+    const allocation = { id: 71, invoice_id: 51, invoice_number: 'CINV000001', amount: '40000', allocated_on: '2026-09-29', released_at: null, released_on: null }
+    const withLeft = () => {
+      receiptList = [{ ...receipts[0], business_date: '2026-09-29', allocations: [allocation], allocated: '40000', unallocated: '60000' }, { ...receipts[1], allocations: [], allocated: '0', unallocated: '0' }]
+      accountExtra = { unallocated: '60000' }
+    }
+    const form = (w: ReturnType<typeof mountView>) => w.get('[data-testid=allocate-form]')
+
+    it('shows what is not allocated and allocates it to the open invoices with an Idempotency-Key', async () => {
+      withLeft()
+      const w = mountView()
+      await flushPromises()
+      expect(w.get('[data-testid=account-unallocated]').text()).toContain('60,000')
+      expect(w.get('[data-testid=left-CLR000001]').text()).toContain('60,000')
+      expect(w.find('[data-testid=allocate-CLR000000]').exists()).toBe(false) // voided
+      expect(w.get('[data-testid=allocation-71]').text()).toContain('CINV000001')
+      await w.get('[data-testid=allocate-CLR000001]').trigger('click')
+      await flushPromises()
+      expect(form(w).text()).toContain('60,000')
+      expect((form(w).get('input[name=alloc_51]').element as HTMLInputElement).value).toBe('60000') // filled from the oldest
+      await form(w).get('form').trigger('submit')
+      await flushPromises()
+      const [path, opts] = POST.mock.calls[0] as [string, { params: { path: unknown; header: Record<string, string> }; body: unknown }]
+      expect(path).toBe('/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/allocations')
+      expect(opts.params.path).toEqual({ propertyId: 7, id: 31 })
+      expect(opts.params.header['Idempotency-Key']).toBeTruthy()
+      expect(opts.body).toEqual({ allocations: [{ invoice_id: 51, amount: '60000' }] })
+      expect(w.get('[data-testid=notice]').text()).toContain('Receipt CLR000001 now pays CINV000001')
+      expect(w.find('[data-testid=allocate-form]').exists()).toBe(false)
+    })
+
+    it('keeps the form open on a refusal and tries with a new key', async () => {
+      withLeft()
+      const w = mountView()
+      await flushPromises()
+      await w.get('[data-testid=allocate-CLR000001]').trigger('click')
+      POST.mockRejectedValue(new ApiError({ type: 't', title: 'Conflict', status: 409, code: 'ALLOCATION_EXCEEDS_UNALLOCATED', detail: 'more than is left' }))
+      await form(w).get('form').trigger('submit')
+      await flushPromises()
+      expect(form(w).get('[data-testid=allocate-error]').text()).toContain('ALLOCATION_EXCEEDS_UNALLOCATED')
+      await form(w).get('form').trigger('submit')
+      await flushPromises()
+      expect(POST.mock.calls[1]?.[1].params.header['Idempotency-Key']).not.toBe(POST.mock.calls[0]?.[1].params.header['Idempotency-Key'])
+    })
+
+    it('does not offer Allocate without what is left, without an open invoice or without cityledger.receive', async () => {
+      withLeft()
+      invoiceList = invoices.filter((i) => i.id !== 51)
+      let w = mountView()
+      await flushPromises()
+      expect(w.find('[data-testid=allocate-CLR000001]').exists()).toBe(false) // nothing to pay
+      expect(w.find('[data-testid=release-71]').exists()).toBe(false) // the invoice is not issued here
+      invoiceList = invoices
+      w = mountView(['cityledger.read'])
+      await flushPromises()
+      expect(w.find('[data-testid=allocate-CLR000001]').exists()).toBe(false)
+      expect(w.find('[data-testid=release-71]').exists()).toBe(false)
+      receiptList = receipts.map((r) => ({ ...r, allocations: [], allocated: r.amount, unallocated: '0' }))
+      w = mountView()
+      await flushPromises()
+      expect(w.find('[data-testid=allocate-CLR000001]').exists()).toBe(false)
+      expect(w.find('[data-testid=left-CLR000001]').exists()).toBe(false)
+    })
+
+    it('releases an allocation with a reason and an approval for its amount, and shows a released one struck', async () => {
+      withLeft()
+      const w = mountView()
+      await flushPromises()
+      await w.get('[data-testid=release-71]').trigger('click')
+      expect(w.get('[data-testid=void-form]').text()).toContain('Release the allocation to CINV000001')
+      await w.get('input[name=void_reason]').setValue('wrong invoice')
+      await w.get('[data-testid=void-continue]').trigger('click')
+      await dlg('input[name=approval_password]').setValue('secret')
+      await dlg('[data-testid=approval-dialog]').trigger('submit')
+      await flushPromises()
+      expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/city-ledger/receipt-allocations/{id}/release', {
+        params: { path: { propertyId: 7, id: 71 } }, body: { reason: 'wrong invoice', approval: { email: 'clerk@hotel.com', password: 'secret' } },
+      })
+      expect(w.get('[data-testid=notice]').text()).toContain('Allocation released')
+
+      receiptList = [{ ...receipts[0], allocations: [{ ...allocation, released_at: '2026-09-30T03:00:00Z', released_on: '2026-09-30', release_reason: 'wrong invoice' }], allocated: '0', unallocated: '100000' }]
+      const v = mountView()
+      await flushPromises()
+      expect(v.get('[data-testid=allocation-71]').text()).toContain('released')
+      expect(v.get('[data-testid=allocation-71]').text()).toContain('wrong invoice')
+      expect(v.find('[data-testid=allocation-71] .line-through').exists()).toBe(true)
+      expect(v.find('[data-testid=release-71]').exists()).toBe(false)
     })
   })
 

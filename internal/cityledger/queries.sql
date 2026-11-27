@@ -1,11 +1,13 @@
--- Accounts: every company with what was transferred to it and what it paid back (posted rows only).
+-- Accounts: every company with what was transferred to it and what it paid back (posted rows only), and what of its receipts the
+-- live allocations took to invoices (the rest is on account).
 -- name: ListAccounts :many
-SELECT a.id, a.code, a.name, a.credit_limit, a.payment_terms_days, a.is_active, a.transferred, a.received, a.adjusted
+SELECT a.id, a.code, a.name, a.credit_limit, a.payment_terms_days, a.is_active, a.transferred, a.received, a.adjusted, a.allocated
 FROM (
     SELECT c.id, c.code, c.name, c.credit_limit, c.payment_terms_days, c.is_active,
            COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = c.property_id AND p.company_id = c.id AND p.status = 'POSTED'), 0)::numeric AS transferred,
            COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received,
-           COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted
+           COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted,
+           COALESCE((SELECT sum(x.amount) FROM city_ledger_receipt_allocations x JOIN city_ledger_receipts xr ON xr.property_id = x.property_id AND xr.id = x.receipt_id AND xr.status = 'POSTED' WHERE x.property_id = c.property_id AND x.company_id = c.id AND x.released_at IS NULL), 0)::numeric AS allocated
     FROM companies c
     WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.id > @after_id
       AND (sqlc.narg(q)::text IS NULL OR c.code ILIKE '%' || sqlc.narg(q)::text || '%' OR c.name ILIKE '%' || sqlc.narg(q)::text || '%')
@@ -18,7 +20,8 @@ LIMIT @row_limit;
 SELECT c.id, c.code, c.name, c.credit_limit, c.payment_terms_days, c.is_active, c.email, c.phone, c.address, c.contact_name,
        COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.property_id = c.property_id AND p.company_id = c.id AND p.status = 'POSTED'), 0)::numeric AS transferred,
        COALESCE((SELECT sum(r.amount) FROM city_ledger_receipts r WHERE r.property_id = c.property_id AND r.company_id = c.id AND r.status = 'POSTED'), 0)::numeric AS received,
-       COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted
+       COALESCE((SELECT sum(a.amount) FROM city_ledger_adjustments a WHERE a.property_id = c.property_id AND a.company_id = c.id AND a.status = 'POSTED'), 0)::numeric AS adjusted,
+       COALESCE((SELECT sum(x.amount) FROM city_ledger_receipt_allocations x JOIN city_ledger_receipts xr ON xr.property_id = x.property_id AND xr.id = x.receipt_id AND xr.status = 'POSTED' WHERE x.property_id = c.property_id AND x.company_id = c.id AND x.released_at IS NULL), 0)::numeric AS allocated
 FROM companies c
 WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.id = @id;
 
@@ -155,23 +158,45 @@ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.invoice_id
 ORDER BY p.business_date, p.id;
 
 -- name: InsertAllocation :exec
-INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
-VALUES (@tenant_id, @property_id, @receipt_id, @invoice_id, @company_id, @amount);
+INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on, created_by, idempotency_key)
+VALUES (@tenant_id, @property_id, @receipt_id, @invoice_id, @company_id, @amount, @allocated_on, sqlc.narg(actor_id), sqlc.narg(idempotency_key));
 
--- What invoices have been paid: the allocations of receipts that are still posted.
+-- What invoices have been paid: the live allocations of receipts that are still posted.
 -- name: InvoicePaid :many
 SELECT a.invoice_id, sum(a.amount)::numeric AS paid
 FROM city_ledger_receipt_allocations a
 JOIN city_ledger_receipts r ON r.property_id = a.property_id AND r.id = a.receipt_id AND r.status = 'POSTED'
-WHERE a.property_id = @property_id AND a.invoice_id = ANY(@invoice_ids::bigint[])
+WHERE a.property_id = @property_id AND a.invoice_id = ANY(@invoice_ids::bigint[]) AND a.released_at IS NULL
 GROUP BY a.invoice_id;
 
+-- The allocations of a company's receipts, released ones too (the trail), in the order they were made.
 -- name: ListCompanyAllocations :many
-SELECT a.receipt_id, a.invoice_id, i.invoice_number, a.amount
+SELECT a.id, a.receipt_id, a.invoice_id, i.invoice_number, a.amount, a.allocated_on, a.released_at, a.released_on, a.release_reason
 FROM city_ledger_receipt_allocations a
 JOIN city_ledger_invoices i ON i.property_id = a.property_id AND i.id = a.invoice_id
 WHERE a.tenant_id = @tenant_id AND a.property_id = @property_id AND a.company_id = @company_id
-ORDER BY a.receipt_id, a.invoice_id;
+ORDER BY a.receipt_id, a.id;
+
+-- What the live allocations of a receipt come to.
+-- name: ReceiptAllocated :one
+SELECT COALESCE(sum(amount), 0)::numeric FROM city_ledger_receipt_allocations
+WHERE property_id = @property_id AND receipt_id = @receipt_id AND released_at IS NULL;
+
+-- The receipt an Idempotency-Key of an allocation was used for (allocations made after their receipt carry the key of their request).
+-- name: AllocationKeyReceipt :one
+SELECT receipt_id FROM city_ledger_receipt_allocations
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND idempotency_key = @idempotency_key
+LIMIT 1;
+
+-- name: GetAllocation :one
+SELECT * FROM city_ledger_receipt_allocations WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id;
+
+-- A live allocation is released once; no row when it is released already.
+-- name: ReleaseAllocation :one
+UPDATE city_ledger_receipt_allocations
+SET released_at = @now, released_on = @released_on, released_by = sqlc.narg(actor_id), release_reason = @reason, release_approved_by = @approved_by
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND released_at IS NULL
+RETURNING *;
 
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -277,7 +302,7 @@ SELECT count(*)::int FROM tax_invoices WHERE tenant_id = @tenant_id AND property
 -- name: ListOverdueInvoices :many
 SELECT i.id, i.invoice_number, i.company_id, c.code AS company_code, c.name AS company_name, i.invoice_date, i.due_date, i.total,
        COALESCE((SELECT sum(a.amount) FROM city_ledger_receipt_allocations a JOIN city_ledger_receipts r ON r.property_id = a.property_id AND r.id = a.receipt_id AND r.status = 'POSTED'
-                  WHERE a.property_id = i.property_id AND a.invoice_id = i.id), 0)::numeric AS paid,
+                  WHERE a.property_id = i.property_id AND a.invoice_id = i.id AND a.released_at IS NULL), 0)::numeric AS paid,
        COALESCE((SELECT sum(x.amount) FROM city_ledger_adjustments x WHERE x.property_id = i.property_id AND x.invoice_id = i.id AND x.status = 'POSTED'), 0)::numeric AS adjusted
 FROM city_ledger_invoices i
 JOIN companies c ON c.property_id = i.property_id AND c.id = i.company_id

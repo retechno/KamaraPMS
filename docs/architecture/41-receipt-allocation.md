@@ -233,7 +233,7 @@ All on real PostgreSQL (`dbtest`), in `internal/cityledger` (`allocate_later_tes
 DELETE and TRUNCATE refused; `clra_released_ck`; the deferred `clra_exceeds_receipt` at commit (two inserts in one transaction that
 together pass the receipt); the business-day trigger; the back-fill of `allocated_on`; Down refused while a release exists.
 
-**Races** (two transactions, `pg_stat_activity` to wait for the lock, as `void_race_test.go`):
+**Races** (requests started together in goroutines, as `TestReceiptsCannotExceedTheBalanceUnderRace`; the company lock makes the late ones wait):
 12. **Two allocations of the same receipt at once**, each within the unallocated part but together above it: one commits, the other
     waits on the company lock, then sees the new unallocated part and answers `ALLOCATION_EXCEEDS_UNALLOCATED`. The receipt is never
     allocated above its amount.

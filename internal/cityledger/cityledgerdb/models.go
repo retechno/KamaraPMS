@@ -84,6 +84,25 @@ type CityLedgerReceipt struct {
 	MdrVat                 *decimal.Decimal
 }
 
+type CityLedgerReceiptAllocation struct {
+	ID                int64
+	TenantID          int64
+	PropertyID        int64
+	ReceiptID         int64
+	InvoiceID         int64
+	CompanyID         int64
+	Amount            decimal.Decimal
+	CreatedAt         time.Time
+	AllocatedOn       civil.Date
+	CreatedBy         *int64
+	IdempotencyKey    *string
+	ReleasedAt        *time.Time
+	ReleasedOn        *civil.Date
+	ReleasedBy        *int64
+	ReleaseReason     *string
+	ReleaseApprovedBy *int64
+}
+
 type CityLedgerReminder struct {
 	ID               int64
 	TenantID         int64

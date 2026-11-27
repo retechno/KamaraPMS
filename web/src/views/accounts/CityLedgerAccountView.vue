@@ -5,6 +5,8 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { Approval, CityLedgerAccount, CityLedgerAdjustment, CityLedgerAging, CityLedgerCandidate, CityLedgerInvoice, CityLedgerReceipt, CityLedgerReminder, CityLedgerStatement, GlAccount } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
+import AllocationTable from '@/components/cityledger/AllocationTable.vue'
+import { checkAllocations, openInvoicesOf, splitFromOldest } from '@/components/cityledger/allocation'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import ShiftRequiredNotice from '@/components/app/ShiftRequiredNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -21,7 +23,6 @@ import { t } from '@/i18n'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
-import { formatMoney } from '@/utils/format'
 import { documentPath, openPdf } from '@/utils/documents'
 import { newIdempotencyKey } from '@/utils/reservations'
 import { listAccounts } from '@/views/accounting/accountApi'
@@ -52,13 +53,15 @@ const busy = ref(false)
 const period = reactive({ from: '', to: '' })
 const receipt = reactive({ amount: '', method: 'BANK_TRANSFER' as CityLedgerReceipt['payment_method'], reference: '', remarks: '' })
 const METHODS: CityLedgerReceipt['payment_method'][] = ['BANK_TRANSFER', 'CASH', 'CARD', 'OTHER', 'QRIS']
-// A void waiting for its reason and its approval: a receipt or an invoice.
-const voiding = ref<{ kind: 'receipt' | 'invoice' | 'adjustment'; id: number; label: string; reason: string; asking: boolean } | null>(null)
+// A void waiting for its reason and its approval: a receipt, an invoice, a credit note or write-off, or the release of an allocation (KD-27,
+// with the amount of the allocation for the approval rule).
+const voiding = ref<{ kind: 'receipt' | 'invoice' | 'adjustment' | 'allocation'; id: number; label: string; reason: string; asking: boolean; amount?: string } | null>(null)
 // One key per attempt: kept while a request may have been lost, renewed once the server has answered.
 let receiptKey = newIdempotencyKey()
 let invoiceKey = newIdempotencyKey()
 let payKey = newIdempotencyKey()
 let adjustKey = newIdempotencyKey()
+let allocateKey = newIdempotencyKey()
 /** A credit note or a write-off being made: against an invoice or a transfer, with the reason and then the approval. */
 interface AdjustForm {
   mode: 'credit' | 'writeoff'
@@ -116,55 +119,18 @@ async function load(): Promise<void> {
 }
 
 // KD-04: a payment from the company pays its open invoices. The amount is split over them from the oldest (the clerk may change
-// the split); what no invoice takes stays on account. Amounts are thousandths (bigint), never floats.
-const allocs = reactive<Record<number, string>>({})
-const allocTouched = ref(false)
-const openInvoices = computed(() => invoices.value
-  .filter((i) => i.status === 'ISSUED' && (toMilli(i.outstanding) ?? 0n) > 0n)
-  .sort((a, b) => a.invoice_date.localeCompare(b.invoice_date) || a.id - b.id))
-function allocateOldest(): void {
-  const amount = toMilli(receipt.amount) ?? 0n
-  let left = amount > 0n ? amount : 0n
-  for (const inv of openInvoices.value) {
-    const owes = toMilli(inv.outstanding) ?? 0n
-    const take = left < owes ? left : owes
-    allocs[inv.id] = take > 0n ? fromMilli(take) : ''
-    left -= take
-  }
-}
-function splitFromOldest(): void {
-  allocTouched.value = false
-  allocateOldest()
-}
-function setAlloc(id: number, value: string): void {
-  allocs[id] = value
-  allocTouched.value = true // what the clerk typed is kept when the amount changes
-}
-watch(() => receipt.amount, () => { if (!allocTouched.value) allocateOldest() })
-watch(openInvoices, (list) => {
-  for (const id of Object.keys(allocs).map(Number)) if (!list.some((i) => i.id === id)) delete allocs[id]
-  if (!allocTouched.value) allocateOldest()
-})
-const allocLines = computed(() => openInvoices.value.map((inv) => {
-  const value = (allocs[inv.id] ?? '').trim()
-  const milli = value === '' ? 0n : toMilli(value)
-  return { inv, milli, bad: milli === null || milli < 0n, over: milli !== null && milli > (toMilli(inv.outstanding) ?? 0n) }
-}))
-const allocated = computed(() => allocLines.value.reduce((sum, l) => sum + (l.milli !== null && l.milli > 0n ? l.milli : 0n), 0n))
-const unallocated = computed(() => (toMilli(receipt.amount) ?? 0n) - allocated.value)
-const allocProblem = computed(() => {
-  if (allocLines.value.some((l) => l.bad)) return t('clAccount.allocInvalid')
-  const over = allocLines.value.find((l) => l.over)
-  if (over) return t('clAccount.allocExceedsInvoice', { number: over.inv.invoice_number, amount: formatMoney(over.inv.outstanding) })
-  if (unallocated.value < 0n) return t('clAccount.allocExceedsAmount')
-  return ''
-})
+// the split); what no invoice takes stays on account (components/cityledger/AllocationTable.vue).
+const allocs = ref<Record<number, string>>({})
+const allocKey = ref(0) // a new key starts the split over
+const openInvoices = computed(() => openInvoicesOf(invoices.value))
+const receiptCheck = computed(() => checkAllocations(allocs.value, openInvoices.value, receipt.amount))
+const allocProblem = computed(() => receiptCheck.value.problem)
 
 async function receive(): Promise<void> {
   busy.value = true
   error.value = null
   notice.value = ''
-  const allocations = allocLines.value.filter((l) => l.milli !== null && l.milli > 0n).map((l) => ({ invoice_id: l.inv.id, amount: fromMilli(l.milli as bigint) }))
+  const allocations = receiptCheck.value.payload
   try {
     await api.POST('/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/receipts', {
       params: { ...base(), header: { 'Idempotency-Key': receiptKey } },
@@ -174,7 +140,8 @@ async function receive(): Promise<void> {
       },
     })
     receiptKey = newIdempotencyKey()
-    allocTouched.value = false
+    allocs.value = {}
+    allocKey.value++
     receipt.amount = ''
     receipt.reference = ''
     receipt.remarks = ''
@@ -186,6 +153,55 @@ async function receive(): Promise<void> {
   } finally {
     busy.value = false
   }
+}
+
+// KD-27: what is left of a recorded receipt, of any day, is allocated to open invoices later; a wrong allocation is released with a reason and
+// an approval (docs/architecture/41-receipt-allocation.md). Neither posts a journal.
+const positive = (v: string | undefined) => !!v && (toMilli(v) ?? 0n) > 0n
+const leftOf = (number: string): string => {
+  const r = receiptOf(number)
+  return r && r.status === 'POSTED' && positive(r.unallocated) ? r.unallocated : ''
+}
+const allocating = ref<{ receipt: CityLedgerReceipt; model: Record<number, string> } | null>(null)
+const allocateError = ref<ApiError | null>(null)
+const allocateCheck = computed(() => allocating.value ? checkAllocations(allocating.value.model, openInvoices.value, allocating.value.receipt.unallocated) : null)
+function startAllocate(number: string): void {
+  const r = receiptOf(number)
+  if (!r) return
+  allocating.value = { receipt: r, model: splitFromOldest(r.unallocated, openInvoices.value) }
+  allocateError.value = null
+  allocateKey = newIdempotencyKey()
+}
+async function submitAllocate(): Promise<void> {
+  const a = allocating.value
+  const check = allocateCheck.value
+  if (!a || !check || pid.value === null) return
+  busy.value = true
+  allocateError.value = null
+  notice.value = ''
+  try {
+    await api.POST('/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/allocations', {
+      params: { path: { propertyId: pid.value, id: a.receipt.id }, header: { 'Idempotency-Key': allocateKey } },
+      body: { allocations: check.payload },
+    })
+    allocateKey = newIdempotencyKey()
+    const names = check.payload.map((x) => openInvoices.value.find((i) => i.id === x.invoice_id)?.invoice_number ?? '').join(', ')
+    notice.value = t('clAccount.allocatedNotice', { number: a.receipt.receipt_number, invoices: names })
+    allocating.value = null
+    await load()
+  } catch (e) {
+    allocateError.value = e instanceof ApiError ? e : null
+    if (e instanceof ApiError) allocateKey = newIdempotencyKey() // the server answered: the next submit is a new attempt
+  } finally {
+    busy.value = false
+  }
+}
+const releasable = (r: CityLedgerReceipt | undefined, invoiceID: number) =>
+  !!r && r.status === 'POSTED' && can('cityledger.receive') && invoices.value.some((i) => i.id === invoiceID && i.status === 'ISSUED')
+function startRelease(a: CityLedgerReceipt['allocations'][number]): void {
+  voiding.value = { kind: 'allocation', id: a.id, label: a.invoice_number, reason: '', asking: false, amount: a.amount }
+  dialogError.value = null
+  error.value = null
 }
 
 function startVoid(number: string): void {
@@ -205,10 +221,11 @@ async function approveVoid(approval: Approval): Promise<void> {
     const params = { path: { propertyId: pid.value, id: v.id } }
     const body = { reason: v.reason, approval }
     if (v.kind === 'receipt') await api.POST('/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/void', { params, body })
+    else if (v.kind === 'allocation') await api.POST('/api/v1/properties/{propertyId}/city-ledger/receipt-allocations/{id}/release', { params, body })
     else if (v.kind === 'adjustment') await api.POST('/api/v1/properties/{propertyId}/city-ledger/adjustments/{id}/void', { params, body })
     else await api.POST('/api/v1/properties/{propertyId}/city-ledger/invoices/{id}/void', { params, body })
     voiding.value = null
-    notice.value = v.kind === 'receipt' ? t('clAccount.receiptVoided') : v.kind === 'adjustment' ? t('clAccount.adjustmentVoided') : t('clAccount.invoiceVoided')
+    notice.value = v.kind === 'receipt' ? t('clAccount.receiptVoided') : v.kind === 'allocation' ? t('clAccount.allocationReleased') : v.kind === 'adjustment' ? t('clAccount.adjustmentVoided') : t('clAccount.invoiceVoided')
     await load()
   } catch (e) {
     dialogError.value = e instanceof ApiError ? e : null
@@ -494,6 +511,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
           <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.creditLimit') }}</dt><dd class="m-0 text-sm">{{ account.credit_limit ? $money(account.credit_limit) : t('clAccount.noLimit') }}</dd></div>
           <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.available') }}</dt><dd class="m-0 text-sm">{{ account.available ? $money(account.available) : '-' }}</dd></div>
           <div><dt class="text-xs text-muted-foreground">{{ t('clAccount.terms') }}</dt><dd class="m-0 text-sm">{{ t('clAccount.days', { n: account.payment_terms_days }) }}</dd></div>
+          <div v-if="positive(account.unallocated)" data-testid="account-unallocated"><dt class="text-xs text-muted-foreground">{{ t('clAccount.unallocatedHeader') }}</dt><dd class="m-0 text-sm"><b>{{ $money(account.unallocated) }}</b></dd></div>
         </dl>
         <table v-if="aging" class="mt-4 w-full border-collapse text-sm" data-testid="aging">
           <caption class="pb-1.5 text-left text-xs text-muted-foreground">{{ t('clAccount.aging', { date: $date(aging.as_of) }) }}</caption>
@@ -525,47 +543,7 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
               <template #default="{ id }"><Input :id="id" v-model="receipt.remarks" name="remarks" /></template>
             </FormField>
           </div>
-          <div v-if="openInvoices.length" class="mt-4" data-testid="allocations">
-            <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
-              <p class="m-0 text-sm font-medium">{{ t('clAccount.allocTitle') }}</p>
-              <Button type="button" variant="outline" size="sm" data-testid="allocate-oldest" @click="splitFromOldest">{{ t('clAccount.allocateOldest') }}</Button>
-            </div>
-            <p class="m-0 mb-2 text-sm text-muted-foreground">{{ t('clAccount.allocHint') }}</p>
-            <div class="overflow-x-auto">
-              <table class="w-full border-collapse text-sm">
-                <thead>
-                  <tr class="border-b border-border text-left text-xs text-muted-foreground">
-                    <th class="py-1 pr-3 font-medium">{{ t('clAccount.number') }}</th>
-                    <th class="px-3 font-medium">{{ t('clAccount.date') }}</th>
-                    <th class="px-3 font-medium">{{ t('clAccount.due') }}</th>
-                    <th class="px-3 text-right font-medium">{{ t('clAccount.outstanding') }}</th>
-                    <th class="pl-3 text-right font-medium">{{ t('clAccount.allocAmount') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="l in allocLines" :key="l.inv.id" class="border-b border-border" :data-testid="`alloc-row-${l.inv.invoice_number}`">
-                    <td class="py-1.5 pr-3">{{ l.inv.invoice_number }}</td>
-                    <td class="px-3">{{ $date(l.inv.invoice_date) }}</td>
-                    <td class="px-3">{{ $date(l.inv.due_date) }}</td>
-                    <td class="px-3 text-right tabular-nums">{{ $money(l.inv.outstanding) }}</td>
-                    <td class="py-1 pl-3">
-                      <Input
-                        class="ml-auto w-36 text-right"
-                        :model-value="allocs[l.inv.id] ?? ''"
-                        :name="`alloc_${l.inv.id}`"
-                        inputmode="decimal"
-                        :aria-label="t('clAccount.allocFor', { number: l.inv.invoice_number })"
-                        :aria-invalid="l.bad || l.over"
-                        @update:model-value="(v) => setAlloc(l.inv.id, String(v ?? ''))"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="m-0 mt-2 text-right text-sm" data-testid="unallocated">{{ t('clAccount.unallocated', { amount: $money(fromMilli(unallocated > 0n ? unallocated : 0n)) }) }}</p>
-            <p v-if="allocProblem" role="alert" class="m-0 mt-1 text-right text-sm text-destructive" data-testid="alloc-error">{{ allocProblem }}</p>
-          </div>
+          <AllocationTable :key="allocKey" v-model="allocs" class="mt-4" :amount="receipt.amount" :invoices="openInvoices" />
           <ShiftRequiredNotice class="mt-4" :method="receipt.method" />
           <div class="mt-4 flex justify-end"><Button type="submit" :disabled="busy || !!allocProblem" data-testid="receipt-submit">{{ t('clAccount.recordReceipt') }}</Button></div>
         </CardContent>
@@ -766,16 +744,39 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
             </thead>
             <tbody class="[&_td]:py-1.5 [&_td]:pr-3 [&_tr]:border-b [&_tr]:border-border">
               <tr><td colspan="6">{{ t('clAccount.opening') }}</td><td class="text-right tabular-nums">{{ $money(statement.opening_balance) }}</td><td /></tr>
-              <tr v-for="l in statement.lines" :key="`${l.kind}-${l.number}`" :class="{ voided: l.status === 'VOIDED', 'text-muted-foreground line-through': l.status === 'VOIDED' }" :data-testid="`line-${l.number}`">
-                <td>{{ $date(l.date) }}</td>
-                <td>{{ l.number }}</td>
-                <td>{{ l.description }}<template v-if="l.guest_name"> · {{ l.guest_name }}</template><small v-if="l.status === 'VOIDED'"> {{ t('clAccount.voidedNote') }}</small></td>
-                <td>{{ l.reference }}</td>
-                <td class="text-right tabular-nums">{{ l.debit === '0' ? '' : l.debit }}</td>
-                <td class="text-right tabular-nums">{{ l.credit === '0' ? '' : l.credit }}</td>
-                <td class="text-right tabular-nums">{{ $money(l.balance) }}</td>
-                <td><Button v-if="l.kind === 'RECEIPT' && voidable(l.number)" type="button" variant="outline" size="sm" :data-testid="`void-${l.number}`" @click="startVoid(l.number)">{{ t('clAccount.void') }}</Button></td>
-              </tr>
+              <template v-for="l in statement.lines" :key="`${l.kind}-${l.number}`">
+                <tr :class="{ voided: l.status === 'VOIDED', 'text-muted-foreground line-through': l.status === 'VOIDED' }" :data-testid="`line-${l.number}`">
+                  <td>{{ $date(l.date) }}</td>
+                  <td>{{ l.number }}</td>
+                  <td>
+                    {{ l.description }}<template v-if="l.guest_name"> · {{ l.guest_name }}</template><small v-if="l.status === 'VOIDED'"> {{ t('clAccount.voidedNote') }}</small>
+                    <small v-if="l.kind === 'RECEIPT' && leftOf(l.number)" class="text-muted-foreground" :data-testid="`left-${l.number}`"> · {{ t('clAccount.receiptLeft', { amount: $money(leftOf(l.number)) }) }}</small>
+                  </td>
+                  <td>{{ l.reference }}</td>
+                  <td class="text-right tabular-nums">{{ l.debit === '0' ? '' : l.debit }}</td>
+                  <td class="text-right tabular-nums">{{ l.credit === '0' ? '' : l.credit }}</td>
+                  <td class="text-right tabular-nums">{{ $money(l.balance) }}</td>
+                  <td>
+                    <div class="flex justify-end gap-2">
+                      <Button v-if="l.kind === 'RECEIPT' && leftOf(l.number) && openInvoices.length && can('cityledger.receive')" type="button" variant="outline" size="sm" :data-testid="`allocate-${l.number}`" @click="startAllocate(l.number)">{{ t('clAccount.allocateButton') }}</Button>
+                      <Button v-if="l.kind === 'RECEIPT' && voidable(l.number)" type="button" variant="outline" size="sm" :data-testid="`void-${l.number}`" @click="startVoid(l.number)">{{ t('clAccount.void') }}</Button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="l.kind === 'RECEIPT' && receiptOf(l.number)?.allocations?.length" :data-testid="`allocs-${l.number}`">
+                  <td />
+                  <td colspan="7">
+                    <p class="m-0 text-xs text-muted-foreground">{{ t('clAccount.allocationsOf') }}</p>
+                    <ul class="m-0 list-none p-0">
+                      <li v-for="a in receiptOf(l.number)?.allocations ?? []" :key="a.id" class="flex flex-wrap items-center gap-2 py-0.5" :data-testid="`allocation-${a.id}`">
+                        <span :class="{ 'text-muted-foreground line-through': !!a.released_at }">{{ a.invoice_number }} · <span class="tabular-nums">{{ $money(a.amount) }}</span> · {{ $date(a.allocated_on) }}</span>
+                        <small v-if="a.released_at" class="text-muted-foreground">{{ t('clAccount.releasedNote', { date: a.released_on ? $date(a.released_on) : '', reason: a.release_reason ?? '' }) }}</small>
+                        <Button v-else-if="releasable(receiptOf(l.number), a.invoice_id)" type="button" variant="outline" size="sm" :data-testid="`release-${a.id}`" @click="startRelease(a)">{{ t('clAccount.release') }}</Button>
+                      </li>
+                    </ul>
+                  </td>
+                </tr>
+              </template>
               <tr class="font-semibold"><td colspan="4">{{ t('clAccount.total') }}</td><td class="text-right tabular-nums">{{ $money(statement.total_debit) }}</td><td class="text-right tabular-nums">{{ $money(statement.total_credit) }}</td><td class="text-right tabular-nums"><b>{{ $money(statement.closing_balance) }}</b></td><td /></tr>
             </tbody>
           </table>
@@ -784,8 +785,24 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </Card>
   </template>
 
+  <Card v-if="allocating" class="mt-4" data-testid="allocate-form">
+    <form novalidate @submit.prevent="submitAllocate">
+      <CardHeader>
+        <CardTitle>{{ t('clAccount.allocateTitle', { number: allocating.receipt.receipt_number }) }}</CardTitle>
+        <p class="m-0 text-sm text-muted-foreground">{{ t('clAccount.allocateHint', { amount: $money(allocating.receipt.unallocated), date: $date(businessDate) }) }}</p>
+      </CardHeader>
+      <CardContent>
+        <ErrorNotice v-if="allocateError" class="mb-4" :error="allocateError" inline data-testid="allocate-error" />
+        <AllocationTable v-model="allocating.model" :amount="allocating.receipt.unallocated" :invoices="openInvoices" />
+        <div class="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="allocating = null">{{ t('clAccount.keep') }}</Button>
+          <Button type="submit" :disabled="busy || !allocateCheck?.payload.length || !!allocateCheck?.problem" data-testid="allocate-submit">{{ t('clAccount.allocateSubmit') }}</Button>
+        </div>
+      </CardContent>
+    </form>
+  </Card>
   <Card v-if="voiding && !voiding.asking" class="mt-4" data-testid="void-form">
-    <CardHeader><CardTitle>{{ t('clAccount.voidTitle', { label: voiding.label }) }}</CardTitle></CardHeader>
+    <CardHeader><CardTitle>{{ voiding.kind === 'allocation' ? t('clAccount.releaseTitle', { number: voiding.label }) : t('clAccount.voidTitle', { label: voiding.label }) }}</CardTitle></CardHeader>
     <CardContent>
       <FormField class="max-w-md" :label="t('clAccount.reason')">
         <template #default="{ id }"><Input :id="id" v-model="voiding.reason" name="void_reason" /></template>
@@ -797,5 +814,5 @@ watch(() => [pid.value, props.id], () => void load(), { immediate: true })
     </CardContent>
   </Card>
   <ApprovalDialog kind="CITY_LEDGER_CREDIT" :amount="adjusting?.mode === 'writeoff' ? adjusting.amount : undefined" v-if="adjusting?.asking" :title="t('clAccount.approveAdjust')" :busy="busy" :error="dialogError" @approve="submitAdjust" @cancel="adjusting = null; dialogError = null" />
-  <ApprovalDialog :kind="voiding?.kind === 'adjustment' ? 'CITY_LEDGER_CREDIT' : 'CITY_LEDGER_VOID'" v-if="voiding?.asking" :title="t('clAccount.approveVoid')" :busy="busy" :error="dialogError" @approve="approveVoid" @cancel="voiding = null" />
+  <ApprovalDialog :kind="voiding?.kind === 'adjustment' ? 'CITY_LEDGER_CREDIT' : 'CITY_LEDGER_VOID'" :amount="voiding?.amount" v-if="voiding?.asking" :title="voiding?.kind === 'allocation' ? t('clAccount.approveRelease') : t('clAccount.approveVoid')" :busy="busy" :error="dialogError" @approve="approveVoid" @cancel="voiding = null" />
 </template>

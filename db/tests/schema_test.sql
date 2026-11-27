@@ -930,30 +930,57 @@ SELECT expect_error('a voided invoice cannot change again', '23001',
 SELECT expect_error('invoices cannot be truncated', '23001',
     $q$TRUNCATE city_ledger_invoices CASCADE$q$);
 
--- Receipt allocations (a receipt pays invoices of its own company)
+-- Receipt allocations (a receipt pays invoices of its own company; 00102: dated, released, more than one per invoice, within the receipt)
 INSERT INTO city_ledger_invoices (tenant_id, property_id, invoice_number, company_id, invoice_date, due_date, total)
 VALUES (tn('ABC'), pr('BALI'), 'CINVA', (SELECT id FROM companies WHERE property_id = pr('BALI')), '2026-10-01', '2026-10-31', 100);
 SELECT expect_ok('a receipt pays an invoice of its company',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$);
+SELECT expect_ok('a receipt pays the same invoice in two allocations (one made later)',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 10, '2026-10-01')$q$);
+SELECT expect_error('the live allocations of a receipt are at most its amount, checked at commit', '23514',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 20, '2026-10-01')$q$);
+SELECT expect_ok('a released allocation leaves room for another',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
+    $q$UPDATE city_ledger_receipt_allocations SET released_at = now(), released_on = '2026-10-01', released_by = (SELECT min(id) FROM users), release_reason = 'wrong invoice', release_approved_by = (SELECT min(id) FROM users)$q$,
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 50, '2026-10-01')$q$);
+SELECT expect_error('an allocation is dated', '23502',
     $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
        VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$);
-SELECT expect_error('a receipt pays an invoice once', '23505',
-    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
-       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$,
-    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
-       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 10)$q$);
 SELECT expect_error('an allocation is positive', '23514',
-    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
-       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 0)$q$);
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 0, '2026-10-01')$q$);
 SELECT expect_error('a receipt cannot pay another company''s invoice', '23503',
-    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
-       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('SG')), 5)$q$);
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('SG')), 5, '2026-10-01')$q$);
 SELECT expect_error('an allocation cannot change', '23001',
-    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
-       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$,
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
     $q$UPDATE city_ledger_receipt_allocations SET amount = 1$q$);
+SELECT expect_error('a release changes nothing but the release', '23001',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
+    $q$UPDATE city_ledger_receipt_allocations SET released_at = now(), released_on = '2026-10-01', released_by = (SELECT min(id) FROM users), release_reason = 'x', release_approved_by = (SELECT min(id) FROM users), amount = 1$q$);
+SELECT expect_error('a release has its date, its author, its reason and its approver', '23514',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
+    $q$UPDATE city_ledger_receipt_allocations SET released_at = now()$q$);
+SELECT expect_error('a released allocation does not change again', '23001',
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
+    $q$UPDATE city_ledger_receipt_allocations SET released_at = now(), released_on = '2026-10-01', released_by = (SELECT min(id) FROM users), release_reason = 'wrong invoice', release_approved_by = (SELECT min(id) FROM users)$q$,
+    $q$UPDATE city_ledger_receipt_allocations SET release_reason = 'again'$q$);
 SELECT expect_error('an allocation is never deleted', '23001',
-    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount)
-       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40)$q$,
+    $q$INSERT INTO city_ledger_receipt_allocations (tenant_id, property_id, receipt_id, invoice_id, company_id, amount, allocated_on)
+       VALUES (tn('ABC'), pr('BALI'), (SELECT id FROM city_ledger_receipts WHERE receipt_number = 'CLR1'), (SELECT id FROM city_ledger_invoices WHERE invoice_number = 'CINVA'), (SELECT id FROM companies WHERE property_id = pr('BALI')), 40, '2026-10-01')$q$,
     $q$DELETE FROM city_ledger_receipt_allocations$q$);
 SELECT expect_error('allocations cannot be truncated', '23001', $q$TRUNCATE city_ledger_receipt_allocations CASCADE$q$);
 
@@ -2059,6 +2086,21 @@ BEGIN
     IF v_missing IS NOT NULL THEN RAISE EXCEPTION 'FAIL business day guard: no BEFORE trigger on %', v_missing; END IF;
     INSERT INTO pms_test.results VALUES ('the ten ledger and cash date columns each have the business-day guard', 'accepted');
     RAISE NOTICE 'PASS  the ten ledger and cash date columns each have the business-day guard';
+END $$;
+-- 00102: an allocation is dated by the business day it is made and released on (no row of it stays in this fixture; the Go test of
+-- cityledger inserts one on a closed day).
+DO $$
+DECLARE v_missing text;
+BEGIN
+    SELECT string_agg(e.c, ', ') INTO v_missing
+      FROM (VALUES ('allocated_on'), ('released_on')) AS e (c)
+     WHERE NOT EXISTS (SELECT 1 FROM pg_trigger g JOIN pg_class c ON c.oid = g.tgrelid
+                        WHERE c.relname = 'city_ledger_receipt_allocations' AND NOT g.tgisinternal AND g.tgfoid = 'public.business_day_must_be_open'::regproc
+                          AND (g.tgtype & 2) = 2
+                          AND (string_to_array(encode(g.tgargs, 'escape'), '\000'))[1] = e.c);
+    IF v_missing IS NOT NULL THEN RAISE EXCEPTION 'FAIL business day guard of the allocations: no BEFORE trigger on %', v_missing; END IF;
+    INSERT INTO pms_test.results VALUES ('the dates of an allocation and its release have the business-day guard', 'accepted');
+    RAISE NOTICE 'PASS  the dates of an allocation and its release have the business-day guard';
 END $$;
 
 ------------------------------------------------------------------------------------------

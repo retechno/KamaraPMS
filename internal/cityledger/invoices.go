@@ -495,7 +495,7 @@ func (s *Service) VoidInvoice(ctx context.Context, propertyID, id int64, in Void
 			return err
 		}
 		if paid[id].IsPositive() {
-			return apperr.Conflict("INVOICE_HAS_PAYMENTS", "receipts have paid this invoice: void them first").WithContext("paid", paid[id].StringFixed(decimals))
+			return apperr.Conflict("INVOICE_HAS_PAYMENTS", "receipts have paid this invoice: release their allocations first").WithContext("paid", paid[id].StringFixed(decimals))
 		}
 		by := approval.UserID()
 		now := s.clock.Now()
