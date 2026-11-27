@@ -147,7 +147,7 @@ export const navigation: NavSection[] = [
       { id: 'inventoryAmenities', to: '/inventory/amenities', permission: ['inventory.view', 'inventory.manage'], module: 'INVENTORY' },
       { id: 'inventoryPosGap', to: '/inventory/pos-gap', permission: ['inventory.view', 'inventory.manage'], module: 'INVENTORY' },
       { id: 'inventoryApprovals', to: '/inventory/approvals', permission: ['inventory.approve', 'inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve'], module: 'INVENTORY' },
-      { id: 'inventoryChains', to: '/inventory/approval-chains', permission: 'inventory.manage', module: 'INVENTORY' },
+      { id: 'inventoryChains', to: '/inventory/approval-chains', permission: ['property.manage', 'inventory.manage'], module: 'INVENTORY' },
     ],
   },
   {

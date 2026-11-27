@@ -144,7 +144,7 @@ Kolom **Izin** berisi permission yang membuat item tampil di menu atau yang dimi
 | `/inventory/amenities`, `/amenities/runs/:date` | Amenities otomatis | `inventory.view` atau `inventory.manage` |
 | `/inventory/pos-gap` | Penjualan POS tanpa stok | `inventory.view` atau `inventory.manage` |
 | `/inventory/approvals` | Perlu saya setujui | izin persetujuan persediaan |
-| `/inventory/approval-chains` | Rantai persetujuan | `inventory.manage` (menyimpan butuh `property.manage`) |
+| `/inventory/approval-chains` | Rantai persetujuan | `property.manage` atau `inventory.manage` (mengubah dan menyimpan hanya `property.manage`; `inventory.manage` membaca) |
 | `/inventory/reports` dan 23 laporan di `/inventory/reports/*` | Laporan persediaan | baca. **Tidak ada di menu**: dibuka dari tautan "Laporan persediaan" di Ringkasan |
 
 ### 2.9 Banquet (`banquet`, modul BANQUET)
@@ -645,7 +645,7 @@ Tautan dari halaman yang sudah ditulis ke halaman yang belum ada. Halaman yang d
 
 **Persediaan**
 - Pengaturan persediaan (toleransi, PO wajib PR, batas penerimaan tanpa pesanan, opname menahan audit, hitung buta) tidak punya layar.
-- Rantai persetujuan: menunya untuk `inventory.manage`, tetapi menyimpan butuh `property.manage`.
+- *Diperbaiki (KD-16):* rantai persetujuan terbuka untuk `property.manage` dan `inventory.manage`; hanya `property.manage` yang bisa mengubah dan menyimpan, sesuai desain 35 §5.8.
 - Membuang draf tagihan tidak punya tombol.
 - Lingkup opname "Daftar" tidak tersedia di UI.
 - Teks "Menambah nilai … menyusul di rilis berikutnya" masih tampil, padahal fiturnya sudah ada.

@@ -6230,6 +6230,7 @@ export const en = {
       howItWorks: 'A return goes back to the requester; the resubmitted document starts again from level 1.',
       save: 'Save the chain',
       saved: 'The chain was saved.',
+      readOnly: 'You can read these chains. Only a role that may change the property settings can change them.',
     },
     order: {
       newTitle: 'New purchase order',

@@ -6227,6 +6227,7 @@ export const id: Messages = {
       howItWorks: 'Pengembalian kembali ke pemohon; dokumen yang diajukan ulang mulai lagi dari tingkat 1.',
       save: 'Simpan rantai',
       saved: 'Rantai disimpan.',
+      readOnly: 'Anda bisa membaca rantai ini. Hanya peran yang boleh mengubah pengaturan properti yang bisa mengubahnya.',
     },
     order: {
       newTitle: 'Pesanan pembelian baru',

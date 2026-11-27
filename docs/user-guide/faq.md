@@ -333,9 +333,9 @@ Label kotak itu menyesatkan: artinya "kirim pesanan ke pemasok sekarang", bukan 
 Peran Anda hanya boleh menyetujui, tanpa izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal** (kendala yang diketahui). Akibatnya permintaan tertahan di tingkat Anda. Minta administrator menambahkan izin melihat barang dan stok ke peran Anda.
 → [Rantai persetujuan: mengatur dan memutuskan](09-inventory/rantai-persetujuan.md)
 
-### Rantai persetujuan sudah saya isi, tetapi ditolak saat Simpan rantai. Kenapa?
+### Rantai persetujuan terkunci dan tidak ada tombol Simpan rantai. Kenapa?
 
-**Simpan rantai** hanya diterima dari peran yang juga boleh **Mengubah pengaturan properti** (kendala yang diketahui). Minta administrator, atau manajer yang perannya boleh mengubah pengaturan properti, untuk menyimpan rantainya.
+Rantai persetujuan hanya diubah oleh peran yang boleh **Mengubah pengaturan properti**. Peran yang hanya boleh mengelola persediaan bisa membacanya, tetapi tidak mengubahnya. Minta administrator, atau manajer yang perannya boleh mengubah pengaturan properti, untuk mengubah rantainya.
 → [Rantai persetujuan: mengatur dan memutuskan](09-inventory/rantai-persetujuan.md)
 
 ### Bulatan Bawaan beli dan Bawaan resep tidak terisi setelah saya klik. Apakah pilihannya tersimpan?

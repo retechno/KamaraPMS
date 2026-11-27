@@ -30,6 +30,14 @@ describe('navigation', () => {
     }
   })
 
+  // KD-16: the approval chains are edited with property.manage and read with the module's permissions (docs/architecture/35-inventory.md 5.8, section 13).
+  it('opens the approval chains to property.manage and to the managers of the inventory', () => {
+    const idsOf = (held: string[]) => visibleNavigation(false, (p) => held.includes(p)).flatMap((s) => s.items.map((i) => i.id))
+    expect(idsOf(['property.manage'])).toContain('inventoryChains')
+    expect(idsOf(['inventory.manage'])).toContain('inventoryChains')
+    expect(router.resolve('/inventory/approval-chains').meta.permission).toEqual(['property.manage', 'inventory.manage'])
+  })
+
   it('keeps administrator pages from everyone else', () => {
     const asUser = visibleNavigation(false).flatMap((s) => s.items.map((i) => i.id))
     const asAdmin = visibleNavigation(true).flatMap((s) => s.items.map((i) => i.id))
