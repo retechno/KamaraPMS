@@ -29,6 +29,7 @@
    | Tipe kamar | Ya | Tidak bisa diganti selama nomor kamar sudah ditetapkan. Klik **Lepas kamar** dulu di halaman reservasi. |
    | Paket tarif | Ya | Paket harga, misalnya `RO` (room only, kamar saja). |
    | Dewasa / Anak | Ya | Jumlah tamu di kamar. |
+   | Cari pemesan | Untuk konfirmasi draf | Tamu yang memesan. Ketik nama, email, telepon, atau kode tamu, klik **Cari**, lalu klik tamunya. Pemesan bisa diganti, tetapi tidak bisa dikosongkan. |
    | Perusahaan | Tidak | Perusahaan pemesan, kalau ada. |
    | Permintaan khusus | Tidak | Permintaan tamu, misalnya `Kamar di lantai atas, jauh dari lift`. Tampil di kartu **Catatan dan riwayat**. |
    | Catatan | Tidak | Catatan untuk staf. |
@@ -39,10 +40,11 @@
 
 ### Draf yang tersimpan tanpa pemesan
 
-Draf tanpa pemesan tidak bisa dikonfirmasi, dan pemesannya tidak bisa ditambahkan dari halaman reservasi. Buat ulang reservasinya:
+Draf tanpa pemesan tidak bisa dikonfirmasi. Di kartu atas halaman reservasi, **Pemesan** tertulis **belum diisi**. Tambahkan pemesannya:
 
-7. Buat reservasi baru untuk tanggal, tipe kamar, dan paket tarif yang sama, kali ini dengan **Pemesan**. Lihat [Membuat reservasi](membuat-reservasi.md). Catat nomor konfirmasinya.
-8. Buka draf yang lama, klik **Batalkan reservasi**, lalu isi **Alasan**, misalnya `Dibuat ulang dengan pemesan: RES000020` (nomor reservasi yang baru). Klik tombol merah **Batal**. Draf tidak menahan kamar, jadi pembatalan ini tidak mengubah sisa kamar.
+7. Klik **Ubah reservasi**. Di bagian reservasi (bawah), **Pemesan:** tertulis **belum diisi**.
+8. Di **Cari pemesan**, ketik nama, email, telepon, atau kode tamu, lalu klik **Cari**. Klik tamu yang memesan. **Pemesan:** sekarang menyebut nama dan kodenya. Kalau tamunya belum terdaftar, buat dulu lewat [Mengelola data tamu](mengelola-data-tamu.md).
+9. Klik **Simpan** di bagian itu, lalu **Tutup**. Sekarang klik **Konfirmasi** (langkah 3).
 
 ## Hasilnya
 
@@ -52,11 +54,11 @@ Draf tanpa pemesan tidak bisa dikonfirmasi, dan pemesannya tidak bisa ditambahka
 ## Perlu diperhatikan
 
 - **Konfirmasi ditolak** kalau:
-  - Reservasi belum punya pemesan: "Pemesan wajib diisi: tamu atau perusahaan." Walaupun pesannya menyebut perusahaan, yang dihitung hanya **tamu** pemesan: mengisi **Perusahaan** di **Ubah reservasi** tidak cukup. Ikuti langkah 7 dan 8.
+  - Reservasi belum punya pemesan: "Pemesan wajib diisi: tamu atau perusahaan." Walaupun pesannya menyebut perusahaan, yang dihitung hanya **tamu** pemesan: mengisi **Perusahaan** di **Ubah reservasi** tidak cukup. Ikuti langkah 7 sampai 9.
   - Kamar tipe itu sudah habis pada beberapa malam: "Tipe kamar tidak tersedia pada beberapa malam."
   - Menginap itu melanggar pembatasan penjualan. Pengguna yang berwenang bisa melewatinya dengan alasan dan persetujuan.
-- **Selalu pilih Pemesan saat membuat draf.** Halaman reservasi tidak punya kolom untuk menambahkan pemesan belakangan. Kalau telanjur, ikuti langkah 7 dan 8.
-- **Tamu dan tarif per malam tidak diubah di jendela ini.** Untuk data tamu, gunakan **Ubah tamu** di kartu **Tamu**. Untuk harga, gunakan **Ubah tarif** di kartu kamar (hanya bagi yang berwenang).
+- **Pilih Pemesan saat membuat draf** supaya draf langsung bisa dikonfirmasi. Kalau telanjur, ikuti langkah 7 sampai 9.
+- **Data tamu dan tarif per malam tidak diubah di jendela ini.** Jendela ini hanya memilih siapa pemesannya. Untuk data tamu, gunakan **Ubah tamu** di kartu **Tamu**. Untuk harga, gunakan **Ubah tarif** di kartu kamar (hanya bagi yang berwenang).
 - **Sumber** pesanan dan **Catatan** juga bisa diubah di kartu **Rincian** di sisi kanan halaman.
 - **"Data diubah orang lain: muat ulang lalu coba lagi."** berarti rekan Anda mengubah reservasi yang sama di saat yang sama. Halaman dimuat ulang. Ulangi perubahan Anda.
 - Reservasi yang sudah check-in tidak bisa diubah lewat jendela ini. Gunakan [Perpanjang atau persingkat](perpanjang-atau-persingkat.md) atau [Pindah kamar](pindah-kamar.md).

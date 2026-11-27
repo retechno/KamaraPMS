@@ -33,7 +33,7 @@ Cari pesan yang muncul di layar pada tabel di bawah, baca penyebabnya, lalu kerj
 
 | Pesan yang muncul | Penyebab | Solusi |
 |---|---|---|
-| "Pemesan wajib diisi: tamu atau perusahaan." | Draf belum punya tamu pemesan. Mengisi **Perusahaan** saja tidak cukup. | Buat reservasi baru dengan **Pemesan**, lalu batalkan draf yang lama dengan alasan. → [Mengonfirmasi dan mengubah reservasi](01-front-desk/mengonfirmasi-dan-mengubah-reservasi.md) |
+| "Pemesan wajib diisi: tamu atau perusahaan." | Draf belum punya tamu pemesan. Mengisi **Perusahaan** saja tidak cukup. | Klik **Ubah reservasi**, cari tamu pemesan di **Cari pemesan**, klik tamunya, lalu **Simpan**. Setelah itu klik **Konfirmasi**. → [Mengonfirmasi dan mengubah reservasi](01-front-desk/mengonfirmasi-dan-mengubah-reservasi.md#draf-yang-tersimpan-tanpa-pemesan) |
 | "Tipe kamar tidak tersedia pada beberapa malam." | Kamar tipe itu sudah habis pada beberapa malam. Draf tidak menahan kamar. | Pilih tanggal lain atau tipe kamar lain. → [Mengonfirmasi dan mengubah reservasi](01-front-desk/mengonfirmasi-dan-mengubah-reservasi.md) |
 | "Menginap ini melanggar pembatasan penjualan." | Tanggal atau lama menginap kena pembatasan, misalnya minimal menginap 2 malam atau tutup jual. | Ubah tanggal atau lama menginap. Pengguna yang berwenang bisa melewatinya dengan alasan dan persetujuan. → [Membuat reservasi](01-front-desk/membuat-reservasi.md) |
 | "Data diubah orang lain: muat ulang lalu coba lagi." | Rekan Anda mengubah data yang sama pada saat yang sama. | Halaman dimuat ulang. Ulangi perubahan Anda. → [Mengonfirmasi dan mengubah reservasi](01-front-desk/mengonfirmasi-dan-mengubah-reservasi.md) |

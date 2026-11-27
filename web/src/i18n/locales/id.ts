@@ -1149,6 +1149,8 @@ export const id: Messages = {
     historyEmpty: 'Belum ada catatan.',
     specialRequest: 'Permintaan khusus',
     editHint: 'Perubahan diperiksa ulang oleh server: ketersediaan, batasan penjualan dan harga malam. Tamu dan tarif malam punya editor sendiri.',
+    bookerFind: 'Cari pemesan',
+    bookerDraftHint: 'Draf baru bisa dikonfirmasi setelah ada pemesannya: cari tamu yang memesan.',
     ratePlan: 'Paket tarif',
     adults: 'Dewasa',
     children: 'Anak',

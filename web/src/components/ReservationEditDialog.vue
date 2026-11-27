@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
-import type { ApiError } from '@/api/problem'
-import type { Reservation, RoomType } from '@/api/types'
+import { reactive, ref, watch } from 'vue'
+import { api } from '@/api/client'
+import { ApiError } from '@/api/problem'
+import type { Guest, Reservation, RoomType } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
@@ -11,10 +12,13 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import type { Choice } from '@/composables/useReservationLookups'
 import { t } from '@/i18n'
+import { usePropertyStore } from '@/stores/property'
 import { guardForm } from '@/utils/forms'
+import { guestLabel } from '@/utils/reservations'
 
 /**
- * Edit Reservation: the stay of each room that is not checked in (dates, room type, rate plan, adults and children) and the company, the special request and the remarks of the reservation.
+ * Edit Reservation: the stay of each room that is not checked in (dates, room type, rate plan, adults and children) and the booker, the company, the special request and the remarks of the reservation.
+ * The booker is searched among the guests here: a draft made without one cannot be confirmed until it is set.
  * It only asks; the page sends the change with the version it loaded, so the server decides: availability, the sales restrictions and the price of the nights are checked again there. The
  * guest and the rate of a night are not edited here (they have their own editors), and the rate plan, the booked prices and the folios are never touched from this form.
  */
@@ -34,7 +38,13 @@ interface LineForm {
   child_count: number
 }
 const lines = reactive<Record<number, LineForm>>({})
-const header = reactive({ company_id: 0, special_request: '', remarks: '' })
+const header = reactive({ guest_id: 0, company_id: 0, special_request: '', remarks: '' })
+const property = usePropertyStore()
+// the booker: the guest found and picked here, shown until saved (the reservation's own guest otherwise)
+const booker = ref<{ first_name?: string; last_name: string; code: string } | null>(null)
+const bookerQuery = ref('')
+const bookerResults = ref<Guest[]>([])
+const bookerError = ref<ApiError | null>(null)
 
 const editable = (status: string) => status === 'DRAFT' || status === 'CONFIRMED'
 const fieldError = (field: string) => props.error?.fieldMessage(field)
@@ -43,6 +53,11 @@ function fill(): void {
   for (const l of props.reservation.rooms) {
     lines[l.id] = { arrival_date: l.arrival_date, departure_date: l.departure_date, room_type_id: l.room_type_id, rate_plan_id: l.rate_plan_id, adult_count: l.adult_count, child_count: l.child_count }
   }
+  header.guest_id = props.reservation.guest_id ?? 0
+  booker.value = props.reservation.guest ?? null
+  bookerQuery.value = ''
+  bookerResults.value = []
+  bookerError.value = null
   header.company_id = props.reservation.company_id ?? 0
   header.special_request = props.reservation.special_request ?? ''
   header.remarks = props.reservation.remarks ?? ''
@@ -61,10 +76,30 @@ function changes(lineId: number): Record<string, unknown> {
 function headerChanges(): Record<string, unknown> {
   const r = props.reservation
   const out: Record<string, unknown> = {}
+  if (header.guest_id && header.guest_id !== (r.guest_id ?? 0)) out.guest_id = header.guest_id
   if (header.company_id !== (r.company_id ?? 0)) out.company_id = header.company_id
   if (header.special_request !== (r.special_request ?? '')) out.special_request = header.special_request
   if (header.remarks !== (r.remarks ?? '')) out.remarks = header.remarks
   return out
+}
+
+async function findBooker(): Promise<void> {
+  const propertyId = property.currentId
+  if (propertyId === null || !bookerQuery.value.trim()) return
+  bookerError.value = null
+  try {
+    const { data } = await api.GET('/api/v1/guests', { params: { query: { q: bookerQuery.value.trim(), property_id: propertyId, limit: 10 } } })
+    bookerResults.value = data?.data ?? []
+  } catch (e) {
+    bookerError.value = e instanceof ApiError ? e : null
+  }
+}
+
+function pickBooker(g: Guest): void {
+  header.guest_id = g.id
+  booker.value = g
+  bookerResults.value = []
+  bookerQuery.value = ''
 }
 
 watch(() => [open.value, props.reservation.version], () => { if (open.value) fill() }, { immediate: true })
@@ -115,6 +150,27 @@ watch(() => [open.value, props.reservation.version], () => { if (open.value) fil
       </section>
 
       <form class="mt-4 grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2" novalidate data-testid="edit-header" @submit.prevent="emit('saveHeader', headerChanges())">
+        <div class="sm:col-span-2">
+          <p class="m-0 text-sm" data-testid="edit-booker">
+            {{ t('reservation.booker') }}:
+            <strong v-if="booker">{{ guestLabel(booker) }} ({{ booker.code }})</strong>
+            <span v-else class="text-muted-foreground">{{ t('reservation.notSet') }}</span>
+          </p>
+          <div class="mt-2 flex items-end gap-3">
+            <FormField class="flex-1" :label="t('reservation.bookerFind')" :hint="reservation.status === 'DRAFT' && !reservation.guest_id ? t('reservation.bookerDraftHint') : undefined" :error="fieldError('guest_id')">
+              <template #default="{ id }">
+                <Input :id="id" v-model="bookerQuery" name="booker_q" type="search" :placeholder="t('newReservation.bookerPlaceholder')" @keydown.enter.prevent="findBooker" />
+              </template>
+            </FormField>
+            <Button type="button" variant="outline" data-testid="find-booker" @click="findBooker">{{ t('newReservation.find') }}</Button>
+          </div>
+          <ErrorNotice :error="bookerError" class="mt-2" />
+          <ul v-if="bookerResults.length" class="m-0 mt-2 flex list-none flex-wrap gap-2 p-0">
+            <li v-for="g in bookerResults" :key="g.id">
+              <Button type="button" variant="outline" size="sm" :data-testid="`booker-${g.code}`" @click="pickBooker(g)">{{ g.code }} · {{ guestLabel(g) }}</Button>
+            </li>
+          </ul>
+        </div>
         <FormField :label="t('reservation.company')" :error="fieldError('company_id')">
           <template #default="{ id }">
             <NativeSelect :id="id" v-model.number="header.company_id" name="company_id">

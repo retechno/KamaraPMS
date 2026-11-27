@@ -77,7 +77,7 @@ Arahkan kursor ke tombol **Pesan** untuk melihat alasannya. Biasanya kamar tipe 
 
 ### Apakah reservasi Draf sudah menahan kamar?
 
-Belum. Reservasi **Draf** tidak mengurangi sisa kamar, jadi konfirmasinya bisa ditolak kalau kamar tipe itu habis lebih dulu. Selalu pilih pemesan saat membuat draf, karena konfirmasi butuh tamu pemesan.
+Belum. Reservasi **Draf** tidak mengurangi sisa kamar, jadi konfirmasinya bisa ditolak kalau kamar tipe itu habis lebih dulu. Konfirmasi butuh tamu pemesan. Kalau draf tersimpan tanpa pemesan, tambahkan lewat **Ubah reservasi** → **Cari pemesan**.
 → [Mengonfirmasi dan mengubah reservasi](01-front-desk/mengonfirmasi-dan-mengubah-reservasi.md)
 
 ### Tamu sudah saya tandai no-show, ternyata ia datang. Bisakah tandanya dibatalkan?

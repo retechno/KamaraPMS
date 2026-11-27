@@ -1151,6 +1151,8 @@ export const en = {
     historyEmpty: 'No entries.',
     specialRequest: 'Special request',
     editHint: 'Changes are checked again by the server: availability, sales restrictions and the price of the nights. The guest and the rate of a night have their own editors.',
+    bookerFind: 'Find the booker',
+    bookerDraftHint: 'A draft is confirmed only with a booker: find the guest who booked.',
     ratePlan: 'Rate plan',
     adults: 'Adults',
     children: 'Children',
