@@ -1,9 +1,9 @@
 # 41. Allocating a company receipt after it is recorded (KD-27)
 
-Status: **plan, awaiting the owner's decisions** (§11). It answers KD-27 of the user guide report (`docs/user-guide/_laporan.md`,
-priority 1, money): a receipt of a company that was recorded without allocations cannot be allocated to its invoices later, so the
-invoices stay **Belum dibayar** and overdue, and the company can be asked to pay twice. Nothing in this document is built yet. **R**
-marks a recommendation; each one waits for a decision in §11.
+Status: **approved by the owner on 2026-11-27** (A1-A4 as recommended, §11). It answers KD-27 of the user guide report
+(`docs/user-guide/_laporan.md`, priority 1, money): a receipt of a company that was recorded without allocations cannot be allocated
+to its invoices later, so the invoices stay **Belum dibayar** and overdue, and the company can be asked to pay twice. **R** marks
+what was a recommendation; each one was approved.
 
 Read with: `10-credit-notes-writeoffs.md` (what an invoice owes), `14-supplier-credit-notes.md` (`ApplyCredit`, the pattern this
 follows), `05-transactions-locking.md` (lock order), `32-distinct-approver.md` (approval kinds).
@@ -260,7 +260,9 @@ the invoice shows paid.
 
 ## 11. Decisions of the owner
 
-| # | Question | Recommendation and why |
+All four were **approved by the owner on 2026-11-27** (*disetujui pemilik*), as recommended.
+
+| # | Question | Decision, and why |
 |---|---|---|
 | A1 | Permission and approval for allocating later: `cityledger.receive` without an approval, or with one? | **`cityledger.receive`, no approval** (R). An allocation moves no money and posts no journal (§2); allocating with the receipt needs no approval today; the supplier side (`ApplyCredit`) needs none either. The undo (A3) is the act that needs a second person. |
 | A2 | The date of an allocation: the current business date, or the receipt's date? | **The current business date** (R). Nothing is written into a closed day; the overdue list and reminders already made stay as they were; `allocated_on` records when the matching was made, and a report of a past date can use it later. The receipt's date would rewrite what the overdue list of a past day said. |
