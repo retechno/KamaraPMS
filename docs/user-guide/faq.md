@@ -227,8 +227,13 @@ Biasanya folio tamu terkunci untuk beban outlet ("Folio ini terkunci untuk beban
 
 ### Bill restoran terlanjur dibebankan ke kamar yang salah. Bisakah dibatalkan?
 
-Bisa, selama folio tamu masih terbuka. Buka kembali bill-nya, lalu klik **Kembalikan beban kamar** di baris "Dibebankan ke kamar". Keduanya butuh alasan dan persetujuan. Beban dibatalkan di folio tamu, batas outlet pulih, lalu bill dibayar dengan cara lain atau dibebankan ke kamar yang benar. Di folio tamu sendiri, beban POS tidak bisa di-reverse atau dikoreksi dengan **Penyesuaian**.
+Bisa. Selama folio tamu masih terbuka, buka kembali bill-nya, lalu klik **Kembalikan beban kamar** di baris "Dibebankan ke kamar". Keduanya butuh alasan dan persetujuan. Beban dibatalkan di folio tamu, batas outlet pulih, lalu bill dibayar dengan cara lain atau dibebankan ke kamar yang benar. Di folio tamu sendiri, beban POS tidak bisa di-reverse atau dikoreksi dengan **Penyesuaian**.
 → [Mengembalikan beban kamar dari bill POS](04-pos/mengembalikan-beban-kamar.md)
+
+### Beban restoran ke kamar yang salah baru ketahuan setelah tamunya check-out. Bisakah dikembalikan?
+
+Bisa. Di bill outlet, baris beban bertanda **Sudah check-out** punya tombol **Kembalikan setelah check-out**. Dengan satu alasan dan satu persetujuan, beban kembali ke bill dan tamu menerima refund dari pembayarannya. Kalau tagihan tamu dipindah ke master folio grup yang masih terbuka, jumlahnya menjadi kredit di master itu. Folio tamu tetap ditutup dengan saldo nol, lalu bill dibayar dengan cara lain. Kalau tagihan tamu dipindah ke perusahaan, jalur ini menolak. Pakai cara manual dengan nota kredit.
+→ [Mengembalikan beban kamar setelah tamu check-out](04-pos/mengembalikan-beban-kamar.md#mengembalikan-beban-kamar-setelah-tamu-check-out)
 
 ### Saya sudah memakai Buka kembali pada bill, tetapi bebannya masih ada di tagihan tamu. Kenapa?
 

@@ -301,6 +301,9 @@ type movement struct {
 	scope      string
 	// outDesc and inDesc name the two lines of a balance transfer when the text is not the default (an outlet charge reads "{outlet} · {bill}" on the guest folio).
 	outDesc, inDesc string
+	// allowCredit lets the balance move leave the source in credit. Only the return after check-out sets it (docs/architecture/42-pos-charge-return-after-checkout.md):
+	// its own rows bring every closed folio back to zero in the same transaction, which the database checks at commit (folios_closed_balanced).
+	allowCredit bool
 }
 
 // sourceOf is the source of the ledger rows of a transfer: TRANSFER, and POS for what an outlet does on its own (a split, a merge, a charge to a room), which has no approver.
@@ -701,7 +704,7 @@ func (s *Service) moveBalance(ctx context.Context, m movement, amount decimal.De
 	if err != nil {
 		return TransferredItem{}, err
 	}
-	if amount.GreaterThan(balance) {
+	if amount.GreaterThan(balance) && !m.allowCredit {
 		return TransferredItem{}, apperr.Conflict("TRANSFER_EXCEEDS_BALANCE", "the transfer is more than the folio's balance").WithContext("balance", fixed(balance, decimals)).WithContext("folio_id", m.src.ID)
 	}
 	outDesc, inDesc := "Transfer to "+m.tgt.FolioNumber, "Transfer from "+m.src.FolioNumber

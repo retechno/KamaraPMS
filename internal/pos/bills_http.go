@@ -46,6 +46,8 @@ func (h *Handler) registerBills(mux *http.ServeMux) {
 	mux.Handle("POST "+p+"/bills/{id}/reopen", httpx.HandlerFunc(h.reopenBill))
 	mux.Handle("POST "+p+"/room-charges/{id}/return", httpx.HandlerFunc(h.returnRoomCharge))
 	mux.Handle("POST "+p+"/room-charges/{id}/move", httpx.HandlerFunc(h.moveRoomCharge))
+	mux.Handle("GET "+p+"/room-charges/{id}/return-closed", httpx.HandlerFunc(h.previewReturnClosed))
+	mux.Handle("POST "+p+"/room-charges/{id}/return-closed", httpx.HandlerFunc(h.returnRoomChargeClosed))
 }
 
 func idempotencyKey(r *http.Request) (string, error) {
@@ -496,6 +498,35 @@ func (h *Handler) returnRoomCharge(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	return httpx.WriteJSON(w, http.StatusOK, b)
+}
+
+// previewReturnClosed and returnRoomChargeClosed are the return of a charge to a room after that guest checked out (docs/architecture/42-pos-charge-return-after-checkout.md, KD-26).
+func (h *Handler) previewReturnClosed(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	pv, err := h.svc.PreviewReturnClosed(r.Context(), pid, id)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, pv)
+}
+
+func (h *Handler) returnRoomChargeClosed(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := idsOf(r)
+	if err != nil {
+		return err
+	}
+	in, err := decode[ReturnClosedInput](w, r)
+	if err != nil {
+		return err
+	}
+	out, err := h.svc.ReturnRoomChargeClosed(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) moveRoomCharge(w http.ResponseWriter, r *http.Request) error {

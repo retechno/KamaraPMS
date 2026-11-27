@@ -2472,8 +2472,9 @@ func (q *Queries) ListBillLines(ctx context.Context, arg ListBillLinesParams) ([
 }
 
 const listBillRoomCharges = `-- name: ListBillRoomCharges :many
-SELECT c.id, c.amount, c.to_folio_id, c.stay_id, c.returned_at, COALESCE(r.room_number, '')::text AS room_number
+SELECT c.id, c.amount, c.to_folio_id, c.stay_id, c.returned_at, COALESCE(r.room_number, '')::text AS room_number, f.status AS holder_status
 FROM pos_room_charges c
+JOIN folios f ON f.property_id = c.property_id AND f.id = c.to_folio_id
 LEFT JOIN stay_rooms sr ON sr.property_id = c.property_id AND sr.stay_id = c.stay_id AND sr.id = (SELECT max(x.id) FROM stay_rooms x WHERE x.property_id = c.property_id AND x.stay_id = c.stay_id)
 LEFT JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
 WHERE c.tenant_id = $1 AND c.property_id = $2 AND c.bill_id = $3
@@ -2487,14 +2488,17 @@ type ListBillRoomChargesParams struct {
 }
 
 type ListBillRoomChargesRow struct {
-	ID         int64
-	Amount     decimal.Decimal
-	ToFolioID  int64
-	StayID     *int64
-	ReturnedAt *time.Time
-	RoomNumber string
+	ID           int64
+	Amount       decimal.Decimal
+	ToFolioID    int64
+	StayID       *int64
+	ReturnedAt   *time.Time
+	RoomNumber   string
+	HolderStatus string
 }
 
+// The charges of a bill to rooms, with the status of the folio that holds each: a CLOSED one (the guest checked out) is returned after
+// check-out (docs/architecture/42-pos-charge-return-after-checkout.md), an OPEN one by the plain return.
 func (q *Queries) ListBillRoomCharges(ctx context.Context, arg ListBillRoomChargesParams) ([]ListBillRoomChargesRow, error) {
 	rows, err := q.db.Query(ctx, listBillRoomCharges, arg.TenantID, arg.PropertyID, arg.BillID)
 	if err != nil {
@@ -2511,6 +2515,7 @@ func (q *Queries) ListBillRoomCharges(ctx context.Context, arg ListBillRoomCharg
 			&i.StayID,
 			&i.ReturnedAt,
 			&i.RoomNumber,
+			&i.HolderStatus,
 		); err != nil {
 			return nil, err
 		}

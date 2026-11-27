@@ -358,7 +358,7 @@ func (s *Service) loadBill(ctx context.Context, p auth.Principal, propertyID, id
 		return Bill{}, err
 	}
 	for _, c := range rcs {
-		b.RoomCharges = append(b.RoomCharges, BillRoomCharge{ID: c.ID, Amount: c.Amount, ToFolioID: c.ToFolioID, StayID: c.StayID, Room: c.RoomNumber, ReturnedAt: c.ReturnedAt})
+		b.RoomCharges = append(b.RoomCharges, BillRoomCharge{ID: c.ID, Amount: c.Amount, ToFolioID: c.ToFolioID, StayID: c.StayID, Room: c.RoomNumber, ReturnedAt: c.ReturnedAt, HolderStatus: c.HolderStatus})
 	}
 	return b, nil
 }

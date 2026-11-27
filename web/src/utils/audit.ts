@@ -314,6 +314,7 @@ export const AUDIT_ACTIONS = [
   'pos.recipe_changed',
   'pos.room_charge_moved',
   'pos.room_charge_returned',
+  'pos.room_charge_returned_after_checkout',
   'pos.round_sent',
   'pos.rule_profile_created',
   'pos.rule_profile_updated',

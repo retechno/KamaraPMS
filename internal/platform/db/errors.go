@@ -120,6 +120,7 @@ var constraintErrors = map[string]mapped{
 	"clra_release_only":                          {apperr.KindConflict, "LEDGER_IMMUTABLE", "a receipt allocation is only released, once"},
 	"clra_released_ck":                           {apperr.KindInvalid, "INVALID_VALUE", "a release has its date, its author, its reason and its approver"},
 	"clra_exceeds_receipt":                       {apperr.KindConflict, "ALLOCATION_EXCEEDS_UNALLOCATED", "the allocations are more than the receipt"},
+	"folios_closed_balanced":                     {apperr.KindConflict, "CLOSED_FOLIO_UNBALANCED", "a closed folio must stay at a zero balance: the rows that settle it belong in the same transaction"}, // the database's rule behind every path (00103, KD-26)
 	"clra_idempotency_uk":                        {apperr.KindConflict, "DUPLICATE_REQUEST", "this request was already processed"},
 	"clra_allocated_on_fk":                       {apperr.KindConflict, "BUSINESS_DAY_NOT_FOUND", "the business date of the allocation does not exist"},
 	"clra_released_on_fk":                        {apperr.KindConflict, "BUSINESS_DAY_NOT_FOUND", "the business date of the release does not exist"},

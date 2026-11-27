@@ -375,3 +375,36 @@ func firstPaymentOf(t *testing.T, h *hotel, folio int64) int64 {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// KD-26, test 17 of docs/architecture/42-pos-charge-return-after-checkout.md §9: a folio with a deposit closes at the check-out, and the
+// night audit closes the day with the rule of the database on (folios_closed_balanced). The deposit is released once (Dr 2310 / Cr 1210),
+// a second close releases nothing again, and the rule raises nothing.
+func TestTheCheckOutNightAuditAndDepositReleaseOnCloseWithTheClosedFolioRule(t *testing.T) {
+	h := setupHotelMode(t, "ON_CLOSE")
+	if n := h.Count(t, `SELECT count(*) FROM pg_trigger WHERE tgname = 'folios_closed_balanced' AND NOT tgisinternal`); n != 2 {
+		t.Fatalf("the rule of the closed folio is on folio_items and folios: %d triggers", n)
+	}
+	res := h.book(t, "2026-09-30", "2026-10-01")
+	_, err := h.Folios.Deposit(h.admin, h.propID, res.ID, "dep", folios.PaymentInput{Amount: "300000", PaymentMethod: "CASH"})
+	must(t, err)
+	h.Clock.Set(roomstest.T0.Add(time.Hour))
+	st := h.checkIn(t, res, h.r101)
+	h.closeDay(t) // the night of 30 Sep: the deposit is held whole until the folio closes
+	h.books(t, "the night", "2026-09-30", map[string]string{"2310": "-300000", "1210": "1000000"})
+	_, err = h.Folios.PostPayment(h.admin, h.propID, st.Folio.ID, "rest", folios.PaymentInput{Amount: "700000", PaymentMethod: "CARD"})
+	must(t, err)
+	cur, err := h.Front.GetStay(h.admin, h.propID, st.Stay.ID)
+	must(t, err)
+	_, err = h.Front.CheckOut(h.admin, h.propID, st.Stay.ID, frontdesk.CheckOutInput{Version: cur.Stay.Version})
+	must(t, err)
+	if n := h.Count(t, `SELECT count(*) FROM folios WHERE id = $1 AND status = 'CLOSED' AND closed_on = '2026-10-01'`, st.Folio.ID); n != 1 {
+		t.Fatal("the folio closed at the check-out")
+	}
+	h.closeDay(t) // 1 Oct: the release at the close of the folio
+	h.books(t, "after the check-out", "2026-10-01", map[string]string{"2310": "0", "1210": "0", "1110": "300000", "1150": "700000"})
+	h.closeDay(t) // 2 Oct: the closed folio is not released again
+	h.books(t, "the day after", "2026-10-02", map[string]string{"2310": "0", "1210": "0"})
+	if n := h.Count(t, `SELECT count(*) FROM gl_journal_lines WHERE source_type = 'DEPOSIT_RELEASE'`); n != 2 {
+		t.Fatalf("the deposit is released once (two lines): %d", n)
+	}
+}

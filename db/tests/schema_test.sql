@@ -1827,20 +1827,65 @@ SELECT expect_ok('a stay is cancelled once its folio is unlinked (the guest foli
     $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F4'$q$, -- the reservation has one open folio without a stay
     $q$UPDATE folios SET stay_id = NULL WHERE folio_number = 'F1'$q$,
     $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$);
-SELECT expect_ok('or closed, and stays linked to the cancelled stay as history',
+SELECT expect_ok('or closed, and stays linked to the cancelled stay as history (closed at zero: 00103)',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       SELECT tn('ABC'), pr('BALI'), fo('F1'), d, d, 'CHARGE', cc('LAUNDRY'), 'settles F1 before it closes (00103)', 1, b, 'EXCLUSIVE', b, b, b, 'TRANSFER', 'FOLIO_TRANSFER', '1'
+       FROM (SELECT sum(credit - debit) AS b, max(business_date) AS d FROM folio_items WHERE folio_id = fo('F1')) s$q$,
     $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F1'$q$,
     $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$);
 SELECT expect_error('a folio of a cancelled stay cannot be opened again',
     '23514',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       SELECT tn('ABC'), pr('BALI'), fo('F1'), d, d, 'CHARGE', cc('LAUNDRY'), 'settles F1 before it closes (00103)', 1, b, 'EXCLUSIVE', b, b, b, 'TRANSFER', 'FOLIO_TRANSFER', '1'
+       FROM (SELECT sum(credit - debit) AS b, max(business_date) AS d FROM folio_items WHERE folio_id = fo('F1')) s$q$,
     $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F1'$q$,
     $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$,
     $q$UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE folio_number = 'F1'$q$);
 SELECT expect_error('nor can a new open folio be linked to a cancelled stay', '23514',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       SELECT tn('ABC'), pr('BALI'), fo('F1'), d, d, 'CHARGE', cc('LAUNDRY'), 'settles F1 before it closes (00103)', 1, b, 'EXCLUSIVE', b, b, b, 'TRANSFER', 'FOLIO_TRANSFER', '1'
+       FROM (SELECT sum(credit - debit) AS b, max(business_date) AS d FROM folio_items WHERE folio_id = fo('F1')) s$q$,
     $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F1'$q$,
     $q$UPDATE stays SET status = 'CANCELLED' WHERE id = st('S1')$q$,
     $q$INSERT INTO folios (tenant_id, property_id, folio_number, reservation_id, stay_id, folio_type, bill_to_company_id) VALUES (tn('ABC'), pr('BALI'), 'F9', rs('R1'), st('S1'), 'COMPANY', (SELECT id FROM companies WHERE property_id = pr('BALI') AND code = 'ACME'))$q$);
 SELECT expect_ok('an open folio of an open stay is as before',
     $q$UPDATE folios SET stay_id = st('S1') WHERE folio_number = 'F1'$q$);
+
+------------------------------------------------------------------------------------------
+-- A closed folio is balanced (00103, KD-26: docs/architecture/42-pos-charge-return-after-checkout.md §4)
+------------------------------------------------------------------------------------------
+SELECT expect_ok('a folio at zero closes',
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F4'$q$);
+SELECT expect_error('a folio off zero does not close (folios_closed_balanced)', '23514',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       VALUES (tn('ABC'), pr('BALI'), fo('F4'), '2026-10-01', '2026-10-01', 'CHARGE', cc('LAUNDRY'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'TRANSFER', 'FOLIO_TRANSFER', '1')$q$,
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F4'$q$);
+SELECT expect_error('an item that leaves a closed folio off zero is refused at commit (folios_closed_balanced)', '23514',
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F4'$q$,
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       VALUES (tn('ABC'), pr('BALI'), fo('F4'), '2026-10-01', '2026-10-01', 'CHARGE', cc('LAUNDRY'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'TRANSFER', 'FOLIO_TRANSFER', '1')$q$);
+SELECT expect_ok('a balanced pair on a closed folio is accepted (the return after check-out)',
+    $q$UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE folio_number = 'F4'$q$,
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       VALUES (tn('ABC'), pr('BALI'), fo('F4'), '2026-10-01', '2026-10-01', 'CHARGE', cc('LAUNDRY'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'TRANSFER', 'FOLIO_TRANSFER', '1')$q$,
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, credit, source, reference_type, reference_id, reason, approved_by)
+       VALUES (tn('ABC'), pr('BALI'), fo('F4'), '2026-10-01', '2026-10-01', 'ADJUSTMENT', cc('LAUNDRY'),
+               'x', 1, -100, 'EXCLUSIVE', -100, -100, 100, 'TRANSFER', 'FOLIO_TRANSFER', '1', 'x', us('ABC', 'admin@hotel.com'))$q$);
+SELECT expect_ok('an open folio takes any item, as before',
+    $q$INSERT INTO folio_items (tenant_id, property_id, folio_id, business_date, service_date, transaction_type, charge_code_id,
+                                description, quantity, unit_price, price_mode, base_amount, net_amount, debit, source, reference_type, reference_id)
+       VALUES (tn('ABC'), pr('BALI'), fo('F4'), '2026-10-01', '2026-10-01', 'CHARGE', cc('LAUNDRY'),
+               'x', 1, 100, 'EXCLUSIVE', 100, 100, 100, 'TRANSFER', 'FOLIO_TRANSFER', '1')$q$);
 
 ------------------------------------------------------------------------------------------
 -- Sales restrictions (00059)

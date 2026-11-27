@@ -10505,6 +10505,44 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/pos/room-charges/{id}/return-closed:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: previewPosRoomChargeReturnClosed
+      summary: "What the return of a charge to a room after check-out would do (pos.cashier and folio.reverse)"
+      description: "KD-26 (docs/architecture/42-pos-charge-return-after-checkout.md). The case (a refund to the payer, or the credit stays on the open master of the group), the payments a refund could go against with the one proposed, and the refusal when the charge cannot be returned this way (refusal is then set; nothing is written)."
+      tags: [pos]
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosReturnClosedPreview" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: returnPosRoomChargeClosed
+      summary: "Return a charge to a room after that guest checked out (pos.cashier, folio.reverse, folio.reopen when the bill is closed, payment.refund for a refund, and an approval of the kind ROOM_CHARGE_RETURN_CLOSED)"
+      description: "KD-26. In one transaction: the bill is reopened when it is closed, the charge goes back to it, and the folio that settled the charge is settled again: a refund of one of its payments (refund is required) or, when the guest's balance went to an open master, the credit stays on the master (refund must be absent). The folio of the guest stays CLOSED at zero. The bill is left OPEN with the amount. Refused: RETURN_HOLDER_OPEN (use the return), RETURN_AFTER_CHECKOUT_CITY_LEDGER (settled by the city ledger), RETURN_CHAIN_UNSUPPORTED, REFUND_OF_DEPOSIT_AFTER_CLOSE, REFUND_EXCEEDS_PAYMENT, ALREADY_RETURNED, RETURN_CHANGED."
+      tags: [pos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PosReturnClosedInput" }
+      responses:
+        "200":
+          description: The bill, open with the amount, the folios settled again and the refund.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PosReturnClosedResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/folios/{id}/outlet-lock:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -17495,7 +17533,7 @@ components:
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
     ApprovalKind:
       type: string
-      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BANK_SETTLEMENT_VOID, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, INV_BILL_VARIANCE, BANQUET_DISCOUNT, ASSET_DISPOSAL]
+      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BANK_SETTLEMENT_VOID, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, ROOM_CHARGE_RETURN_CLOSED, INV_BILL_VARIANCE, BANQUET_DISCOUNT, ASSET_DISPOSAL]
       description: A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
     ApprovalRuleType:
       type: string
@@ -24953,7 +24991,7 @@ components:
         company_id: { type: [integer, "null"], format: int64 }
     PosBillRoomCharge:
       type: object
-      required: [id, amount, to_folio_id]
+      required: [id, amount, to_folio_id, holder_status]
       properties:
         id: { type: integer, format: int64 }
         amount: { type: string }
@@ -24961,6 +24999,7 @@ components:
         stay_id: { type: [integer, "null"], format: int64 }
         room: { type: string }
         returned_at: { type: [string, "null"], format: date-time }
+        holder_status: { type: string, description: "The status of the folio that holds the charge: CLOSED once that guest checked out (then the return after check-out applies)." }
     PosBillTotals:
       type: object
       required: [base, discount, net, service, tax, sold, drafts, rounding, paid, transferred, balance, payable, cash_payable]
@@ -25125,6 +25164,92 @@ components:
         stay_id: { type: [integer, "null"], format: int64, description: The room the charge moves to (the move only). }
         reason: { type: string, maxLength: 200 }
         approval: { $ref: "#/components/schemas/Approval" }
+    PosReturnClosedInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, maxLength: 200 }
+        approval: { $ref: "#/components/schemas/Approval" }
+        refund:
+          type: [object, "null"]
+          description: The payment refunded, when the folio that settled the charge is closed.
+          required: [payment_id]
+          properties:
+            payment_id: { type: integer, format: int64 }
+            payment_method: { type: string, description: "CASH, CARD, BANK_TRANSFER, OTHER or QRIS, among the refund methods of the property; empty: the method of the payment when allowed, else the first allowed." }
+            reference_number: { type: string, maxLength: 100 }
+    PosReturnClosedFolio:
+      type: object
+      required: [folio_id, folio_number, folio_type, status, balance]
+      properties:
+        folio_id: { type: integer, format: int64 }
+        folio_number: { type: string }
+        folio_type: { type: string }
+        status: { type: string }
+        balance: { type: string }
+    PosReturnClosedPayment:
+      type: object
+      required: [payment_id, payment_number, payment_method, amount, refundable, is_deposit, business_date]
+      properties:
+        payment_id: { type: integer, format: int64 }
+        payment_number: { type: string }
+        payment_method: { type: string }
+        amount: { type: string }
+        refundable: { type: string, description: The amount less its refunds. }
+        is_deposit: { type: boolean, description: Paid before the check-in; such a payment is not refunded after the folio closed. }
+        business_date: { type: string, format: date }
+    PosReturnClosedRefusal:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        context: { type: object, additionalProperties: true }
+    PosReturnClosedPreview:
+      type: object
+      required: [charge_id, amount, bill_id, bill_number, bill_status, holder, master, case, payments, proposed_payment_id, refund_methods, refusal]
+      properties:
+        charge_id: { type: integer, format: int64 }
+        amount: { type: string }
+        bill_id: { type: integer, format: int64 }
+        bill_number: { type: string }
+        bill_status: { type: string }
+        holder: { $ref: "#/components/schemas/PosReturnClosedFolio" }
+        master:
+          oneOf:
+            - $ref: "#/components/schemas/PosReturnClosedFolio"
+            - type: "null"
+        case: { type: string, enum: ["", REFUND, MASTER_CREDIT], description: "REFUND: the settling folio is closed and the payer is refunded; MASTER_CREDIT: the credit stays on the open master. Empty with a refusal." }
+        payments: { type: array, items: { $ref: "#/components/schemas/PosReturnClosedPayment" } }
+        proposed_payment_id: { type: [integer, "null"], format: int64 }
+        refund_methods: { type: array, items: { type: string } }
+        refusal:
+          oneOf:
+            - $ref: "#/components/schemas/PosReturnClosedRefusal"
+            - type: "null"
+    PosReturnClosedRefund:
+      type: object
+      required: [payment_id, payment_number, payment_method, amount, refund_of_payment_id]
+      properties:
+        payment_id: { type: integer, format: int64 }
+        payment_number: { type: string }
+        payment_method: { type: string }
+        amount: { type: string }
+        refund_of_payment_id: { type: integer, format: int64 }
+    PosReturnClosedResult:
+      type: object
+      required: [bill, holder, master, refund]
+      properties:
+        bill: { $ref: "#/components/schemas/PosBill" }
+        holder: { $ref: "#/components/schemas/PosReturnClosedFolio" }
+        master:
+          oneOf:
+            - $ref: "#/components/schemas/PosReturnClosedFolio"
+            - type: "null"
+        refund:
+          oneOf:
+            - $ref: "#/components/schemas/PosReturnClosedRefund"
+            - type: "null"
     PosRoomLookup:
       type: object
       required: [stay_id, room, guest, open]

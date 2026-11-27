@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { Approval, PosBill, PosBillLine, PosBillRoomCharge, PosBillSummary, PosCatalog, PosOutlet } from '@/api/types'
+import type { Approval, PosBill, PosBillLine, PosBillRoomCharge, PosBillSummary, PosCatalog, PosOutlet, PosReturnClosedPreview } from '@/api/types'
 import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
@@ -280,6 +280,7 @@ type Sheet =
   | { kind: 'comp' }
   | { kind: 'reopen' }
   | { kind: 'returnCharge'; charge: PosBillRoomCharge }
+  | { kind: 'returnClosed'; charge: PosBillRoomCharge }
   | { kind: 'table' }
   | { kind: 'merge' }
   | { kind: 'split' }
@@ -314,6 +315,44 @@ function openSheet(s: Sheet): void {
 
 const closeSheet = (): void => { sheet.value = null }
 
+// ---- KD-26: the return of a charge to a room after that guest checked out (docs/architecture/42-pos-charge-return-after-checkout.md). The server says first what it would do (the case,
+// the payment refunded, or why it cannot): the cashier then gives the reason, the payment and the method, and one approval covers the reopening of the bill, the return and the refund.
+const closedPreview = ref<PosReturnClosedPreview | null>(null)
+const refundPayment = ref<number | null>(null)
+const refundMethod = ref('')
+const refundReference = ref('')
+const closedRefusal = computed(() => {
+  const r = closedPreview.value?.refusal
+  return r ? new ApiError({ type: `urn:kamarapms:problem:${r.code}`, title: r.message, detail: r.message, status: 409, code: r.code, context: r.context ?? {} }) : null
+})
+const isRefund = computed(() => closedPreview.value?.case === 'REFUND')
+const methodLabel = (m: string): string => t(`cashier.${m}` as never)
+
+async function openReturnClosed(c: PosBillRoomCharge): Promise<void> {
+  openSheet({ kind: 'returnClosed', charge: c })
+  closedPreview.value = null
+  refundPayment.value = null
+  refundMethod.value = ''
+  refundReference.value = ''
+  const propertyId = pid.value
+  if (propertyId === null) return
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/pos/room-charges/{id}/return-closed', { params: { path: { propertyId, id: c.id } } })
+    closedPreview.value = data ?? null
+    refundPayment.value = data?.proposed_payment_id ?? null
+  } catch (e) {
+    dialogError.value = e instanceof ApiError ? e : null
+  }
+}
+
+// the method of the refund: the payment's own when the property refunds by it, else the first it allows (as any refund)
+watch(refundPayment, (id) => {
+  const pv = closedPreview.value
+  const pay = pv?.payments.find((x) => x.payment_id === id)
+  if (!pv || !pay) return
+  refundMethod.value = pv.refund_methods.includes(pay.payment_method) ? pay.payment_method : (pv.refund_methods[0] ?? '')
+})
+
 async function approved(approval: Approval | undefined): Promise<void> {
   const propertyId = pid.value
   const s = sheet.value
@@ -345,6 +384,18 @@ async function approved(approval: Approval | undefined): Promise<void> {
       ;({ data } = await api.POST('/api/v1/properties/{propertyId}/pos/room-charges/{id}/return', {
         params: { path: { propertyId, id: s.charge.id } }, body: { reason: reason.value.trim(), ...(approval ? { approval } : {}) },
       }))
+    } else if (s.kind === 'returnClosed') {
+      const body = {
+        reason: reason.value.trim(), ...(approval ? { approval } : {}),
+        refund: isRefund.value && refundPayment.value ? { payment_id: refundPayment.value, payment_method: refundMethod.value, reference_number: refundReference.value.trim() } : null,
+      }
+      const { data: done } = await api.POST('/api/v1/properties/{propertyId}/pos/room-charges/{id}/return-closed', { params: { path: { propertyId, id: s.charge.id } }, body })
+      if (done) {
+        data = done.bill
+        notice.value = done.refund
+          ? t('posBill.returnClosedRefunded', { amount: formatMoney(done.refund.amount), number: done.refund.payment_number, method: methodLabel(done.refund.payment_method) })
+          : t('posBill.returnClosedCredited', { amount: formatMoney(s.charge.amount), folio: done.master?.folio_number ?? '' })
+      }
     }
     if (data) bill.value = data
     sheet.value = null
@@ -374,6 +425,7 @@ const approvalKind = computed(() => {
     case 'discount': return 'POS_DISCOUNT' as const
     case 'comp': return 'POS_COMP' as const
     case 'returnCharge': return 'FOLIO_TRANSFER' as const
+    case 'returnClosed': return 'ROOM_CHARGE_RETURN_CLOSED' as const
     default: return 'POS_REOPEN' as const
   }
 })
@@ -381,7 +433,7 @@ const approvalAmount = computed(() => {
   const s = sheet.value
   if (s?.kind === 'void') return String(Math.abs(Number(s.line.total)))
   if (s?.kind === 'reopen') return totals.value?.sold ?? '0'
-  if (s?.kind === 'returnCharge') return s.charge.amount
+  if (s?.kind === 'returnCharge' || s?.kind === 'returnClosed') return s.charge.amount
   if (s?.kind === 'comp') return totals.value?.payable ?? '0'
   return mode.value === 'amount' && figure.value ? figure.value : undefined
 })
@@ -469,6 +521,8 @@ const optionsText = (l: PosBillLine): string => l.options.map((o) => (o.qty > 1 
 const roomChargeLine = computed(() => bill.value?.room_charges.filter((c) => !c.returned_at) ?? [])
 // A charge to a room goes back to its bill only while the bill is open (a paid bill is reopened first), with folio.reverse (34-pos.md, the return of document 30 4.5)
 const canReturnCharge = computed(() => isOpen.value && can('pos.cashier') && can('folio.reverse'))
+// After that guest checked out (its folio is CLOSED), the return after check-out (KD-26): an open bill or a closed one, which the return reopens
+const canReturnClosed = computed(() => (isOpen.value || bill.value?.status === 'CLOSED') && can('pos.cashier') && can('folio.reverse'))
 </script>
 
 <template>
@@ -584,7 +638,11 @@ const canReturnCharge = computed(() => isOpen.value && can('pos.cashier') && can
       <ul v-if="roomChargeLine.length > 0" class="m-0 mt-2 list-none p-0 text-xs text-muted-foreground" data-testid="room-charges">
         <li v-for="c in roomChargeLine" :key="c.id" class="flex flex-wrap items-center gap-x-2" :data-testid="`room-charge-${c.id}`">
           <span>{{ t('posBill.chargedTo', { room: c.room || '', amount: formatMoney(c.amount) }) }}</span>
-          <Button v-if="canReturnCharge" type="button" size="sm" variant="outline" :disabled="busy" :data-testid="`return-charge-${c.id}`" @click="openSheet({ kind: 'returnCharge', charge: c })">{{ t('posBill.returnCharge') }}</Button>
+          <Button v-if="canReturnCharge && c.holder_status !== 'CLOSED'" type="button" size="sm" variant="outline" :disabled="busy" :data-testid="`return-charge-${c.id}`" @click="openSheet({ kind: 'returnCharge', charge: c })">{{ t('posBill.returnCharge') }}</Button>
+          <template v-if="c.holder_status === 'CLOSED'">
+            <Badge variant="secondary" :data-testid="`room-charge-checked-out-${c.id}`">{{ t('posBill.checkedOut') }}</Badge>
+            <Button v-if="canReturnClosed" type="button" size="sm" variant="outline" :disabled="busy" :data-testid="`return-closed-${c.id}`" @click="openReturnClosed(c)">{{ t('posBill.returnClosed') }}</Button>
+          </template>
         </li>
       </ul>
 
@@ -718,8 +776,66 @@ const canReturnCharge = computed(() => isOpen.value && can('pos.cashier') && can
       </form>
     </DialogContent>
   </Dialog>
+  <!-- KD-26: the return of a charge to a room after that guest checked out: what the server would do, then the reason, the payment refunded and its method -->
+  <Dialog v-if="sheet?.kind === 'returnClosed' && stage === 'form'" :open="true" @update:open="(v) => { if (!v) closeSheet() }">
+    <DialogContent class="max-w-md p-5" data-testid="return-closed-dialog" @interact-outside.prevent>
+      <form novalidate @submit.prevent="submitForm">
+        <DialogTitle>{{ t('posBill.sheet_returnClosed') }}</DialogTitle>
+        <DialogDescription class="mb-3 mt-1">{{ t('posBill.sheetHint_returnClosed', { room: sheet.charge.room || '', amount: formatMoney(sheet.charge.amount) }) }}</DialogDescription>
+        <ErrorNotice v-if="dialogError" :error="dialogError" inline data-testid="reason-error" />
+        <p v-if="!closedPreview && !dialogError" class="text-sm text-muted-foreground" data-testid="return-closed-loading">{{ t('posBill.returnClosedLoading') }}</p>
+        <template v-if="closedPreview">
+          <ErrorNotice v-if="closedRefusal" :error="closedRefusal" inline data-testid="return-closed-refusal" />
+          <template v-else>
+            <p class="mb-3 rounded-md border border-border bg-muted/40 p-3 text-sm" :data-testid="`return-closed-case-${closedPreview.case}`">
+              {{ closedPreview.case === 'REFUND'
+                ? t('posBill.returnClosedCase_REFUND', { folio: (closedPreview.master ?? closedPreview.holder).folio_number })
+                : t('posBill.returnClosedCase_MASTER_CREDIT', { folio: closedPreview.master?.folio_number ?? '' }) }}
+              <template v-if="closedPreview.bill_status === 'CLOSED'"> {{ t('posBill.returnClosedReopens') }}</template>
+            </p>
+            <div class="flex flex-col gap-3">
+              <template v-if="isRefund">
+                <FormField :label="t('posBill.returnClosedPayment')">
+                  <template #default="{ id }">
+                    <NativeSelect :id="id" v-model="refundPayment" name="refund_payment_id" data-testid="return-closed-payment">
+                      <option
+                        v-for="p in closedPreview.payments" :key="p.payment_id" :value="p.payment_id"
+                        :disabled="p.is_deposit || Number(p.refundable) < Number(sheet.charge.amount)"
+                      >{{ p.payment_number }} · {{ methodLabel(p.payment_method) }} · {{ formatMoney(p.refundable) }}{{ p.is_deposit ? ` (${t('posBill.returnClosedDeposit')})` : '' }}</option>
+                    </NativeSelect>
+                  </template>
+                </FormField>
+                <div class="grid grid-cols-2 gap-3">
+                  <FormField :label="t('posBill.returnClosedMethod')">
+                    <template #default="{ id }">
+                      <NativeSelect :id="id" v-model="refundMethod" name="refund_payment_method" data-testid="return-closed-method">
+                        <option v-for="m in closedPreview.refund_methods" :key="m" :value="m">{{ methodLabel(m) }}</option>
+                      </NativeSelect>
+                    </template>
+                  </FormField>
+                  <FormField :label="t('posBill.returnClosedReference')">
+                    <template #default="{ id }"><Input :id="id" v-model="refundReference" name="refund_reference_number" autocomplete="off" maxlength="100" data-testid="return-closed-reference" /></template>
+                  </FormField>
+                </div>
+              </template>
+              <FormField :label="t('posBill.reason')">
+                <template #default="{ id }"><Input :id="id" v-model="reason" name="reason" autocomplete="off" maxlength="200" data-testid="reason" /></template>
+              </FormField>
+            </div>
+          </template>
+        </template>
+        <div class="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" @click="closeSheet">{{ t('common.cancel') }}</Button>
+          <Button
+            type="submit" data-testid="reason-submit"
+            :disabled="busy || !closedPreview || !!closedRefusal || !reason.trim() || (isRefund && (!refundPayment || !refundMethod))"
+          >{{ t('posBill.continue') }}</Button>
+        </div>
+      </form>
+    </DialogContent>
+  </Dialog>
   <ApprovalDialog
-    v-if="sheet && ['void', 'discount', 'comp', 'reopen', 'returnCharge'].includes(sheet.kind) && stage === 'approval'" :title="t(`posBill.sheet_${sheet.kind}`)" :kind="approvalKind" :amount="approvalAmount"
+    v-if="sheet && ['void', 'discount', 'comp', 'reopen', 'returnCharge', 'returnClosed'].includes(sheet.kind) && stage === 'approval'" :title="t(`posBill.sheet_${sheet.kind}`)" :kind="approvalKind" :amount="approvalAmount"
     :busy="busy" :error="dialogError" @approve="approved" @cancel="closeSheet"
   />
 
