@@ -125,6 +125,15 @@ JOIN roles r ON r.id = up.role_id
 WHERE up.tenant_id = @tenant_id AND up.user_id = @user_id
 ORDER BY p.code;
 
+-- name: ListGrantsOfUsers :many
+-- The grants of a page of users in one query (the list of users, KD-12), in the order of ListUserGrants per user.
+SELECT up.user_id, up.property_id, p.code AS property_code, p.name AS property_name, up.role_id, r.name AS role_name
+FROM user_properties up
+JOIN properties p ON p.id = up.property_id
+JOIN roles r ON r.id = up.role_id
+WHERE up.tenant_id = @tenant_id AND up.user_id = ANY(@user_ids::bigint[])
+ORDER BY up.user_id, p.code;
+
 -- name: DeleteUserGrants :exec
 DELETE FROM user_properties WHERE tenant_id = @tenant_id AND user_id = @user_id;
 

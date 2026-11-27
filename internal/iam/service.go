@@ -458,8 +458,27 @@ func (s *Service) ListUsers(ctx context.Context, afterID int64, limit int) ([]Us
 		return nil, err
 	}
 	out := make([]User, len(rows))
+	ids := make([]int64, len(rows))
 	for i, r := range rows {
 		out[i] = toUser(r)
+		ids[i] = r.ID
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	// the grants of the page in one query: the list shows each user's property access (KD-12)
+	grants, err := s.q(ctx).ListGrantsOfUsers(ctx, iamdb.ListGrantsOfUsersParams{TenantID: p.TenantID, UserIds: ids})
+	if err != nil {
+		return nil, err
+	}
+	byUser := make(map[int64][]Grant, len(rows))
+	for _, g := range grants {
+		byUser[g.UserID] = append(byUser[g.UserID], Grant{PropertyID: g.PropertyID, PropertyCode: g.PropertyCode, PropertyName: g.PropertyName, RoleID: g.RoleID, RoleName: g.RoleName})
+	}
+	for i := range out {
+		if g := byUser[out[i].ID]; g != nil {
+			out[i].Grants = g
+		}
 	}
 	return out, nil
 }

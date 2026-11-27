@@ -12,11 +12,11 @@ Setiap pengguna mendapat **satu peran untuk setiap properti** tempat ia bekerja.
 
 ### Membuat pengguna
 
-1. Buka **Pengaturan → Pengguna**. Kolom **Akses** seharusnya menunjukkan hak masing-masing: "Semua properti (administrator tenant)", "Tanpa akses properti", atau kode properti dengan perannya.
+1. Buka **Pengaturan → Pengguna**. Kolom **Akses** menunjukkan hak masing-masing: "Semua properti (administrator tenant)", "Tanpa akses properti", atau kode properti dengan perannya.
 
    ![Daftar pengguna dengan kolom Akses](../screenshots/pengaturan-pengguna-01.png)
 
-   > 🐞 Kendala yang diketahui (KD-12): saat ini setiap pengguna yang bukan administrator tertulis "Tanpa akses properti" di daftar, walaupun sudah punya peran di properti. Gambar di atas menunjukkan keadaan itu. **Dampaknya:** dari daftar, Anda tidak bisa melihat siapa memegang peran apa, dan staf yang benar-benar belum punya akses tidak bisa dibedakan. **Sementara ini:** klik nama penggunanya. Halaman pengguna menunjukkan properti dan perannya dengan benar.
+   "Tanpa akses properti" berarti pengguna itu memang belum punya peran di properti mana pun, sehingga ia tidak bisa membuka properti apa pun setelah masuk.
 
 2. Klik **Pengguna baru**, lalu isi kartu **Profil**.
 

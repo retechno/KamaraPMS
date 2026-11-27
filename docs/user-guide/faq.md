@@ -421,9 +421,9 @@ Angka itu baru terisi setelah biaya kamar malam ini diposting. Sebelumnya kartun
 
 ## Pengaturan dan hak akses
 
-### Di daftar Pengguna, semua staf tertulis "Tanpa akses properti". Apakah aksesnya hilang?
+### Di daftar Pengguna, seorang staf tertulis "Tanpa akses properti". Apa artinya?
 
-Tidak. Daftar itu menulis "Tanpa akses properti" untuk setiap pengguna yang bukan administrator, walaupun sudah punya peran di properti (kendala yang diketahui). Klik nama penggunanya: halaman pengguna menunjukkan properti dan perannya dengan benar.
+Staf itu belum punya peran di properti mana pun, sehingga setelah masuk ia tidak bisa membuka hotel apa pun. Klik nama penggunanya, lalu tambahkan properti dan perannya di **Akses properti**.
 → [Pengguna](13-pengaturan/pengguna.md)
 
 ### Akses staf sudah saya isi, tetapi ia tetap tidak bisa masuk ke properti itu. Kenapa?
