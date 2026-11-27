@@ -75,9 +75,7 @@
 - **"Masih ada paket tarif aktif yang menjual lewat kode biaya ini."**: nonaktifkan dulu paket tarif yang memakai kode itu.
 - **"Akun ini butuh departemen dan tidak ditemukan: …"**: pilih **Departemen bawaan**.
 - **Kode TRF** (Transfer antar folio) tidak punya tombol **Ubah**. Kode ini dipakai sistem untuk pemindahan antar folio.
-- **Kode biaya pembulatan POS (`POS_ROUNDING`):**
-
-  > 🐞 Kendala yang diketahui (KD-15): kolom **Jenis** kode ini menampilkan teks mentah `chargeCodes.type_ROUNDING`, dan setiap perubahan pada kode ini gagal disimpan dengan "Ada isian yang tidak valid.". **Dampaknya:** nama, akun, atau departemen kode pembulatan tidak bisa diubah. **Sementara ini:** biarkan kode ini apa adanya. Kalau akunnya perlu diubah, hubungi tim dukungan KamaraPMS (lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak)).
+- **Kode biaya pembulatan POS (`POS_ROUNDING`)** berjenis **Pembulatan POS**. Jenis ini terkunci dan tidak bisa dipilih untuk kode lain. Nama, akun, dan departemennya bisa diubah lewat **Ubah**, sama seperti kode sistem lain. Jangan memetakan pajak atau biaya layanan ke kode ini: pembulatan bill ditolak kalau kode ini punya aturan.
 - **Tarif berdesimal** tampil dengan titik, misalnya `10.5%` untuk 10,5%.
 - **Petunjuk akun** di bawah kolom akun bisa memuat jenis akun dalam bahasa Inggris, misalnya `liability` (kewajiban) atau `revenue` (pendapatan).
 

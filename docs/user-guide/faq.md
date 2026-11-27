@@ -436,9 +436,9 @@ Periksa kolom **Akses** di daftar **Pengguna**: properti itu harus tertulis deng
 Tidak. Pengguna tidak bisa dihapus, dan emailnya tidak bisa diubah. Nonaktifkan pengguna itu, lalu buat yang baru dengan email yang benar.
 → [Pengguna](13-pengaturan/pengguna.md)
 
-### Kode biaya pembulatan POS tidak bisa disimpan. Apa yang harus dilakukan?
+### Bagaimana mengubah akun kode biaya pembulatan POS?
 
-Kolom **Jenis** kode `POS_ROUNDING` menampilkan teks mentah, dan setiap perubahan gagal disimpan dengan "Ada isian yang tidak valid." (kendala yang diketahui). Biarkan kode ini apa adanya. Kalau akunnya perlu diubah, hubungi administrator hotel; administrator hotel akan meneruskannya ke tim dukungan KamaraPMS (lihat [Bantuan dan kontak](README.md#bantuan-dan-kontak)).
+Buka **Pengaturan → Kode biaya**, klik **Ubah** pada kode `POS_ROUNDING` (jenis **Pembulatan POS**), ganti **Akun pendapatan** atau **Departemen bawaan**, lalu simpan. **Jenis** kode ini terkunci.
 → [Pajak dan kode biaya](13-pengaturan/pajak-dan-kode-biaya.md)
 
 ### Muncul "Langganan sudah berakhir: data bisa dibaca tetapi tidak bisa diubah." Apa artinya?

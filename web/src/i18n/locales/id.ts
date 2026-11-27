@@ -1903,6 +1903,7 @@ export const id: Messages = {
     type_FEE: 'Biaya',
     type_OTHER: 'Lainnya',
     type_TRANSFER: 'Transfer antar folio',
+    type_ROUNDING: 'Pembulatan POS',
     typeFixed: 'Jenis kode sistem tidak dapat diubah.',
     pricesAre: 'Harga bersifat',
     exclusiveOption: 'Eksklusif: servis dan pajak ditambahkan',

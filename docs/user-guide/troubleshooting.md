@@ -249,7 +249,6 @@ Cari pesan yang muncul di layar pada tabel di bawah, baca penyebabnya, lalu kerj
 | "Pajak masih dipetakan ke kode biaya: hapus dulu dari aturannya." | Pajak itu masih dipakai di bagian **Aturan** sebuah kode biaya. | Lepas pajak itu dari setiap kode biaya, lalu nonaktifkan. → [Pajak dan kode biaya](13-pengaturan/pajak-dan-kode-biaya.md) |
 | "Masih ada paket tarif aktif yang menjual lewat kode biaya ini." | Kode biaya masih dipakai paket tarif aktif. | Nonaktifkan dulu paket tarif yang memakai kode itu. → [Pajak dan kode biaya](13-pengaturan/pajak-dan-kode-biaya.md) |
 | "Akun ini butuh departemen dan tidak ditemukan: …" | Akun kode biaya mewajibkan departemen. | Pilih **Departemen bawaan**. → [Pajak dan kode biaya](13-pengaturan/pajak-dan-kode-biaya.md) |
-| "Ada isian yang tidak valid." saat mengubah kode `POS_ROUNDING` | Perubahan pada kode pembulatan POS selalu gagal disimpan (KD-15). | Biarkan kode ini apa adanya. Kalau akunnya perlu diubah, administrator hotel menghubungi tim dukungan KamaraPMS. → [Pajak dan kode biaya](13-pengaturan/pajak-dan-kode-biaya.md) |
 | "Plan ini sudah punya tarif dengan mode harga yang berbeda dari kode biaya baru. Buat plan baru." | Kode biaya kamar baru inklusif, sedangkan yang lama eksklusif (atau sebaliknya). | Buat paket tarif baru untuk mode harga yang lain. → [Paket tarif dan grid tarif](13-pengaturan/paket-tarif-dan-grid-tarif.md) |
 | "Properti ini sudah punya paket tarif acuan." | Hanya satu paket tarif yang boleh menjadi acuan. | Hapus dulu centang **Plan acuan** pada paket yang lama. → [Paket tarif dan grid tarif](13-pengaturan/paket-tarif-dan-grid-tarif.md) |
 | "Tanggal ini sudah punya pembatasan untuk tipe kamar dan paket tarif ini." | Pembatasan untuk tanggal itu sudah ada. | Muat ulang halaman, lalu ubah pembatasan yang ada lewat kartu **Atur pembatasan**. → [Pembatasan penjualan, aturan yield, dan kuota malam gratis](13-pengaturan/pembatasan-yield-dan-kuota.md) |
@@ -284,7 +283,7 @@ Hentikan pekerjaan itu dan minta bantuan kalau Anda menemui salah satu keadaan i
 - **Langganan:** muncul "Langganan sudah berakhir: data bisa dibaca tetapi tidak bisa diubah.", atau banner masa tenggang tampil.
 - **"Terjadi kesalahan yang tidak terduga."** terus muncul pada tindakan yang sama.
 - **Angka di laporan terlihat salah**, misalnya "Control balance berbeda: …" di Daily flash report, nilai stok yang tetap berbeda dari buku besar setelah audit malam, atau pendapatan yang "belum dipetakan".
-- **Pengaturan yang tidak ada di layar** perlu diubah, misalnya toleransi persediaan, draf tagihan yang harus dibuang, atau akun kode `POS_ROUNDING` (KD-15).
+- **Pengaturan yang tidak ada di layar** perlu diubah, misalnya toleransi persediaan atau draf tagihan yang harus dibuang.
 
 **Yang disertakan saat melapor:**
 

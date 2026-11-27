@@ -543,7 +543,11 @@ func (s *Service) UpdateChargeCode(ctx context.Context, propertyID, id int64, pa
 			}
 		}
 		in.Normalize()
-		if fields := in.Validate(false, decimals); len(fields) > 0 {
+		systemType := ""
+		if row.IsSystem {
+			systemType = before.ChargeType
+		}
+		if fields := in.ValidateChange(decimals, systemType); len(fields) > 0 {
 			return apperr.Invalid("the charge code is invalid", fields...)
 		}
 		if in.DepartmentID != nil && (before.DepartmentID == nil || *before.DepartmentID != *in.DepartmentID) { // an unchanged one may be switched off meanwhile

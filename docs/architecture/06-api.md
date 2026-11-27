@@ -255,7 +255,7 @@ Codes are upper-cased and immutable (PATCH rejects `code`). Rates are percentage
 - **Filters:** `active`, `charge_type`.
 - **Rules:**
   - `price_mode` is immutable once the code is used by a rate plan, a nightly rate or a folio item (409 `PRICE_MODE_LOCKED`, enforced by a trigger). Re-sending the current value is not a change.
-  - The charge type of a **system** code is fixed (409 `SYSTEM_CHARGE_CODE_LOCKED`); a code used for room revenue stays `ROOM` (trigger, 409 `CHARGE_TYPE_LOCKED`).
+  - The charge type of a **system** code is fixed (409 `SYSTEM_CHARGE_CODE_LOCKED`); a code used for room revenue stays `ROOM` (trigger, 409 `CHARGE_TYPE_LOCKED`). A PATCH of a system code may send the type it has even when nobody may choose it: `ROUNDING` of `POS_ROUNDING` (KD-15). A new code, or a change of another code, takes only `ROOM`, `FOOD_BEVERAGE`, `SERVICE`, `FEE` or `OTHER` (422).
   - A code cannot be deactivated while an active rate plan sells through it (409 `CHARGE_CODE_IN_USE`).
   - Every property starts with ten system codes: `ROOM`, `ROOM_EXEMPT` (type ROOM), `BREAKFAST`, `RESTAURANT`, `MINIBAR` (FOOD_BEVERAGE), `LAUNDRY`, `EXTRA_BED` (SERVICE), `NO_SHOW_FEE`, `CANCEL_FEE` (FEE), `OTHER`. They carry no rules; the owner maps taxes and service charges per property.
 - **TX:** master pattern (`T[charge_code FOR UPDATE]` + audit)

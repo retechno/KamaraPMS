@@ -15020,10 +15020,10 @@ export interface components {
          */
         Amount: string;
         /**
-         * @description TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue.
+         * @description TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue. ROUNDING is the type of the system code POS_ROUNDING, the rounding of an outlet bill: nobody chooses it for a code, and a change of POS_ROUNDING (its name, account, department) keeps it.
          * @enum {string}
          */
-        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER" | "TRANSFER";
+        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER" | "TRANSFER" | "ROUNDING";
         /**
          * @description Whether a price excludes or already contains the mapped service charges and taxes.
          * @enum {string}

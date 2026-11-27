@@ -1905,6 +1905,7 @@ export const en = {
     type_FEE: 'Fee',
     type_OTHER: 'Other',
     type_TRANSFER: 'Transfer between folios',
+    type_ROUNDING: 'POS rounding',
     typeFixed: 'The type of a system code is fixed.',
     pricesAre: 'Prices are',
     exclusiveOption: 'Exclusive: service and tax are added',

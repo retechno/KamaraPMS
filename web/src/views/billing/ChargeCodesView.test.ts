@@ -25,7 +25,7 @@ const room = {
 }
 const spa = { id: 11, code: 'SPA', name: 'Spa', charge_type: 'SERVICE', price_mode: 'INCLUSIVE', default_unit_price: '250000.00', is_system: false, is_active: true, taxes: [], service_charges: [] }
 
-function mountView(permissions: string[]) {
+function mountView(permissions: string[], codes: unknown[] = [room, spa]) {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().me = { user: { id: 5, is_tenant_admin: false }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
@@ -33,7 +33,7 @@ function mountView(permissions: string[]) {
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/taxes')) return { data: { data: [vat, city, old] } }
     if (path.endsWith('/service-charges')) return { data: { data: [svc] } }
-    return { data: { data: [room, spa] } }
+    return { data: { data: codes } }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
   PATCH = vi.fn().mockResolvedValue({ data: {} })
@@ -145,6 +145,24 @@ describe('ChargeCodesView', () => {
     await w.get('[data-testid=code-form]').trigger('submit')
     await flushPromises()
     expect(w.get('[data-testid=form-error]').text()).toContain('PRICE_MODE_LOCKED')
+  })
+
+  // KD-15: the system code POS_ROUNDING has the type ROUNDING, which nobody chooses: its row and its locked select name it, and a change sends the type it has.
+  it('names the type of the rounding code and sends it unchanged with a change', async () => {
+    const rounding = { id: 12, code: 'POS_ROUNDING', name: 'POS rounding', charge_type: 'ROUNDING', price_mode: 'EXCLUSIVE', is_system: true, is_active: true, gl_account_code: '4591', taxes: [], service_charges: [] }
+    const w = mountView(['billing_config.manage'], [room, rounding])
+    await flushPromises()
+    expect(w.get('[data-testid=code-POS_ROUNDING]').text()).toContain('POS rounding')
+    expect(w.get('[data-testid=code-POS_ROUNDING]').text()).not.toContain('chargeCodes.')
+    await w.get('[data-testid=code-POS_ROUNDING] button').trigger('click')
+    const select = w.get('select[name=charge_type]')
+    expect(select.attributes('disabled')).toBeDefined()
+    expect((select.element as HTMLSelectElement).value).toBe('ROUNDING')
+    await w.get('input[name=name]').setValue('Pembulatan kasir')
+    await w.get('[data-testid=code-form]').trigger('submit')
+    await flushPromises()
+    expect(PATCH).toHaveBeenCalled()
+    expect(PATCH.mock.calls[0]![1].body.charge_type).toBe('ROUNDING')
   })
 
   it('filters by type and is read-only without billing_config.manage', async () => {
