@@ -328,9 +328,9 @@ Gudang itu sedang dibekukan oleh opname. Tunggu opname disetujui atau dibatalkan
 Label kotak itu menyesatkan: artinya "kirim pesanan ke pemasok sekarang", bukan mengajukan untuk persetujuan (kendala yang diketahui). Centang kotak itu hanya kalau pesanan memang dikirim ke pemasok sekarang. Tanpa centang, pesanan tersimpan sebagai **Draf**.
 → [Permintaan pembelian dan pesanan pembelian](09-inventory/permintaan-dan-pesanan-pembelian.md)
 
-### Saya penyetuju, permintaannya ada di Perlu saya setujui, tetapi saya dialihkan keluar saat membukanya. Kenapa?
+### Saya hanya penyetuju. Apakah peran saya butuh izin melihat barang dan stok?
 
-Peran Anda hanya boleh menyetujui, tanpa izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal** (kendala yang diketahui). Akibatnya permintaan tertahan di tingkat Anda. Minta administrator menambahkan izin melihat barang dan stok ke peran Anda.
+Tidak. Izin persetujuan (kepala departemen, kontrol biaya, atau persetujuan akhir) sudah cukup untuk membuka **Persediaan → Pembelian** dan permintaan yang menunggu Anda, lalu memutuskannya. Izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal** hanya perlu kalau Anda juga bekerja dengan barang dan stoknya.
 → [Rantai persetujuan: mengatur dan memutuskan](09-inventory/rantai-persetujuan.md)
 
 ### Rantai persetujuan terkunci dan tidak ada tombol Simpan rantai. Kenapa?

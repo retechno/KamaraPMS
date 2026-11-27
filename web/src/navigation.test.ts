@@ -38,6 +38,15 @@ describe('navigation', () => {
     expect(router.resolve('/inventory/approval-chains').meta.permission).toEqual(['property.manage', 'inventory.manage'])
   })
 
+  // KD-17: every approver of the chain reads the requests (requestReaders, docs/architecture/35-inventory.md 5.8), so the purchasing pages open to them.
+  it('opens the purchasing list and the purchase request to every approver of the chain', () => {
+    const idsOf = (held: string[]) => visibleNavigation(false, (p) => held.includes(p)).flatMap((s) => s.items.map((i) => i.id))
+    for (const approver of ['inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve']) {
+      expect(idsOf([approver]), approver).toContain('inventoryPurchasing')
+      for (const path of ['/inventory/purchasing', '/inventory/requests/1']) expect(router.resolve(path).meta.permission as string[], `${path} ${approver}`).toContain(approver)
+    }
+  })
+
   it('keeps administrator pages from everyone else', () => {
     const asUser = visibleNavigation(false).flatMap((s) => s.items.map((i) => i.id))
     const asAdmin = visibleNavigation(true).flatMap((s) => s.items.map((i) => i.id))

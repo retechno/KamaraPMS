@@ -69,9 +69,7 @@
 - **"Tingkat yang aktif bukan yang dapat Anda putuskan: muat ulang permintaan."**: orang lain sudah memutuskan lebih dulu. Muat ulang halamannya.
 - **Tingkat yang muncul atau hilang**: kalau penyetuju mengubah jumlah atau harga, totalnya dihitung ulang, sehingga tingkat "Bila total di atas" bisa menjadi wajib atau tidak perlu.
 - **Siapa yang mengubah rantai:** hanya peran yang boleh **Mengubah pengaturan properti**, sama seperti aturan persetujuan koreksi. Manajer persediaan tanpa izin itu melihat rantainya dalam keadaan terkunci.
-- **Penyetuju tanpa izin melihat persediaan:**
-
-  > 🐞 Kendala yang diketahui (KD-17): kepala departemen atau penyetuju akhir yang perannya hanya boleh menyetujui (tanpa izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal**) melihat permintaan di **Perlu saya setujui**, tetapi dialihkan keluar saat membuka permintaan pembelian itu. Halaman **Pembelian** juga tidak terbuka. **Dampaknya:** permintaan tertahan di tingkatnya. **Sementara ini:** administrator menambahkan izin melihat barang dan stok ke peran penyetuju (lihat [Peran](../13-pengaturan/peran.md)).
+- **Penyetuju tanpa izin melihat persediaan:** peran yang hanya boleh menyetujui (kepala departemen, kontrol biaya, persetujuan akhir) tetap bisa membuka **Persediaan → Pembelian** dan permintaan yang harus diputuskannya, lalu memutuskannya. Izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal** tidak diperlukan untuk itu.
 - **Persetujuan selisih tagihan dan persetujuan opname** tidak memakai rantai ini. Keduanya diputuskan oleh orang yang boleh menyetujui selisih persediaan. Lihat [Penerimaan, tagihan, dan retur](penerimaan-tagihan-dan-retur.md) dan [Opname](opname.md).
 - **Nama tingkat bawaan** `Cost control` tampil dalam bahasa Inggris (artinya: kontrol biaya).
 

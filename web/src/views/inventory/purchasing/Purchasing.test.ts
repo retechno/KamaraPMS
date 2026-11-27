@@ -89,6 +89,13 @@ describe('purchasing', () => {
     expect(document.body.textContent).not.toContain('PR-000002')
   })
 
+  // KD-17: the approvers of the chain read the requests, the orders, the receipts and the returns (requestReaders), not the settings of the module (readers).
+  it('lists the requests to an approver who may not read the settings of the module', async () => {
+    await setup(PurchasingView, ['inventory.dept_approve'])
+    expect(GET.mock.calls.map((c) => String(c[0])).some((p) => p.endsWith('/inventory/settings'))).toBe(false)
+    expect(document.body.textContent).toContain('PR-000001')
+  })
+
   it('offers a new request only to who may make one', async () => {
     await setup(PurchasingView, ['inventory.view'])
     expect(has('[data-testid=request-new]')).toBe(false)

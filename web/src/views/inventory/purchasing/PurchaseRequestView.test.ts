@@ -36,16 +36,16 @@ const level = (n: number, over: Record<string, unknown> = {}) => ({ level_no: n,
 const checkOf = (problem: string | null, levels: unknown[]) => ({ can_submit: problem === null, problem, department_id: 3, department_name: 'Food and beverage', est_total: '5000', levels })
 let check: unknown = checkOf(null, [level(1), level(2)])
 
-async function mountAt(path: string, admin = false): Promise<void> {
+async function mountAt(path: string, admin = false, permissions = ['inventory.view', 'inventory.request'], request: unknown = draft): Promise<void> {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useAuthStore().me = { user: { id: 5, email: 'm@hotel.test', is_tenant_admin: admin }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions: ['inventory.view', 'inventory.request'] }] } as never
+  useAuthStore().me = { user: { id: 5, email: 'm@hotel.test', is_tenant_admin: admin }, properties: [{ id: 7, code: 'BALI', name: 'Bali', permissions }] } as never
   usePropertyStore().currentId = 7
   usePropertyStore().current = { id: 7, currency_decimals: 0 } as never
   resetDepartments()
   GET = vi.fn(async (path: string) => {
     if (path.endsWith('/inventory/requests/{id}/approval-check')) return { data: check }
-    if (path.endsWith('/inventory/requests/{id}')) return { data: draft }
+    if (path.endsWith('/inventory/requests/{id}')) return { data: request }
     if (path.endsWith('/inventory/warehouses')) return { data: { data: warehouses } }
     if (path.endsWith('/inventory/items/{id}')) return { data: item }
     if (path.endsWith('/inventory/items')) return { data: { items: [item] } }
@@ -139,4 +139,22 @@ describe('PurchaseRequestView, the check before a submission', () => {
     await mountNew()
     expect(calls().length).toBe(0)
   })
+})
+
+// KD-17: an approver of the chain reads the request (requestReaders of the server) but may not read the masters (readers): the page asks only for what the person may read.
+describe('PurchaseRequestView, an approver who may not read the stock', () => {
+  const submitted = {
+    ...draft, requester_id: 9, requester_name: 'Made', status: 'SUBMITTED', cycle: 1, submitted_at: '2026-11-01T02:00:00Z', decision: { can_decide: true, level_no: 1, reason: null },
+    steps: [{ id: 31, cycle: 1, level_no: 1, name: 'Kepala departemen', approver_kind: 'DEPT_HEAD', permission: null, condition_kind: 'ALWAYS', threshold: null, edit_allowed: true, status: 'ACTIVE', skip_reason: null, activated_at: '2026-11-01T02:00:00Z', decided_by: null, decided_at: null, note: null }],
+  }
+  for (const approver of ['inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve']) {
+    it(`shows the request and the decision box to ${approver} without asking for the items`, async () => {
+      await mountAt('/inventory/requests/9', false, [approver], submitted)
+      const asked = GET.mock.calls.map((c) => String(c[0]))
+      expect(asked.some((p) => p.endsWith('/inventory/requests/{id}'))).toBe(true)
+      expect(asked.filter((p) => p.includes('/inventory/items') || p.endsWith('/inventory/warehouses') || p.endsWith('/inventory/suppliers'))).toEqual([])
+      expect(document.body.querySelector('[data-testid=decision-approve]')).not.toBeNull()
+      expect(document.body.textContent).toContain('Beras')
+    })
+  }
 })

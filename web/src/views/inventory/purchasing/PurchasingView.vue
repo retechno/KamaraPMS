@@ -54,7 +54,8 @@ async function load(): Promise<void> {
       api.GET('/api/v1/properties/{propertyId}/inventory/purchase-orders', path),
       api.GET('/api/v1/properties/{propertyId}/inventory/receipts', path),
       api.GET('/api/v1/properties/{propertyId}/inventory/returns', { params: { path: { propertyId } } }),
-      api.GET('/api/v1/properties/{propertyId}/inventory/settings', { params: { path: { propertyId } } }),
+      // the settings are read by the module's readers; only who orders or receives needs them here, and an approver of the chain may not read them (KD-17)
+      can('inventory.purchase') || can('inventory.receive') ? api.GET('/api/v1/properties/{propertyId}/inventory/settings', { params: { path: { propertyId } } }) : Promise.resolve({ data: undefined }),
     ])
     requests.value = r.data?.data ?? []
     orders.value = o.data?.data ?? []

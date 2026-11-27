@@ -136,7 +136,7 @@ Kolom **Izin** berisi permission yang membuat item tampil di menu atau yang dimi
 | `/inventory/categories` (+form) | Kategori & akun | baca (form: manage) |
 | `/inventory/units` (+form) | Satuan | baca (form: manage) |
 | `/inventory/costing` | Harga pokok (termasuk Kartu stok) | baca |
-| `/inventory/purchasing`, `/requests/*`, `/purchase-orders/*`, `/receipts/*`, `/returns/*` | Pembelian | `inventory.view` / request / purchase / receive / bill / approve / cost_control / final_approve |
+| `/inventory/purchasing`, `/requests/*`, `/purchase-orders/*`, `/receipts/*`, `/returns/*` | Pembelian | `inventory.view` / request / purchase / receive / bill / approve / cost_control / final_approve; `/inventory/purchasing` dan `/requests/:id` juga dept_approve / sr_final_approve (KD-17) |
 | `/inventory/bill-drafts` (+`/:id`) | Draf tagihan | `inventory.bill` atau `inventory.view` |
 | `/inventory/requisitions`, `/requisitions/*`, `/transfers/*` | Permintaan & transfer | gerak |
 | `/inventory/issues` (+`/new`, `/:id`) | Pemakaian & waste | gerak |
