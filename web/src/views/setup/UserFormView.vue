@@ -29,6 +29,8 @@ const newPassword = ref('')
 const error = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
+// KD-20: after a save was tried, the rows that lack their property or role are shown with a message (they were dropped without a word before).
+const triedSave = ref(false)
 
 onMounted(async () => {
   if (!properties.loaded) await properties.loadProperties()
@@ -49,11 +51,18 @@ onMounted(async () => {
 const completeGrants = computed(() =>
   grants.value.filter((g): g is { property_id: number; role_id: number } => g.property_id !== null && g.role_id !== null),
 )
+/** The rows still lacking the property or the role. An administrator's rows are not asked: the access is every property, and the rows are hidden. */
+const incompleteRows = computed(() =>
+  form.is_tenant_admin ? new Set<number>() : new Set(grants.value.flatMap((g, i) => (g.property_id === null || g.role_id === null ? [i] : []))),
+)
+const rowInvalid = (i: number) => triedSave.value && incompleteRows.value.has(i)
 
 async function save(): Promise<void> {
-  busy.value = true
   error.value = null
   notice.value = ''
+  triedSave.value = true
+  if (incompleteRows.value.size) return // nothing is sent: each such row says what it lacks
+  busy.value = true
   try {
     if (isNew.value) {
       await api.POST('/api/v1/users', {
@@ -124,15 +133,16 @@ async function resetPassword(): Promise<void> {
         <template v-else>
           <p v-if="!grants.length" class="mb-2 mt-0 text-sm text-muted-foreground">{{ t('users.noGrants') }}</p>
           <div v-for="(g, i) in grants" :key="i" class="mb-2 flex flex-wrap gap-2">
-            <NativeSelect v-model="g.property_id" class="w-56" :aria-label="t('users.propertyN', { n: i + 1 })">
+            <NativeSelect v-model="g.property_id" class="w-56" :aria-label="t('users.propertyN', { n: i + 1 })" :aria-invalid="rowInvalid(i) && g.property_id === null ? 'true' : undefined">
               <option :value="null" disabled>{{ t('users.propertyPlaceholder') }}</option>
               <option v-for="p in properties.properties" :key="p.id" :value="p.id">{{ p.code }} · {{ p.name }}</option>
             </NativeSelect>
-            <NativeSelect v-model="g.role_id" class="w-56" :aria-label="t('users.roleN', { n: i + 1 })">
+            <NativeSelect v-model="g.role_id" class="w-56" :aria-label="t('users.roleN', { n: i + 1 })" :aria-invalid="rowInvalid(i) && g.role_id === null ? 'true' : undefined">
               <option :value="null" disabled>{{ t('users.rolePlaceholder') }}</option>
               <option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</option>
             </NativeSelect>
             <Button type="button" variant="outline" @click="grants.splice(i, 1)">{{ t('users.remove') }}</Button>
+            <small v-if="rowInvalid(i)" role="alert" class="block w-full text-xs text-destructive" :data-testid="`grant-error-${i}`">{{ t('users.grantIncomplete') }}</small>
           </div>
           <Button type="button" variant="outline" size="sm" @click="grants.push({ property_id: null, role_id: null })">{{ t('users.addProperty') }}</Button>
           <small v-if="error?.fieldMessage('grants')" role="alert" class="block text-xs text-destructive">{{ error.fieldMessage('grants') }}</small>

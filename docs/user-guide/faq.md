@@ -428,7 +428,7 @@ Staf itu belum punya peran di properti mana pun, sehingga setelah masuk ia tidak
 
 ### Akses staf sudah saya isi, tetapi ia tetap tidak bisa masuk ke properti itu. Kenapa?
 
-Baris akses yang properti atau perannya belum dipilih dibuang saat menyimpan, tanpa peringatan (kendala yang diketahui). Setelah menyimpan, buka lagi pengguna itu dan periksa properti dan perannya di halamannya. Kolom **Akses** di daftar belum bisa dipakai untuk memeriksa.
+Periksa kolom **Akses** di daftar **Pengguna**: properti itu harus tertulis dengan perannya. Kalau tidak ada, buka pengguna itu dan tambahkan baris properti dan perannya. Baris yang belum lengkap tidak bisa disimpan: layar menunjukkan baris mana yang belum dipilih propertinya atau perannya. Kalau aksesnya sudah benar, periksa apakah perannya punya izin untuk menu yang ia butuhkan. Lihat [Peran](13-pengaturan/peran.md).
 → [Pengguna](13-pengaturan/pengguna.md)
 
 ### Email pengguna salah ketik. Bisakah diubah?

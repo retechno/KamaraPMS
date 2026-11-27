@@ -2001,6 +2001,7 @@ export const id: Messages = {
     rolePlaceholder: 'Peran…',
     remove: 'Hapus',
     addProperty: 'Tambah properti',
+    grantIncomplete: 'Pilih properti dan peran untuk baris ini, atau hapus barisnya.',
     create: 'Buat pengguna',
     saveChanges: 'Simpan perubahan',
     saving: 'Menyimpan…',

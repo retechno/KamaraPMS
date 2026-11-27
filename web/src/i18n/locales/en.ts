@@ -2003,6 +2003,7 @@ export const en = {
     rolePlaceholder: 'Role…',
     remove: 'Remove',
     addProperty: 'Add property',
+    grantIncomplete: 'Choose the property and the role of this row, or remove it.',
     create: 'Create user',
     saveChanges: 'Save changes',
     saving: 'Saving…',

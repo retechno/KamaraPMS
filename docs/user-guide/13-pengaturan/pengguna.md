@@ -59,9 +59,7 @@ Setiap pengguna mendapat **satu peran untuk setiap properti** tempat ia bekerja.
 > ⚠️ Penting: pengguna tidak bisa dihapus, dan emailnya tidak bisa diubah. Kalau email salah ketik, nonaktifkan pengguna itu lalu buat yang baru dengan email yang benar.
 
 - **Minta staf mengganti kata sandi awal** setelah masuk pertama kali. Lihat [Mengubah kata sandi](../00-memulai/mengubah-kata-sandi.md).
-- **Baris akses yang belum lengkap:**
-
-  > 🐞 Kendala yang diketahui (KD-20): baris akses yang properti atau perannya belum dipilih dibuang saat menyimpan, tanpa peringatan. **Dampaknya:** staf bisa tersimpan tanpa akses ke properti yang dimaksud, dan baru ketahuan saat ia tidak bisa masuk ke properti itu. **Sementara ini:** setelah menyimpan, buka lagi pengguna itu dan periksa properti dan perannya di halamannya. Kolom **Akses** di daftar belum bisa dipakai untuk memeriksa (KD-12).
+- **Baris akses yang belum lengkap** tidak disimpan diam-diam. Kalau properti atau peran sebuah baris belum dipilih, tidak ada yang disimpan, dan di bawah baris itu muncul "Pilih properti dan peran untuk baris ini, atau hapus barisnya.". Lengkapi barisnya atau klik **Hapus**, lalu simpan lagi. Untuk administrator tenant, baris akses tidak diperiksa, karena ia sudah mengakses semua properti.
 - **Satu peran per properti.** "Satu pengguna hanya boleh punya satu peran per properti." berarti properti yang sama dipilih dua kali. Gabungkan izinnya dalam satu peran.
 - **"Tenant harus punya setidaknya satu administrator aktif."**: Anda mencoba menonaktifkan atau mencabut centang administrator terakhir. Jadikan orang lain administrator dulu.
 - **"Pengguna adalah kepala atau wakil sebuah departemen: …"**: pilih kepala atau wakil lain di [Departemen](../07-accounting/departemen.md) sebelum menonaktifkan pengguna itu.
