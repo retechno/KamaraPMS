@@ -270,6 +270,10 @@ func TestReturnToAClosedPreviousFolioIsRefused(t *testing.T) {
 		t.Fatalf("context: %v", e.Context)
 	}
 	must(t, p.Exec(t, `UPDATE folios SET status = 'OPEN', closed_at = NULL WHERE id = $1`, p.guestFolio))
+	var due string // a closed folio is at zero (00103): the holder is paid before it closes
+	must(t, p.Pool.QueryRow(context.Background(), `SELECT sum(debit - credit)::text FROM folio_items WHERE folio_id = $1`, cf).Scan(&due))
+	_, err = p.Folios.PostPayment(p.admin, p.propID, cf, "", folios.PaymentInput{Amount: due, PaymentMethod: "CARD"})
+	must(t, err)
 	p.closeFolio(t, cf)
 	_, err = p.Folios.ReturnTransfers(p.admin, p.propID, cf, folios.ReturnInput{TransferIDs: []int64{m.Moved[0].TransferID}, To: "PREVIOUS", Reason: "back", Approval: p.approval()})
 	wantCode(t, err, "FOLIO_CLOSED")                                                            // the holder is closed too

@@ -1724,6 +1724,23 @@ func (q *Queries) GetUserName(ctx context.Context, id int64) (string, error) {
 	return full_name, err
 }
 
+const hasLiveCityLedgerPayment = `-- name: HasLiveCityLedgerPayment :one
+SELECT EXISTS (SELECT 1 FROM payments WHERE property_id = $1 AND folio_id = $2 AND payment_type = 'PAYMENT' AND payment_method = 'CITY_LEDGER' AND status = 'POSTED')::boolean
+`
+
+type HasLiveCityLedgerPaymentParams struct {
+	PropertyID int64
+	FolioID    int64
+}
+
+// Whether a folio was settled, in part or whole, by a transfer to the city ledger that stands (case b, deferred: KD-29).
+func (q *Queries) HasLiveCityLedgerPayment(ctx context.Context, arg HasLiveCityLedgerPaymentParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasLiveCityLedgerPayment, arg.PropertyID, arg.FolioID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const insertChargeAttempt = `-- name: InsertChargeAttempt :one
 INSERT INTO pos_room_charge_attempts (tenant_id, property_id, source, folio_id, requested_stay_id, outlet_id, bill_id, bill_number, amount, result, code, context,
                                       pos_room_charge_id, business_date, created_by)
@@ -2975,6 +2992,64 @@ func (q *Queries) ListChargeAttempts(ctx context.Context, arg ListChargeAttempts
 	return items, nil
 }
 
+const listClosedReturnPayments = `-- name: ListClosedReturnPayments :many
+SELECT p.id, p.payment_number, p.payment_method, p.amount, p.business_date, p.paid_at,
+       (p.amount - COALESCE((SELECT sum(r.amount) FROM payments r WHERE r.property_id = p.property_id AND r.refund_of_payment_id = p.id AND r.status = 'POSTED'), 0))::numeric AS refundable,
+       COALESCE((SELECT g.is_deposit FROM folio_item_gl g WHERE g.property_id = p.property_id AND g.payment_id = p.id ORDER BY g.item_id LIMIT 1), false)::boolean AS is_deposit
+FROM payments p
+WHERE p.tenant_id = $1 AND p.property_id = $2 AND p.folio_id = $3 AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+  AND p.company_id IS NULL AND p.payment_method <> 'CITY_LEDGER'
+ORDER BY p.id
+`
+
+type ListClosedReturnPaymentsParams struct {
+	TenantID   int64
+	PropertyID int64
+	FolioID    int64
+}
+
+type ListClosedReturnPaymentsRow struct {
+	ID            int64
+	PaymentNumber string
+	PaymentMethod string
+	Amount        decimal.Decimal
+	BusinessDate  civil.Date
+	PaidAt        time.Time
+	Refundable    decimal.Decimal
+	IsDeposit     bool
+}
+
+// The payments of a folio that a refund could go against: posted, not to a company, with what is left of each after its refunds and whether
+// it was a deposit (read from folio_item_gl, the journal's own view: a refund of a deposit would be booked on 2310).
+func (q *Queries) ListClosedReturnPayments(ctx context.Context, arg ListClosedReturnPaymentsParams) ([]ListClosedReturnPaymentsRow, error) {
+	rows, err := q.db.Query(ctx, listClosedReturnPayments, arg.TenantID, arg.PropertyID, arg.FolioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListClosedReturnPaymentsRow{}
+	for rows.Next() {
+		var i ListClosedReturnPaymentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PaymentNumber,
+			&i.PaymentMethod,
+			&i.Amount,
+			&i.BusinessDate,
+			&i.PaidAt,
+			&i.Refundable,
+			&i.IsDeposit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExpiredTodayLocks = `-- name: ListExpiredTodayLocks :many
 SELECT folio_id FROM folio_outlet_locks
 WHERE tenant_id = $1 AND property_id = $2 AND status = 'OPEN' AND valid_mode = 'TODAY' AND valid_on <= $3
@@ -3898,6 +3973,57 @@ func (q *Queries) ListLineInstructions(ctx context.Context, arg ListLineInstruct
 			&i.CompanyName,
 			&i.ChargeCode,
 			&i.ChargeCodeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLiveBalanceTransfersFrom = `-- name: ListLiveBalanceTransfersFrom :many
+
+SELECT t.id, t.to_folio_id, t.amount, f.folio_type AS to_folio_type
+FROM folio_transfers t
+JOIN folio_transfer_batches b ON b.property_id = t.property_id AND b.id = t.batch_id
+JOIN folios f ON f.property_id = t.property_id AND f.id = t.to_folio_id
+WHERE t.property_id = $1 AND t.from_folio_id = $2 AND b.kind = 'BALANCE' AND t.returns_transfer_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM folio_transfers r WHERE r.property_id = t.property_id AND r.returns_transfer_id = t.id)
+ORDER BY t.id
+`
+
+type ListLiveBalanceTransfersFromParams struct {
+	PropertyID int64
+	FolioID    int64
+}
+
+type ListLiveBalanceTransfersFromRow struct {
+	ID          int64
+	ToFolioID   int64
+	Amount      decimal.Decimal
+	ToFolioType string
+}
+
+// ================================================================ the return of an outlet charge after check-out (docs/architecture/42-pos-charge-return-after-checkout.md, KD-26)
+// The balance transfers out of a folio that still stand: not a return themselves, and not returned. A guest folio whose balance went to the
+// master of its group has one; the use case follows that one hop (§3.c).
+func (q *Queries) ListLiveBalanceTransfersFrom(ctx context.Context, arg ListLiveBalanceTransfersFromParams) ([]ListLiveBalanceTransfersFromRow, error) {
+	rows, err := q.db.Query(ctx, listLiveBalanceTransfersFrom, arg.PropertyID, arg.FolioID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLiveBalanceTransfersFromRow{}
+	for rows.Next() {
+		var i ListLiveBalanceTransfersFromRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ToFolioID,
+			&i.Amount,
+			&i.ToFolioType,
 		); err != nil {
 			return nil, err
 		}

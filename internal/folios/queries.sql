@@ -954,3 +954,31 @@ JOIN pos_room_charges c ON c.property_id = i.property_id AND c.transfer_batch_id
 JOIN pos_bills b ON b.property_id = c.property_id AND b.id = c.bill_id
 JOIN pos_outlets o ON o.property_id = b.property_id AND o.id = b.outlet_id
 WHERE i.tenant_id = @tenant_id AND i.property_id = @property_id AND i.id = ANY(@ids::bigint[]);
+
+-- ================================================================ the return of an outlet charge after check-out (docs/architecture/42-pos-charge-return-after-checkout.md, KD-26)
+
+-- The balance transfers out of a folio that still stand: not a return themselves, and not returned. A guest folio whose balance went to the
+-- master of its group has one; the use case follows that one hop (§3.c).
+-- name: ListLiveBalanceTransfersFrom :many
+SELECT t.id, t.to_folio_id, t.amount, f.folio_type AS to_folio_type
+FROM folio_transfers t
+JOIN folio_transfer_batches b ON b.property_id = t.property_id AND b.id = t.batch_id
+JOIN folios f ON f.property_id = t.property_id AND f.id = t.to_folio_id
+WHERE t.property_id = @property_id AND t.from_folio_id = @folio_id AND b.kind = 'BALANCE' AND t.returns_transfer_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM folio_transfers r WHERE r.property_id = t.property_id AND r.returns_transfer_id = t.id)
+ORDER BY t.id;
+
+-- Whether a folio was settled, in part or whole, by a transfer to the city ledger that stands (case b, deferred: KD-29).
+-- name: HasLiveCityLedgerPayment :one
+SELECT EXISTS (SELECT 1 FROM payments WHERE property_id = @property_id AND folio_id = @folio_id AND payment_type = 'PAYMENT' AND payment_method = 'CITY_LEDGER' AND status = 'POSTED')::boolean;
+
+-- The payments of a folio that a refund could go against: posted, not to a company, with what is left of each after its refunds and whether
+-- it was a deposit (read from folio_item_gl, the journal's own view: a refund of a deposit would be booked on 2310).
+-- name: ListClosedReturnPayments :many
+SELECT p.id, p.payment_number, p.payment_method, p.amount, p.business_date, p.paid_at,
+       (p.amount - COALESCE((SELECT sum(r.amount) FROM payments r WHERE r.property_id = p.property_id AND r.refund_of_payment_id = p.id AND r.status = 'POSTED'), 0))::numeric AS refundable,
+       COALESCE((SELECT g.is_deposit FROM folio_item_gl g WHERE g.property_id = p.property_id AND g.payment_id = p.id ORDER BY g.item_id LIMIT 1), false)::boolean AS is_deposit
+FROM payments p
+WHERE p.tenant_id = @tenant_id AND p.property_id = @property_id AND p.folio_id = @folio_id AND p.payment_type = 'PAYMENT' AND p.status = 'POSTED'
+  AND p.company_id IS NULL AND p.payment_method <> 'CITY_LEDGER'
+ORDER BY p.id;

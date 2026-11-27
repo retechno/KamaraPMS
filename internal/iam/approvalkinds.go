@@ -35,6 +35,9 @@ const (
 	KindPOSDiscount ApprovalKind = "POS_DISCOUNT"
 	KindPOSComp     ApprovalKind = "POS_COMP"
 	KindPOSReopen   ApprovalKind = "POS_REOPEN"
+	// KindRoomChargeReturnClosed is the return of an outlet charge to a room after that guest checked out (docs/architecture/42-pos-charge-return-after-checkout.md 6): one approval for the
+	// reopening of the bill, the return and the refund, of the amount of the charge.
+	KindRoomChargeReturnClosed ApprovalKind = "ROOM_CHARGE_RETURN_CLOSED"
 	// The kinds of the inventory (docs/architecture/35-inventory.md 9.2): a price difference on a supplier bill above the tolerance (credentials, at once). The approval of a purchase request is a chain
 	// with its own engine, not a kind; the result of a stock count (INV_COUNT) is a decision of the signed-in approver (ApprovalRequest.Decision).
 	KindInvBillVariance ApprovalKind = "INV_BILL_VARIANCE"
@@ -78,6 +81,7 @@ var approvalKinds = []KindInfo{
 	{KindPOSDiscount, true, auth.PermPOSApprove},
 	{KindPOSComp, true, auth.PermPOSApprove},
 	{KindPOSReopen, true, auth.PermPOSApprove},
+	{KindRoomChargeReturnClosed, true, auth.PermCorrectionApprove},
 	{KindInvBillVariance, true, auth.PermInventoryApprove},
 	{KindInvCount, true, auth.PermInventoryApprove},
 	{KindBanquetDiscount, true, auth.PermBanquetConfirm},

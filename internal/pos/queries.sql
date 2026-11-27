@@ -552,9 +552,12 @@ SELECT
 FROM folio_items i LEFT JOIN charge_codes c ON c.property_id = i.property_id AND c.id = i.charge_code_id
 WHERE i.property_id = @property_id AND i.folio_id = @folio_id;
 
+-- The charges of a bill to rooms, with the status of the folio that holds each: a CLOSED one (the guest checked out) is returned after
+-- check-out (docs/architecture/42-pos-charge-return-after-checkout.md), an OPEN one by the plain return.
 -- name: ListBillRoomCharges :many
-SELECT c.id, c.amount, c.to_folio_id, c.stay_id, c.returned_at, COALESCE(r.room_number, '')::text AS room_number
+SELECT c.id, c.amount, c.to_folio_id, c.stay_id, c.returned_at, COALESCE(r.room_number, '')::text AS room_number, f.status AS holder_status
 FROM pos_room_charges c
+JOIN folios f ON f.property_id = c.property_id AND f.id = c.to_folio_id
 LEFT JOIN stay_rooms sr ON sr.property_id = c.property_id AND sr.stay_id = c.stay_id AND sr.id = (SELECT max(x.id) FROM stay_rooms x WHERE x.property_id = c.property_id AND x.stay_id = c.stay_id)
 LEFT JOIN rooms r ON r.property_id = sr.property_id AND r.id = sr.room_id
 WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.bill_id = sqlc.narg(bill_id)

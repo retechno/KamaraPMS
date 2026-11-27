@@ -9252,6 +9252,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/pos/room-charges/{id}/return-closed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What the return of a charge to a room after check-out would do (pos.cashier and folio.reverse)
+         * @description KD-26 (docs/architecture/42-pos-charge-return-after-checkout.md). The case (a refund to the payer, or the credit stays on the open master of the group), the payments a refund could go against with the one proposed, and the refusal when the charge cannot be returned this way (refusal is then set; nothing is written).
+         */
+        get: operations["previewPosRoomChargeReturnClosed"];
+        put?: never;
+        /**
+         * Return a charge to a room after that guest checked out (pos.cashier, folio.reverse, folio.reopen when the bill is closed, payment.refund for a refund, and an approval of the kind ROOM_CHARGE_RETURN_CLOSED)
+         * @description KD-26. In one transaction: the bill is reopened when it is closed, the charge goes back to it, and the folio that settled the charge is settled again: a refund of one of its payments (refund is required) or, when the guest's balance went to an open master, the credit stays on the master (refund must be absent). The folio of the guest stays CLOSED at zero. The bill is left OPEN with the amount. Refused: RETURN_HOLDER_OPEN (use the return), RETURN_AFTER_CHECKOUT_CITY_LEDGER (settled by the city ledger), RETURN_CHAIN_UNSUPPORTED, REFUND_OF_DEPOSIT_AFTER_CLOSE, REFUND_EXCEEDS_PAYMENT, ALREADY_RETURNED, RETURN_CHANGED.
+         */
+        post: operations["returnPosRoomChargeClosed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/folios/{id}/outlet-lock": {
         parameters: {
             query?: never;
@@ -15235,7 +15262,7 @@ export interface components {
          * @description A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
          * @enum {string}
          */
-        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BANK_SETTLEMENT_VOID" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "INV_BILL_VARIANCE" | "BANQUET_DISCOUNT" | "ASSET_DISPOSAL";
+        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BANK_SETTLEMENT_VOID" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "ROOM_CHARGE_RETURN_CLOSED" | "INV_BILL_VARIANCE" | "BANQUET_DISCOUNT" | "ASSET_DISPOSAL";
         /** @enum {string} */
         ApprovalRuleType: "FREE" | "DISTINCT" | "DISTINCT_ABOVE";
         ApprovalRuleInForce: {
@@ -22960,6 +22987,8 @@ export interface components {
             room?: string;
             /** Format: date-time */
             returned_at?: string | null;
+            /** @description The status of the folio that holds the charge: CLOSED once that guest checked out (then the return after check-out applies). */
+            holder_status: string;
         };
         PosBillTotals: {
             base: string;
@@ -23140,6 +23169,82 @@ export interface components {
             stay_id?: number | null;
             reason: string;
             approval?: components["schemas"]["Approval"];
+        };
+        PosReturnClosedInput: {
+            reason: string;
+            approval?: components["schemas"]["Approval"];
+            /** @description The payment refunded, when the folio that settled the charge is closed. */
+            refund?: {
+                /** Format: int64 */
+                payment_id: number;
+                /** @description CASH, CARD, BANK_TRANSFER, OTHER or QRIS, among the refund methods of the property; empty: the method of the payment when allowed, else the first allowed. */
+                payment_method?: string;
+                reference_number?: string;
+            } | null;
+        };
+        PosReturnClosedFolio: {
+            /** Format: int64 */
+            folio_id: number;
+            folio_number: string;
+            folio_type: string;
+            status: string;
+            balance: string;
+        };
+        PosReturnClosedPayment: {
+            /** Format: int64 */
+            payment_id: number;
+            payment_number: string;
+            payment_method: string;
+            amount: string;
+            /** @description The amount less its refunds. */
+            refundable: string;
+            /** @description Paid before the check-in; such a payment is not refunded after the folio closed. */
+            is_deposit: boolean;
+            /** Format: date */
+            business_date: string;
+        };
+        PosReturnClosedRefusal: {
+            code: string;
+            message: string;
+            context?: {
+                [key: string]: unknown;
+            };
+        };
+        PosReturnClosedPreview: {
+            /** Format: int64 */
+            charge_id: number;
+            amount: string;
+            /** Format: int64 */
+            bill_id: number;
+            bill_number: string;
+            bill_status: string;
+            holder: components["schemas"]["PosReturnClosedFolio"];
+            master: components["schemas"]["PosReturnClosedFolio"] | null;
+            /**
+             * @description REFUND: the settling folio is closed and the payer is refunded; MASTER_CREDIT: the credit stays on the open master. Empty with a refusal.
+             * @enum {string}
+             */
+            case: "" | "REFUND" | "MASTER_CREDIT";
+            payments: components["schemas"]["PosReturnClosedPayment"][];
+            /** Format: int64 */
+            proposed_payment_id: number | null;
+            refund_methods: string[];
+            refusal: components["schemas"]["PosReturnClosedRefusal"] | null;
+        };
+        PosReturnClosedRefund: {
+            /** Format: int64 */
+            payment_id: number;
+            payment_number: string;
+            payment_method: string;
+            amount: string;
+            /** Format: int64 */
+            refund_of_payment_id: number;
+        };
+        PosReturnClosedResult: {
+            bill: components["schemas"]["PosBill"];
+            holder: components["schemas"]["PosReturnClosedFolio"];
+            master: components["schemas"]["PosReturnClosedFolio"] | null;
+            refund: components["schemas"]["PosReturnClosedRefund"] | null;
         };
         PosRoomLookup: {
             /** Format: int64 */
@@ -43409,6 +43514,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PosBill"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    previewPosRoomChargeReturnClosed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosReturnClosedPreview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    returnPosRoomChargeClosed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosReturnClosedInput"];
+            };
+        };
+        responses: {
+            /** @description The bill, open with the amount, the folios settled again and the refund. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosReturnClosedResult"];
                 };
             };
             403: components["responses"]["Problem"];

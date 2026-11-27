@@ -252,6 +252,114 @@ describe('the order and the bill', () => {
     expect(w.find('[data-testid=return-charge-41]').exists()).toBe(false) // no folio.reverse
   })
 
+  // KD-26 (docs/architecture/42-pos-charge-return-after-checkout.md): once the guest checked out, the plain return was refused (FOLIO_CLOSED) and the cashier was stuck. A charge whose
+  // folio is CLOSED offers the return after check-out instead: the preview of the server, the payment refunded and its method, one approval of the kind ROOM_CHARGE_RETURN_CLOSED.
+  const checkedOut = { id: 41, amount: '60500', to_folio_id: 9, stay_id: 3, room: '305', returned_at: null, holder_status: 'CLOSED' }
+  const closedBill = () => bill({ status: 'CLOSED', lines: [line({ id: 2, status: 'SENT', round: 1 })], room_charges: [checkedOut], totals: totals({ sold: '60500', drafts: '0', transferred: '60500', payable: '0' }) })
+  const preview = (over: object = {}) => ({
+    charge_id: 41, amount: '60500', bill_id: 10, bill_number: 'B-0001', bill_status: 'CLOSED', master: null, case: 'REFUND', proposed_payment_id: 501, refund_methods: ['CASH', 'CARD'], refusal: null,
+    holder: { folio_id: 9, folio_number: 'F-0009', folio_type: 'GUEST', status: 'CLOSED', balance: '0' },
+    payments: [
+      { payment_id: 500, payment_number: 'P-0500', payment_method: 'CASH', amount: '300000', refundable: '300000', is_deposit: true, business_date: '2026-10-14' },
+      { payment_id: 501, payment_number: 'P-0501', payment_method: 'CARD', amount: '700000', refundable: '700000', is_deposit: false, business_date: '2026-10-15' },
+    ],
+    ...over,
+  })
+
+  it('returns a charge after the guest checked out: the preview, the card refund and one approval of the kind ROOM_CHARGE_RETURN_CLOSED', async () => {
+    const back = bill({ lines: [line({ id: 2, status: 'SENT', round: 1 })], room_charges: [{ ...checkedOut, returned_at: '2026-10-16T09:00:00Z' }], totals: totals({ sold: '60500', drafts: '0', transferred: '0', balance: '60500', payable: '60500' }) })
+    const w = await setup(closedBill(), ['pos.order', 'pos.cashier', 'folio.reopen', 'folio.reverse', 'payment.refund'])
+    await flushPromises()
+    expect(w.find('[data-testid=return-charge-41]').exists()).toBe(false) // the plain return would be refused: the folio is closed
+    expect(w.get('[data-testid=room-charge-checked-out-41]').text()).toBe('Checked out')
+    const plain = GET
+    GET = vi.fn(async (path: string, ...rest: unknown[]) => (path.endsWith('/return-closed') ? { data: preview() } : plain(path, ...rest)))
+    await w.get('[data-testid=return-closed-41]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls.find((c) => String(c[0]).endsWith('/room-charges/{id}/return-closed'))![1]).toEqual({ params: { path: { propertyId: 7, id: 41 } } })
+    expect(body('[data-testid=return-closed-case-REFUND]').text()).toContain('F-0009')
+    expect(body('[data-testid=return-closed-case-REFUND]').text()).toContain('reopened')
+    const options = document.body.querySelectorAll('[data-testid=return-closed-payment] option')
+    expect((options[0] as HTMLOptionElement).disabled).toBe(true) // the deposit is not refunded
+    expect(options[0]!.textContent).toContain('deposit')
+    expect((body('[data-testid=return-closed-payment]').element as HTMLSelectElement).value).toBe('501') // the one the server proposed
+    expect((body('[data-testid=return-closed-method]').element as HTMLSelectElement).value).toBe('CARD') // its own method, which the property refunds by
+    expect(body('[data-testid=reason-submit]').attributes('disabled')).toBeDefined() // no reason yet
+    await body('[data-testid=reason]').setValue('charged to the wrong room')
+    await body('[data-testid=return-closed-reference]').setValue('EDC 123')
+    await body('[data-testid=return-closed-dialog] form').trigger('submit')
+    await flushPromises()
+    expect(has('[data-testid=approval-dialog]')).toBe(true)
+    await body('input[name=approval_email]').setValue('boss@hotel.test')
+    await body('input[name=approval_password]').setValue('secret-pass')
+    POST = vi.fn(async () => ({ data: { bill: back, holder: preview().holder, master: null, refund: { payment_id: 502, payment_number: 'P-0502', payment_method: 'CARD', amount: '60500', refund_of_payment_id: 501 } } }))
+    await body('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    const call = POST.mock.calls.find((c) => String(c[0]).endsWith('/room-charges/{id}/return-closed'))!
+    expect(call[1]).toEqual({
+      params: { path: { propertyId: 7, id: 41 } },
+      body: { reason: 'charged to the wrong room', approval: { email: 'boss@hotel.test', password: 'secret-pass' }, refund: { payment_id: 501, payment_method: 'CARD', reference_number: 'EDC 123' } },
+    })
+    expect(w.get('[data-testid=bill-notice]').text()).toContain('P-0502')
+    expect(w.find('[data-testid=return-closed-41]').exists()).toBe(false) // returned: the line is gone
+    expect(w.get('[data-testid=payable]').text()).toBe('60,500')
+    expect(w.find('[data-testid=pay]').exists()).toBe(true)
+  })
+
+  it('asks the approval kind ROOM_CHARGE_RETURN_CLOSED and sends no refund when the credit stays on the open master', async () => {
+    const w = await setup(closedBill(), ['pos.order', 'pos.cashier', 'folio.reopen', 'folio.reverse'])
+    await flushPromises()
+    const plain = GET
+    const master = { folio_id: 12, folio_number: 'M-0012', folio_type: 'MASTER', status: 'OPEN', balance: '500000' }
+    GET = vi.fn(async (path: string, ...rest: unknown[]) => {
+      if (path.endsWith('/return-closed')) return { data: preview({ case: 'MASTER_CREDIT', master, payments: [], proposed_payment_id: null, refund_methods: [] }) }
+      // the rule of the kind ROOM_CHARGE_RETURN_CLOSED, and of another kind: the dialog says the one of the kind it asks
+      if (path.endsWith('/approval-rules/in-force')) return { data: { data: [{ kind: 'FOLIO_TRANSFER', rule: 'FREE', threshold: null }, { kind: 'ROOM_CHARGE_RETURN_CLOSED', rule: 'DISTINCT', threshold: null }] } }
+      return plain(path, ...rest)
+    })
+    await w.get('[data-testid=return-closed-41]').trigger('click')
+    await flushPromises()
+    expect(body('[data-testid=return-closed-case-MASTER_CREDIT]').text()).toContain('M-0012')
+    expect(has('[data-testid=return-closed-payment]')).toBe(false)
+    await body('[data-testid=reason]').setValue('wrong room')
+    await body('[data-testid=return-closed-dialog] form').trigger('submit')
+    await flushPromises()
+    expect(has('[data-testid=approval-dialog]')).toBe(true)
+    expect(body('[data-testid=approval-rule]').attributes('data-rule')).toBe('distinct')
+    await body('input[name=approval_email]').setValue('boss@hotel.test')
+    await body('input[name=approval_password]').setValue('secret-pass')
+    POST = vi.fn(async () => ({ data: { bill: closedBill(), holder: preview().holder, master, refund: null } }))
+    await body('[data-testid=approval-dialog]').trigger('submit')
+    await flushPromises()
+    const call = POST.mock.calls.find((c) => String(c[0]).endsWith('/room-charges/{id}/return-closed'))!
+    expect((call[1] as { body: { refund: unknown } }).body.refund).toBeNull()
+    expect(w.get('[data-testid=bill-notice]').text()).toContain('M-0012')
+  })
+
+  it('shows the refusal of the server before anything is asked: a folio settled by the city ledger (KD-29)', async () => {
+    const w = await setup(closedBill(), ['pos.order', 'pos.cashier', 'folio.reopen', 'folio.reverse', 'payment.refund'])
+    await flushPromises()
+    const plain = GET
+    const refusal = { code: 'RETURN_AFTER_CHECKOUT_CITY_LEDGER', message: 'the folio was settled by a transfer to the city ledger' }
+    GET = vi.fn(async (path: string, ...rest: unknown[]) => (path.endsWith('/return-closed') ? { data: preview({ case: '', refusal, payments: [], proposed_payment_id: null }) } : plain(path, ...rest)))
+    await w.get('[data-testid=return-closed-41]').trigger('click')
+    await flushPromises()
+    expect(body('[data-testid=return-closed-dialog]').text()).toContain('city ledger')
+    expect(has('[data-testid=reason]')).toBe(false)
+    expect(body('[data-testid=reason-submit]').attributes('disabled')).toBeDefined()
+    expect(POST.mock.calls.some((c) => String(c[0]).endsWith('/return-closed'))).toBe(false)
+  })
+
+  it('offers the return after check-out only to a cashier with folio.reverse, and never on a void bill', async () => {
+    let w = await setup(closedBill(), ['pos.order', 'pos.cashier', 'folio.reopen'])
+    await flushPromises()
+    expect(w.find('[data-testid=room-charge-checked-out-41]').exists()).toBe(true)
+    expect(w.find('[data-testid=return-closed-41]').exists()).toBe(false) // no folio.reverse
+    w = await setup(bill({ status: 'VOID', room_charges: [checkedOut] }), ['pos.order', 'pos.cashier', 'folio.reverse'])
+    await flushPromises()
+    expect(w.find('[data-testid=return-closed-41]').exists()).toBe(false)
+  })
+
   it('prints an open bill at the receipt printer of the outlet, and keeps the browser as a second way', async () => {
     outletOver = { receipt_printer_id: 3 }
     const w = await setup()

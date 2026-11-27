@@ -1,7 +1,7 @@
 # 42. Returning a POS charge to the wrong room after check-out (KD-26)
 
-Status: **approved by the owner on 2026-11-27, with conditions; not built yet** (§11). The build is a separate PR, after the
-PR of KD-27 (doc 41) is merged. It answers KD-26 of the user guide report (`docs/user-guide/_laporan.md`, priority 2, money): an
+Status: **approved by the owner on 2026-11-27, with conditions (§11); built** (migration 00103, `internal/folios/closedreturn.go`,
+`internal/pos/return_closed.go`, the screen **Kembalikan setelah check-out**). The build followed the PR of KD-27 (doc 41). It answers KD-26 of the user guide report (`docs/user-guide/_laporan.md`, priority 2, money): an
 outlet bill charged to the wrong room and found after that guest checked out cannot be returned from any screen, so the guest
 stays charged for someone else's meal and the difference is settled outside the system. **Case b (the city ledger) is deferred**
 (R3): the use case refuses it, and its design is kept in §10.1 for later (KD-29). **R** marks what was a recommendation. A choice
@@ -144,6 +144,36 @@ existing Return is the way).
   check-out. The list goes here, in this section, with the reason each one never writes to a CLOSED folio or always writes a
   balanced set. Test 17 (§9) runs check-out → night audit → deposit release `ON_CLOSE` on a folio already closed, with the trigger
   on.
+
+### 4.1 Every path that inserts into `folio_items` (the trace of R1, done before the migration)
+
+`grep -rn "INSERT INTO folio_items"` over `migrations/` and `internal/` finds **one** statement: `InsertFolioItem`
+(`folios/queries.sql`). No trigger or SQL function inserts a folio item: the triggers on `folio_items` (00010 totals, 00065
+business day, 00078 `lock_deposit_release`) check or update other tables only, and the deposit release (`ON_CLOSE` and `EVERY_DAY`)
+is journal lines (`gl_journal_lines`), never folio items. `InsertFolioItem` is called only by `posting.insert`
+(`folios/posting.go`), and `s.posting(…)` is called by the functions below. Each one refuses a CLOSED folio before it writes:
+
+| Path (file) | Who calls it | Why it never writes to a CLOSED folio |
+|---|---|---|
+| `PostCharge` (charges.go) | the folio screen, groups, banquet | `lockFolio`, then `requireOpen` |
+| `PostAdjustment`, `Reverse` (charges.go) | the folio screen | `requireOpen` under the folio lock |
+| `PostReservationFee` (fees.go) | cancellation and no-show fees | `requireOpen` |
+| `AdjustChargedNights` (nightadjust.go) | the change of nights | `requireOpen` |
+| `RoomPoster.Post` (roomposter.go) | the night audit, the check-out (room charges) | `requireOpen` |
+| `PostPayment`, `Void`, `Refund`, `Transfer` to the city ledger (payments.go) | the folio screen, check-out | `requireOpen` under the folio lock |
+| `Deposit` / `DepositInBatch` (payments.go) | reservations, group check-in | `depositFolio` takes the reservation's folio only when `FindUnlinkedOpenFolio` finds it OPEN, or creates a new OPEN one. **A race is left:** a `CloseFolio` of that folio that commits between the find and the folio lock lets the deposit be written to the closed folio. Today it is silent. With `folios_closed_balanced`, the deposit is refused at commit (`CLOSED_FOLIO_UNBALANCED`), so nothing unbalanced is written. The code is not changed here (outside KD-26) |
+| `PostEventCharge`, `TransferEventItems`, `TransferEventBalance` (eventfolio.go) | banquet posting and cancellation | `openEventFolio` / `eventPair`: `requireOpen` on both folios |
+| `PostOutletLine`, `AdjustOutletItem`, `VoidOutletItem`, `PostOutletPayment`, `PostOutletCompanyTransfer`, `RoundingLine` (outletbill.go) | the POS bill | `openBillFolio`: an OUTLET folio and `requireOpen` |
+| `ChargeOutletBillToRoom` (outletbill.go) | the POS charge to a room | the bill by `openBillFolio`; the target by the gate `CheckOutletCharge` (`FOLIO_CLOSED` when the target is not OPEN) |
+| `ReturnOutletRoomCharge`, `MoveOutletItems` (outletbill.go) | the POS return, split and merge | `requireOpen` on both folios |
+| `TransferItems`, `TransferBalance` (transfer.go) | the folio screen | `lockPair`: `requireOpen` on both |
+| `ReturnTransfers` (transfer.go) | the folio screen | `requireOpen` on every folio of the request |
+| `MoveToMaster` (movemaster.go) | groups | `requireOpen` on the master and the source |
+| `moveItem`, `moveBalance`, `transferLine`, `createPayment` | the helpers of the functions above | no check of their own: each caller has checked. `moveBalance` and `moveItem` always write a pair (−X on one folio, +X on the other) |
+
+Check-out (`CloseStayFolios`), `CloseFolio` and `CloseBillFolio` write no folio item: they close a folio whose items sum to zero.
+`ReopenBillFolio` reopens OUTLET folios only. **No path that is used today writes to a CLOSED folio, balanced or not.** The return of
+this document is the first. It writes a balanced set: the return pair, then the refund or the balance pair from the master.
 - **The folio stays CLOSED.** `closed_at` and `closed_on` are not changed, so:
   - the deposit release `ON_CLOSE` (it reads `closed_on`) does not run twice;
   - the outlet lock of the folio stays LOCKED;
@@ -205,10 +235,12 @@ KD-27 takes 00102; this one takes the next free number when it is built. Nothing
 
 - **API:** `POST {P}/pos/room-charges/{id}/return-closed`, body:
   - `reason`, `approval`;
-  - `settle`: `{ kind: "REFUND", payment_id, payment_method?, reference_number? }` or `{ kind: "COMPANY" }`. The server finds the
-    company's transfer from the holder.
+  - `refund`: `{ payment_id, payment_method?, reference_number? }`, required when the settling folio is closed (case a, c2), absent
+    when the credit stays on an open master (c1; a `refund` then is 422 `refund NOT_ALLOWED`). As built, there is no `settle.kind`:
+    case b is deferred (R3), so the refund is the only way the request settles. An empty `payment_method` is the payment's own
+    when the property refunds by it, else the first refund method of the property (as every refund).
 
-  Answer: the bill, the holder (and master) numbers and balances, and the refund or the company's new balance. A
+  Answer: the bill, the holder (and master) numbers and balances, and the refund. A
   **`GET {P}/pos/room-charges/{id}/return-closed`** preview says which case applies, what will be refunded or reduced, and what
   would refuse it, so the screen can show it before the approval. `openapi.yaml`, `gen:api` and `06-api.md` get both.
 - **Screen.** On the bill's room charges (where **Kembalikan beban kamar** is today, `04-pos/mengembalikan-beban-kamar.md`), a charge

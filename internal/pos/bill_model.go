@@ -124,6 +124,8 @@ type BillRoomCharge struct {
 	StayID     *int64          `json:"stay_id"`
 	Room       string          `json:"room,omitempty"`
 	ReturnedAt *time.Time      `json:"returned_at"`
+	// HolderStatus is the status of the folio that holds the charge: CLOSED once that guest checked out (the return after check-out, KD-26).
+	HolderStatus string `json:"holder_status"`
 }
 
 // BillTotals are the amounts of a bill. Sold is what the lines come to (service and tax included), voided lines out; Rounding is the line of the system code POS_ROUNDING; Paid is what the

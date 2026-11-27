@@ -316,6 +316,22 @@ echo "    down refused while an allocation is released"
 psql_run -c "ALTER TABLE city_ledger_receipt_allocations DISABLE TRIGGER city_ledger_receipt_allocations_guard" -c "DELETE FROM city_ledger_receipt_allocations" -c "ALTER TABLE city_ledger_receipt_allocations ENABLE TRIGGER city_ledger_receipt_allocations_guard"
 psql_run -c "ALTER TABLE city_ledger_receipt_allocations ENABLE TRIGGER city_ledger_receipt_allocations_business_day_open" -c "ALTER TABLE city_ledger_receipt_allocations ENABLE TRIGGER city_ledger_receipt_allocations_released_business_day_open"
 
+echo "==> migration 00103 (a closed folio is balanced): the check of the folios closed so far, and the Down"
+M103="$(ls "$ROOT"/migrations/00103_*.sql)"
+section down "$M103" | psql_run
+# before 00103 nothing stops a folio closing off zero: the migration finds it, names it, and stops
+OFF=$(psql_run -tA -c "SELECT f.id FROM folios f JOIN folio_items i ON i.property_id = f.property_id AND i.folio_id = f.id WHERE f.status = 'OPEN' GROUP BY f.id HAVING sum(i.debit - i.credit) <> 0 ORDER BY f.id LIMIT 1")
+[ -n "$OFF" ] || { echo "FAIL: the fixture has no open folio with a balance to close" >&2; exit 1; }
+psql_run -c "UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $OFF" >/dev/null
+if section up "$M103" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m103-up.err"; then echo "FAIL: 00103 went up over a closed folio off zero" >&2; exit 1; fi
+grep -q "00103: closed folios that do not balance" "${TMPDIR:-/tmp}/m103-up.err" || { echo "FAIL: 00103 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m103-up.err" >&2; exit 1; }
+echo "    up refused while a closed folio is off zero, and it names the folio"
+psql_run -c "UPDATE folios SET status = 'OPEN', closed_at = NULL, closed_on = NULL WHERE id = $OFF" >/dev/null
+section up "$M103" | psql_run >/dev/null
+[ "$(psql_run -tA -c "SELECT count(*) FROM pg_trigger WHERE tgname = 'folios_closed_balanced' AND NOT tgisinternal")" = "2" ] || { echo "FAIL: 00103 did not create its two triggers" >&2; exit 1; }
+if psql_run -c "UPDATE folios SET status = 'CLOSED', closed_at = now() WHERE id = $OFF" >/dev/null 2>&1; then echo "FAIL: a folio off zero closed after 00103" >&2; exit 1; fi
+echo "    up with the folios balanced; a folio off zero does not close any more"
+
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
   echo "    down $(basename "$f")"

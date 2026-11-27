@@ -918,6 +918,8 @@ Same module and the same `P`. `pos.order` also means `pos.cashier` (who may do m
 | `POST {P}/pos/bills/{id}/void` | `pos.order` | a bill that sold nothing and took nothing |
 | `POST {P}/pos/bills/{id}/reopen` | `pos.cashier` + `folio.reopen` + approval `POS_REOPEN` | `{reason, approval}` |
 | `POST {P}/pos/room-charges/{id}/return` | `pos.cashier` + `folio.reverse` + approval `FOLIO_TRANSFER` | the bill must be open |
+| `GET {P}/pos/room-charges/{id}/return-closed` | `pos.cashier` + `folio.reverse` | the preview of the return after check-out (KD-26, doc 42): the case, the payments a refund could go against, the refusal |
+| `POST {P}/pos/room-charges/{id}/return-closed` | `pos.cashier` + `folio.reverse`, + `folio.reopen` when the bill is closed, + `payment.refund` for a refund; approval `ROOM_CHARGE_RETURN_CLOSED` (the amount of the charge) | `{reason, approval, refund?: {payment_id, payment_method?, reference_number?}}`; the guest folio stays CLOSED at zero, the bill is left OPEN |
 | `POST {P}/pos/room-charges/{id}/move` | `pos.cashier` + `pos.charge_room` + `folio.reverse` + approval `FOLIO_TRANSFER` | `{stay_id, reason, approval}`; the new charge goes through the gate at the target for everyone; a refusal moves nothing |
 | `GET {P}/pos/outlets/{id}/room-lookup` | `pos.charge_room` | `q`; the in-house rooms with where the charge lands, the lock, the limit and the usage: no balance, no lines |
 | `POST {P}/pos/outlets/{id}/holds`, `POST {P}/pos/holds/{id}/seat`, `…/cancel` | `pos.order` | "dipesan"; not linked to the reservations of the PMS |

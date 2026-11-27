@@ -63,6 +63,7 @@ Koreksi yang ditandai "Tanpa jumlah" hanya punya pilihan **Siapa pun yang boleh 
 | **Diskon pada bill outlet** | Jumlah dasar yang didiskon | sama seperti di atas |
 | **Bill komplimen outlet** | Total yang dikomplimenkan, termasuk pajak dan servis | sama seperti di atas |
 | **Membuka kembali bill outlet yang sudah ditutup** | Total penjualan pada bill | sama seperti di atas |
+| **Pengembalian beban kamar setelah tamu check-out (dengan refund)** | Jumlah beban yang dikembalikan | Menyetujui koreksi (…) |
 | **Selisih harga pada tagihan pemasok di atas toleransi** | Selisih harga tagihan, tanpa PPN | tampil `inventory.approve` (izin menyetujui selisih harga tagihan pemasok) |
 | **Hasil opname stok** | Total selisih opname, menurut harga pokok | tampil `inventory.approve` (izin yang sama) |
 | **Diskon pada baris banquet di atas batas tanpa persetujuan** | Dasar baris sebelum diskon | tampil `banquet.confirm` (izin mengonfirmasi acara) |
