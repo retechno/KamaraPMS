@@ -564,11 +564,13 @@ func (s *Service) CreateUser(ctx context.Context, in CreateUserInput) (User, err
 	return out, err
 }
 
-// UserPatch changes selected user attributes.
+// UserPatch changes selected user attributes. Grants, when set, replaces all the user's property grants in the same
+// transaction as the profile (as ReplaceGrants does), so a save from the user form is never half done: both, or neither.
 type UserPatch struct {
 	FullName      *string
 	IsActive      *bool
 	IsTenantAdmin *bool
+	Grants        *[]GrantInput
 }
 
 // UpdateUser edits a user. The last active tenant administrator can be neither
@@ -582,6 +584,11 @@ func (s *Service) UpdateUser(ctx context.Context, id int64, patch UserPatch) (Us
 	if patch.FullName != nil {
 		if fe := validateFullName(*patch.FullName); fe != nil {
 			return User{}, apperr.Invalid("the user is invalid", *fe)
+		}
+	}
+	if patch.Grants != nil {
+		if fields := validateGrants(*patch.Grants); len(fields) > 0 {
+			return User{}, apperr.Invalid("the grants are invalid", fields...)
 		}
 	}
 	var out User
@@ -644,12 +651,31 @@ func (s *Service) UpdateUser(ctx context.Context, id int64, patch UserPatch) (Us
 				return err
 			}
 		}
+		var grantsBefore []Grant
+		if patch.Grants != nil { // the same rows and the same audit entry as ReplaceGrants, under the same user lock
+			if grantsBefore, err = s.grants(ctx, p.TenantID, id); err != nil {
+				return err
+			}
+			if err := q.DeleteUserGrants(ctx, iamdb.DeleteUserGrantsParams{TenantID: p.TenantID, UserID: id}); err != nil {
+				return err
+			}
+			if err := s.writeGrants(ctx, p, id, *patch.Grants); err != nil {
+				return err
+			}
+		}
 		out = toUser(updated)
 		if out.Grants, err = s.grants(ctx, p.TenantID, id); err != nil {
 			return err
 		}
+		if err := s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
+			Action: "user.updated", EntityType: "user", EntityID: id, EntityLabel: auditlabel.User(ctx, p.TenantID, id), Old: before, New: out}); err != nil {
+			return err
+		}
+		if patch.Grants == nil {
+			return nil
+		}
 		return s.audit.Write(ctx, audit.Entry{TenantID: p.TenantID, UserID: p.ActorID(),
-			Action: "user.updated", EntityType: "user", EntityID: id, EntityLabel: auditlabel.User(ctx, p.TenantID, id), Old: before, New: out})
+			Action: "user.grants_replaced", EntityType: "user", EntityID: id, EntityLabel: auditlabel.User(ctx, p.TenantID, id), Old: grantsBefore, New: out.Grants})
 	})
 	return out, err
 }

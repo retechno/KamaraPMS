@@ -182,7 +182,7 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
     patch:
       operationId: updateUser
-      summary: Rename, activate/deactivate, or change the administrator flag
+      summary: Rename, activate/deactivate, or change the administrator flag, and optionally replace the property grants in the same transaction
       tags: [access]
       requestBody:
         required: true
@@ -16556,6 +16556,10 @@ components:
         full_name: { type: string }
         is_active: { type: boolean }
         is_tenant_admin: { type: boolean }
+        grants:
+          type: array
+          description: When present, replaces all the user's property grants (one role per property) in the same transaction as the profile, as PUT /users/{userId}/properties does. Absent leaves the grants as they are; an empty list removes them all.
+          items: { $ref: "#/components/schemas/GrantInput" }
     PermissionInfo:
       type: object
       required: [code, group, description, milestone]

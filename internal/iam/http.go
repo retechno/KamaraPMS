@@ -262,9 +262,10 @@ func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) error {
 }
 
 type updateUserRequest struct {
-	FullName      *string `json:"full_name"`
-	IsActive      *bool   `json:"is_active"`
-	IsTenantAdmin *bool   `json:"is_tenant_admin"`
+	FullName      *string       `json:"full_name"`
+	IsActive      *bool         `json:"is_active"`
+	IsTenantAdmin *bool         `json:"is_tenant_admin"`
+	Grants        *[]GrantInput `json:"grants"` // replaces every grant, in the same transaction as the profile
 }
 
 func (h *Handler) updateUser(w http.ResponseWriter, r *http.Request) error {

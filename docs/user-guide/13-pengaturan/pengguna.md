@@ -51,6 +51,7 @@ Setiap pengguna mendapat **satu peran untuk setiap properti** tempat ia bekerja.
 ## Hasilnya
 
 - Pengguna masuk dengan **kode tenant**, emailnya, dan kata sandi awal. Ia hanya melihat properti yang diberikan, dan di tiap properti hanya menu yang diizinkan perannya.
+- Profil dan akses properti disimpan bersama. Kalau penyimpanan ditolak (pesannya tampil di atas formulir), tidak ada yang berubah: perbaiki yang disebut pesan itu, lalu simpan lagi.
 - Perubahan peran berlaku pada permintaan berikutnya, tanpa perlu keluar dan masuk lagi.
 - Pengguna yang dinonaktifkan langsung keluar dari semua perangkat dan tidak bisa masuk lagi.
 

@@ -111,6 +111,34 @@ describe('UserFormView', () => {
     expect(PATCH).toHaveBeenCalled()
   })
 
+  // A save was two requests (PATCH the profile, PUT the grants): when the second failed, the profile was saved and the access not.
+  it('saves the profile and the access of an existing user in one request', async () => {
+    const { w, router } = await mountPage('21')
+    await w.get('input[name=full_name]').setValue('Dewi Anggraeni')
+    await w.findAll('button').find((b) => b.text() === 'Add property')!.trigger('click')
+    await selects(w, 'Property 2').setValue('8')
+    await selects(w, 'Role 2').setValue('4')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(PUT).not.toHaveBeenCalled()
+    expect(PATCH).toHaveBeenCalledTimes(1)
+    expect(PATCH).toHaveBeenCalledWith('/api/v1/users/{userId}', {
+      params: { path: { userId: 21 } },
+      body: { full_name: 'Dewi Anggraeni', is_active: true, is_tenant_admin: false, grants: [{ property_id: 7, role_id: 3 }, { property_id: 8, role_id: 4 }] },
+    })
+    expect(router.currentRoute.value.path).toBe('/setup/users')
+  })
+
+  it('stays on the form with the error when the save is refused, nothing of it saved', async () => {
+    const { w, router } = await mountPage('21')
+    const { ApiError } = await import('@/api/problem')
+    PATCH = vi.fn().mockRejectedValue(new ApiError({ type: 't', title: 'Not found', status: 404, code: 'PROPERTY_NOT_FOUND', detail: 'the property does not exist' }))
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/setup/users/21')
+    expect(w.find('[data-testid=form-error]').exists()).toBe(true)
+  })
+
   it('does not ask for the rows of an administrator, whose access is every property', async () => {
     const { w } = await mountPage()
     await w.get('input[name=email]').setValue('boss@hotel.example')

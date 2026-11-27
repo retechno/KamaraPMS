@@ -69,12 +69,11 @@ async function save(): Promise<void> {
         body: { email: form.email, full_name: form.full_name, password: form.password, is_tenant_admin: form.is_tenant_admin, grants: completeGrants.value },
       })
     } else {
-      const userId = Number(props.id)
+      // one request, one transaction: the profile and the access are saved together, or neither is
       await api.PATCH('/api/v1/users/{userId}', {
-        params: { path: { userId } },
-        body: { full_name: form.full_name, is_active: form.is_active, is_tenant_admin: form.is_tenant_admin },
+        params: { path: { userId: Number(props.id) } },
+        body: { full_name: form.full_name, is_active: form.is_active, is_tenant_admin: form.is_tenant_admin, grants: completeGrants.value },
       })
-      await api.PUT('/api/v1/users/{userId}/properties', { params: { path: { userId } }, body: { grants: completeGrants.value } })
     }
     await router.push('/setup/users')
   } catch (e) {
