@@ -164,7 +164,7 @@ func (s *Service) PostReservationFee(ctx context.Context, propertyID, reservatio
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		folio, err := s.depositFolio(ctx, p, propertyID, reservationID)
+		folio, err := s.depositFolio(ctx, p, propertyID, reservationID, nil)
 		if err != nil {
 			return err
 		}

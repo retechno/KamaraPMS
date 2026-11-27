@@ -30,7 +30,7 @@ Deposit yang diterima saat check-in dicatat di langkah **Deposit** pada [Check-i
 
 ## Hasilnya
 
-- Deposit tercatat di folio reservasi. Folio ini otomatis dibuat saat deposit pertama, dan tampil di kartu **Pembayaran dan folio**.
+- Deposit tercatat di folio reservasi. Folio ini otomatis dibuat saat deposit pertama, dan tampil di kartu **Pembayaran dan folio**. Kalau folio reservasi itu sudah ditutup, misalnya oleh rekan Anda pada saat yang sama, deposit dicatat di folio reservasi yang baru, dan folio yang ditutup tidak berubah.
 - Saldo folio menjadi minus. Artinya hotel memegang uang tamu, yang nanti dipakai untuk membayar tagihannya.
 - Di daftar **Kedatangan**, kolom **Siap check-in** menampilkan **Deposit** dengan jumlahnya.
 
