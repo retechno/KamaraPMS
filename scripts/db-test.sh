@@ -292,6 +292,30 @@ section down "$M99" | psql_run
 psql_run < "$ROOT/db/tests/migration_00099_down.sql" 2>&1 | sed -E -n -e 's/^(psql:[^ ]* )?NOTICE:  /    /p' -e '/ERROR/p'
 section up "$M99" | psql_run >/dev/null
 
+echo "==> migration 00102 (allocating a receipt later): the back-fill of the date, and the Down is refused while a release or a second allocation exists"
+M102="$(ls "$ROOT"/migrations/00102_*.sql)"
+ALLOC_COLS="tenant_id, property_id, receipt_id, invoice_id, company_id, amount"
+ALLOC_ROW="SELECT r.tenant_id, r.property_id, r.id, i.id, r.company_id, 10 FROM city_ledger_receipts r JOIN city_ledger_invoices i ON i.property_id = r.property_id AND i.company_id = r.company_id AND i.status = 'ISSUED' ORDER BY r.id, i.id LIMIT 1"
+section down "$M102" | psql_run
+psql_run -c "INSERT INTO city_ledger_receipt_allocations ($ALLOC_COLS) $ALLOC_ROW"
+section up "$M102" | psql_run >/dev/null
+bad=$(psql_run -tA -c "SELECT count(*) FROM city_ledger_receipt_allocations a JOIN city_ledger_receipts r ON r.id = a.receipt_id WHERE a.allocated_on IS DISTINCT FROM r.business_date OR a.created_by IS DISTINCT FROM r.created_by")
+[ "$bad" = "0" ] || { echo "FAIL: 00102 did not date $bad allocation(s) by their receipt" >&2; exit 1; }
+echo "    an allocation made before 00102 is dated by its receipt"
+# the day of the fixture's receipt is closed by now: the business-day guards are not what this checks
+psql_run -c "ALTER TABLE city_ledger_receipt_allocations DISABLE TRIGGER city_ledger_receipt_allocations_business_day_open" -c "ALTER TABLE city_ledger_receipt_allocations DISABLE TRIGGER city_ledger_receipt_allocations_released_business_day_open"
+psql_run -c "INSERT INTO city_ledger_receipt_allocations ($ALLOC_COLS, allocated_on) SELECT a.tenant_id, a.property_id, a.receipt_id, a.invoice_id, a.company_id, 1, a.allocated_on FROM city_ledger_receipt_allocations a ORDER BY a.id LIMIT 1"
+if section down "$M102" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m102-down.err"; then echo "FAIL: the Down of 00102 ran while a receipt paid an invoice twice" >&2; exit 1; fi
+grep -q "00102 cannot be rolled back" "${TMPDIR:-/tmp}/m102-down.err" || { echo "FAIL: the Down of 00102 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m102-down.err" >&2; exit 1; }
+echo "    down refused while a receipt pays an invoice in two allocations"
+psql_run -c "ALTER TABLE city_ledger_receipt_allocations DISABLE TRIGGER city_ledger_receipt_allocations_guard" -c "DELETE FROM city_ledger_receipt_allocations WHERE amount = 1" -c "ALTER TABLE city_ledger_receipt_allocations ENABLE TRIGGER city_ledger_receipt_allocations_guard"
+psql_run -c "UPDATE city_ledger_receipt_allocations SET released_at = now(), released_on = allocated_on, released_by = created_by, release_reason = 'wrong', release_approved_by = created_by WHERE created_by IS NOT NULL"          -c "UPDATE city_ledger_receipt_allocations SET released_at = now(), released_on = allocated_on, released_by = (SELECT min(id) FROM users), release_reason = 'wrong', release_approved_by = (SELECT min(id) FROM users) WHERE released_at IS NULL"
+if section down "$M102" | psql_run >/dev/null 2>"${TMPDIR:-/tmp}/m102-down.err"; then echo "FAIL: the Down of 00102 ran while an allocation was released" >&2; exit 1; fi
+grep -q "00102 cannot be rolled back" "${TMPDIR:-/tmp}/m102-down.err" || { echo "FAIL: the Down of 00102 was refused for another reason:" >&2; cat "${TMPDIR:-/tmp}/m102-down.err" >&2; exit 1; }
+echo "    down refused while an allocation is released"
+psql_run -c "ALTER TABLE city_ledger_receipt_allocations DISABLE TRIGGER city_ledger_receipt_allocations_guard" -c "DELETE FROM city_ledger_receipt_allocations" -c "ALTER TABLE city_ledger_receipt_allocations ENABLE TRIGGER city_ledger_receipt_allocations_guard"
+psql_run -c "ALTER TABLE city_ledger_receipt_allocations ENABLE TRIGGER city_ledger_receipt_allocations_business_day_open" -c "ALTER TABLE city_ledger_receipt_allocations ENABLE TRIGGER city_ledger_receipt_allocations_released_business_day_open"
+
 echo "==> migrate down"
 for f in $(ls "$ROOT"/migrations/*.sql | sort -r); do
   echo "    down $(basename "$f")"

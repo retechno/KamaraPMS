@@ -19,6 +19,8 @@ test.describe('Night audit', () => {
   let debtor: { id: number; code: string; invoices: string[] } | undefined
   // NA-06: two card payments of today, waiting for their settlement once the audit has closed the day
   let cards: { day: string; payments: string[] } | undefined
+  // NA-07: a company that paid both its invoices of today with one receipt recorded on account (not allocated)
+  let advance: { id: number; code: string; invoices: string[]; receipt: string } | undefined
 
   /** Two card payments (300,000 and 500,000) of a guest in house: their journal lines wait for the acquirer once the day is closed. */
   async function cardPayments(data: Factories): Promise<{ day: string; payments: string[] }> {
@@ -62,6 +64,14 @@ test.describe('Night audit', () => {
     earlyLeaver = await data.inHouse({ nights: 3 }) // NA-04: in house over the audit, booked two nights past it
     debtor = await companyWithTwoInvoices(data) // NA-05: due today, overdue after the audit
     cards = await cardPayments(data) // NA-06: settled from the bank after the audit
+    // NA-07: the money of the company is recorded today without allocating it, so its invoices look unpaid and overdue after the audit
+    const paid = await companyWithTwoInvoices(data)
+    const owes = await data.api.get<{ balance: string }>(`${data.P}/city-ledger/accounts/${paid.id}`)
+    const onAccount = await data.api.post<{ receipt: { receipt_number: string; unallocated: string } }>(`${data.P}/city-ledger/accounts/${paid.id}/receipts`, {
+      amount: owes.balance, payment_method: 'BANK_TRANSFER', reference_number: `TRF-${uid()}`,
+    })
+    expect(onAccount.receipt.unallocated).toBe(owes.balance)
+    advance = { ...paid, receipt: onAccount.receipt.receipt_number }
 
     // an open count freezes its warehouse and holds the close of the day: setup runs pms-seed inventory with -no-open-count, and no module leaves one
     const open = (await data.api.get<{ data: { cnt_number: string }[] }>(`${data.P}/inventory/counts`, { status: 'OPEN' })).data
@@ -174,6 +184,40 @@ test.describe('Night audit', () => {
 
     const after = await data.api.get<{ data: { invoice_number: string; payment_status: string; outstanding: string }[] }>(`${data.P}/city-ledger/accounts/${company.id}/invoices`)
     for (const inv of company.invoices) expect(after.data.find((i) => i.invoice_number === inv)?.payment_status, inv).toBe('PAID')
+    await page.goto('/city-ledger/overdue')
+    await expect(page.getByTestId('overdue-summary')).toBeVisible()
+    await expect(page.getByTestId(`overdue-${company.code}`)).toHaveCount(0)
+  })
+
+  // KD-27 (docs/architecture/41-receipt-allocation.md): a receipt recorded without allocating it, on a day that is closed now, is allocated
+  // to the invoices it paid: they become paid and leave the overdue list. The allocation is dated the new business date.
+  test('NA-07 penerimaan yang belum dialokasikan dialokasikan setelah night audit, dan invoice hilang dari daftar jatuh tempo', async ({ page, loginAs, data }) => {
+    expect(advance, 'NA-01 recorded the receipt on account').toBeDefined()
+    const company = advance!
+    const today = await data.businessDate()
+    await loginAs('admin', '/city-ledger/overdue')
+    const overdue = page.getByTestId(`overdue-${company.code}`)
+    for (const inv of company.invoices) await expect(overdue).toContainText(inv)
+
+    await page.goto(`/city-ledger/${company.id}`)
+    await expect(page.getByTestId('account-unallocated')).toBeVisible()
+    await expect(page.getByTestId(`left-${company.receipt}`)).toBeVisible()
+    await page.getByTestId(`allocate-${company.receipt}`).click()
+    const form = page.getByTestId('allocate-form')
+    await expect(form.locator('[data-testid^=alloc-row-]')).toHaveCount(2)
+    const rows = await data.api.get<{ data: { id: number; outstanding: string }[] }>(`${data.P}/city-ledger/accounts/${company.id}/invoices`)
+    for (const inv of rows.data) await expect(form.locator(`input[name=alloc_${inv.id}]`)).toHaveValue(inv.outstanding.replace(/\.0+$/, ''))
+    await form.getByTestId('allocate-submit').click()
+    await expect(page.getByTestId('notice')).toContainText(company.receipt)
+    await expect(page.getByTestId(`left-${company.receipt}`)).toHaveCount(0)
+    await expect(page.getByTestId('account-unallocated')).toHaveCount(0)
+
+    const after = await data.api.get<{ data: { invoice_number: string; payment_status: string }[] }>(`${data.P}/city-ledger/accounts/${company.id}/invoices`)
+    for (const inv of company.invoices) expect(after.data.find((i) => i.invoice_number === inv)?.payment_status, inv).toBe('PAID')
+    const receipts = await data.api.get<{ data: { receipt_number: string; business_date: string; allocations: { allocated_on: string }[] }[] }>(`${data.P}/city-ledger/accounts/${company.id}/receipts`)
+    const r = receipts.data.find((x) => x.receipt_number === company.receipt)!
+    expect(r.business_date).not.toBe(today) // the receipt stays on its closed day
+    expect(r.allocations.map((a) => a.allocated_on)).toEqual([today, today])
     await page.goto('/city-ledger/overdue')
     await expect(page.getByTestId('overdue-summary')).toBeVisible()
     await expect(page.getByTestId(`overdue-${company.code}`)).toHaveCount(0)

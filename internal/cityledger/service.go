@@ -104,11 +104,12 @@ func auditEntry(p auth.Principal, propertyID int64, bd civil.Date, action string
 	return audit.Entry{TenantID: p.TenantID, PropertyID: &propertyID, BusinessDate: &bd, UserID: p.ActorID(), Action: action, EntityType: "city_ledger_receipt", EntityID: id, EntityLabel: label, Old: old, New: updated}
 }
 
-func account(id int64, code, name string, active bool, limit *decimal.Decimal, terms int16, transferred, received, adjusted decimal.Decimal, decimals int32) Account {
+func account(id int64, code, name string, active bool, limit *decimal.Decimal, terms int16, transferred, received, adjusted, allocated decimal.Decimal, decimals int32) Account {
 	balance := transferred.Sub(received).Sub(adjusted)
 	a := Account{
 		CompanyID: id, Code: code, Name: name, IsActive: active, PaymentTermsDays: int(terms),
 		Transferred: transferred.StringFixed(decimals), Received: received.StringFixed(decimals), Adjusted: adjusted.StringFixed(decimals), Balance: balance.StringFixed(decimals),
+		Unallocated: received.Sub(allocated).StringFixed(decimals),
 	}
 	if limit != nil {
 		l := limit.StringFixed(decimals)
@@ -137,20 +138,34 @@ func (s *Service) Accounts(ctx context.Context, propertyID, afterID int64, owing
 	}
 	out := make([]Account, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, r.Adjusted, decimals))
+		out = append(out, account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, r.Adjusted, r.Allocated, decimals))
 	}
 	return out, nil
 }
 
+// receiptAllocations are the allocations of one receipt (released ones too) and what the live ones come to.
+type receiptAllocations struct {
+	list []ReceiptAllocation
+	live decimal.Decimal
+}
+
 // allocationsOf lists, per receipt of a company, the invoices it pays.
-func (s *Service) allocationsOf(ctx context.Context, tenantID, propertyID, companyID int64, decimals int32) (map[int64][]ReceiptAllocation, error) {
+func (s *Service) allocationsOf(ctx context.Context, tenantID, propertyID, companyID int64, decimals int32) (map[int64]receiptAllocations, error) {
 	rows, err := s.q(ctx).ListCompanyAllocations(ctx, cityledgerdb.ListCompanyAllocationsParams{TenantID: tenantID, PropertyID: propertyID, CompanyID: companyID})
 	if err != nil {
 		return nil, err
 	}
-	out := map[int64][]ReceiptAllocation{}
+	out := map[int64]receiptAllocations{}
 	for _, r := range rows {
-		out[r.ReceiptID] = append(out[r.ReceiptID], ReceiptAllocation{InvoiceID: r.InvoiceID, InvoiceNumber: r.InvoiceNumber, Amount: r.Amount.StringFixed(decimals)})
+		a := out[r.ReceiptID]
+		a.list = append(a.list, ReceiptAllocation{
+			ID: r.ID, InvoiceID: r.InvoiceID, InvoiceNumber: r.InvoiceNumber, Amount: r.Amount.StringFixed(decimals),
+			AllocatedOn: r.AllocatedOn, ReleasedAt: r.ReleasedAt, ReleasedOn: r.ReleasedOn, ReleaseReason: deref(r.ReleaseReason),
+		})
+		if r.ReleasedAt == nil {
+			a.live = a.live.Add(r.Amount)
+		}
+		out[r.ReceiptID] = a
 	}
 	return out, nil
 }
@@ -163,7 +178,7 @@ func (s *Service) loadAccount(ctx context.Context, tenantID, propertyID, company
 	if err != nil {
 		return Account{}, err
 	}
-	return account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, r.Adjusted, decimals), nil
+	return account(r.ID, r.Code, r.Name, r.IsActive, r.CreditLimit, r.PaymentTermsDays, r.Transferred, r.Received, r.Adjusted, r.Allocated, decimals), nil
 }
 
 // GetAccount is one company's account.
@@ -179,13 +194,18 @@ func (s *Service) GetAccount(ctx context.Context, propertyID, companyID int64) (
 	return s.loadAccount(ctx, p.TenantID, propertyID, companyID, decimals)
 }
 
-func receiptView(r cityledgerdb.CityLedgerReceipt, allocations []ReceiptAllocation, decimals int32) Receipt {
+func receiptView(r cityledgerdb.CityLedgerReceipt, a receiptAllocations, decimals int32) Receipt {
+	allocations := a.list
 	if allocations == nil {
 		allocations = []ReceiptAllocation{}
 	}
+	unallocated := decimal.Zero
+	if r.Status == ReceiptPosted {
+		unallocated = r.Amount.Sub(a.live)
+	}
 	return Receipt{
-		Allocations: allocations,
-		ID:          r.ID, ReceiptNumber: r.ReceiptNumber, CompanyID: r.CompanyID, Amount: r.Amount.StringFixed(decimals), PaymentMethod: r.PaymentMethod,
+		Allocations: allocations, Allocated: a.live.StringFixed(decimals), Unallocated: unallocated.StringFixed(decimals),
+		ID: r.ID, ReceiptNumber: r.ReceiptNumber, CompanyID: r.CompanyID, Amount: r.Amount.StringFixed(decimals), PaymentMethod: r.PaymentMethod,
 		ReferenceNumber: deref(r.ReferenceNumber), Remarks: deref(r.Remarks), BusinessDate: r.BusinessDate, PaidAt: r.PaidAt, Status: r.Status,
 		VoidedAt: r.VoidedAt, VoidReason: deref(r.VoidReason), CreatedBy: r.CreatedBy, ApprovedBy: r.ApprovedBy,
 	}
@@ -503,7 +523,7 @@ func (s *Service) Receive(ctx context.Context, propertyID, companyID int64, key 
 				if err != nil {
 					return err
 				}
-				if err := s.allocate(ctx, p, propertyID, companyID, r.ID, allocations, decimals); err != nil {
+				if err := s.allocate(ctx, p, propertyID, companyID, r.ID, day.BusinessDate, nil, allocations, decimals); err != nil {
 					return err
 				}
 				if err := s.audit.Write(ctx, auditEntry(p, propertyID, day.BusinessDate, "cityledger.receipt_posted", r.ID, auditlabel.CityLedgerReceipt(ctx, propertyID, r.ID), nil, map[string]any{
@@ -603,11 +623,15 @@ type allocation struct {
 // parseAllocations validates what a receipt pays: positive amounts within the currency's decimals, each invoice once,
 // and no more than the receipt's amount in total.
 func (in ReceiptInput) parseAllocations(amount decimal.Decimal, decimals int32) ([]allocation, []apperr.FieldError) {
+	return parseAllocations(in.Allocations, amount, decimals)
+}
+
+func parseAllocations(list []AllocationInput, amount decimal.Decimal, decimals int32) ([]allocation, []apperr.FieldError) {
 	var fields []apperr.FieldError
 	var out []allocation
 	seen := map[int64]bool{}
 	total := decimal.Zero
-	for _, a := range in.Allocations {
+	for _, a := range list {
 		d, err := money.Parse(strings.TrimSpace(a.Amount))
 		switch {
 		case a.InvoiceID < 1:
@@ -622,7 +646,7 @@ func (in ReceiptInput) parseAllocations(amount decimal.Decimal, decimals int32) 
 			out = append(out, allocation{a.InvoiceID, d})
 		}
 	}
-	if len(in.Allocations) > maxInvoiceLines {
+	if len(list) > maxInvoiceLines {
 		fields = append(fields, field("allocations", "OUT_OF_RANGE", "at most 200 invoices"))
 	}
 	if amount.IsPositive() && total.GreaterThan(amount) {
@@ -632,8 +656,9 @@ func (in ReceiptInput) parseAllocations(amount decimal.Decimal, decimals int32) 
 }
 
 // allocate records what a receipt pays, inside the transaction that holds the company lock: every invoice must be
-// an issued invoice of the company and the amount may not exceed what it still owes.
-func (s *Service) allocate(ctx context.Context, p auth.Principal, propertyID, companyID, receiptID int64, list []allocation, decimals int32) error {
+// an issued invoice of the company and the amount may not exceed what it still owes. The allocations are dated the business
+// date; key is the Idempotency-Key of an allocation made after its receipt (nil with the receipt, whose own key covers it).
+func (s *Service) allocate(ctx context.Context, p auth.Principal, propertyID, companyID, receiptID int64, on civil.Date, key *string, list []allocation, decimals int32) error {
 	if len(list) == 0 {
 		return nil
 	}
@@ -668,6 +693,7 @@ func (s *Service) allocate(ctx context.Context, p auth.Principal, propertyID, co
 		}
 		if err := q.InsertAllocation(ctx, cityledgerdb.InsertAllocationParams{
 			TenantID: p.TenantID, PropertyID: propertyID, ReceiptID: receiptID, InvoiceID: a.invoiceID, CompanyID: companyID, Amount: a.amount,
+			AllocatedOn: on, ActorID: p.ActorID(), IdempotencyKey: key,
 		}); err != nil {
 			return err
 		}

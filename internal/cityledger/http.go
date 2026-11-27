@@ -27,6 +27,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/accounts/{id}/receipts", httpx.HandlerFunc(h.receipts))
 	mux.Handle("POST "+p+"/accounts/{id}/receipts", httpx.HandlerFunc(h.receive))
 	mux.Handle("POST "+p+"/receipts/{id}/void", httpx.HandlerFunc(h.void))
+	mux.Handle("POST "+p+"/receipts/{id}/allocations", httpx.HandlerFunc(h.allocate))
+	mux.Handle("POST "+p+"/receipt-allocations/{id}/release", httpx.HandlerFunc(h.releaseAllocation))
 	mux.Handle("GET "+p+"/accounts/{id}/invoice-candidates", httpx.HandlerFunc(h.candidates))
 	mux.Handle("GET "+p+"/accounts/{id}/invoices", httpx.HandlerFunc(h.invoices))
 	mux.Handle("POST "+p+"/accounts/{id}/invoices", httpx.HandlerFunc(h.createInvoice))
@@ -202,6 +204,42 @@ func (h *Handler) void(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	res, err := h.svc.VoidReceipt(r.Context(), pid, id, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) allocate(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if key == "" {
+		return apperr.BadRequest("IDEMPOTENCY_KEY_REQUIRED", "the Idempotency-Key header is required")
+	}
+	var in AllocateInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.Allocate(r.Context(), pid, id, key, in)
+	if err != nil {
+		return err
+	}
+	return httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *Handler) releaseAllocation(w http.ResponseWriter, r *http.Request) error {
+	pid, id, err := ids(r)
+	if err != nil {
+		return err
+	}
+	var in VoidInput
+	if err := httpx.DecodeJSON(w, r, &in); err != nil {
+		return err
+	}
+	res, err := h.svc.ReleaseAllocation(r.Context(), pid, id, in)
 	if err != nil {
 		return err
 	}

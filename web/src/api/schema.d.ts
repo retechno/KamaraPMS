@@ -4884,6 +4884,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{propertyId}/city-ledger/receipts/{id}/allocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Allocate what is left of a recorded receipt to invoices of its company (cityledger.receive)
+         * @description KD-27 (docs/architecture/41-receipt-allocation.md). The receipt may be of any earlier day; the allocations are dated
+         *     the current business date. No journal is posted: the day close journals the receipt itself. The company row is
+         *     locked, as for a receipt. The sum may not exceed what is left of the receipt (409 `ALLOCATION_EXCEEDS_UNALLOCATED`,
+         *     with `context.unallocated`); each invoice must be an issued invoice of the company (404 `INVOICE_NOT_FOUND`, 409
+         *     `INVOICE_NOT_PAYABLE`) and may not be paid more than it still owes (409 `ALLOCATION_EXCEEDS_INVOICE`, with
+         *     `context.invoice_id` and `context.outstanding`). A voided receipt allocates nothing (409 `RECEIPT_ALREADY_VOIDED`).
+         *     The same Idempotency-Key returns the first answer; on another receipt it is 422 `IDEMPOTENCY_KEY_REUSED`.
+         */
+        post: operations["allocateCityLedgerReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/city-ledger/receipt-allocations/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release a wrong allocation of a receipt (cityledger.receive, needs approval)
+         * @description Any day, while the receipt is posted and the invoice issued, with a reason and an approval of kind
+         *     `CITY_LEDGER_VOID` for the allocation's amount. The invoice owes the amount again and it goes back to what is left of
+         *     the receipt. No journal. A released allocation is not released again (409 `ALLOCATION_ALREADY_RELEASED`); an unknown
+         *     one is 404 `ALLOCATION_NOT_FOUND`.
+         */
+        post: operations["releaseCityLedgerAllocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{propertyId}/city-ledger/accounts/{id}/invoice-candidates": {
         parameters: {
             query?: never;
@@ -19711,9 +19766,22 @@ export interface components {
         };
         ReceiptAllocation: {
             /** Format: int64 */
+            id: number;
+            /** Format: int64 */
             invoice_id: number;
             invoice_number: string;
             amount: string;
+            allocated_on: components["schemas"]["Date"];
+            /**
+             * Format: date-time
+             * @description Set once the allocation is released; it pays nothing then.
+             */
+            released_at: string | null;
+            released_on: components["schemas"]["Date"] | null;
+            release_reason?: string;
+        };
+        AllocateReceiptRequest: {
+            allocations: components["schemas"]["ReceiptAllocationRequest"][];
         };
         CityLedgerAccount: {
             /** Format: int64 */
@@ -19731,6 +19799,8 @@ export interface components {
             adjusted: string;
             /** @description transferred minus received minus adjusted. */
             balance: string;
+            /** @description What of the posted receipts no live allocation has taken to an invoice (money on account). */
+            unallocated: string;
             /** @description What can still be transferred within the limit; null without a limit. */
             available: string | null;
         };
@@ -19761,8 +19831,12 @@ export interface components {
             created_by: number | null;
             /** Format: int64 */
             approved_by: number | null;
-            /** @description The invoices this receipt pays (also on a voided receipt, where they no longer count). */
+            /** @description The invoices this receipt pays, released ones too (also on a voided receipt, where they no longer count). */
             allocations: components["schemas"]["ReceiptAllocation"][];
+            /** @description What the live allocations come to. */
+            allocated: string;
+            /** @description What is left of the amount for invoices (0 on a voided receipt). */
+            unallocated: string;
         };
         CityLedgerReceiptResult: {
             receipt: components["schemas"]["CityLedgerReceipt"];
@@ -36479,6 +36553,73 @@ export interface operations {
         };
         responses: {
             /** @description The voided receipt and the account's balance after it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptResult"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    allocateCityLedgerReceipt: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocateReceiptRequest"];
+            };
+        };
+        responses: {
+            /** @description The receipt with its allocations, and the company's balance (unchanged by an allocation). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityLedgerReceiptResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    releaseCityLedgerAllocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The receipt with its allocations, and the company's balance. */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -36,6 +36,8 @@ type Account struct {
 	// Adjusted is what posted credit notes and write-offs took off; the balance is transferred less received less adjusted.
 	Adjusted string `json:"adjusted"`
 	Balance  string `json:"balance"`
+	// Unallocated is what of the posted receipts no live allocation has taken to an invoice: money on account.
+	Unallocated string `json:"unallocated"`
 	// Available is what can still be transferred within the credit limit (null: unlimited).
 	Available *string `json:"available"`
 }
@@ -56,15 +58,29 @@ type Receipt struct {
 	VoidReason      string     `json:"void_reason,omitempty"`
 	CreatedBy       *int64     `json:"created_by"`
 	ApprovedBy      *int64     `json:"approved_by"`
-	// Allocations are the invoices this receipt pays; what is left of the amount is on account.
+	// Allocations are the invoices this receipt pays, the released ones too (the trail); what the live ones leave of the amount
+	// is on account: Unallocated (0 once the receipt is voided).
 	Allocations []ReceiptAllocation `json:"allocations"`
+	Allocated   string              `json:"allocated"`
+	Unallocated string              `json:"unallocated"`
 }
 
-// ReceiptAllocation is the part of a receipt that pays one invoice.
+// ReceiptAllocation is the part of a receipt that pays one invoice, made with the receipt or later (AllocatedOn, the business
+// date). A released one pays nothing any more.
 type ReceiptAllocation struct {
-	InvoiceID     int64  `json:"invoice_id"`
-	InvoiceNumber string `json:"invoice_number"`
-	Amount        string `json:"amount"`
+	ID            int64       `json:"id"`
+	InvoiceID     int64       `json:"invoice_id"`
+	InvoiceNumber string      `json:"invoice_number"`
+	Amount        string      `json:"amount"`
+	AllocatedOn   civil.Date  `json:"allocated_on"`
+	ReleasedAt    *time.Time  `json:"released_at"`
+	ReleasedOn    *civil.Date `json:"released_on"`
+	ReleaseReason string      `json:"release_reason,omitempty"`
+}
+
+// AllocateInput takes what is left of a receipt to invoices of its company.
+type AllocateInput struct {
+	Allocations []AllocationInput `json:"allocations"`
 }
 
 // AllocationInput asks for part of a receipt to pay an invoice.
