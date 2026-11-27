@@ -7966,6 +7966,7 @@ paths:
     delete:
       operationId: unclearJournalLine
       summary: Undo a matching (bank.reconcile)
+      description: "The matching of the bank line of a live card settlement is not undone here: 409 `CLEARING_IS_SETTLEMENT` (context `settlement_id`). Void the settlement instead (`voidCardSettlement`), which also reverses its journal (docs/architecture/40-card-settlement-void.md 4.4)."
       tags: [bank]
       responses:
         "200":
@@ -8193,6 +8194,31 @@ paths:
                   next_cursor: { type: string }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+  /api/v1/properties/{propertyId}/bank/card-settlements/{id}/void:
+    parameters:
+      - $ref: "#/components/parameters/PropertyId"
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: voidCardSettlement
+      summary: Void a card, e-wallet or QRIS settlement (bank.reconcile, needs approval)
+      description: "Posts the mirror image of the settlement journal (a REVERSAL) dated the settlement, the day of its statement line; marks the settlement VOIDED; releases its payment lines so they can be settled again; removes the matching of its bank line and clears the bank line and its mirror against each other. The approval is of the kind `BANK_SETTLEMENT_VOID` for the gross. 409 `PERIOD_CLOSED` when the month of the settlement is closed in the books (context `period` and `month`: reopening it changes that month's reports), `STATEMENT_RECONCILED` when the statement that matches it is reconciled (context `statement_id`), `SETTLEMENT_ALREADY_VOIDED` the second time; 404 `SETTLEMENT_NOT_FOUND`. A VAT claim of the settlement on a filed return is taken back by the next return. No Idempotency-Key: a second void is a 409, never a second journal (docs/architecture/40-card-settlement-void.md)."
+      tags: [bank]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionRequest" }
+      responses:
+        "200":
+          description: The voided settlement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardSettlement" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /api/v1/properties/{propertyId}/bank/statements/{id}/lines/{lineId}/settlement-proposal:
     parameters:
       - $ref: "#/components/parameters/PropertyId"
@@ -17405,7 +17431,7 @@ components:
       description: Room only, bed and breakfast, half board, full board, all inclusive. Informational in the MVP.
     ApprovalKind:
       type: string
-      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, INV_BILL_VARIANCE, BANQUET_DISCOUNT, ASSET_DISPOSAL]
+      enum: [FOLIO_ADJUSTMENT, FOLIO_REVERSAL, REFUND, FOLIO_TRANSFER, STAY_RATE, RATE_OVERRIDE, SALES_RESTRICTION, FREE_ROOM, CITY_LEDGER_CREDIT, CITY_LEDGER_VOID, JOURNAL, FISCAL_YEAR, BANK, BANK_SETTLEMENT_VOID, BUDGET, PAYABLES, TAX_DOCUMENT, TAX_SETTINGS, SHIFT_VARIANCE, POS_VOID, POS_DISCOUNT, POS_COMP, POS_REOPEN, INV_BILL_VARIANCE, BANQUET_DISCOUNT, ASSET_DISPOSAL]
       description: A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
     ApprovalRuleType:
       type: string
@@ -20315,7 +20341,7 @@ components:
         lines: { type: array, items: { $ref: "#/components/schemas/ExpectedCardLine" } }
     CardSettlement:
       type: object
-      required: [id, bank_account_id, account_key, journal_date, journal_number, gross, net, fee, mdr_amount, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate, payments_without_vat_rate, mdr_variance, vat_variance, payments, created_at]
+      required: [id, bank_account_id, account_key, journal_date, journal_number, gross, net, fee, mdr_amount, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate, payments_without_vat_rate, mdr_variance, vat_variance, payments, created_at, status, voided_at, void_reason, void_journal_number, statement_id, statement_line_no]
       properties:
         id: { type: integer, format: int64 }
         bank_account_id: { type: integer, format: int64 }
@@ -20339,6 +20365,12 @@ components:
         payments: { type: integer }
         reference: { type: string }
         created_at: { type: string, format: date-time }
+        status: { type: string, enum: [POSTED, VOIDED] }
+        voided_at: { type: [string, "null"], format: date-time }
+        void_reason: { type: [string, "null"] }
+        void_journal_number: { type: [string, "null"], description: The reversal journal of a voided settlement. }
+        statement_id: { type: integer, format: int64, description: "The statement the settlement is matched in, while it is; 0 when it is not (voided, or unmatched before voids existed)." }
+        statement_line_no: { type: integer, description: The number of the statement line it is matched with; 0 when it is not. }
     NightAuditOutletIssue:
       type: object
       required: [code, message]
@@ -23471,6 +23503,7 @@ components:
         journal_number: { type: string }
         journal_type: { $ref: "#/components/schemas/JournalType" }
         description: { type: string }
+        settlement_id: { type: integer, format: int64, nullable: true, description: "The live card settlement whose bank line this clearing matches: it is undone by voiding the settlement, not by Unclear." }
     BankStatementLine:
       type: object
       required: [id, line_no, line_date, amount, cleared, matched, clearings]
@@ -23710,13 +23743,15 @@ components:
         line_no: { type: integer }
         credit_id: { type: integer, format: int64, description: Zero for a bill claim. }
         credit_line_no: { type: integer }
-        settlement_id: { type: integer, format: int64, description: "The card settlement of a SETTLEMENT claim (the VAT on the commission of the acquirer, positive, claimed once, no reversal: a settlement is final); zero otherwise." }
+        settlement_id: { type: integer, format: int64, description: "The card settlement of a SETTLEMENT claim (the VAT on the commission of the acquirer, positive, claimed once; when the settlement is voided after a return claimed it, the next return takes it back, negative); zero otherwise." }
         bill_number: { type: string, description: "The number of the bill; of the credit note for a credit note claim; of the journal of the settlement for a SETTLEMENT claim." }
         supplier_invoice_number: { type: string, description: "The number on the supplier's invoice, or on the supplier's credit note; the reference of the settlement." }
         supplier_name: { type: string, description: "The supplier; the bank account for a SETTLEMENT claim." }
         bill_date: { type: string, format: date, description: "The date of the bill or of the credit note; the date of the statement line of a settlement." }
         amount: { type: string, description: "The VAT of the bill line; negative on a reversal of a bill claim and on a credit note claim." }
-        reversal: { type: boolean, description: "The claim of a bill voided after it was claimed, taken back; or the claim of a credit note voided after it was claimed, given back." }
+        reversal: { type: boolean, description: "The claim of a bill voided after it was claimed, taken back; or the claim of a credit note voided after it was claimed, given back; or the claim of a settlement voided after it was claimed, taken back." }
+        reverses_period: { type: string, format: date, description: "On the reversal of a SETTLEMENT claim: the first day of the month of the return that holds the claim it reverses." }
+        reverses_return_number: { type: string, description: "On the reversal of a SETTLEMENT claim: the number of the return that holds the claim it reverses." }
     TaxFilingOpeningCreditRequest:
       type: object
       required: [as_of, amount, approval]

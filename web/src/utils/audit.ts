@@ -102,6 +102,7 @@ export const AUDIT_ACTIONS = [
   'bank.card_fee_rule_added',
   'bank.cleared',
   'bank.settled',
+  'bank.settlement_voided',
   'bank.statement_deleted',
   'bank.statement_imported',
   'bank.statement_reconciled',

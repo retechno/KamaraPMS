@@ -1,6 +1,6 @@
 # 15. VAT on the card commission (MDR)
 
-Status: **built (all five steps; the settlement stays final, with no void).** Design approved by the owner on 2026-10-05. Steps 1 (schema and the rename), 2 (rules, snapshots, expected report and proposal) 3 (preview, settle, the settlements list), 4 (the claims on the VAT return) and 5 (screens) are built.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
+Status: **built (all five steps).** A settlement can now be voided: `40-card-settlement-void.md` (KD-05) replaces rule 1 below and the "no reversal" of a settlement claim in §5. Design approved by the owner on 2026-10-05. Steps 1 (schema and the rename), 2 (rules, snapshots, expected report and proposal) 3 (preview, settle, the settlements list), 4 (the claims on the VAT return) and 5 (screens) are built.** Where this file says "built" below it means step 1. It extends part C of `11-cashier-budget-cashflow-card.md` (card fee rules, the snapshots on the payments, the card settlement).
 
 Decisions of the owner (2026-10-05):
 
@@ -51,7 +51,7 @@ As a generated column `mdr_amount` is filled for the settlements made before thi
 `tax_return_input_claims` (the input side of the VAT return, see `14-supplier-credit-notes.md` for the pattern):
 
 - `settlement_id bigint` with a foreign key to `card_settlements (property_id, id)`. A claim now names a bill line, or a credit note line, or a settlement, exactly one of them (CHECK).
-- A settlement claim is always **positive** (the VAT of a CREDITABLE settlement) and has no reversal: a settlement is final. One live claim per settlement (unique index on `settlement_id` where not released and not a reversal). A claim is released when its return is voided, like any claim.
+- A settlement claim is **positive** (the VAT of a CREDITABLE settlement). Since doc 40 a settlement voided after its claim was filed is taken back by the next return with a negative reversing claim (`reverses_claim_id`); before doc 40 it had no reversal. One live claim per settlement (unique index on `settlement_id` where not released and not a reversal). A claim is released when its return is voided, like any claim.
 - `card_settlements` needs `UNIQUE (property_id, id)` for the foreign key if it has none.
 
 Constraint names are mapped to error codes in `internal/platform/db/errors.go`; new codes need their texts in `locales/en.ts` and `locales/id.ts`. `schema_test.sql` gets the checks above.

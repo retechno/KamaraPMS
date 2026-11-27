@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AssetCategory, AssetLocation, AssetWaitingLine } from '@/api/types'
+import type { AssetCategory, AssetLocation, AssetSettings, AssetWaitingLine } from '@/api/types'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -20,7 +20,7 @@ import { formatDate, formatMoney, formatMonth } from '@/utils/format'
 import { monthlyStraightLine, splitCost } from './split'
 
 /** Make one or more assets of a journal line (docs/architecture/37-fixed-assets.md 4.2.2 to 4.2.4, mockup 54): no journal is posted, the line already debits the cost account. */
-const props = defineProps<{ line: AssetWaitingLine | null; categories: AssetCategory[]; locations: AssetLocation[]; threshold: string; propertyId: number }>()
+const props = withDefaults(defineProps<{ line: AssetWaitingLine | null; categories: AssetCategory[]; locations: AssetLocation[]; threshold: string; propertyId: number; startRule?: AssetSettings['start_rule'] }>(), { startRule: 'IN_SERVICE_MONTH' })
 const emit = defineEmits<{ close: []; done: [] }>()
 const property = usePropertyStore()
 const decimals = computed(() => property.current?.currency_decimals ?? 0)
@@ -33,7 +33,7 @@ let key = crypto.randomUUID()
 watch(() => props.line, (l) => {
   if (!l) return
   const c = props.categories.find((x) => x.id === l.category_id)
-  form.value = { name: l.description, units: 1, category_id: l.category_id, location_id: 0, department_id: l.department_id ?? c?.department_id ?? null, in_service_date: l.journal_date, start_rule: 'IN_SERVICE_MONTH', unit_count: '', serial_no: '', notes: '' }
+  form.value = { name: l.description, units: 1, category_id: l.category_id, location_id: 0, department_id: l.department_id ?? c?.department_id ?? null, in_service_date: l.journal_date, start_rule: props.startRule, unit_count: '', serial_no: '', notes: '' } // KD-10: the property's start rule
   error.value = null
   key = crypto.randomUUID()
 }, { immediate: true })
@@ -120,8 +120,8 @@ async function submit(): Promise<void> {
         </div>
         <fieldset v-if="depreciable" class="m-0 flex flex-col gap-1 border-0 p-0" :aria-label="t('assets.make.startRule')">
           <legend class="mb-1 p-0 text-sm font-medium">{{ t('assets.make.startRule') }}</legend>
-          <label class="flex cursor-pointer items-center gap-2 text-sm"><input v-model="form.start_rule" type="radio" name="start_rule" value="IN_SERVICE_MONTH" class="accent-primary" /> {{ t('assets.make.startInService', { month: formatMonth(form.in_service_date.slice(0, 7)) }) }}</label>
-          <label class="flex cursor-pointer items-center gap-2 text-sm"><input v-model="form.start_rule" type="radio" name="start_rule" value="NEXT_MONTH" class="accent-primary" /> {{ t('assets.make.startNext', { month: formatMonth(nextMonth) }) }}</label>
+          <label class="flex cursor-pointer items-center gap-2 text-sm" data-testid="start-rule-IN_SERVICE_MONTH"><input v-model="form.start_rule" type="radio" name="start_rule" value="IN_SERVICE_MONTH" class="accent-primary" /> {{ t('assets.make.startInService', { month: formatMonth(form.in_service_date.slice(0, 7)) }) }}<span v-if="startRule === 'IN_SERVICE_MONTH'" class="-ml-1">{{ t('assets.make.propertyDefault') }}</span></label>
+          <label class="flex cursor-pointer items-center gap-2 text-sm" data-testid="start-rule-NEXT_MONTH"><input v-model="form.start_rule" type="radio" name="start_rule" value="NEXT_MONTH" class="accent-primary" /> {{ t('assets.make.startNext', { month: formatMonth(nextMonth) }) }}<span v-if="startRule === 'NEXT_MONTH'" class="-ml-1">{{ t('assets.make.propertyDefault') }}</span></label>
           <p class="m-0 text-xs text-muted-foreground">{{ t('assets.make.startHint') }}</p>
         </fieldset>
         <div v-if="isBatch" class="grid gap-3 sm:grid-cols-2">

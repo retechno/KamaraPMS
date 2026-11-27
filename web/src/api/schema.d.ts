@@ -6952,7 +6952,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Undo a matching (bank.reconcile) */
+        /**
+         * Undo a matching (bank.reconcile)
+         * @description The matching of the bank line of a live card settlement is not undone here: 409 `CLEARING_IS_SETTLEMENT` (context `settlement_id`). Void the settlement instead (`voidCardSettlement`), which also reverses its journal (docs/architecture/40-card-settlement-void.md 4.4).
+         */
         delete: operations["unclearJournalLine"];
         options?: never;
         head?: never;
@@ -7156,6 +7159,29 @@ export interface paths {
         get: operations["listCardSettlements"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/properties/{propertyId}/bank/card-settlements/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a card, e-wallet or QRIS settlement (bank.reconcile, needs approval)
+         * @description Posts the mirror image of the settlement journal (a REVERSAL) dated the settlement, the day of its statement line; marks the settlement VOIDED; releases its payment lines so they can be settled again; removes the matching of its bank line and clears the bank line and its mirror against each other. The approval is of the kind `BANK_SETTLEMENT_VOID` for the gross. 409 `PERIOD_CLOSED` when the month of the settlement is closed in the books (context `period` and `month`: reopening it changes that month's reports), `STATEMENT_RECONCILED` when the statement that matches it is reconciled (context `statement_id`), `SETTLEMENT_ALREADY_VOIDED` the second time; 404 `SETTLEMENT_NOT_FOUND`. A VAT claim of the settlement on a filed return is taken back by the next return. No Idempotency-Key: a second void is a 409, never a second journal (docs/architecture/40-card-settlement-void.md).
+         */
+        post: operations["voidCardSettlement"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15154,7 +15180,7 @@ export interface components {
          * @description A kind of approval a person understands; the amount of a kind is defined in docs/architecture/32-distinct-approver.md section 2.
          * @enum {string}
          */
-        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "INV_BILL_VARIANCE" | "BANQUET_DISCOUNT" | "ASSET_DISPOSAL";
+        ApprovalKind: "FOLIO_ADJUSTMENT" | "FOLIO_REVERSAL" | "REFUND" | "FOLIO_TRANSFER" | "STAY_RATE" | "RATE_OVERRIDE" | "SALES_RESTRICTION" | "FREE_ROOM" | "CITY_LEDGER_CREDIT" | "CITY_LEDGER_VOID" | "JOURNAL" | "FISCAL_YEAR" | "BANK" | "BANK_SETTLEMENT_VOID" | "BUDGET" | "PAYABLES" | "TAX_DOCUMENT" | "TAX_SETTINGS" | "SHIFT_VARIANCE" | "POS_VOID" | "POS_DISCOUNT" | "POS_COMP" | "POS_REOPEN" | "INV_BILL_VARIANCE" | "BANQUET_DISCOUNT" | "ASSET_DISPOSAL";
         /** @enum {string} */
         ApprovalRuleType: "FREE" | "DISTINCT" | "DISTINCT_ABOVE";
         ApprovalRuleInForce: {
@@ -18230,6 +18256,20 @@ export interface components {
             reference?: string;
             /** Format: date-time */
             created_at: string;
+            /** @enum {string} */
+            status: "POSTED" | "VOIDED";
+            /** Format: date-time */
+            voided_at: string | null;
+            void_reason: string | null;
+            /** @description The reversal journal of a voided settlement. */
+            void_journal_number: string | null;
+            /**
+             * Format: int64
+             * @description The statement the settlement is matched in, while it is; 0 when it is not (voided, or unmatched before voids existed).
+             */
+            statement_id: number;
+            /** @description The number of the statement line it is matched with; 0 when it is not. */
+            statement_line_no: number;
         };
         NightAuditOutletIssue: {
             /** @enum {string} */
@@ -21241,6 +21281,11 @@ export interface components {
             journal_number: string;
             journal_type: components["schemas"]["JournalType"];
             description?: string;
+            /**
+             * Format: int64
+             * @description The live card settlement whose bank line this clearing matches: it is undone by voiding the settlement, not by Unclear.
+             */
+            settlement_id?: number | null;
         };
         BankStatementLine: {
             /** Format: int64 */
@@ -21512,7 +21557,7 @@ export interface components {
             credit_line_no: number;
             /**
              * Format: int64
-             * @description The card settlement of a SETTLEMENT claim (the VAT on the commission of the acquirer, positive, claimed once, no reversal: a settlement is final); zero otherwise.
+             * @description The card settlement of a SETTLEMENT claim (the VAT on the commission of the acquirer, positive, claimed once; when the settlement is voided after a return claimed it, the next return takes it back, negative); zero otherwise.
              */
             settlement_id: number;
             /** @description The number of the bill; of the credit note for a credit note claim; of the journal of the settlement for a SETTLEMENT claim. */
@@ -21528,8 +21573,15 @@ export interface components {
             bill_date: string;
             /** @description The VAT of the bill line; negative on a reversal of a bill claim and on a credit note claim. */
             amount: string;
-            /** @description The claim of a bill voided after it was claimed, taken back; or the claim of a credit note voided after it was claimed, given back. */
+            /** @description The claim of a bill voided after it was claimed, taken back; or the claim of a credit note voided after it was claimed, given back; or the claim of a settlement voided after it was claimed, taken back. */
             reversal: boolean;
+            /**
+             * Format: date
+             * @description On the reversal of a SETTLEMENT claim: the first day of the month of the return that holds the claim it reverses.
+             */
+            reverses_period?: string;
+            /** @description On the reversal of a SETTLEMENT claim: the number of the return that holds the claim it reverses. */
+            reverses_return_number?: string;
         };
         TaxFilingOpeningCreditRequest: {
             /** Format: date */
@@ -40003,6 +40055,38 @@ export interface operations {
             };
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    voidCardSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The voided settlement. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardSettlement"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     getSettlementProposal: {

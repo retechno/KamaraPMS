@@ -266,7 +266,7 @@ Tidak. Setelah Definit, acara hanya bisa diselesaikan atau dibatalkan, dan pemba
 
 ### Perusahaan sudah membayar, tetapi invoicenya masih Belum dibayar. Kenapa?
 
-Pembayarannya dicatat lewat **Catat pembayaran dari perusahaan**, yang tidak pernah terhubung ke invoice, dan belum ada layar untuk menghubungkannya (kendala yang diketahui). Saldo piutang turun, tetapi invoice tetap **Belum dibayar** dan muncul di **Invoice jatuh tempo**. Untuk pembayaran invoice, selalu pakai **Bayar** pada invoicenya. Kalau penerimaan sudah terlanjur dicatat tanpa invoice, laporkan ke manajer keuangan atau administrator, beserta nama perusahaan, nomor invoice, dan jumlahnya.
+Penerimaannya dicatat tanpa dibagi ke invoice itu: **Dibayar sekarang** pada barisnya kosong, sehingga jumlahnya masuk **Belum dialokasikan** sebagai uang muka. Saldo piutang turun, tetapi invoice tetap **Belum dibayar** dan muncul di **Invoice jatuh tempo**. Pada tanggal bisnis yang sama, batalkan penerimaan itu lalu catat ulang dengan invoicenya. Setelah audit malam, penerimaan tidak bisa dibatalkan atau dialokasikan lagi (kendala yang diketahui KD-27): laporkan ke manajer keuangan atau administrator, beserta nama perusahaan, nomor penerimaan, nomor invoice, dan jumlahnya.
 → [Invoice dan penerimaan piutang perusahaan](06-corporate-group-city-ledger/invoice-dan-penerimaan.md)
 
 ### Muncul "Pemindahan ini melampaui batas kredit perusahaan." Apa yang bisa dilakukan?

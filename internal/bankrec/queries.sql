@@ -145,11 +145,14 @@ WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.id = @id;
 INSERT INTO bank_clearings (tenant_id, property_id, bank_account_id, statement_id, statement_line_id, journal_line_id, amount, cleared_at, cleared_by)
 VALUES (@tenant_id, @property_id, @bank_account_id, @statement_id, sqlc.narg(statement_line_id), @journal_line_id, @amount, @now, sqlc.narg(actor_id));
 
+-- The clearings of a statement; settlement_id names the live settlement whose journal the journal line is of (its matching is undone by voiding it).
 -- name: ListClearings :many
-SELECT c.id, c.statement_line_id, c.journal_line_id, c.amount, j.journal_date, j.journal_number, j.journal_type, COALESCE(l.description, j.description) AS description
+SELECT c.id, c.statement_line_id, c.journal_line_id, c.amount, j.journal_date, j.journal_number, j.journal_type, COALESCE(l.description, j.description) AS description,
+       cs.id AS settlement_id
 FROM bank_clearings c
 JOIN gl_journal_lines l ON l.id = c.journal_line_id
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
+LEFT JOIN card_settlements cs ON cs.property_id = j.property_id AND cs.journal_id = j.id AND cs.status = 'POSTED'
 WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND c.statement_id = @statement_id
 ORDER BY j.journal_date, c.id;
 
@@ -174,20 +177,23 @@ SELECT COALESCE(sum(amount), 0)::numeric AS cleared FROM bank_clearings WHERE te
 -- ---------------------------------------------------------------------------------------------------------------
 -- Card and e-wallet settlements
 
--- The lines of a clearing account (card, e-wallet) up to a date that no settlement has settled and that are not the
--- credit of a settlement themselves.
+-- The lines of a clearing account (card, e-wallet) up to a date that no live settlement has settled and that are not a line of
+-- a settlement journal or of the reversal of one themselves (the credit of a settlement, and the debit of its void).
 -- name: SettlementCandidates :many
 SELECT l.id, j.journal_date, j.id AS journal_id, j.journal_number, j.journal_type, j.description AS journal_description, l.description, l.source_ref,
        (l.debit - l.credit)::numeric AS amount
 FROM gl_journal_lines l
 JOIN gl_journals j ON j.property_id = l.property_id AND j.id = l.journal_id
 WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.account_id = @account_id AND j.journal_date <= @to_date::date
-  AND NOT EXISTS (SELECT 1 FROM card_settlement_items i WHERE i.settled_line_id = l.id OR i.settling_line_id = l.id)
+  AND NOT EXISTS (SELECT 1 FROM card_settlement_items i WHERE i.settled_line_id = l.id AND i.released_at IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM card_settlements s WHERE s.property_id = l.property_id AND (s.journal_id = l.journal_id OR s.void_journal_id = l.journal_id))
 ORDER BY j.journal_date, l.id
 LIMIT @row_limit;
 
 -- name: IsSettledOrSettling :one
-SELECT EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = @line_id OR settling_line_id = @line_id)::boolean;
+SELECT (EXISTS (SELECT 1 FROM card_settlement_items WHERE settled_line_id = @line_id AND released_at IS NULL)
+        OR EXISTS (SELECT 1 FROM gl_journal_lines l JOIN card_settlements s ON s.property_id = l.property_id AND (s.journal_id = l.journal_id OR s.void_journal_id = l.journal_id)
+                   WHERE l.id = @line_id))::boolean;
 
 -- name: InsertSettlement :one
 INSERT INTO card_settlements (tenant_id, property_id, bank_account_id, account_key, journal_id, gross, net, fee, vat_amount, vat_treatment, expected_mdr, expected_vat, proposed_vat, mdr_rate, vat_rate,
@@ -235,9 +241,51 @@ SELECT code::text AS code, name::text AS name FROM gl_accounts WHERE tenant_id =
 -- name: ListSettlements :many
 SELECT s.id, s.bank_account_id, s.account_key, s.gross, s.net, s.fee, s.mdr_amount::numeric AS mdr_amount, s.vat_amount, s.vat_treatment, s.expected_mdr, s.expected_vat, s.proposed_vat, s.mdr_rate, s.vat_rate,
        s.payments_without_vat_rate, s.reference, s.created_at, j.journal_date, j.journal_number,
-       (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments
+       (SELECT count(*) FROM card_settlement_items i WHERE i.settlement_id = s.id)::int AS payments,
+       s.status, s.voided_at, s.void_reason, vj.journal_number AS void_journal_number, COALESCE(m.statement_id, 0)::bigint AS statement_id, COALESCE(m.line_no, 0)::int AS statement_line_no
 FROM card_settlements s
 JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+LEFT JOIN gl_journals vj ON vj.property_id = s.property_id AND vj.id = s.void_journal_id
+LEFT JOIN LATERAL (
+    SELECT c.statement_id, sl.line_no FROM bank_clearings c
+    JOIN gl_journal_lines bl ON bl.id = c.journal_line_id
+    JOIN bank_statement_lines sl ON sl.id = c.statement_line_id
+    WHERE bl.property_id = s.property_id AND bl.journal_id = s.journal_id
+    ORDER BY c.id LIMIT 1
+) m ON true
 WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id < @before_id
 ORDER BY s.id DESC
 LIMIT @row_limit;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Voiding a settlement (docs/architecture/40-card-settlement-void.md)
+
+-- name: GetSettlement :one
+SELECT s.id, s.bank_account_id, s.account_key, s.status, s.journal_id, s.gross, s.net, s.fee, s.vat_amount, s.vat_treatment, j.journal_date, j.journal_number
+FROM card_settlements s
+JOIN gl_journals j ON j.property_id = s.property_id AND j.id = s.journal_id
+WHERE s.tenant_id = @tenant_id AND s.property_id = @property_id AND s.id = @id;
+
+-- The clearings of the bank line of a settlement journal, with the statement each is in.
+-- name: SettlementClearings :many
+SELECT c.id, c.statement_id, c.statement_line_id, sl.line_no, c.amount, st.status AS statement_status
+FROM bank_clearings c
+JOIN gl_journal_lines l ON l.id = c.journal_line_id
+JOIN bank_statements st ON st.property_id = c.property_id AND st.id = c.statement_id
+LEFT JOIN bank_statement_lines sl ON sl.id = c.statement_line_id
+WHERE c.tenant_id = @tenant_id AND c.property_id = @property_id AND l.journal_id = @journal_id AND l.account_id = @account_id
+ORDER BY c.id;
+
+-- name: MarkSettlementVoided :execrows
+UPDATE card_settlements SET status = 'VOIDED', voided_at = @now, voided_by = sqlc.narg(actor_id), void_reason = @reason, void_approved_by = sqlc.narg(approved_by), void_journal_id = @void_journal_id
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND id = @id AND status = 'POSTED';
+
+-- name: ReleaseSettlementItems :execrows
+UPDATE card_settlement_items SET released_at = @now
+WHERE tenant_id = @tenant_id AND property_id = @property_id AND settlement_id = @settlement_id AND released_at IS NULL;
+
+-- The live settlement a journal line belongs to, if any: the matching of its bank line is undone by voiding it, not by Unclear.
+-- name: LiveSettlementOfJournalLine :one
+SELECT s.id FROM gl_journal_lines l
+JOIN card_settlements s ON s.property_id = l.property_id AND s.journal_id = l.journal_id
+WHERE l.tenant_id = @tenant_id AND l.property_id = @property_id AND l.id = @journal_line_id AND s.status = 'POSTED';

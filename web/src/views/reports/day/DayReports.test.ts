@@ -350,6 +350,38 @@ describe('the other reports of the day', () => {
     expect(w.get('[data-testid=z-row-S-0412]').text()).not.toContain('CARD')
   })
 
+  // _laporan.md, priority 3 (angka): the sums were JavaScript floats, so 0.1 + 0.2 showed 0.30000000000000004
+  it('adds the value of the bookings in decimals, not in floats', async () => {
+    const group = (key: string, value: string) => ({ key, events: 1, rooms: 1, nights: 1, value })
+    const data = {
+      from: '2026-10-23', to: '2026-10-29', kind: 'ALL', fees_posted: '0', fee_count: 0, deposits_held: '0',
+      events: [event({ value_lost: '0.1' }), event({ confirmation_number: 'RSV-2', kind: 'CANCELLED', value_lost: '0.2' })],
+      by_kind: [group('NO_SHOW', '0.1'), group('CANCELLED', '0.2')], by_reason: [], by_source: [], by_company: [],
+    }
+    GET = vi.fn(async () => ({ data }))
+    const w = await setup(CancellationsView, '/reports/cancellations')
+    const card = w.get('[data-testid=cx-nights]').element.parentElement!.textContent ?? ''
+    expect(card).toContain('Value of the bookings 0.3')
+    expect(card).not.toContain('0.30000000000000004')
+  })
+
+  it('adds the pay-ins and pay-outs of the Z report in decimals, not in floats', async () => {
+    const zero = { opening_float: '0', cash_payments: '0', cash_refunds: '0', cash_receipts: '0', voided_after_close: '0', drops: '0', expected_cash: '0', counted_cash: null, over_short: null, total_takings: '0' }
+    const block = {
+      ...zero, kind: 'X', shift_id: 1, number: 'S-0001', drawer: 'FO-1', cashier: 'Dewi', opened_at: '2026-10-28T07:00:00Z', closed_at: null, business_date_opened: '2026-10-28', business_date_closed: null,
+      pay_ins: '0.1', pay_outs: '0.2', variance_reason: '', closed_by: '', approved_by: '', handed_over_to: '', tenders: [],
+    }
+    const data = {
+      date: '2026-10-28', blocks: [block], drawers: [], property: { ...zero, drawer: '', shifts: 1, pay_ins: '0.3', pay_outs: '-0.1' }, cash_off_shift: '0', voided_after_close: '0', reconciled: true, takings: [],
+    }
+    GET = vi.fn(async () => ({ data }))
+    const w = await setup(ZReportsView, '/reports/z-reports', ['report.view', 'cashier.shift_manage'])
+    expect(w.get('[data-testid=z-row-S-0001]').text()).toContain('0.3')
+    expect(w.get('[data-testid=z-row-S-0001]').text()).not.toContain('0.30000000000000004')
+    expect(w.get('[data-testid=z-property]').text()).toContain('0.2')
+    expect(w.get('[data-testid=z-property]').text()).not.toContain('0.19999999999999998')
+  })
+
   it('needs the permission to manage the cashier shifts for the Z report, and says which', async () => {
     const w = await setup(ZReportsView, '/reports/z-reports', VIEW)
     expect(GET).not.toHaveBeenCalled()

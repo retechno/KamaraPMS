@@ -359,7 +359,8 @@ watch([() => pid.value, sid], () => {
             <template #cell-clearings="{ row }">
               <span v-for="c in row.clearings" :key="c.id" class="mr-1.5 inline-block text-sm">
                 {{ c.journal_number }} · {{ $money(c.amount) }}
-                <button v-if="editable" type="button" class="cursor-pointer border-0 bg-transparent px-0.5 underline" :data-testid="`unmatch-${c.id}`" @click="unmatch(c.id)">{{ t('reconcile.undo') }}</button>
+                <RouterLink v-if="editable && c.settlement_id" to="/bank/cards" class="px-0.5 underline" :data-testid="`void-settlement-${c.id}`">{{ t('reconcile.voidSettlement') }}</RouterLink>
+                <button v-else-if="editable" type="button" class="cursor-pointer border-0 bg-transparent px-0.5 underline" :data-testid="`unmatch-${c.id}`" @click="unmatch(c.id)">{{ t('reconcile.undo') }}</button>
               </span>
               <small v-if="!row.matched && row.clearings.length" class="text-destructive">{{ t('reconcile.partOf', { cleared: $money(row.cleared), amount: $money(row.amount) }) }}</small>
             </template>

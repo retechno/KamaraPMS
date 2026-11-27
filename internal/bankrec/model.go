@@ -78,6 +78,8 @@ type Clearing struct {
 	JournalNumber   string          `json:"journal_number"`
 	JournalType     string          `json:"journal_type"`
 	Description     string          `json:"description,omitempty"`
+	// SettlementID names the live card settlement whose bank line this clearing matches: it is undone by voiding the settlement, not by Unclear.
+	SettlementID *int64 `json:"settlement_id"`
 }
 
 // StatementLine is a line of the statement: money in is positive, money out negative.

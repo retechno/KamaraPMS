@@ -44,7 +44,7 @@
 
 - **Bunga hanya ditampilkan**, tidak pernah dibukukan ke folio atau buku besar. Kalau bunga memang ditagih, buat tagihannya terpisah.
 - **Surat peringatan tidak bisa dibatalkan.** Periksa tingkat dan invoicenya sebelum mengklik **Catat dan cetak**.
-- **Invoice yang dibayar lewat "Catat pembayaran dari perusahaan"** tetap muncul di sini, karena penerimaan itu tidak terhubung ke invoice. Lihat [Invoice dan penerimaan](invoice-dan-penerimaan.md).
+- **Invoice yang sudah dibayar dengan uang muka** (penerimaan yang **Belum dialokasikan** ke invoice itu) tetap muncul di sini. Periksa penerimaan perusahaan sebelum mengirim surat. Lihat [Invoice dan penerimaan](invoice-dan-penerimaan.md).
 - **Tidak ada invoice** di halaman ini: "Tidak ada invoice yang lewat jatuh tempo.".
 - **Kolom Tingkat** dan **Surat terakhir** menampilkan tingkat sebagai angka saja, misalnya `REM000001 (1)`.
 

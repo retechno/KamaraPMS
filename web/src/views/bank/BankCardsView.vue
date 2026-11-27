@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import { computed, reactive, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { CardFeeRule, CardSettlement, ExpectedCardSettlements } from '@/api/types'
+import type { Approval, CardFeeRule, CardSettlement, ExpectedCardSettlements } from '@/api/types'
+import ApprovalDialog from '@/components/ApprovalDialog.vue'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
 import EmptyState from '@/components/app/EmptyState.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -18,6 +20,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
+import { formatMonth } from '@/utils/format'
 
 type ExpectedLine = ExpectedCardSettlements['lines'][number]
 
@@ -32,11 +35,17 @@ const error = ref<ApiError | null>(null)
 const notice = ref('')
 const busy = ref(false)
 const loaded = ref(false)
+/** The settlement being voided (docs/architecture/40-card-settlement-void.md): the reason first, then the approval of the kind BANK_SETTLEMENT_VOID for the gross. */
+const voiding = ref<{ row: CardSettlement; reason: string; asking: boolean } | null>(null)
+const dialogError = ref<ApiError | null>(null)
+/** The month of a void refused because it is closed in the books: the page says what reopening it means. */
+const closedMonth = ref('')
 const rule = reactive({ payment_method: 'CARD' as 'CARD' | 'OTHER' | 'QRIS', mdr_rate: '', vat_rate: '', settlement_days: '1', effective_from: '' })
 
 const pid = computed(() => property.currentId)
 const canView = computed(() => auth.can('bank.view', pid.value))
 const canManage = computed(() => auth.can('bank.manage', pid.value))
+const canVoid = computed(() => auth.can('bank.reconcile', pid.value))
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 
 const lineColumns = computed<Column<ExpectedLine>[]>(() => [
@@ -61,6 +70,7 @@ const settlementColumns = computed<Column<CardSettlement>[]>(() => [
   { key: 'mdr_variance', label: t('cards.variance'), align: 'right' },
   { key: 'vat_variance', label: t('cards.vatVariance'), align: 'right' },
   { key: 'payments', label: t('cards.payments'), align: 'right' },
+  { key: 'status', label: t('cards.settlementStatus') },
 ])
 
 async function load(): Promise<void> {
@@ -101,6 +111,37 @@ async function addRule(): Promise<void> {
     await load()
   } catch (e) {
     error.value = e instanceof ApiError ? e : null
+  } finally {
+    busy.value = false
+  }
+}
+
+function startVoid(row: CardSettlement): void {
+  voiding.value = { row, reason: '', asking: false }
+  dialogError.value = null
+  closedMonth.value = ''
+  notice.value = ''
+}
+
+async function voidSettlement(approval: Approval): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null || voiding.value === null) return
+  const v = voiding.value
+  dialogError.value = null
+  busy.value = true
+  try {
+    await api.POST('/api/v1/properties/{propertyId}/bank/card-settlements/{id}/void', { params: { path: { propertyId, id: v.row.id } }, body: { reason: v.reason.trim(), approval } })
+    notice.value = t('cards.voided', { number: v.row.journal_number })
+    voiding.value = null
+    await load()
+  } catch (e) {
+    const err = e instanceof ApiError ? e : null
+    if (err?.code === 'PERIOD_CLOSED' && typeof err.context.month === 'string') {
+      closedMonth.value = err.context.month
+      voiding.value = null
+    } else {
+      dialogError.value = err
+    }
   } finally {
     busy.value = false
   }
@@ -213,8 +254,31 @@ watch(key, () => void load())
             <template v-else>-</template>
           </template>
           <template #cell-vat_variance="{ row }">{{ row.vat_variance === null ? '-' : $money(row.vat_variance) }}</template>
+          <template #cell-status="{ row }">
+            <template v-if="row.status === 'VOIDED'">
+              <Badge variant="outline" :data-testid="`voided-${row.journal_number}`">{{ t('cards.statusVoided') }}</Badge>
+              <small class="block text-muted-foreground">{{ row.void_journal_number }}<template v-if="row.void_reason"> · {{ row.void_reason }}</template></small>
+            </template>
+            <template v-else>
+              {{ t('cards.statusPosted') }}
+              <Button v-if="canVoid" type="button" variant="outline" size="sm" class="ml-2" :data-testid="`void-${row.journal_number}`" @click="startVoid(row)">{{ t('cards.void') }}</Button>
+            </template>
+          </template>
         </DataTable>
+        <div v-if="closedMonth" role="alert" class="mt-3 rounded-md border border-destructive/40 p-3 text-sm text-destructive" data-testid="void-period-closed">
+          {{ t('cards.voidPeriodClosed', { month: formatMonth(closedMonth) }) }}
+          <RouterLink to="/accounting/journals" class="ml-1 underline">{{ t('cards.voidManualJournal') }}</RouterLink>
+        </div>
+        <form v-if="voiding && !voiding.asking" class="mt-3 flex flex-wrap items-end gap-3" novalidate data-testid="void-form" @submit.prevent="voiding.asking = true">
+          <p class="m-0 w-full text-sm">{{ t('cards.voidIntro', { number: voiding.row.journal_number, gross: $money(voiding.row.gross) }) }}</p>
+          <FormField class="max-w-md flex-1" :label="t('cards.voidReason')">
+            <template #default="{ id }"><Input :id="id" v-model="voiding.reason" name="reason" maxlength="500" /></template>
+          </FormField>
+          <Button type="button" variant="outline" @click="voiding = null">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="!voiding.reason.trim()" data-testid="void-ask">{{ t('cards.voidContinue') }}</Button>
+        </form>
       </CardContent>
     </Card>
+    <ApprovalDialog v-if="voiding?.asking" kind="BANK_SETTLEMENT_VOID" :amount="voiding.row.gross" :title="t('cards.approveVoid')" :busy="busy" :error="dialogError" @approve="voidSettlement" @cancel="voiding = null; dialogError = null" />
   </template>
 </template>

@@ -302,7 +302,7 @@ func (s *Service) loadDetail(ctx context.Context, tenantID, propertyID, id int64
 	d := StatementDetail{Statement: st, Lines: make([]StatementLine, 0, len(lines)), Clearings: make([]Clearing, 0, len(cls))}
 	byLine := map[int64][]Clearing{}
 	for _, c := range cls {
-		cl := Clearing{ID: c.ID, StatementLineID: c.StatementLineID, JournalLineID: c.JournalLineID, Amount: c.Amount, JournalDate: c.JournalDate, JournalNumber: c.JournalNumber, JournalType: c.JournalType, Description: c.Description}
+		cl := Clearing{ID: c.ID, StatementLineID: c.StatementLineID, JournalLineID: c.JournalLineID, Amount: c.Amount, JournalDate: c.JournalDate, JournalNumber: c.JournalNumber, JournalType: c.JournalType, Description: c.Description, SettlementID: c.SettlementID}
 		d.Clearings = append(d.Clearings, cl)
 		if c.StatementLineID != nil {
 			byLine[*c.StatementLineID] = append(byLine[*c.StatementLineID], cl)

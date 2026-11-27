@@ -37,7 +37,7 @@ func (s *Service) openForWork(ctx context.Context, tenantID, propertyID, stateme
 	return st, ba, err
 }
 
-// Unclear undoes one clearing of a statement that is not reconciled (bank.reconcile).
+// Unclear undoes one clearing of a statement that is not reconciled (bank.reconcile). The matching of a card settlement is not undone here: the settlement is voided.
 func (s *Service) Unclear(ctx context.Context, propertyID, statementID, clearingID int64) (StatementDetail, error) {
 	p, err := s.need(ctx, propertyID, auth.PermBankReconcile)
 	if err != nil {
@@ -57,6 +57,12 @@ func (s *Service) Unclear(ctx context.Context, propertyID, statementID, clearing
 			return apperr.NotFound("CLEARING_NOT_FOUND", "the matching does not exist in this statement")
 		}
 		if err != nil {
+			return err
+		}
+		// the matching of a settlement and its journal go together: it is undone by voiding the settlement (docs/architecture/40-card-settlement-void.md 4.4)
+		if sid, err := q.LiveSettlementOfJournalLine(ctx, bankrecdb.LiveSettlementOfJournalLineParams{TenantID: p.TenantID, PropertyID: propertyID, JournalLineID: c.JournalLineID}); err == nil {
+			return apperr.Conflict("CLEARING_IS_SETTLEMENT", "this matching is a card settlement: void the settlement instead (Void settlement), which also reverses its journal").WithContext("settlement_id", sid)
+		} else if !isNoRows(err) {
 			return err
 		}
 		if err := q.DeleteClearing(ctx, bankrecdb.DeleteClearingParams{TenantID: p.TenantID, PropertyID: propertyID, ID: clearingID}); err != nil {

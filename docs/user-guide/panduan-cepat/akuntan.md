@@ -55,6 +55,6 @@ Ringkasan satu halaman untuk staf akuntansi dan keuangan. Setiap baris menunjuk 
 - Jurnal yang sudah diposting tidak bisa diubah atau dihapus. Koreksinya dengan pembalikan, lalu jurnal baru yang benar.
 - Tagihan, pembayaran, dan nota kredit pemasok tidak bisa diubah. Batalkan dengan persetujuan, lalu catat ulang.
 - Settlement kartu tidak bisa dibatalkan atau dikoreksi. Periksa centang pembayaran dan komisinya dulu.
-- Catat pembayaran invoice lewat **Bayar** pada invoicenya, bukan lewat **Catat pembayaran dari perusahaan**.
+- Pembayaran perusahaan dibagi ke invoice di **Catat pembayaran dari perusahaan** (terisi dari invoice tertua) atau lewat **Bayar** pada satu invoice. Periksa **Belum dialokasikan** sebelum mencatat: penerimaan tidak bisa dialokasikan belakangan. → [Invoice dan penerimaan](../06-corporate-group-city-ledger/invoice-dan-penerimaan.md)
 - Menutup periode mengunci laporan. Hanya bulan tertutup terakhir yang bisa dibuka kembali.
 - Kalau menu atau tombol tidak ada, peran Anda tidak mencakupnya. Tanyakan ke administrator. → [Peran dan hak akses](../00-memulai/peran-dan-hak-akses.md)

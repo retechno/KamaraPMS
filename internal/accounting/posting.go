@@ -272,29 +272,45 @@ func (po *Poster) Post(ctx context.Context, in SystemJournal) (int64, string, er
 
 // Reverse posts the mirror image of a payables journal (a voided bill or payment) dated a given day, in an open month.
 func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date, reason string, approvedBy int64) (int64, error) {
+	id, _, err := po.reverse(ctx, journalID, date, reason, approvedBy, false)
+	return id, err
+}
+
+// ReverseSettlement posts the mirror image of the BANK journal of a card settlement that is voided (docs/architecture/40-card-settlement-void.md 3) and returns its id and
+// number. Only the void of a settlement calls it, with the journal of that settlement: a BANK journal is reversed nowhere else, so the adjustment of a statement line
+// still cannot be.
+func (po *Poster) ReverseSettlement(ctx context.Context, journalID int64, date civil.Date, reason string, approvedBy int64) (int64, string, error) {
+	return po.reverse(ctx, journalID, date, reason, approvedBy, true)
+}
+
+func (po *Poster) reverse(ctx context.Context, journalID int64, date civil.Date, reason string, approvedBy int64, settlement bool) (int64, string, error) {
 	orig, err := po.svc.loadJournal(ctx, po.p.TenantID, po.propertyID, journalID)
 	if err != nil {
-		return 0, err
+		return 0, "", err
+	}
+	reversible := orig.Type == JournalPayables || orig.Type == JournalTax || orig.Type == JournalReceivables || orig.Type == JournalAsset
+	if settlement {
+		reversible = orig.Type == JournalBank
 	}
 	switch {
-	case orig.Type != JournalPayables && orig.Type != JournalTax && orig.Type != JournalReceivables && orig.Type != JournalAsset:
-		return 0, apperr.Conflict("JOURNAL_NOT_REVERSIBLE", "only the journal of a bill or a payment is reversed here")
+	case !reversible:
+		return 0, "", apperr.Conflict("JOURNAL_NOT_REVERSIBLE", "only the journal of a bill or a payment is reversed here")
 	case orig.ReversedByID != nil:
-		return 0, apperr.Conflict("JOURNAL_ALREADY_REVERSED", "the journal has been reversed already")
+		return 0, "", apperr.Conflict("JOURNAL_ALREADY_REVERSED", "the journal has been reversed already")
 	case date.Before(orig.Date):
-		return 0, apperr.Invalid("the date is invalid", fieldErr("date", "BEFORE_JOURNAL", "not before the journal it reverses"))
+		return 0, "", apperr.Invalid("the date is invalid", fieldErr("date", "BEFORE_JOURNAL", "not before the journal it reverses"))
 	}
 	if err := po.CheckDate(ctx, date, "date"); err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if orig.Type != JournalAsset { // the register's own journals carry no link; its run holds the register settings already
 		if err := po.svc.checkReverse(ctx, po.p.TenantID, po.propertyID, journalID); err != nil {
-			return 0, err
+			return 0, "", err
 		}
 	}
 	number, err := po.svc.days.NextDocumentNumber(ctx, po.propertyID, tenancy.SeqJournal)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	q := po.svc.q(ctx)
 	id, err := q.InsertJournal(ctx, accountingdb.InsertJournalParams{
@@ -303,17 +319,17 @@ func (po *Poster) Reverse(ctx context.Context, journalID int64, date civil.Date,
 		ActorID: po.p.ActorID(), ApprovedBy: &approvedBy,
 	})
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	for _, l := range orig.Lines {
 		if err := q.InsertJournalLine(ctx, accountingdb.InsertJournalLineParams{
 			TenantID: po.p.TenantID, PropertyID: po.propertyID, JournalID: id, LineNo: l.LineNo, AccountID: l.AccountID, Debit: l.Credit, Credit: l.Debit,
 			Description: nullable(l.Description), SourceType: nullable(l.SourceType), SourceRef: nullable(l.SourceRef), DepartmentID: l.DepartmentID,
 		}); err != nil {
-			return 0, err
+			return 0, "", err
 		}
 	}
-	return id, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.payables_journal_reversed", "gl_journal", id, auditlabel.Journal(ctx, po.propertyID, id), nil,
+	return id, number, po.svc.audit.Write(ctx, entry(po.p, po.propertyID, po.today, "accounting.payables_journal_reversed", "gl_journal", id, auditlabel.Journal(ctx, po.propertyID, id), nil,
 		map[string]any{"journal_number": number, "reverses": orig.Number, "reason": reason, "approved_by": approvedBy}))
 }
 

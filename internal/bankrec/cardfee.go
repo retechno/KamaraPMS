@@ -120,6 +120,14 @@ type SettlementRow struct {
 	Payments               int              `json:"payments"`
 	Reference              string           `json:"reference,omitempty"`
 	CreatedAt              time.Time        `json:"created_at"`
+	// The void (docs/architecture/40-card-settlement-void.md): POSTED or VOIDED, and for a voided one when, why and the number of the reversal journal. StatementID and
+	// StatementLineNo name the statement line the settlement is matched with, while it is (0 when it is not).
+	Status            string     `json:"status"`
+	VoidedAt          *time.Time `json:"voided_at"`
+	VoidReason        *string    `json:"void_reason"`
+	VoidJournalNumber *string    `json:"void_journal_number"`
+	StatementID       int64      `json:"statement_id"`
+	StatementLineNo   int        `json:"statement_line_no"`
 }
 
 func toFeeRule(r bankrecdb.CardFeeRule) FeeRule {
@@ -441,28 +449,45 @@ func (s *Service) Settlements(ctx context.Context, propertyID, before int64, lim
 	}
 	out := make([]SettlementRow, 0, len(rows))
 	for _, r := range rows {
-		row := SettlementRow{
-			ID: r.ID, BankAccountID: r.BankAccountID, AccountKey: r.AccountKey, Date: r.JournalDate, JournalNumber: r.JournalNumber, Gross: r.Gross, Net: r.Net, Fee: r.Fee,
-			MDRAmount: r.MdrAmount, VATAmount: r.VatAmount, VATTreatment: r.VatTreatment, ExpectedMDR: r.ExpectedMdr, ExpectedVAT: r.ExpectedVat, ProposedVAT: r.ProposedVat,
-			PaymentsWithoutVATRate: int(r.PaymentsWithoutVatRate), Payments: int(r.Payments), Reference: deref(r.Reference), CreatedAt: r.CreatedAt,
-		}
-		if r.MdrRate != nil {
-			v := r.MdrRate.String()
-			row.MDRRate = &v
-		}
-		if r.VatRate != nil {
-			v := r.VatRate.String()
-			row.VATRate = &v
-		}
-		if r.ExpectedMdr != nil {
-			v := r.MdrAmount.Sub(*r.ExpectedMdr)
-			row.MDRVariance = &v
-		}
-		if r.ExpectedVat != nil {
-			v := r.VatAmount.Sub(*r.ExpectedVat)
-			row.VATVariance = &v
-		}
-		out = append(out, row)
+		out = append(out, toSettlementRow(r))
 	}
 	return out, nil
+}
+
+// settlementRow reads one settlement as the list shows it.
+func (s *Service) settlementRow(ctx context.Context, tenantID, propertyID, id int64) (SettlementRow, error) {
+	rows, err := s.q(ctx).ListSettlements(ctx, bankrecdb.ListSettlementsParams{TenantID: tenantID, PropertyID: propertyID, BeforeID: id + 1, RowLimit: 1})
+	if err != nil {
+		return SettlementRow{}, err
+	}
+	if len(rows) == 0 || rows[0].ID != id {
+		return SettlementRow{}, errSettlementNotFound()
+	}
+	return toSettlementRow(rows[0]), nil
+}
+
+func toSettlementRow(r bankrecdb.ListSettlementsRow) SettlementRow {
+	row := SettlementRow{
+		ID: r.ID, BankAccountID: r.BankAccountID, AccountKey: r.AccountKey, Date: r.JournalDate, JournalNumber: r.JournalNumber, Gross: r.Gross, Net: r.Net, Fee: r.Fee,
+		MDRAmount: r.MdrAmount, VATAmount: r.VatAmount, VATTreatment: r.VatTreatment, ExpectedMDR: r.ExpectedMdr, ExpectedVAT: r.ExpectedVat, ProposedVAT: r.ProposedVat,
+		PaymentsWithoutVATRate: int(r.PaymentsWithoutVatRate), Payments: int(r.Payments), Reference: deref(r.Reference), CreatedAt: r.CreatedAt,
+		Status: r.Status, VoidedAt: r.VoidedAt, VoidReason: r.VoidReason, VoidJournalNumber: r.VoidJournalNumber, StatementID: r.StatementID, StatementLineNo: int(r.StatementLineNo),
+	}
+	if r.MdrRate != nil {
+		v := r.MdrRate.String()
+		row.MDRRate = &v
+	}
+	if r.VatRate != nil {
+		v := r.VatRate.String()
+		row.VATRate = &v
+	}
+	if r.ExpectedMdr != nil {
+		v := r.MdrAmount.Sub(*r.ExpectedMdr)
+		row.MDRVariance = &v
+	}
+	if r.ExpectedVat != nil {
+		v := r.VatAmount.Sub(*r.ExpectedVat)
+		row.VATVariance = &v
+	}
+	return row
 }

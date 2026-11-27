@@ -25,7 +25,7 @@
    | Lokasi | Tidak | Tempat aset berada. |
    | Departemen | Tidak | Terisi dari baris atau dari kategori. |
    | Tanggal mulai pakai | Ya | Terisi dengan tanggal jurnal. |
-   | Mulai disusutkan | Tidak | **Bulan mulai pakai** atau **Bulan berikutnya**. |
+   | Mulai disusutkan | Tidak | **Bulan mulai pakai** atau **Bulan berikutnya**. Terpilih sesuai **Mulai penyusutan (bawaan)** di pengaturan aset, dan pilihan itu bertanda "bawaan properti". Bisa diganti untuk aset ini. |
    | Jumlah buah | Tidak | Khusus batch peralatan operasional: jumlah set dalam satu aset. |
 
    ![Jendela Jadikan aset untuk 12 kursi](../screenshots/aset-tunggu-04.png)
@@ -55,9 +55,7 @@
 - **Aset yang salah dibuat** bisa dibatalkan selama belum pernah disusutkan atau diubah. Buka asetnya, klik **Batalkan aset**, isi alasan, lalu klik **Batalkan aset**. Barisnya kembali ke daftar tunggu. Pembatalan tidak bisa diurungkan.
 - **Biaya di bawah batas kapitalisasi** hanya diberi peringatan, tidak diblokir. Batasnya diatur di **Aset tetap → Pengaturan aset**. Lihat [Pengaturan aset](pengaturan-aset.md).
 - **Ekspor CSV** mengunduh register yang tampil. **Cetak label QR** mencetak label aset yang dicentang. Lihat [Opname aset dan label QR](opname-aset-dan-label-qr.md).
-- **Pilihan Mulai disusutkan:**
-
-  > 🐞 Kendala yang diketahui (KD-10): di jendela **Jadikan aset**, pilihan **Mulai disusutkan** selalu terpilih pada **Bulan mulai pakai**, dengan tulisan "bawaan properti", walaupun pengaturan properti memakai bulan berikutnya. **Dampaknya:** aset bisa mulai disusutkan sebulan lebih awal dari aturan hotel. **Sementara ini:** periksa dan pilih sendiri bulan mulai disusutkan setiap kali. Selama aset belum disusutkan, pilihan ini masih bisa diubah lewat **Ubah data**.
+- **Pilihan Mulai disusutkan** mengikuti **Mulai penyusutan (bawaan)** di [Pengaturan aset](pengaturan-aset.md). Mengubahnya di jendela **Jadikan aset** hanya berlaku untuk aset yang sedang dibuat. Selama aset belum disusutkan, pilihan ini masih bisa diubah lewat **Ubah data**.
 - **Catatan di bawah daftar tunggu** masih berbunyi "Menambah nilai pada aset yang sudah ada menyusul di rilis berikutnya.". Tombol **Tambah ke aset** sebenarnya sudah bisa dipakai.
 - **Riwayat register:**
 

@@ -12,10 +12,14 @@ import { DateInput } from '@/components/ui/date-input'
 import { t } from '@/i18n'
 import { formatDate, formatDateTime, formatMoney } from '@/utils/format'
 import { money } from '@/views/accounting/reportApi'
+import { sumAmounts } from '@/views/budget/budgetMath'
 import { guardForm } from '@/utils/forms'
 import DayReportActions from './DayReportActions.vue'
 import { methodName } from './dayLabels'
 import { useDayReport } from './useDayReport'
+
+/** The pay-ins and pay-outs together, added in thousandths, not as floats (0.1 + 0.2 is 0.3). */
+const payInOut = (x: { pay_ins: string; pay_outs: string }): string | undefined => sumAmounts([x.pay_ins, x.pay_outs]) ?? undefined
 
 /** The Z report of all drawers (docs/architecture/38-reports-night-audit-pack.md 7.5, mockup 68): every shift of the day, X while it is open, checked against the cashier report. */
 const date = ref('')
@@ -63,7 +67,7 @@ const th = 'align-bottom px-2 py-2 text-[12px] font-medium uppercase text-muted-
                 <td class="px-2 py-2"><Badge :variant="b.kind === 'X' ? 'outline' : 'secondary'" :data-testid="`z-kind-${b.number}`">{{ b.kind }}</Badge> {{ b.number }}<div class="text-muted-foreground">{{ b.drawer }} · {{ b.cashier }}</div></td>
                 <td class="px-2 py-2">{{ formatDateTime(b.opened_at) }}<div class="text-muted-foreground">{{ b.closed_at ? formatDateTime(b.closed_at) : t('dayReports.z.stillOpen') }}</div></td>
                 <td class="px-2 py-2 text-right">{{ money(b.opening_float) }}</td><td class="px-2 py-2 text-right">{{ money(b.cash_payments) }}</td><td class="px-2 py-2 text-right">{{ money(b.cash_receipts) }}</td>
-                <td class="px-2 py-2 text-right">{{ money(String(Number(b.pay_ins) + Number(b.pay_outs))) }}</td><td class="px-2 py-2 text-right">{{ money(b.drops) }}</td><td class="px-2 py-2 text-right" :data-testid="`z-refund-${b.number}`">{{ money(b.cash_refunds) }}</td><td class="px-2 py-2 text-right">{{ money(b.expected_cash) }}</td>
+                <td class="px-2 py-2 text-right">{{ money(payInOut(b)) }}</td><td class="px-2 py-2 text-right">{{ money(b.drops) }}</td><td class="px-2 py-2 text-right" :data-testid="`z-refund-${b.number}`">{{ money(b.cash_refunds) }}</td><td class="px-2 py-2 text-right">{{ money(b.expected_cash) }}</td>
                 <td class="px-2 py-2 text-right">{{ b.counted_cash === null ? t('dayReports.z.notCounted') : money(b.counted_cash) }}</td>
                 <td :class="['px-2 py-2 text-right', b.over_short && Number(b.over_short) !== 0 && 'text-destructive']">{{ b.over_short === null ? '–' : money(b.over_short) }}</td>
                 <td class="px-2 py-2">{{ b.variance_reason }}<div v-if="b.approved_by" class="text-muted-foreground">{{ b.approved_by }}</div></td>
@@ -74,7 +78,7 @@ const th = 'align-bottom px-2 py-2 text-[12px] font-medium uppercase text-muted-
               <tr class="font-semibold" data-testid="z-property">
                 <td class="px-2 py-2" colspan="2">{{ t('dayReports.z.property') }}</td>
                 <td class="px-2 py-2 text-right">{{ money(report.property.opening_float) }}</td><td class="px-2 py-2 text-right">{{ money(report.property.cash_payments) }}</td><td class="px-2 py-2 text-right">{{ money(report.property.cash_receipts) }}</td>
-                <td class="px-2 py-2 text-right">{{ money(String(Number(report.property.pay_ins) + Number(report.property.pay_outs))) }}</td><td class="px-2 py-2 text-right">{{ money(report.property.drops) }}</td><td class="px-2 py-2 text-right" data-testid="z-refund-property">{{ money(report.property.cash_refunds) }}</td><td class="px-2 py-2 text-right">{{ money(report.property.expected_cash) }}</td>
+                <td class="px-2 py-2 text-right">{{ money(payInOut(report.property)) }}</td><td class="px-2 py-2 text-right">{{ money(report.property.drops) }}</td><td class="px-2 py-2 text-right" data-testid="z-refund-property">{{ money(report.property.cash_refunds) }}</td><td class="px-2 py-2 text-right">{{ money(report.property.expected_cash) }}</td>
                 <td class="px-2 py-2 text-right">{{ report.property.counted_cash === null ? '–' : money(report.property.counted_cash) }}</td><td class="px-2 py-2 text-right" data-testid="z-over-short">{{ report.property.over_short === null ? '–' : money(report.property.over_short) }}</td><td colspan="2" />
               </tr>
             </tfoot>
