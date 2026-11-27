@@ -345,7 +345,7 @@ Pilihannya tetap tercatat saat disimpan, hanya bulatannya yang tidak tampil teri
 
 ### Akun persediaan sebuah kategori salah, tetapi tidak bisa diubah. Apa yang harus dilakukan?
 
-Akun dan jenis kategori terkunci begitu kategori berisi barang, walaupun barangnya belum punya mutasi stok (kendala yang diketahui). Buat kategori baru dengan akun yang benar, lalu pindahkan barangnya ke kategori itu lewat **Kategori** di formulir barang, selama barangnya belum punya stok. Ke depan, periksa akun dan jenisnya sebelum menambahkan barang.
+Selama belum ada barang kategori itu yang punya mutasi stok, akunnya bisa diubah langsung di formulir kategori. Setelah mutasi stok pertama, akunnya terkunci. Buat kategori baru dengan akun yang benar; barang yang belum punya stok bisa dipindah ke kategori itu lewat **Kategori** di formulir barang. Ke depan, periksa akunnya sebelum mencatat saldo awal atau penerimaan pertama.
 → [Menyiapkan persediaan: metode harga pokok, satuan, dan kategori](09-inventory/menyiapkan-persediaan.md)
 
 ### Saldo awal barang salah ketik. Bisakah dibatalkan?

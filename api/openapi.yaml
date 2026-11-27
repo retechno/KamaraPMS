@@ -25557,7 +25557,7 @@ components:
         is_active: { type: boolean }
     InventoryCategory:
       type: object
-      required: [id, code, name, kind, inventory_account_id, cogs_account_id, issue_account_id, waste_account_id, variance_account_id, is_active, sort_order, item_count, version]
+      required: [id, code, name, kind, inventory_account_id, cogs_account_id, issue_account_id, waste_account_id, variance_account_id, is_active, sort_order, item_count, has_stock, version]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -25577,6 +25577,7 @@ components:
         is_active: { type: boolean }
         sort_order: { type: integer }
         item_count: { type: integer }
+        has_stock: { type: boolean, description: "An item of the category has a stock movement: its inventory account and the class of its kind (food, beverage, other) cannot change (409 CATEGORY_HAS_STOCK)." }
         version: { type: integer }
     InventoryCategoryInput:
       type: object

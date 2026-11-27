@@ -23578,6 +23578,8 @@ export interface components {
             is_active: boolean;
             sort_order: number;
             item_count: number;
+            /** @description An item of the category has a stock movement: its inventory account and the class of its kind (food, beverage, other) cannot change (409 CATEGORY_HAS_STOCK). */
+            has_stock: boolean;
             version: number;
         };
         InventoryCategoryInput: {

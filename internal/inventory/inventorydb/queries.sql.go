@@ -2097,7 +2097,10 @@ const listCategories = `-- name: ListCategories :many
 
 SELECT c.id, c.tenant_id, c.property_id, c.code, c.name, c.kind, c.inventory_account_id, c.cogs_account_id, c.issue_account_id, c.waste_account_id, c.variance_account_id, c.is_active, c.sort_order, c.version, c.created_at, c.created_by, c.updated_at, c.updated_by, ia.code AS inventory_account_code, ia.name AS inventory_account_name,
        ca.code AS cogs_account_code, xa.code AS issue_account_code, wa.code AS waste_account_code, va.code AS variance_account_code,
-       (SELECT count(*) FROM inv_items i WHERE i.property_id = c.property_id AND i.category_id = c.id)::int AS item_count
+       (SELECT count(*) FROM inv_items i WHERE i.property_id = c.property_id AND i.category_id = c.id)::int AS item_count,
+       -- the rule of UpdateCategory (CATEGORY_HAS_STOCK): an item of the category has a stock movement
+       EXISTS (SELECT 1 FROM inv_movements m JOIN inv_items i ON i.property_id = m.property_id AND i.id = m.item_id
+                WHERE m.tenant_id = c.tenant_id AND m.property_id = c.property_id AND i.category_id = c.id)::boolean AS has_stock
   FROM inv_categories c
   JOIN gl_accounts ia ON ia.property_id = c.property_id AND ia.id = c.inventory_account_id
   LEFT JOIN gl_accounts ca ON ca.property_id = c.property_id AND ca.id = c.cogs_account_id
@@ -2139,6 +2142,7 @@ type ListCategoriesRow struct {
 	WasteAccountCode     *string
 	VarianceAccountCode  *string
 	ItemCount            int32
+	HasStock             bool
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -2178,6 +2182,7 @@ func (q *Queries) ListCategories(ctx context.Context, arg ListCategoriesParams) 
 			&i.WasteAccountCode,
 			&i.VarianceAccountCode,
 			&i.ItemCount,
+			&i.HasStock,
 		); err != nil {
 			return nil, err
 		}
