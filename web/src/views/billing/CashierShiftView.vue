@@ -33,6 +33,8 @@ const settings = ref<CashierSettings | null>(null)
 const handovers = ref<CashierHandover[]>([])
 const cashiers = ref<Cashier[]>([])
 const lastClosed = ref<CashierShift | null>(null)
+// The shift the close form acts on: the own open shift, or (cashier.shift_manage, KD-21) the open shift of another cashier chosen in the list.
+const closingShift = ref<CashierShift | null>(null)
 const chart = ref<GlAccount[]>([])
 const error = ref<ApiError | null>(null)
 const dialogError = ref<ApiError | null>(null)
@@ -52,6 +54,8 @@ const can = (p: string) => auth.can(p, pid.value)
 const canShift = computed(() => can('cashier.shift'))
 const canManage = computed(() => can('cashier.shift_manage'))
 const canSee = computed(() => canShift.value || canManage.value)
+const myId = computed(() => auth.me?.user.id ?? 0)
+const closingOther = computed(() => !!closingShift.value && closingShift.value.user_id !== myId.value)
 const fieldError = (field: string) => error.value?.fieldMessage(field)
 const postable = computed(() => chart.value.filter((a) => a.is_postable && a.is_active && a.code !== '1110'))
 
@@ -184,7 +188,8 @@ async function moveCash(): Promise<void> {
   }
 }
 
-function startClose(): void {
+function startClose(sh: CashierShift | null = current.value): void {
+  closingShift.value = sh
   closing.open = true
   closing.asking = false
   closing.counted = ''
@@ -197,9 +202,22 @@ function startClose(): void {
   void loadCashiers()
 }
 
+/** KD-21: the open shift of another cashier (one who went home without closing it) is closed by a holder of cashier.shift_manage, with the cash counted in its drawer. */
+async function startCloseOther(row: CashierShift): Promise<void> {
+  const propertyId = pid.value
+  if (propertyId === null) return
+  error.value = null
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/cashier/shifts/{id}', { params: { path: { propertyId, id: row.id } } })
+    if (data) startClose(data) // with the cash expected so far
+  } catch (e) {
+    error.value = e instanceof ApiError ? e : null
+  }
+}
+
 /** The difference the count makes against the cash expected, as the server will take it (shown as a hint). */
 const difference = computed(() => {
-  const exp = Number(current.value?.cash?.expected ?? 'NaN')
+  const exp = Number(closingShift.value?.cash?.expected ?? 'NaN')
   const counted = Number(closing.counted)
   if (!closing.counted.trim() || Number.isNaN(exp) || Number.isNaN(counted)) return null
   return counted - exp
@@ -207,7 +225,7 @@ const difference = computed(() => {
 
 async function close(approval?: Approval): Promise<void> {
   const propertyId = pid.value
-  const sh = current.value
+  const sh = closingShift.value
   if (propertyId === null || !sh) return
   busy.value = true
   dialogError.value = null
@@ -219,6 +237,7 @@ async function close(approval?: Approval): Promise<void> {
     lastClosed.value = data && typeof data === 'object' && 'id' in data ? (data as CashierShift) : null
     closing.open = false
     closing.asking = false
+    closingShift.value = null
     notice.value = t('shifts.closedNotice')
     await load()
   } catch (e) {
@@ -261,6 +280,8 @@ watch(() => property.currentId, () => {
   shifts.value = []
   handovers.value = []
   lastClosed.value = null
+  closingShift.value = null
+  closing.open = false
   loaded.value = false
   void load()
 }, { immediate: true })
@@ -371,13 +392,16 @@ watch(() => move.kind, (k) => {
       </Card>
 
       <Card v-if="!closing.open" class="mb-4">
-        <CardContent class="pt-4"><Button type="button" variant="outline" data-testid="start-close" @click="startClose">{{ t('shifts.closeShift') }}</Button></CardContent>
+        <CardContent class="pt-4"><Button type="button" variant="outline" data-testid="start-close" @click="startClose()">{{ t('shifts.closeShift') }}</Button></CardContent>
       </Card>
-      <Card v-else-if="!closing.asking" class="mb-4" data-testid="close-form">
+    </template>
+
+    <Card v-if="closing.open && !closing.asking && closingShift" class="mb-4" data-testid="close-form">
         <form novalidate @submit.prevent="close()">
           <CardHeader>
-            <CardTitle>{{ t('shifts.closeTitle') }}</CardTitle>
-            <p class="m-0 text-sm text-muted-foreground">{{ t('shifts.closeHint') }}</p>
+            <CardTitle>{{ closingOther ? t('shifts.closeOtherTitle', { number: closingShift.number, name: closingShift.user_name, drawer: drawerName(closingShift.drawer) }) : t('shifts.closeTitle') }}</CardTitle>
+            <p class="m-0 text-sm text-muted-foreground">{{ closingOther ? t('shifts.closeOtherHint') : t('shifts.closeHint') }}</p>
+            <p v-if="closingOther && closingShift.cash" class="m-0 text-sm" data-testid="close-expected">{{ t('shifts.expectedNow') }} <b class="tabular-nums">{{ $money(closingShift.cash.expected) }}</b></p>
           </CardHeader>
           <CardContent>
             <div class="grid gap-4 sm:grid-cols-2">
@@ -408,8 +432,7 @@ watch(() => move.kind, (k) => {
             </div>
           </CardContent>
         </form>
-      </Card>
-    </template>
+    </Card>
 
     <Card v-if="can('cashier.settings') && settings" class="mb-4" data-testid="settings">
       <form novalidate @submit.prevent="saveSettings">
@@ -432,7 +455,13 @@ watch(() => move.kind, (k) => {
         <DataTable v-else :columns="columns" :rows="shifts" row-key="id" :row-test-id="(s) => `shift-${s.number}`" :caption="t('shifts.title')">
           <template #cell-over_short="{ row }">{{ row.over_short === null ? '-' : $money(row.over_short) }}</template>
           <template #cell-status="{ row }"><Badge :variant="row.status === 'OPEN' ? 'success' : 'outline'">{{ row.status === 'OPEN' ? t('shifts.statusOpen') : t('shifts.statusClosed') }}</Badge></template>
-          <template #cell-report="{ row }"><Button type="button" variant="ghost" size="sm" :data-testid="`report-${row.number}`" @click="showReport(row)">{{ row.status === 'OPEN' ? t('shifts.reportX') : t('shifts.reportZ') }}</Button></template>
+          <template #cell-report="{ row }">
+            <Button
+              v-if="canManage && row.status === 'OPEN' && row.user_id !== myId" type="button" variant="outline" size="sm" :disabled="busy" :data-testid="`close-${row.number}`"
+              @click="startCloseOther(row)"
+            >{{ t('shifts.closeShift') }}</Button>
+            <Button type="button" variant="ghost" size="sm" :data-testid="`report-${row.number}`" @click="showReport(row)">{{ row.status === 'OPEN' ? t('shifts.reportX') : t('shifts.reportZ') }}</Button>
+          </template>
         </DataTable>
       </CardContent>
     </Card>

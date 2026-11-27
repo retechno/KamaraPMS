@@ -284,7 +284,7 @@ func (s *Service) DepositInBatch(ctx context.Context, propertyID, reservationID 
 				if err != nil {
 					return err
 				}
-				folio, err := s.depositFolio(ctx, p, propertyID, reservationID)
+				folio, err := s.depositFolio(ctx, p, propertyID, reservationID, &in)
 				if err != nil {
 					return err
 				}
@@ -389,24 +389,44 @@ func (s *Service) depositShift(ctx context.Context, p auth.Principal, propertyID
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return in, err
 	}
+	return in, s.cashShiftBeforeNumber(ctx, propertyID, &in)
+}
+
+// cashShiftBeforeNumber resolves and locks the caller's cash shift (43) into in, before a new folio draws its number (50).
+func (s *Service) cashShiftBeforeNumber(ctx context.Context, propertyID int64, in *PaymentInput) error {
+	if in.PaymentMethod != methodCash || in.shiftSet || s.shifts == nil {
+		return nil
+	}
 	shiftID, err := s.shifts.CashShift(ctx, propertyID)
 	if err != nil {
-		return in, err
+		return err
 	}
 	in.shiftID, in.shiftSet = shiftID, true
-	return in, nil
+	return nil
 }
 
 // depositFolio returns the reservation's open folio that has no stay, locked, or creates it. A new folio is our
 // own uncommitted row, so it is not locked again: its number comes from a sequence (L5), after which no lower
 // lock level may be taken.
-func (s *Service) depositFolio(ctx context.Context, p auth.Principal, propertyID, reservationID int64) (foliosdb.Folio, error) {
+//
+// KD-30: the folio is searched before it is locked, and CloseFolio does not take the reservation lock, so the folio
+// found OPEN may be closed by the time the lock is held. It is looked at again then: a closed folio is left alone and a
+// new one is opened, as for a deposit that came a moment later (the reservation lock, held by the caller, keeps a second
+// deposit from opening one too). In cash the shift is taken first, its level (43) being after the folio's (42) and before
+// the number's (50). in is nil for a fee (fees.go), which keeps refusing a closed folio (FOLIO_CLOSED).
+func (s *Service) depositFolio(ctx context.Context, p auth.Principal, propertyID, reservationID int64, in *PaymentInput) (foliosdb.Folio, error) {
 	q := s.q(ctx)
 	id, err := q.FindUnlinkedOpenFolio(ctx, foliosdb.FindUnlinkedOpenFolioParams{TenantID: p.TenantID, PropertyID: propertyID, ReservationID: &reservationID})
-	if err == nil {
-		return s.lockFolio(ctx, p.TenantID, propertyID, id)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	switch {
+	case err == nil:
+		f, err := s.lockFolio(ctx, p.TenantID, propertyID, id)
+		if err != nil || f.Status == "OPEN" || in == nil { // without a payment (a fee), the caller refuses a closed folio itself
+			return f, err
+		}
+		if err := s.cashShiftBeforeNumber(ctx, propertyID, in); err != nil {
+			return foliosdb.Folio{}, err
+		}
+	case !errors.Is(err, pgx.ErrNoRows):
 		return foliosdb.Folio{}, err
 	}
 	number, err := s.days.NextDocumentNumber(ctx, propertyID, tenancy.SeqFolio)

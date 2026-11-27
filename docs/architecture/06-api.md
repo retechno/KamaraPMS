@@ -106,9 +106,10 @@ There are no endpoints to open or close days directly. That only happens through
 - **TX:** `T[—]` + audit
 
 **PATCH `/users/{id}`**
-- **Purpose:** update or deactivate a user.
+- **Purpose:** update or deactivate a user, and optionally replace the property grants.
+- **Request:** `{ full_name?, is_active?, is_tenant_admin?, grants?: [{ property_id, role_id }] }`. `grants`, when present, replaces all grants as PUT `/users/{id}/properties` does, in the same transaction: the user form saves the profile and the access together or not at all.
 - **Rules:** deactivation revokes all sessions.
-- **TX:** `T[user FOR UPDATE]` + audit
+- **TX:** `T[user FOR UPDATE]` (+ delete and insert of the grants) + audit (`user.updated`, and `user.grants_replaced` when grants are sent)
 
 **PUT `/users/{id}/properties`**
 - **Purpose:** replace the user's property grants.

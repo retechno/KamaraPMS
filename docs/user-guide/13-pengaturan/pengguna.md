@@ -12,11 +12,11 @@ Setiap pengguna mendapat **satu peran untuk setiap properti** tempat ia bekerja.
 
 ### Membuat pengguna
 
-1. Buka **Pengaturan → Pengguna**. Kolom **Akses** seharusnya menunjukkan hak masing-masing: "Semua properti (administrator tenant)", "Tanpa akses properti", atau kode properti dengan perannya.
+1. Buka **Pengaturan → Pengguna**. Kolom **Akses** menunjukkan hak masing-masing: "Semua properti (administrator tenant)", "Tanpa akses properti", atau kode properti dengan perannya.
 
    ![Daftar pengguna dengan kolom Akses](../screenshots/pengaturan-pengguna-01.png)
 
-   > 🐞 Kendala yang diketahui (KD-12): saat ini setiap pengguna yang bukan administrator tertulis "Tanpa akses properti" di daftar, walaupun sudah punya peran di properti. Gambar di atas menunjukkan keadaan itu. **Dampaknya:** dari daftar, Anda tidak bisa melihat siapa memegang peran apa, dan staf yang benar-benar belum punya akses tidak bisa dibedakan. **Sementara ini:** klik nama penggunanya. Halaman pengguna menunjukkan properti dan perannya dengan benar.
+   "Tanpa akses properti" berarti pengguna itu memang belum punya peran di properti mana pun, sehingga ia tidak bisa membuka properti apa pun setelah masuk.
 
 2. Klik **Pengguna baru**, lalu isi kartu **Profil**.
 
@@ -51,6 +51,7 @@ Setiap pengguna mendapat **satu peran untuk setiap properti** tempat ia bekerja.
 ## Hasilnya
 
 - Pengguna masuk dengan **kode tenant**, emailnya, dan kata sandi awal. Ia hanya melihat properti yang diberikan, dan di tiap properti hanya menu yang diizinkan perannya.
+- Profil dan akses properti disimpan bersama. Kalau penyimpanan ditolak (pesannya tampil di atas formulir), tidak ada yang berubah: perbaiki yang disebut pesan itu, lalu simpan lagi.
 - Perubahan peran berlaku pada permintaan berikutnya, tanpa perlu keluar dan masuk lagi.
 - Pengguna yang dinonaktifkan langsung keluar dari semua perangkat dan tidak bisa masuk lagi.
 
@@ -59,9 +60,7 @@ Setiap pengguna mendapat **satu peran untuk setiap properti** tempat ia bekerja.
 > ⚠️ Penting: pengguna tidak bisa dihapus, dan emailnya tidak bisa diubah. Kalau email salah ketik, nonaktifkan pengguna itu lalu buat yang baru dengan email yang benar.
 
 - **Minta staf mengganti kata sandi awal** setelah masuk pertama kali. Lihat [Mengubah kata sandi](../00-memulai/mengubah-kata-sandi.md).
-- **Baris akses yang belum lengkap:**
-
-  > 🐞 Kendala yang diketahui (KD-20): baris akses yang properti atau perannya belum dipilih dibuang saat menyimpan, tanpa peringatan. **Dampaknya:** staf bisa tersimpan tanpa akses ke properti yang dimaksud, dan baru ketahuan saat ia tidak bisa masuk ke properti itu. **Sementara ini:** setelah menyimpan, buka lagi pengguna itu dan periksa properti dan perannya di halamannya. Kolom **Akses** di daftar belum bisa dipakai untuk memeriksa (KD-12).
+- **Baris akses yang belum lengkap** tidak disimpan diam-diam. Kalau properti atau peran sebuah baris belum dipilih, tidak ada yang disimpan, dan di bawah baris itu muncul "Pilih properti dan peran untuk baris ini, atau hapus barisnya.". Lengkapi barisnya atau klik **Hapus**, lalu simpan lagi. Untuk administrator tenant, baris akses tidak diperiksa, karena ia sudah mengakses semua properti.
 - **Satu peran per properti.** "Satu pengguna hanya boleh punya satu peran per properti." berarti properti yang sama dipilih dua kali. Gabungkan izinnya dalam satu peran.
 - **"Tenant harus punya setidaknya satu administrator aktif."**: Anda mencoba menonaktifkan atau mencabut centang administrator terakhir. Jadikan orang lain administrator dulu.
 - **"Pengguna adalah kepala atau wakil sebuah departemen: …"**: pilih kepala atau wakil lain di [Departemen](../07-accounting/departemen.md) sebelum menonaktifkan pengguna itu.

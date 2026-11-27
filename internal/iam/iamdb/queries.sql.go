@@ -620,6 +620,57 @@ func (q *Queries) ListApprovalRules(ctx context.Context, arg ListApprovalRulesPa
 	return items, nil
 }
 
+const listGrantsOfUsers = `-- name: ListGrantsOfUsers :many
+SELECT up.user_id, up.property_id, p.code AS property_code, p.name AS property_name, up.role_id, r.name AS role_name
+FROM user_properties up
+JOIN properties p ON p.id = up.property_id
+JOIN roles r ON r.id = up.role_id
+WHERE up.tenant_id = $1 AND up.user_id = ANY($2::bigint[])
+ORDER BY up.user_id, p.code
+`
+
+type ListGrantsOfUsersParams struct {
+	TenantID int64
+	UserIds  []int64
+}
+
+type ListGrantsOfUsersRow struct {
+	UserID       int64
+	PropertyID   int64
+	PropertyCode string
+	PropertyName string
+	RoleID       int64
+	RoleName     string
+}
+
+// The grants of a page of users in one query (the list of users, KD-12), in the order of ListUserGrants per user.
+func (q *Queries) ListGrantsOfUsers(ctx context.Context, arg ListGrantsOfUsersParams) ([]ListGrantsOfUsersRow, error) {
+	rows, err := q.db.Query(ctx, listGrantsOfUsers, arg.TenantID, arg.UserIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGrantsOfUsersRow{}
+	for rows.Next() {
+		var i ListGrantsOfUsersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.PropertyID,
+			&i.PropertyCode,
+			&i.PropertyName,
+			&i.RoleID,
+			&i.RoleName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPropertiesWithPermission = `-- name: ListPropertiesWithPermission :many
 SELECT up.property_id FROM user_properties up
 JOIN role_permissions rp ON rp.role_id = up.role_id AND rp.permission_code = $1

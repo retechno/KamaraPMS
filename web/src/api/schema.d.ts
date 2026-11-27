@@ -174,7 +174,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Rename, activate/deactivate, or change the administrator flag */
+        /** Rename, activate/deactivate, or change the administrator flag, and optionally replace the property grants in the same transaction */
         patch: operations["updateUser"];
         trace?: never;
     };
@@ -14331,6 +14331,8 @@ export interface components {
             full_name?: string;
             is_active?: boolean;
             is_tenant_admin?: boolean;
+            /** @description When present, replaces all the user's property grants (one role per property) in the same transaction as the profile, as PUT /users/{userId}/properties does. Absent leaves the grants as they are; an empty list removes them all. */
+            grants?: components["schemas"]["GrantInput"][];
         };
         PermissionInfo: {
             code: string;

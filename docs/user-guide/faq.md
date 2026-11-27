@@ -77,7 +77,7 @@ Arahkan kursor ke tombol **Pesan** untuk melihat alasannya. Biasanya kamar tipe 
 
 ### Apakah reservasi Draf sudah menahan kamar?
 
-Belum. Reservasi **Draf** tidak mengurangi sisa kamar, jadi konfirmasinya bisa ditolak kalau kamar tipe itu habis lebih dulu. Selalu pilih pemesan saat membuat draf, karena konfirmasi butuh tamu pemesan.
+Belum. Reservasi **Draf** tidak mengurangi sisa kamar, jadi konfirmasinya bisa ditolak kalau kamar tipe itu habis lebih dulu. Konfirmasi butuh tamu pemesan. Kalau draf tersimpan tanpa pemesan, tambahkan lewat **Ubah reservasi** → **Cari pemesan**.
 → [Mengonfirmasi dan mengubah reservasi](01-front-desk/mengonfirmasi-dan-mengubah-reservasi.md)
 
 ### Tamu sudah saya tandai no-show, ternyata ia datang. Bisakah tandanya dibatalkan?
@@ -215,8 +215,8 @@ Tidak. Pembayaran kartu, QRIS, dan transfer bank tidak masuk hitungan laci. Hany
 
 ### Rekan kasir pulang tanpa menutup shift-nya. Bisakah supervisor menutupnya?
 
-Belum. Halaman **Shift kasir** tidak punya tombol untuk menutup shift milik kasir lain, juga untuk supervisor (kendala yang diketahui). Minta kasir itu masuk dan menutup shift-nya sendiri. Kalau tidak bisa, laporkan ke manajer atau administrator, beserta nomor shift, nama kasir, dan lacinya; mereka bisa memutuskan apakah **Shift terbuka menahan audit malam** di kartu **Pengaturan kasir** (halaman **Tagihan → Shift kasir**) dimatikan sementara.
-→ [Menangani penghalang audit malam](11-audit-malam/menangani-penghalang.md)
+Bisa, kalau perannya memegang **Melihat semua shift kasir di properti dan menutup shift kasir lain**. Di halaman **Tagihan → Shift kasir**, shift itu ada di daftar **Shift** dengan tombol **Tutup shift…**. Supervisor menghitung uang di laci itu dan mengisi **Kas yang dihitung**. Selisih di atas batas butuh alasan dan persetujuan, seperti shift lain. Laporan Z mencatat supervisor sebagai penutupnya.
+→ [Menutup shift kasir lain](03-kasir-dan-pembayaran/shift-kasir.md#menutup-shift-kasir-lain)
 
 ## POS
 
@@ -421,14 +421,14 @@ Angka itu baru terisi setelah biaya kamar malam ini diposting. Sebelumnya kartun
 
 ## Pengaturan dan hak akses
 
-### Di daftar Pengguna, semua staf tertulis "Tanpa akses properti". Apakah aksesnya hilang?
+### Di daftar Pengguna, seorang staf tertulis "Tanpa akses properti". Apa artinya?
 
-Tidak. Daftar itu menulis "Tanpa akses properti" untuk setiap pengguna yang bukan administrator, walaupun sudah punya peran di properti (kendala yang diketahui). Klik nama penggunanya: halaman pengguna menunjukkan properti dan perannya dengan benar.
+Staf itu belum punya peran di properti mana pun, sehingga setelah masuk ia tidak bisa membuka hotel apa pun. Klik nama penggunanya, lalu tambahkan properti dan perannya di **Akses properti**.
 → [Pengguna](13-pengaturan/pengguna.md)
 
 ### Akses staf sudah saya isi, tetapi ia tetap tidak bisa masuk ke properti itu. Kenapa?
 
-Baris akses yang properti atau perannya belum dipilih dibuang saat menyimpan, tanpa peringatan (kendala yang diketahui). Setelah menyimpan, buka lagi pengguna itu dan periksa properti dan perannya di halamannya. Kolom **Akses** di daftar belum bisa dipakai untuk memeriksa.
+Periksa kolom **Akses** di daftar **Pengguna**: properti itu harus tertulis dengan perannya. Kalau tidak ada, buka pengguna itu dan tambahkan baris properti dan perannya. Baris yang belum lengkap tidak bisa disimpan: layar menunjukkan baris mana yang belum dipilih propertinya atau perannya. Kalau aksesnya sudah benar, periksa apakah perannya punya izin untuk menu yang ia butuhkan. Lihat [Peran](13-pengaturan/peran.md).
 → [Pengguna](13-pengaturan/pengguna.md)
 
 ### Email pengguna salah ketik. Bisakah diubah?

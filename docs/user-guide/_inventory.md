@@ -628,7 +628,7 @@ Tautan dari halaman yang sudah ditulis ke halaman yang belum ada. Halaman yang d
 **Folio dan kasir**
 - Folio atau master folio tidak bisa dibuka kembali, walaupun teks UI menyebut "dibuka kembali".
 - `folio.post_after_checkout` tidak dipakai di mana pun.
-- Penghitungan kas per pecahan dan menutup shift kasir lain hanya ada di backend.
+- Penghitungan kas per pecahan hanya ada di backend. (Menutup shift kasir lain kini ada di layar: KD-21.)
 - Tampilan baca-saja Perusahaan tidak terjangkau, karena route butuh `company.manage`. Hal yang sama berlaku untuk catatan "baca saja" di halaman Pengaturan tarif dan persetujuan.
 - `/setup/properties/:id` untuk non-admin: tidak ada menunya, dan setelah disimpan pengguna dialihkan ke halaman khusus admin.
 
