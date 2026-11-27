@@ -215,8 +215,8 @@ Tidak. Pembayaran kartu, QRIS, dan transfer bank tidak masuk hitungan laci. Hany
 
 ### Rekan kasir pulang tanpa menutup shift-nya. Bisakah supervisor menutupnya?
 
-Belum. Halaman **Shift kasir** tidak punya tombol untuk menutup shift milik kasir lain, juga untuk supervisor (kendala yang diketahui). Minta kasir itu masuk dan menutup shift-nya sendiri. Kalau tidak bisa, laporkan ke manajer atau administrator, beserta nomor shift, nama kasir, dan lacinya; mereka bisa memutuskan apakah **Shift terbuka menahan audit malam** di kartu **Pengaturan kasir** (halaman **Tagihan → Shift kasir**) dimatikan sementara.
-→ [Menangani penghalang audit malam](11-audit-malam/menangani-penghalang.md)
+Bisa, kalau perannya memegang **Melihat semua shift kasir di properti dan menutup shift kasir lain**. Di halaman **Tagihan → Shift kasir**, shift itu ada di daftar **Shift** dengan tombol **Tutup shift…**. Supervisor menghitung uang di laci itu dan mengisi **Kas yang dihitung**. Selisih di atas batas butuh alasan dan persetujuan, seperti shift lain. Laporan Z mencatat supervisor sebagai penutupnya.
+→ [Menutup shift kasir lain](03-kasir-dan-pembayaran/shift-kasir.md#menutup-shift-kasir-lain)
 
 ## POS
 

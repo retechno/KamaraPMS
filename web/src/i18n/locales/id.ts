@@ -2883,6 +2883,8 @@ export const id: Messages = {
     closeShift: 'Tutup shift…',
     closeTitle: 'Tutup shift',
     closeHint: 'Hitung kas di laci. Selisih dengan kas yang seharusnya dibukukan ke akun selisih kas.',
+    closeOtherTitle: 'Tutup shift {number} milik {name} (laci {drawer})',
+    closeOtherHint: 'Kasir ini meninggalkan shift-nya terbuka. Hitung kas di laci itu: selisihnya dibukukan seperti shift lain, dan laporan mencatat Anda sebagai penutupnya.',
     countedCash: 'Kas yang dihitung',
     varianceReason: 'Alasan selisih',
     exact: 'Hitungan pas.',

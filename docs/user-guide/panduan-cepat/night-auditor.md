@@ -47,5 +47,5 @@ Ringkasan satu halaman untuk night auditor dan manajer jaga yang menutup hari bi
 - Tanda no-show tidak bisa dibatalkan dan tidak menagih apa pun. Kalau tamunya ternyata datang, buat reservasi atau walk-in baru. → [Menandai tamu tidak datang](../11-audit-malam/menandai-no-show.md)
 - Satu kali audit malam menutup satu hari. Kalau tertinggal dua hari (**Audit malam terlambat**), jalankan dua kali. → [Menjalankan audit malam](../11-audit-malam/menjalankan-audit-malam.md)
 - Mengklik baris di daftar "Hari belum bisa ditutup karena:" tidak menggulir halaman. Gulir sendiri ke langkahnya. → [Menangani penghalang](../11-audit-malam/menangani-penghalang.md)
-- Shift kasir lain tidak bisa ditutup dari layar, juga oleh supervisor. Minta kasir itu masuk dan menutupnya sendiri. Kalau tidak bisa, laporkan ke manajer atau administrator dengan nomor shift, nama kasir, dan lacinya. → [Menangani penghalang](../11-audit-malam/menangani-penghalang.md)
+- Shift kasir yang ditinggal terbuka ditutup oleh supervisor yang berwenang dari daftar **Shift** di **Tagihan → Shift kasir**, dengan menghitung uang di laci itu. → [Menutup shift kasir lain](../03-kasir-dan-pembayaran/shift-kasir.md#menutup-shift-kasir-lain)
 - Kalau menu atau tombol tidak ada, peran Anda tidak mencakupnya. Tanyakan ke administrator. → [Peran dan hak akses](../00-memulai/peran-dan-hak-akses.md)

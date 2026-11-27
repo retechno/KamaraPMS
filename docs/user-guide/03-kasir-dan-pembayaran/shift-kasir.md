@@ -62,6 +62,18 @@
 
     ![Shift ditutup dengan tombol Cetak laporan Z](../screenshots/kasir-shift-10.png)
 
+### Menutup shift kasir lain
+
+Untuk supervisor yang perannya memegang **Melihat semua shift kasir di properti dan menutup shift kasir lain**, kalau seorang kasir pulang tanpa menutup shift-nya.
+
+1. Buka **Tagihan → Shift kasir**. Di daftar **Shift**, baris shift kasir itu berstatus **Buka** dan punya tombol **Tutup shift…**. Klik tombol itu.
+2. Formulir **Tutup shift {nomor} milik {nama} (laci {laci})** menampilkan **Kas yang seharusnya ada di laci:** untuk laci itu. Hitung uang di laci itu, lalu isi **Kas yang dihitung**. Isian lainnya sama seperti saat menutup shift sendiri.
+3. Klik **Tutup shift**. Selisih di atas batas butuh **Alasan selisih** dan persetujuan, seperti shift lain.
+
+Shift tetap atas nama kasirnya. Laporan Z mencatat Anda di **Ditutup oleh**, dan jejak audit mencatat Anda sebagai yang menutupnya.
+
+<!-- SCREENSHOT: daftar Shift dengan tombol Tutup shift pada shift kasir lain, dan formulir Tutup shift {nomor} milik {nama}. Belum diambil: data docs belum punya shift kasir lain yang terbuka (lihat _laporan.md bagian 6). -->
+
 ## Hasilnya
 
 - Shift berstatus **Tutup**, dan selisih kas (kalau ada) dicatat ke akun selisih kas.
@@ -77,7 +89,7 @@
 - **Shift yang masih terbuka bisa menahan audit malam** kalau **Shift terbuka menahan audit malam** dicentang di Pengaturan kasir (bawaan: dicentang). Tutup semua shift sebelum night auditor menjalankan audit malam. Lihat [Menjalankan audit malam](../11-audit-malam/menjalankan-audit-malam.md).
 - **Uang tunai butuh shift terbuka** (bawaan: dicentang). Kalau pengaturan ini dimatikan, uang tunai bisa diterima tanpa shift, tetapi tidak dicocokkan per laci.
 - **Pembayaran kartu, QRIS, dan transfer bank** tidak masuk hitungan laci.
-- Supervisor yang berwenang melihat semua shift properti di daftar **Shift**, bukan hanya miliknya.
+- Supervisor yang berwenang melihat semua shift properti di daftar **Shift**, bukan hanya miliknya, dan bisa menutup shift kasir lain yang masih terbuka (lihat [Menutup shift kasir lain](#menutup-shift-kasir-lain)). Shift miliknya sendiri tetap ditutup dari kartunya di atas daftar.
 
 ## Terkait
 

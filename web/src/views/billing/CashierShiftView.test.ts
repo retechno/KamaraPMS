@@ -23,6 +23,8 @@ const closedShift = { ...openShift, id: 4, number: 'SHF000004', status: 'CLOSED'
 
 let current: unknown = null
 let waiting: unknown[] = []
+let listed: unknown[] = [closedShift]
+let detail: unknown = null
 
 function mountView(permissions = ['cashier.shift']) {
   const pinia = createPinia()
@@ -35,7 +37,8 @@ function mountView(permissions = ['cashier.shift']) {
     if (path.endsWith('/cashiers')) return { data: { data: [{ id: 12, name: 'Dewi' }] } }
     if (path.endsWith('/suggested-float')) return { data: { opening_float: '200000' } }
     if (path.endsWith('/settings')) return { data: { require_shift_for_cash: true, max_variance: '0', block_night_audit: true } }
-    return { data: { data: [closedShift] } }
+    if (path.endsWith('/shifts/{id}')) return { data: detail }
+    return { data: { data: listed } }
   })
   POST = vi.fn().mockResolvedValue({ data: {} })
   PUT = vi.fn().mockResolvedValue({ data: {} })
@@ -48,6 +51,8 @@ describe('CashierShiftView', () => {
     document.body.innerHTML = ''
     current = null
     waiting = []
+    listed = [closedShift]
+    detail = null
     openPdf.mockReset()
     GET = vi.fn()
     POST = vi.fn()
@@ -165,6 +170,46 @@ describe('CashierShiftView', () => {
     await admin.get('[data-testid=settings] form').trigger('submit')
     await flushPromises()
     expect(PUT).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/cashier/settings', { params: { path: { propertyId: 7 } }, body: { require_shift_for_cash: true, max_variance: '1000', block_night_audit: true } })
+  })
+
+  // KD-21: a cashier who went home without closing the shift held the night audit, and nobody could close it from the screen. A holder of cashier.shift_manage closes it from
+  // the list: the cash counted in the drawer, the difference as for one's own shift (a reason and the approval SHIFT_VARIANCE beyond the limit), the closer is recorded by the server.
+  it('lets a holder of cashier.shift_manage close the open shift of another cashier from the list, with the count', async () => {
+    const other = { ...openShift, id: 6, number: 'SHF000006', user_id: 31, user_name: 'Budi', drawer: 'BAR' }
+    listed = [other, closedShift]
+    detail = other
+    const w = mountView(['cashier.shift_manage'])
+    await flushPromises()
+    expect(w.find('[data-testid=close-SHF000004]').exists()).toBe(false) // a closed shift
+    await w.get('[data-testid=close-SHF000006]').trigger('click')
+    await flushPromises()
+    expect(GET.mock.calls.some((c) => String(c[0]).endsWith('/cashier/shifts/{id}') && (c[1] as { params: { path: { id: number } } }).params.path.id === 6)).toBe(true)
+    const form = w.get('[data-testid=close-form]')
+    expect(form.text()).toContain('SHF000006')
+    expect(form.text()).toContain('Budi')
+    expect(form.text()).toContain('500,000') // the cash expected in that drawer
+    await form.get('input[name=counted_cash]').setValue('500000')
+    expect(w.get('[data-testid=difference]').text()).toContain('exact')
+    POST = vi.fn().mockResolvedValue({ data: { ...other, status: 'CLOSED' } })
+    await form.get('form').trigger('submit')
+    await flushPromises()
+    expect(POST).toHaveBeenCalledWith('/api/v1/properties/{propertyId}/cashier/shifts/{id}/close', {
+      params: { path: { propertyId: 7, id: 6 } }, body: { counted_cash: '500000', reason: undefined, department_id: null, hand_over_to: undefined, approval: undefined },
+    })
+    expect(w.get('[data-testid=notice]').text()).toContain('The shift is closed')
+  })
+
+  it('offers no close of a shift of another cashier without cashier.shift_manage, nor of the own shift from the list', async () => {
+    current = openShift
+    const w = mountView(['cashier.shift'])
+    await flushPromises()
+    expect(w.find('[data-testid=close-SHF000004]').exists()).toBe(false)
+    w.unmount()
+    listed = [openShift]
+    const mine = mountView(['cashier.shift', 'cashier.shift_manage'])
+    await flushPromises()
+    expect(mine.find('[data-testid=close-SHF000005]').exists()).toBe(false) // one's own shift is closed from its card above
+    expect(mine.find('[data-testid=start-close]').exists()).toBe(true)
   })
 
   it('needs a cashier permission', async () => {

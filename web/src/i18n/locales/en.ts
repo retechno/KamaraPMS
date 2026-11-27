@@ -2886,6 +2886,8 @@ export const en = {
     closeShift: 'Close the shift…',
     closeTitle: 'Close the shift',
     closeHint: 'Count the cash in the drawer. The difference to the cash expected is booked on the cash over and short account.',
+    closeOtherTitle: 'Close the shift {number} of {name} (drawer {drawer})',
+    closeOtherHint: 'This cashier left the shift open. Count the cash in that drawer: the difference is booked as for any shift, and the report names you as the one who closed it.',
     countedCash: 'Cash counted',
     varianceReason: 'Reason for a difference',
     exact: 'The count is exact.',
