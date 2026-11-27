@@ -29163,7 +29163,7 @@ components:
         posting_mode: { type: string, enum: [AUTO, MANUAL, ""], description: "Empty goes back to the setting of the property." }
     AssetSettings:
       type: object
-      required: [register_from, capitalization_threshold, start_rule, oe_policy, oe_default_months, oe_policy_changed_on, tax_year_start_month, started, version]
+      required: [register_from, capitalization_threshold, start_rule, oe_policy, oe_default_months, oe_policy_changed_on, tax_year_start_month, started, has_assets, version]
       properties:
         register_from: { type: [string, "null"], format: date, description: "The first month the register depreciates (the first of a month); null until the opening balances or the first asset." }
         capitalization_threshold: { type: string }
@@ -29173,6 +29173,7 @@ components:
         oe_policy_changed_on: { type: [string, "null"], format: date }
         tax_year_start_month: { type: [integer, "null"] }
         started: { type: boolean }
+        has_assets: { type: boolean, description: "The register holds an asset (of any state): register_from cannot change (409 REGISTER_FROM_LOCKED)." }
         version: { type: integer }
     AssetSettingsInput:
       type: object

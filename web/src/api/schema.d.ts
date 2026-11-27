@@ -27373,6 +27373,8 @@ export interface components {
             oe_policy_changed_on: string | null;
             tax_year_start_month: number | null;
             started: boolean;
+            /** @description The register holds an asset (of any state): register_from cannot change (409 REGISTER_FROM_LOCKED). */
+            has_assets: boolean;
             version: number;
         };
         AssetSettingsInput: {

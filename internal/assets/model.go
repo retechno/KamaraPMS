@@ -145,6 +145,7 @@ type Settings struct {
 	OEPolicyChangedOn       *civil.Date     `json:"oe_policy_changed_on"`
 	TaxYearStartMonth       *int            `json:"tax_year_start_month"`
 	Started                 bool            `json:"started"`
+	HasAssets               bool            `json:"has_assets"` // the register holds an asset: register_from cannot move (REGISTER_FROM_LOCKED, KD-24)
 	Version                 int32           `json:"version"`
 }
 

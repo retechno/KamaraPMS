@@ -85,9 +85,7 @@ Halaman **Kategori dan pengaturan aset** punya lima bagian: **Kategori**, **Peng
 - **Tarif fiskal** menunjukkan **Umur (tahun)**, tarif **Garis lurus**, dan tarif **Saldo menurun** setiap kelompok fiskal. Ubah angkanya, lalu klik **Simpan** di baris itu. Tarif ini hanya dipakai laporan fiskal, dan perlu dikonfirmasi konsultan pajak. Lihat [Laporan aset](laporan-aset.md).
 - **Mematikan lokasi:** klik **Matikan** di baris lokasi. Lokasi itu menjadi **Nonaktif** dan tidak lagi ditawarkan di pilihan lokasi, misalnya di **Jadikan aset** dan **Pindahkan**. Aset yang sudah ada di lokasi itu tetap di sana. Klik **Aktifkan** untuk memakainya lagi.
 
-- **Register mulai:**
-
-  > 🐞 Kendala yang diketahui (KD-24): field **Register mulai** terkunci segera setelah disimpan, walaupun keterangannya berbunyi "Terkunci setelah ada aset yang dimasukkan.". **Dampaknya:** kalau bulan yang salah tersimpan, bulan itu tidak bisa diperbaiki dari layar, walaupun register belum berisi aset. Impor saldo awal juga menolak per tanggal yang tidak cocok dengan bulan itu. **Sementara ini:** periksa bulannya baik-baik sebelum menyimpan. Kalau sudah terlanjur salah dan belum ada aset, minta administrator hotel menghubungi tim dukungan KamaraPMS. Lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak).
+- **Register mulai** bisa diubah selama register belum berisi aset, juga setelah disimpan. Begitu ada aset yang dimasukkan (lewat **Jadikan aset** atau impor saldo awal), keterangannya berbunyi "Terkunci setelah ada aset yang dimasukkan." dan bulannya tidak bisa diubah lagi. Impor saldo awal hanya diterima per tanggal terakhir bulan sebelum **Register mulai**.
 
 ## Terkait
 
