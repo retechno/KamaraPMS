@@ -40,7 +40,7 @@
 
 ### Draf yang tersimpan tanpa pemesan
 
-Draf tanpa pemesan tidak bisa dikonfirmasi. Di kartu atas halaman reservasi, **Pemesan** tertulis **belum diisi**. Tambahkan pemesannya:
+Draf tanpa pemesan tidak bisa dikonfirmasi. Di kartu **Rincian** di sisi kanan halaman reservasi, **Pemesan** tertulis **belum diisi**. Tambahkan pemesannya:
 
 7. Klik **Ubah reservasi**. Di bagian reservasi (bawah), **Pemesan:** tertulis **belum diisi**.
 8. Di **Cari pemesan**, ketik nama, email, telepon, atau kode tamu, lalu klik **Cari**. Klik tamu yang memesan. **Pemesan:** sekarang menyebut nama dan kodenya. Kalau tamunya belum terdaftar, buat dulu lewat [Mengelola data tamu](mengelola-data-tamu.md).
