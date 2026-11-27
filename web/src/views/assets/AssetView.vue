@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AssetCategory, AssetDetail, AssetHistoryEntry, AssetLocation, AssetRepair, AssetSchedule } from '@/api/types'
+import type { AssetCategory, AssetDetail, AssetHistoryEntry, AssetLocation, AssetRepair, AssetSchedule, AssetSettings } from '@/api/types'
 import DepartmentSelect from '@/components/app/DepartmentSelect.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
@@ -240,6 +240,7 @@ const moving = ref(false)
 const revising = ref<'TERMS' | 'CATEGORY' | null>(null)
 const disposing = ref(false)
 const categories = ref<AssetCategory[]>([])
+const startRule = ref<AssetSettings['start_rule']>('IN_SERVICE_MONTH')
 const actionable = computed(() => !!asset.value && asset.value.status === 'ACTIVE' && !asset.value.disposal_pending)
 const isCip = computed(() => asset.value?.category_kind === 'CIP')
 async function openMove(): Promise<void> {
@@ -261,6 +262,13 @@ async function openRevise(kind: 'TERMS' | 'CATEGORY'): Promise<void> {
     categories.value = data?.data ?? []
   } catch {
     categories.value = []
+  }
+  // the start rule of the property is the default of a finished building (KD-28); without the settings the dialog keeps the month in service
+  try {
+    const { data } = await api.GET('/api/v1/properties/{propertyId}/assets/settings', { params: { path: { propertyId } } })
+    startRule.value = data?.start_rule ?? 'IN_SERVICE_MONTH'
+  } catch {
+    startRule.value = 'IN_SERVICE_MONTH'
   }
   revising.value = kind
 }
@@ -418,7 +426,7 @@ async function disposed(): Promise<void> {
   <p v-else-if="loaded && !error" class="muted">{{ t('assets.asset.notFound') }}</p>
 
   <AssetMoveDialog v-if="pid !== null" :asset="moving ? asset : null" :locations="locations" :property-id="pid" @close="moving = false" @done="changed" />
-  <AssetReviseDialog v-if="pid !== null" :asset="revising ? asset : null" :categories="categories" :property-id="pid" :initial-kind="revising ?? 'TERMS'" @close="revising = null" @done="changed" />
+  <AssetReviseDialog v-if="pid !== null" :asset="revising ? asset : null" :categories="categories" :property-id="pid" :initial-kind="revising ?? 'TERMS'" :start-rule="startRule" @close="revising = null" @done="changed" />
   <AssetDisposeDialog v-if="pid !== null" :asset="disposing ? asset : null" :property-id="pid" @close="disposing = false" @done="disposed" />
 
   <Dialog :open="editing" @update:open="(v) => (editing = v)">
