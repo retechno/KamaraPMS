@@ -276,3 +276,47 @@ It decrypts and restores in the `backup` image onto a throwaway PostgreSQL (`kam
 | Wrong private key, changed file, no key | each exit 2, nothing restored |
 
 **What this does not prove.** The 25 seconds are for 1.3 MB; they are **not** the pilot RTO of 4 hours being met in practice, and nothing here says what a year of data takes. The drill was run by someone who knows the system; a person doing it for the first time during an incident will take longer. The recovery point of the drill (1 minute) is the age of one file, not the 24 hours that the schedule gives in the worst case. The alert was received by a local test receiver, not by the owner's real channel; the secondary copy was a host directory and an SSH container on the same machine, not another machine; the private key was a test key. The production values (15 minutes, 1 hour, WAL, off-site, 14/8/12/1) are **not built and not drilled**.
+
+## 17. Kesiapan akuntansi setelah restore
+
+For the support team. The night audit, and the page **Accounting → Accounting readiness**, refuse to close a day when the accounting data of a property is incomplete. Three findings have no screen in the application, on purpose (decision of the owner, 2026-11-28: no repair button, and the accounting start date cannot be changed from the application):
+
+| Code | What is wrong |
+|---|---|
+| `ACCOUNTING_NOT_SET_UP` | the property has no row in `accounting_settings` |
+| `ACCOUNTING_NOT_STARTED` | the OPEN business date is before `accounting_settings.start_date` |
+| `JOURNAL_SEQUENCE_MISSING` | the property has no `document_sequences` row of type `JOURNAL` |
+
+In normal use none of them can happen: creating a property writes its accounting settings (start date = the opening business date) and all its document sequences in the same transaction, migrations 00028 and 00029 completed the properties that existed before, and the business date only moves forward. They appear after an incomplete restore: a dump of some tables only, a `--data-only` subset, a restore that stopped half way, or a copy of one property's rows without the rest.
+
+**Check** (read only; run it on the restored database, and on the source or another copy of the same backup to compare):
+
+```sql
+SELECT p.tenant_id, p.code,
+       s.id IS NOT NULL               AS has_accounting_settings,  -- false: ACCOUNTING_NOT_SET_UP
+       s.start_date,
+       d.business_date                AS open_business_date,
+       d.business_date < s.start_date AS before_start,             -- true: ACCOUNTING_NOT_STARTED
+       EXISTS (SELECT 1 FROM document_sequences q
+                WHERE q.tenant_id = p.tenant_id AND q.property_id = p.id AND q.sequence_type = 'JOURNAL') AS has_journal_sequence  -- false: JOURNAL_SEQUENCE_MISSING
+  FROM properties p
+  LEFT JOIN accounting_settings s ON s.tenant_id = p.tenant_id AND s.property_id = p.id
+  LEFT JOIN business_days d ON d.tenant_id = p.tenant_id AND d.property_id = p.id AND d.status = 'OPEN'
+ ORDER BY p.tenant_id, p.code;
+```
+
+`GET /api/v1/properties/{propertyId}/accounting/readiness` (permission `accounting.view`) gives the same three codes through the API, with the other findings of the check. The query was run on the development database on 2026-11-28 (six properties, all three columns as expected); a database with a missing row has not been seen outside the tests (`internal/accounting/readiness_test.go`).
+
+**Recover from the right source, do not patch the data.** A row inserted by hand looks like a fix but is not one:
+- a new `JOURNAL` sequence starts at 1 and gives numbers that the restored journals already carry;
+- a hand-made `accounting_settings` row or start date decides which days have a journal, so days could close with the books starting on the wrong date;
+- whatever made those rows go missing has probably lost other rows too, which the night audit does not check.
+
+Instead:
+1. Stop the night audit of the property: tell the hotel not to run it, and do not run it yourself.
+2. Find the newest **complete** backup (section 9). Verify it (section 4).
+3. Restore it into a new, empty database (section 5), never over the damaged one. Compare with `db-verify.sql` (section 6).
+4. Run the check above on the new copy. All three columns must be as expected for every property.
+5. Switch the application to the new copy, then tell the hotel that the night audit can run.
+
+If no complete backup has the rows, stop and escalate to the owner; do not invent them.

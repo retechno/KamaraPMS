@@ -60,6 +60,7 @@
 - **Departemen Wajib:** kalau ada kode biaya atau akun sistem yang memposting ke akun ini tanpa departemen, perubahan ditolak. Beri akun itu departemen default, atau beri kode biayanya departemen. Lihat [Departemen](departemen.md).
 - **Akun kontrol** (buku tamu, piutang perusahaan, uang muka tamu, utang usaha, persediaan, dan aset tetap) hanya diisi oleh sistem. Akun ini ditawarkan di jurnal manual, tetapi ditolak saat diposting.
 - **Impor CSV** memasukkan banyak akun sekaligus. Klik **Periksa file** dulu. Tidak ada yang berubah sampai seluruh file valid. **Ekspor CSV** memakai judul kolom bahasa Inggris (`code`, `name`, `type`, …) supaya bisa diimpor lagi.
+- **Kesiapan akuntansi:** **Akuntansi → Kesiapan akuntansi** menjalankan pemeriksaan yang sama dengan audit malam sebelum menutup hari: akun sistem, akun kode biaya kamar, departemen, dan akun transfer antar folio. Setiap temuan menautkan ke layar perbaikannya. Periksa halaman ini setelah mengubah akun sistem, sebelum audit malam berikutnya. Lihat [Menangani penghalang audit malam](../11-audit-malam/menangani-penghalang.md).
 - Beberapa akun sistem persediaan dan aset tetap dijelaskan dalam bahasa Inggris di kolom **Apa**, misalnya "Goods received not invoiced" (barang diterima belum ditagih).
 
 ## Terkait

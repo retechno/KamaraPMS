@@ -164,6 +164,7 @@ export const router = createRouter({
     { path: '/outlet-charges', name: 'outlet-charges', component: () => import('@/views/pos/OutletChargesView.vue'), meta: { title: 'Outlet charges', permission: ['folio.outlet_charge_open', 'folio.read'], module: 'POS' } },
     { path: '/accounting/accounts', name: 'accounting-accounts', component: () => import('@/views/accounting/ChartOfAccountsView.vue'), meta: { title: 'Chart of accounts' } },
     { path: '/accounting/mapping', name: 'accounting-mapping', component: () => import('@/views/accounting/AccountMappingView.vue'), meta: { title: 'System accounts' } },
+    { path: '/accounting/readiness', name: 'accounting-readiness', component: () => import('@/views/accounting/AccountingReadinessView.vue'), meta: { title: 'Accounting readiness', permission: 'accounting.view' } },
     { path: '/accounting/journals', name: 'accounting-journals', component: () => import('@/views/accounting/JournalsView.vue'), meta: { title: 'Journals' } },
     { path: '/accounting/periods', name: 'accounting-periods', component: () => import('@/views/accounting/PeriodsView.vue'), meta: { title: 'Accounting periods' } },
     { path: '/tax/status', name: 'tax-status', component: () => import('@/views/tax/TaxStatusView.vue'), meta: { title: 'PKP status' } },

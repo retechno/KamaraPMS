@@ -6,6 +6,7 @@ import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import type { CheckOutResult, NightAuditPackManifest, NightAuditPreview, NightAuditResult, StayDetail } from '@/api/types'
 import DataTable, { type Column } from '@/components/app/DataTable.vue'
+import ReadinessFindings from '@/components/accounting/ReadinessFindings.vue'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import type { RowAction } from '@/components/app/rowActions'
 import FormField from '@/components/app/FormField.vue'
@@ -429,9 +430,8 @@ watch(pid, () => {
         </div>
         <div v-if="accountingBlockers.length" class="alert mb-0 mt-3" data-testid="accounting-readiness">
           <strong>{{ t('nightAudit.accountingNotReady', { n: accountingBlockers.length }) }}</strong>
-          <ul class="m-0 mt-1 pl-5">
-            <li v-for="b in accountingBlockers" :key="`${b.code}-${b.ref ?? ''}`"><code>{{ b.code }}</code> {{ b.message }}</li>
-          </ul>
+          <ReadinessFindings :items="accountingBlockers" />
+          <RouterLink v-if="auth.can('accounting.view', property.currentId)" to="/accounting/readiness" class="mt-1 inline-block text-sm" data-testid="accounting-readiness-link">{{ t('readiness.openPage') }}</RouterLink>
         </div>
       </StepCard>
 

@@ -101,9 +101,23 @@ describe('NightAuditView', () => {
     })
     await flushPromises()
     const box = w.get('[data-testid=accounting-readiness]')
-    expect(box.text()).toContain('ACCOUNT_MAP_MISSING')
-    expect(box.text()).toContain('the system account CASH is not mapped')
+    // item 10 of PR C2: the words of the readiness page, not the raw code and the English sentence of the server
+    expect(box.text()).toContain('The system account CASH has no account')
+    expect(box.text()).not.toContain('ACCOUNT_MAP_MISSING')
+    expect(box.text()).not.toContain('is not mapped')
     expect(w.get('[data-testid=run-audit]').attributes('disabled')).toBeDefined()
+  })
+
+  it('asks the night auditor for an accountant, and links the readiness page and the screen only to who may open them', async () => {
+    const preview = { ...clean(), can_run: false, blockers: { ...clean().blockers, accounting_readiness: [{ code: 'ACCOUNT_MAP_MISSING', ref: 'CASH', message: '' }] } }
+    const auditor = mountView(preview)
+    await flushPromises()
+    expect(auditor.get('[data-testid=readiness-ACCOUNT_MAP_MISSING]').text()).toContain('Ask an accountant to fix it.')
+    expect(auditor.find('[data-testid=accounting-readiness] a').exists()).toBe(false)
+    const accountant = mountView(preview, ['nightaudit.run', 'accounting.view'])
+    await flushPromises()
+    expect(accountant.get('[data-testid=readiness-ACCOUNT_MAP_MISSING] a').attributes('href')).toBe('/accounting/mapping')
+    expect(accountant.get('[data-testid=accounting-readiness-link]').attributes('href')).toBe('/accounting/readiness')
   })
 
   it('marks exactly the selected arrivals as no-show, after a confirmation, and reloads', async () => {

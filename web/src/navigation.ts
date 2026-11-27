@@ -171,6 +171,7 @@ export const navigation: NavSection[] = [
     items: [
       { id: 'chartOfAccounts', to: '/accounting/accounts', permission: 'accounting.view' },
       { id: 'systemAccounts', to: '/accounting/mapping', permission: 'accounting.view' },
+      { id: 'readiness', to: '/accounting/readiness', permission: 'accounting.view' },
       { id: 'journals', to: '/accounting/journals', permission: 'accounting.view' },
       { id: 'periods', to: '/accounting/periods', permission: 'accounting.view' },
       { id: 'fiscalYears', to: '/accounting/fiscal-years', permission: 'accounting.view' },
