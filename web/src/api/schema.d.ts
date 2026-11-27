@@ -23177,7 +23177,7 @@ export interface components {
             refund?: {
                 /** Format: int64 */
                 payment_id: number;
-                /** @description CASH, CARD, BANK_TRANSFER or OTHER, among the refund methods of the property; empty: the method of the payment when allowed. */
+                /** @description CASH, CARD, BANK_TRANSFER, OTHER or QRIS, among the refund methods of the property; empty: the method of the payment when allowed, else the first allowed. */
                 payment_method?: string;
                 reference_number?: string;
             } | null;
