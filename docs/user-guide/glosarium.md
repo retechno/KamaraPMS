@@ -208,7 +208,7 @@ Daftar istilah hotel dan istilah KamaraPMS yang dipakai di panduan ini, urut abj
 
 **OOS** (*out of service*, tidak dilayani): blokir **Tidak dilayani (OOS)**, untuk kamar yang layak tetapi sengaja tidak dijual. → [Blokir kamar (OOO/OOS)](02-housekeeping/blokir-kamar-ooo-oos.md)
 
-**Opname**: penghitungan fisik stok satu gudang. Sejak opname dimulai, gudang dibekukan, dan opname yang masih terbuka menahan audit malam. → [Opname](09-inventory/opname.md)
+**Opname**: penghitungan fisik stok satu gudang. Sejak opname dimulai, gudang dibekukan, dan opname yang masih terbuka menahan audit malam, kecuali pengaturan persediaan menjadikannya peringatan. → [Opname](09-inventory/opname.md)
 
 **Opname aset**: penghitungan aset tetap per lokasi dengan bantuan label QR, berkala, misalnya setiap triwulan. → [Opname aset dan label QR](10-aset-tetap/opname-aset-dan-label-qr.md)
 

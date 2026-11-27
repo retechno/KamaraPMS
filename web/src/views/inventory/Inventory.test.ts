@@ -473,6 +473,28 @@ describe('costing', () => {
   })
 })
 
+// Item 9 of PR C2: whether an open stock count holds the night audit (count_blocks_night_audit, 35-inventory.md D6) had no control on any screen.
+describe('costing, an open count and the night audit', () => {
+  it('shows the setting and saves it with the other settings unchanged', async () => {
+    await setup(InventoryCostingView)
+    const box = document.body.querySelector('[data-testid=count-blocks]') as HTMLInputElement
+    expect(box.checked).toBe(true)
+    expect(box.disabled).toBe(false)
+    expect((document.body.querySelector('[data-testid=count-blocks-save]') as HTMLButtonElement).disabled).toBe(true)
+    box.click()
+    await flushPromises()
+    await click('[data-testid=count-blocks-save]')
+    expect(PUT.mock.calls[0]![0]).toBe('/api/v1/properties/{propertyId}/inventory/settings')
+    expect(PUT.mock.calls[0]![1].body).toMatchObject({ count_blocks_night_audit: false, costing_method: 'AVERAGE', count_blind: true, po_requires_pr: true, version: 3 })
+  })
+
+  it('shows it read only to who may not manage the inventory', async () => {
+    await setup(InventoryCostingView, ['inventory.view'])
+    expect((document.body.querySelector('[data-testid=count-blocks]') as HTMLInputElement).disabled).toBe(true)
+    expect(has('[data-testid=count-blocks-save]')).toBe(false)
+  })
+})
+
 describe('the lists of the masters', () => {
   it.each([
     [InventoryCategoriesView, 'category-', '/inventory/categories', categories[0]!],

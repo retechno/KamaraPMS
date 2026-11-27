@@ -644,7 +644,7 @@ Tautan dari halaman yang sudah ditulis ke halaman yang belum ada. Halaman yang d
 - "Ubah jadwal" deposit tampil dengan `banquet.confirm`, padahal backend meminta `banquet.manage`.
 
 **Persediaan**
-- Pengaturan persediaan (toleransi, PO wajib PR, batas penerimaan tanpa pesanan, opname menahan audit, hitung buta) tidak punya layar.
+- Pengaturan persediaan (toleransi, PO wajib PR, batas penerimaan tanpa pesanan, hitung buta) tidak punya layar. *Diperbaiki (PR C2):* opname menahan audit (`count_blocks_night_audit`) punya centang di **Persediaan → Harga pokok**.
 - *Diperbaiki (KD-16):* rantai persetujuan terbuka untuk `property.manage` dan `inventory.manage`; hanya `property.manage` yang bisa mengubah dan menyimpan, sesuai desain 35 §5.8.
 - Membuang draf tagihan tidak punya tombol.
 - Lingkup opname "Daftar" tidak tersedia di UI.

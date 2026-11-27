@@ -320,7 +320,7 @@ Tidak. Dokumen yang sudah diposting tidak bisa diedit. Pembalikan hanya bisa pad
 
 ### Kenapa transfer atau penerimaan ke gudang ditolak dengan "Opname sedang berjalan di gudang."?
 
-Gudang itu sedang dibekukan oleh opname. Tunggu opname disetujui atau dibatalkan. Opname yang masih terbuka juga menahan audit malam, jadi selesaikan pada hari yang sama.
+Gudang itu sedang dibekukan oleh opname. Tunggu opname disetujui atau dibatalkan. Opname yang masih terbuka juga menahan audit malam (bawaan, bisa diubah di **Persediaan → Harga pokok**), jadi selesaikan pada hari yang sama.
 → [Opname stok gudang](09-inventory/opname.md)
 
 ### Saya mencentang "Simpan dan ajukan" di pesanan pembelian, kenapa pesanan langsung berstatus Terkirim ke pemasok?

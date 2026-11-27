@@ -45,7 +45,7 @@
 
 ## Perlu diperhatikan
 
-> ⚠️ Penting: opname yang masih terbuka (**Dihitung** atau **Perlu disetujui**) menahan audit malam: "Opname {nomor} di {gudang} masih terbuka dan membekukan gudang. Setujui atau batalkan sebelum hari ditutup.". Selesaikan opname pada hari yang sama. Lihat [Menangani penghalang audit malam](../11-audit-malam/menangani-penghalang.md).
+> ⚠️ Penting: opname yang masih terbuka (**Dihitung** atau **Perlu disetujui**) menahan audit malam: "Opname {nomor} di {gudang} masih terbuka dan membekukan gudang. Setujui atau batalkan sebelum hari ditutup.". Selesaikan opname pada hari yang sama. Ini bawaannya. Manajer persediaan bisa menjadikannya peringatan saja dengan menghapus centang **Opname yang masih terbuka menahan audit malam** di **Persediaan → Harga pokok**, bagian **Opname dan audit malam**. Lihat [Menangani penghalang audit malam](../11-audit-malam/menangani-penghalang.md).
 
 > ⚠️ Penting: persetujuan opname bersifat final dan tidak bisa dibatalkan. Kesalahan dikoreksi dengan opname berikutnya.
 
