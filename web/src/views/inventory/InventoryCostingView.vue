@@ -10,6 +10,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { DateInput } from '@/components/ui/date-input'
 import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -216,10 +217,9 @@ const steps = ['1', '2', '3', '4'] as const
 
     <section aria-labelledby="count-h" data-testid="count-night-audit">
       <h2 id="count-h" class="m-0 mb-2 text-sm font-semibold">{{ t('inventory.costing.countTitle') }}</h2>
-      <label class="flex items-start gap-2 text-sm">
-        <input v-model="countBlocks" type="checkbox" name="count_blocks_night_audit" class="mt-0.5 accent-primary" :disabled="!canManage" data-testid="count-blocks" />
+      <Checkbox v-model="countBlocks" name="count_blocks_night_audit" :disabled="!canManage" label-class="items-start text-sm" data-testid="count-blocks">
         <span><span class="block">{{ t('inventory.costing.countBlocks') }}</span><span class="block text-xs text-muted-foreground">{{ t('inventory.costing.countBlocksHint') }}</span></span>
-      </label>
+      </Checkbox>
       <Button v-if="canManage" type="button" size="sm" class="mt-2" :disabled="saving || !countDirty" data-testid="count-blocks-save" @click="saveMethod">{{ t('inventory.costing.saveCount') }}</Button>
     </section>
 
