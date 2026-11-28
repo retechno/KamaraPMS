@@ -1,7 +1,7 @@
 # Rantai persetujuan: mengatur dan memutuskan
 
 **Siapa yang melakukan:**
-- **Mengatur rantai**: administrator atau manajer yang perannya boleh mengelola persediaan dan mengatur properti.
+- **Mengatur rantai**: administrator atau manajer yang perannya boleh **Mengubah pengaturan properti**. Peran yang hanya boleh mengelola persediaan bisa membuka halaman ini dan membaca rantainya, tetapi tidak bisa mengubahnya.
 - **Memutuskan**: kepala departemen (atau wakilnya), cost controller, dan penyetuju akhir. Contohnya Hadi (kepala departemen peminta) di tingkat 1, Citra (cost control) di tingkat 2, dan Fajar (FC/GM) di tingkat 3.
 
 **Kapan dilakukan:**
@@ -38,6 +38,8 @@
    Dua aturan lain selalu berlaku: satu orang hanya menyetujui satu tingkat dari satu dokumen, dan tidak ada yang menyetujui dokumennya sendiri, termasuk administrator.
 4. Klik **Simpan rantai**. Di sebelah tombol muncul "Rantai disimpan.". Rantai baru berlaku untuk dokumen yang diajukan setelahnya.
 
+   Kalau di atas rantai tertulis "Anda bisa membaca rantai ini. Hanya peran yang boleh mengubah pengaturan properti yang bisa mengubahnya.", isiannya terkunci dan tombol **Simpan rantai** tidak ada. Minta administrator, atau manajer yang perannya boleh mengubah pengaturan properti, untuk mengubah rantainya.
+
 ### Memutuskan permintaan
 
 5. Buka **Persediaan → Perlu saya setujui**, atau klik lonceng di bilah atas lalu **Buka kotak persetujuan**. Daftar berisi permintaan pembelian dan permintaan gudang yang tingkat aktifnya bisa Anda putuskan sekarang (di sebelah nomornya tertulis **Permintaan pembelian** atau **Permintaan gudang**), walaupun kalimat di bawah judulnya hanya menyebut permintaan pembelian.
@@ -66,12 +68,8 @@
 - **Sudah memutuskan tingkat sebelumnya**: "Anda sudah menyetujui tingkat sebelumnya dari permintaan ini.". Tingkat ini harus diputuskan orang lain.
 - **"Tingkat yang aktif bukan yang dapat Anda putuskan: muat ulang permintaan."**: orang lain sudah memutuskan lebih dulu. Muat ulang halamannya.
 - **Tingkat yang muncul atau hilang**: kalau penyetuju mengubah jumlah atau harga, totalnya dihitung ulang, sehingga tingkat "Bila total di atas" bisa menjadi wajib atau tidak perlu.
-- **Simpan rantai:**
-
-  > 🐞 Kendala yang diketahui (KD-16): halaman rantai persetujuan terbuka untuk peran yang boleh mengatur persediaan, tetapi **Simpan rantai** hanya diterima dari peran yang juga boleh **Mengubah pengaturan properti**. **Dampaknya:** manajer persediaan bisa mengisi seluruh rantai, lalu ditolak saat menyimpan. **Sementara ini:** minta administrator, atau manajer yang perannya boleh mengubah pengaturan properti, untuk menyimpan rantainya.
-- **Penyetuju tanpa izin melihat persediaan:**
-
-  > 🐞 Kendala yang diketahui (KD-17): kepala departemen atau penyetuju akhir yang perannya hanya boleh menyetujui (tanpa izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal**) melihat permintaan di **Perlu saya setujui**, tetapi dialihkan keluar saat membuka permintaan pembelian itu. Halaman **Pembelian** juga tidak terbuka. **Dampaknya:** permintaan tertahan di tingkatnya. **Sementara ini:** administrator menambahkan izin melihat barang dan stok ke peran penyetuju (lihat [Peran](../13-pengaturan/peran.md)).
+- **Siapa yang mengubah rantai:** hanya peran yang boleh **Mengubah pengaturan properti**, sama seperti aturan persetujuan koreksi. Manajer persediaan tanpa izin itu melihat rantainya dalam keadaan terkunci.
+- **Penyetuju tanpa izin melihat persediaan:** peran yang hanya boleh menyetujui (kepala departemen, kontrol biaya, persetujuan akhir) tetap bisa membuka **Persediaan → Pembelian** dan permintaan yang harus diputuskannya, lalu memutuskannya. Izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal** tidak diperlukan untuk itu.
 - **Persetujuan selisih tagihan dan persetujuan opname** tidak memakai rantai ini. Keduanya diputuskan oleh orang yang boleh menyetujui selisih persediaan. Lihat [Penerimaan, tagihan, dan retur](penerimaan-tagihan-dan-retur.md) dan [Opname](opname.md).
 - **Nama tingkat bawaan** `Cost control` tampil dalam bahasa Inggris (artinya: kontrol biaya).
 

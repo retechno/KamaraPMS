@@ -17285,8 +17285,8 @@ components:
       examples: ["250000"]
     ChargeType:
       type: string
-      enum: [ROOM, FOOD_BEVERAGE, SERVICE, FEE, OTHER, TRANSFER]
-      description: "TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue."
+      enum: [ROOM, FOOD_BEVERAGE, SERVICE, FEE, OTHER, TRANSFER, ROUNDING]
+      description: "TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue. ROUNDING is the type of the system code POS_ROUNDING, the rounding of an outlet bill: nobody chooses it for a code, and a change of POS_ROUNDING (its name, account, department) keeps it."
     PriceMode:
       type: string
       enum: [EXCLUSIVE, INCLUSIVE]
@@ -25557,7 +25557,7 @@ components:
         is_active: { type: boolean }
     InventoryCategory:
       type: object
-      required: [id, code, name, kind, inventory_account_id, cogs_account_id, issue_account_id, waste_account_id, variance_account_id, is_active, sort_order, item_count, version]
+      required: [id, code, name, kind, inventory_account_id, cogs_account_id, issue_account_id, waste_account_id, variance_account_id, is_active, sort_order, item_count, has_stock, version]
       properties:
         id: { type: integer, format: int64 }
         code: { type: string }
@@ -25577,6 +25577,7 @@ components:
         is_active: { type: boolean }
         sort_order: { type: integer }
         item_count: { type: integer }
+        has_stock: { type: boolean, description: "An item of the category has a stock movement: its inventory account and the class of its kind (food, beverage, other) cannot change (409 CATEGORY_HAS_STOCK)." }
         version: { type: integer }
     InventoryCategoryInput:
       type: object
@@ -29162,7 +29163,7 @@ components:
         posting_mode: { type: string, enum: [AUTO, MANUAL, ""], description: "Empty goes back to the setting of the property." }
     AssetSettings:
       type: object
-      required: [register_from, capitalization_threshold, start_rule, oe_policy, oe_default_months, oe_policy_changed_on, tax_year_start_month, started, version]
+      required: [register_from, capitalization_threshold, start_rule, oe_policy, oe_default_months, oe_policy_changed_on, tax_year_start_month, started, has_assets, version]
       properties:
         register_from: { type: [string, "null"], format: date, description: "The first month the register depreciates (the first of a month); null until the opening balances or the first asset." }
         capitalization_threshold: { type: string }
@@ -29172,6 +29173,7 @@ components:
         oe_policy_changed_on: { type: [string, "null"], format: date }
         tax_year_start_month: { type: [integer, "null"] }
         started: { type: boolean }
+        has_assets: { type: boolean, description: "The register holds an asset (of any state): register_from cannot change (409 REGISTER_FROM_LOCKED)." }
         version: { type: integer }
     AssetSettingsInput:
       type: object

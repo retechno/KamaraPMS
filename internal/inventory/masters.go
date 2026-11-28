@@ -250,6 +250,7 @@ type Category struct {
 	IsActive             bool    `json:"is_active"`
 	SortOrder            int     `json:"sort_order"`
 	ItemCount            int     `json:"item_count"`
+	HasStock             bool    `json:"has_stock"` // an item of the category has a stock movement: its inventory account and the class of its kind are fixed (CATEGORY_HAS_STOCK)
 	Version              int32   `json:"version"`
 }
 
@@ -272,7 +273,7 @@ func toCategory(r inventorydb.ListCategoriesRow) Category {
 	return Category{ID: r.ID, Code: r.Code, Name: r.Name, Kind: r.Kind, InventoryAccountID: r.InventoryAccountID, InventoryAccountCode: r.InventoryAccountCode, InventoryAccountName: r.InventoryAccountName,
 		CogsAccountID: r.CogsAccountID, CogsAccountCode: r.CogsAccountCode, IssueAccountID: r.IssueAccountID, IssueAccountCode: r.IssueAccountCode, WasteAccountID: r.WasteAccountID,
 		WasteAccountCode: r.WasteAccountCode, VarianceAccountID: r.VarianceAccountID, VarianceAccountCode: r.VarianceAccountCode, IsActive: r.IsActive, SortOrder: int(r.SortOrder),
-		ItemCount: int(r.ItemCount), Version: r.Version}
+		ItemCount: int(r.ItemCount), HasStock: r.HasStock, Version: r.Version}
 }
 
 // ListCategories lists the categories with their accounts.

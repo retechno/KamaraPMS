@@ -50,7 +50,10 @@ RETURNING *;
 -- name: ListCategories :many
 SELECT c.*, ia.code AS inventory_account_code, ia.name AS inventory_account_name,
        ca.code AS cogs_account_code, xa.code AS issue_account_code, wa.code AS waste_account_code, va.code AS variance_account_code,
-       (SELECT count(*) FROM inv_items i WHERE i.property_id = c.property_id AND i.category_id = c.id)::int AS item_count
+       (SELECT count(*) FROM inv_items i WHERE i.property_id = c.property_id AND i.category_id = c.id)::int AS item_count,
+       -- the rule of UpdateCategory (CATEGORY_HAS_STOCK): an item of the category has a stock movement
+       EXISTS (SELECT 1 FROM inv_movements m JOIN inv_items i ON i.property_id = m.property_id AND i.id = m.item_id
+                WHERE m.tenant_id = c.tenant_id AND m.property_id = c.property_id AND i.category_id = c.id)::boolean AS has_stock
   FROM inv_categories c
   JOIN gl_accounts ia ON ia.property_id = c.property_id AND ia.id = c.inventory_account_id
   LEFT JOIN gl_accounts ca ON ca.property_id = c.property_id AND ca.id = c.cogs_account_id

@@ -43,9 +43,7 @@
 - **Menambah nilai aset** dilakukan dari daftar tunggu dengan **Tambah ke aset**. Lihat [Daftar tunggu dan register](daftar-tunggu-dan-register.md).
 - **Tombol Batalkan aset dan Ubah data** tetap tampil pada aset yang sudah disusutkan atau sedang menunggu pelepasan, tetapi tindakannya ditolak.
 - **Memindahkan banyak aset sekaligus** belum bisa dilakukan dari layar. Pindahkan satu per satu.
-- **Mulai disusutkan saat Selesai dibangun:**
-
-  > 🐞 Kendala yang diketahui (KD-28): di jendela **Selesai dibangun**, **Mulai disusutkan** selalu terisi **Bulan mulai dipakai**, walaupun **Mulai penyusutan (bawaan)** di pengaturan aset memakai bulan berikutnya. **Dampaknya:** aset jadi bisa mulai disusutkan sebulan lebih awal dari aturan hotel. **Sementara ini:** periksa pilihan itu sebelum mengklik **Simpan perubahan**. Selama aset belum disusutkan, pilihan ini masih bisa diubah lewat **Ubah data**.
+- **Mulai disusutkan saat Selesai dibangun** terisi dari **Mulai penyusutan (bawaan)** di pengaturan aset, sama seperti di jendela **Jadikan aset**. Periksa pilihannya sebelum mengklik **Simpan perubahan**. Selama aset belum disusutkan, pilihan ini masih bisa diubah lewat **Ubah data**.
 
 ## Terkait
 

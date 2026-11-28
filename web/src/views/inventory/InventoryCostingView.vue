@@ -10,6 +10,7 @@ import FormField from '@/components/app/FormField.vue'
 import PageHeader from '@/components/app/PageHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { DateInput } from '@/components/ui/date-input'
 import { guardForm } from '@/utils/forms'
 import { NativeSelect } from '@/components/ui/native-select'
@@ -47,6 +48,8 @@ const formError = ref<ApiError | null>(null)
 const notice = ref('')
 const method = ref<'AVERAGE' | 'FIFO'>('AVERAGE')
 const engineering = ref<number | null>(null)
+// whether an open stock count holds the night audit or is a warning (count_blocks_night_audit, 35-inventory.md D6)
+const countBlocks = ref(true)
 const pick = reactive({ warehouse: 0, item: 0, from: '', to: '' })
 
 /** The POS sales that are not in the stock yet: what a count holds and what failed (35-inventory.md 5.6). */
@@ -99,6 +102,7 @@ async function load(): Promise<void> {
     settings.value = s.data ?? null
     method.value = (s.data?.costing_method as 'AVERAGE' | 'FIFO' | undefined) ?? 'AVERAGE'
     engineering.value = s.data?.engineering_department_id ?? null
+    countBlocks.value = s.data?.count_blocks_night_audit ?? true
     setup.value = c.data ?? null
     await loadQueue()
     warehouses.value = w.data?.data ?? []
@@ -143,7 +147,7 @@ async function saveMethod(): Promise<void> {
       params: { path: { propertyId } },
       body: {
         costing_method: method.value, price_tolerance_pct: s.price_tolerance_pct, qty_tolerance_pct: s.qty_tolerance_pct, over_receipt_pct: s.over_receipt_pct, po_requires_pr: s.po_requires_pr,
-        direct_receipt_limit: s.direct_receipt_limit, count_blocks_night_audit: s.count_blocks_night_audit, count_blind: s.count_blind, engineering_department_id: engineering.value, version: s.version,
+        direct_receipt_limit: s.direct_receipt_limit, count_blocks_night_audit: countBlocks.value, count_blind: s.count_blind, engineering_department_id: engineering.value, version: s.version,
       },
     })
     settings.value = data ?? s
@@ -167,6 +171,7 @@ watch(pid, load, { immediate: true })
 
 const locked = computed(() => settings.value?.costing_locked_on != null)
 const dirty = computed(() => settings.value !== null && (method.value !== settings.value.costing_method || engineering.value !== (settings.value.engineering_department_id ?? null)))
+const countDirty = computed(() => settings.value !== null && countBlocks.value !== settings.value.count_blocks_night_audit)
 const steps = ['1', '2', '3', '4'] as const
 </script>
 
@@ -208,6 +213,14 @@ const steps = ['1', '2', '3', '4'] as const
         </FormField>
         <Button v-if="locked" type="button" size="sm" class="mt-2" :disabled="saving || !dirty" data-testid="engineering-save" @click="saveMethod">{{ t('inventory.costing.saveEngineering') }}</Button>
       </div>
+    </section>
+
+    <section aria-labelledby="count-h" data-testid="count-night-audit">
+      <h2 id="count-h" class="m-0 mb-2 text-sm font-semibold">{{ t('inventory.costing.countTitle') }}</h2>
+      <Checkbox v-model="countBlocks" name="count_blocks_night_audit" :disabled="!canManage" label-class="items-start text-sm" data-testid="count-blocks">
+        <span><span class="block">{{ t('inventory.costing.countBlocks') }}</span><span class="block text-xs text-muted-foreground">{{ t('inventory.costing.countBlocksHint') }}</span></span>
+      </Checkbox>
+      <Button v-if="canManage" type="button" size="sm" class="mt-2" :disabled="saving || !countDirty" data-testid="count-blocks-save" @click="saveMethod">{{ t('inventory.costing.saveCount') }}</Button>
     </section>
 
     <section aria-labelledby="setup-h" data-testid="setup">

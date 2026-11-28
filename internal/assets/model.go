@@ -145,6 +145,7 @@ type Settings struct {
 	OEPolicyChangedOn       *civil.Date     `json:"oe_policy_changed_on"`
 	TaxYearStartMonth       *int            `json:"tax_year_start_month"`
 	Started                 bool            `json:"started"`
+	HasAssets               bool            `json:"has_assets"` // the register holds an asset: register_from cannot move (REGISTER_FROM_LOCKED, KD-24)
 	Version                 int32           `json:"version"`
 }
 
@@ -248,8 +249,8 @@ type LocationInput struct {
 
 // LocationPatch renames a location or switches it off.
 type LocationPatch struct {
-	Name     string `json:"name"`
-	IsActive *bool  `json:"is_active"`
+	Name     *string `json:"name"` // nil keeps the name (the switch of the screen sends only is_active, KD-23)
+	IsActive *bool   `json:"is_active"`
 }
 
 // EnsureLocationInput names a room, a banquet room or a warehouse whose location is wanted (made on first use).

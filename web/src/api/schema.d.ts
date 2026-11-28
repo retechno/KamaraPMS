@@ -15020,10 +15020,10 @@ export interface components {
          */
         Amount: string;
         /**
-         * @description TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue.
+         * @description TRANSFER is the type of the system code TRF, the balance handed from one folio to another: it has no tax or service charge, cannot be posted by hand or edited, and is not revenue. ROUNDING is the type of the system code POS_ROUNDING, the rounding of an outlet bill: nobody chooses it for a code, and a change of POS_ROUNDING (its name, account, department) keeps it.
          * @enum {string}
          */
-        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER" | "TRANSFER";
+        ChargeType: "ROOM" | "FOOD_BEVERAGE" | "SERVICE" | "FEE" | "OTHER" | "TRANSFER" | "ROUNDING";
         /**
          * @description Whether a price excludes or already contains the mapped service charges and taxes.
          * @enum {string}
@@ -23578,6 +23578,8 @@ export interface components {
             is_active: boolean;
             sort_order: number;
             item_count: number;
+            /** @description An item of the category has a stock movement: its inventory account and the class of its kind (food, beverage, other) cannot change (409 CATEGORY_HAS_STOCK). */
+            has_stock: boolean;
             version: number;
         };
         InventoryCategoryInput: {
@@ -27371,6 +27373,8 @@ export interface components {
             oe_policy_changed_on: string | null;
             tax_year_start_month: number | null;
             started: boolean;
+            /** @description The register holds an asset (of any state): register_from cannot change (409 REGISTER_FROM_LOCKED). */
+            has_assets: boolean;
             version: number;
         };
         AssetSettingsInput: {

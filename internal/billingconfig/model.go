@@ -278,12 +278,22 @@ func (in *ChargeCodeInput) Normalize() {
 
 // Validate checks the input; currencyDecimals is the property's precision.
 func (in ChargeCodeInput) Validate(checkCode bool, currencyDecimals int32) []apperr.FieldError {
+	return in.validate(checkCode, currencyDecimals, "")
+}
+
+// ValidateChange checks the change of an existing code. systemType is the charge type of a system code: it is accepted unchanged even when no person may choose it (ROUNDING of
+// POS_ROUNDING, KD-15); changing it is refused afterwards (SYSTEM_CHARGE_CODE_LOCKED). It is empty for a code that is not a system code.
+func (in ChargeCodeInput) ValidateChange(currencyDecimals int32, systemType string) []apperr.FieldError {
+	return in.validate(false, currencyDecimals, systemType)
+}
+
+func (in ChargeCodeInput) validate(checkCode bool, currencyDecimals int32, systemType string) []apperr.FieldError {
 	var errs []apperr.FieldError
 	if checkCode {
 		errs = append(errs, validateCode(in.Code)...)
 	}
 	errs = append(errs, validateName(in.Name)...)
-	if !chargeTypes[in.ChargeType] {
+	if !chargeTypes[in.ChargeType] && (systemType == "" || in.ChargeType != systemType) {
 		errs = append(errs, fieldErr("charge_type", "INVALID_VALUE", "ROOM, FOOD_BEVERAGE, SERVICE, FEE or OTHER"))
 	}
 	if in.PriceMode != ModeExclusive && in.PriceMode != ModeInclusive {

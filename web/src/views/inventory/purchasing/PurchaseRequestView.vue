@@ -42,6 +42,8 @@ const property = usePropertyStore()
 const auth = useAuthStore()
 const pid = computed(() => property.currentId)
 const can = (p: string) => auth.can(p, pid.value)
+// Who may read the items, the warehouses and the suppliers (readers of internal/inventory/service.go). An approver of the chain reads the request without them (KD-17).
+const canReadStock = computed(() => ['inventory.view', 'inventory.manage', 'inventory.opening', 'inventory.request', 'inventory.purchase', 'inventory.receive', 'inventory.bill'].some(can))
 const requestId = computed(() => (route.params.id ? Number(route.params.id) : null))
 const isNew = computed(() => requestId.value === null)
 const decimals = computed(() => property.current?.currency_decimals ?? 0)
@@ -103,7 +105,7 @@ async function load(): Promise<void> {
     } else {
       const { data } = await api.GET('/api/v1/properties/{propertyId}/inventory/requests/{id}', { params: { path: { propertyId, id: requestId.value } } })
       request.value = data ?? null
-      if (request.value && (request.value.status === 'DRAFT' || request.value.status === 'RETURNED' || request.value.status === 'APPROVED')) await loadMasters(propertyId)
+      if (request.value && canReadStock.value && (request.value.status === 'DRAFT' || request.value.status === 'RETURNED' || request.value.status === 'APPROVED')) await loadMasters(propertyId)
       if (request.value) fill(request.value)
     }
   } catch (e) {
@@ -120,7 +122,7 @@ function fill(r: InventoryRequest): void {
   form.needed_on = r.needed_on ?? ''
   form.note = r.note ?? ''
   lines.value = r.lines.map((l) => ({ item_id: l.item_id, unit_id: l.unit_id, qty: trimZeros(l.qty), est_unit_price: l.est_unit_price ?? '', supplier_id: l.supplier_id ?? 0 }))
-  for (const l of lines.value) void itemDetail(l.item_id)
+  if (canReadStock.value) for (const l of lines.value) void itemDetail(l.item_id)
   edit.qty = Object.fromEntries(r.lines.map((l) => [l.line_no, trimZeros(l.qty)]))
   edit.price = Object.fromEntries(r.lines.map((l) => [l.line_no, l.est_unit_price ?? '']))
 }

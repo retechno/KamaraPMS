@@ -30,6 +30,31 @@ describe('navigation', () => {
     }
   })
 
+  // KD-16: the approval chains are edited with property.manage and read with the module's permissions (docs/architecture/35-inventory.md 5.8, section 13).
+  // item 10 of PR C2: the go-live check of the accounting has a page, for who may view the accounting
+  it('has the accounting readiness page for accounting.view, on the menu and on the route', () => {
+    const readiness = navigation.flatMap((s) => s.items).find((i) => i.id === 'readiness')
+    expect(readiness?.to).toBe('/accounting/readiness')
+    expect(readiness?.permission).toBe('accounting.view')
+    expect(router.resolve('/accounting/readiness').matched.at(-1)?.meta.permission).toBe('accounting.view')
+  })
+
+  it('opens the approval chains to property.manage and to the managers of the inventory', () => {
+    const idsOf = (held: string[]) => visibleNavigation(false, (p) => held.includes(p)).flatMap((s) => s.items.map((i) => i.id))
+    expect(idsOf(['property.manage'])).toContain('inventoryChains')
+    expect(idsOf(['inventory.manage'])).toContain('inventoryChains')
+    expect(router.resolve('/inventory/approval-chains').meta.permission).toEqual(['property.manage', 'inventory.manage'])
+  })
+
+  // KD-17: every approver of the chain reads the requests (requestReaders, docs/architecture/35-inventory.md 5.8), so the purchasing pages open to them.
+  it('opens the purchasing list and the purchase request to every approver of the chain', () => {
+    const idsOf = (held: string[]) => visibleNavigation(false, (p) => held.includes(p)).flatMap((s) => s.items.map((i) => i.id))
+    for (const approver of ['inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve']) {
+      expect(idsOf([approver]), approver).toContain('inventoryPurchasing')
+      for (const path of ['/inventory/purchasing', '/inventory/requests/1']) expect(router.resolve(path).meta.permission as string[], `${path} ${approver}`).toContain(approver)
+    }
+  })
+
   it('keeps administrator pages from everyone else', () => {
     const asUser = visibleNavigation(false).flatMap((s) => s.items.map((i) => i.id))
     const asAdmin = visibleNavigation(true).flatMap((s) => s.items.map((i) => i.id))

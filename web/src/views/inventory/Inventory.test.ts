@@ -30,8 +30,8 @@ const units = [
   { id: 4, code: 'karton', name: 'Karton', is_active: true, in_use: false },
 ]
 const categories = [
-  { id: 1, code: 'MAKANAN', name: 'Makanan', kind: 'FOOD', inventory_account_id: 10, inventory_account_code: '1310', inventory_account_name: 'Food inventory', cogs_account_id: 20, cogs_account_code: '5210', issue_account_id: null, waste_account_id: null, variance_account_id: null, is_active: true, sort_order: 0, item_count: 2, version: 1 },
-  { id: 2, code: 'MINUMAN', name: 'Minuman', kind: 'BEVERAGE', inventory_account_id: 11, inventory_account_code: '1320', inventory_account_name: 'Beverage inventory', cogs_account_id: null, issue_account_id: null, waste_account_id: null, variance_account_id: null, is_active: true, sort_order: 1, item_count: 1, version: 1 },
+  { id: 1, code: 'MAKANAN', name: 'Makanan', kind: 'FOOD', inventory_account_id: 10, inventory_account_code: '1310', inventory_account_name: 'Food inventory', cogs_account_id: 20, cogs_account_code: '5210', issue_account_id: null, waste_account_id: null, variance_account_id: null, is_active: true, sort_order: 0, item_count: 2, has_stock: true, version: 1 },
+  { id: 2, code: 'MINUMAN', name: 'Minuman', kind: 'BEVERAGE', inventory_account_id: 11, inventory_account_code: '1320', inventory_account_name: 'Beverage inventory', cogs_account_id: null, issue_account_id: null, waste_account_id: null, variance_account_id: null, is_active: true, sort_order: 1, item_count: 1, has_stock: false, version: 1 },
 ]
 const stockUnit = { unit_id: 3, unit_code: 'botol', stock_num: 1, stock_den: 1, is_purchase: true, is_recipe: false, is_default_purchase: true, is_default_recipe: false }
 const sirup = {
@@ -312,6 +312,31 @@ describe('a category', () => {
     await setup(InventoryCategoryFormView, undefined, '/inventory/categories/1')
     expect(has('[data-testid=locked]')).toBe(true)
     expect((document.body.querySelector('select[name=inventory_account_id]') as HTMLSelectElement).disabled).toBe(true)
+    expect((document.body.querySelector('select[name=kind]') as HTMLSelectElement).disabled).toBe(true)
+  })
+
+  // KD-19: the server keeps the account and the class only once an item of the category has a stock movement (CATEGORY_HAS_STOCK), not once it has items.
+  it('lets the account and the kind of a category change while its items have no stock', async () => {
+    await setup(InventoryCategoryFormView, undefined, '/inventory/categories/2')
+    expect(has('[data-testid=locked]')).toBe(false)
+    expect((document.body.querySelector('select[name=inventory_account_id]') as HTMLSelectElement).disabled).toBe(false)
+    const kind = document.body.querySelector('select[name=kind]') as HTMLSelectElement
+    expect(kind.disabled).toBe(false)
+    expect(Array.from(kind.options).map((o) => o.value)).toEqual(['FOOD', 'BEVERAGE', 'SUPPLIES', 'OTHER'])
+  })
+
+  it('offers a category with stock only the kinds of its class', async () => {
+    const supplies = { ...categories[1]!, id: 3, code: 'ATK', kind: 'SUPPLIES', has_stock: true }
+    categories.push(supplies)
+    try {
+      await setup(InventoryCategoryFormView, undefined, '/inventory/categories/3')
+      const kind = document.body.querySelector('select[name=kind]') as HTMLSelectElement
+      expect(kind.disabled).toBe(false)
+      expect(Array.from(kind.options).map((o) => o.value)).toEqual(['SUPPLIES', 'OTHER'])
+      expect((document.body.querySelector('select[name=inventory_account_id]') as HTMLSelectElement).disabled).toBe(true)
+    } finally {
+      categories.pop()
+    }
   })
 })
 
@@ -445,6 +470,28 @@ describe('costing', () => {
     await flushPromises()
     expect(PUT.mock.calls[0]![1].body.costing_method).toBe('FIFO')
     expect(PUT.mock.calls[0]![1].body.version).toBe(1)
+  })
+})
+
+// Item 9 of PR C2: whether an open stock count holds the night audit (count_blocks_night_audit, 35-inventory.md D6) had no control on any screen.
+describe('costing, an open count and the night audit', () => {
+  it('shows the setting and saves it with the other settings unchanged', async () => {
+    await setup(InventoryCostingView)
+    const box = document.body.querySelector('[data-testid=count-blocks]') as HTMLInputElement
+    expect(box.checked).toBe(true)
+    expect(box.disabled).toBe(false)
+    expect((document.body.querySelector('[data-testid=count-blocks-save]') as HTMLButtonElement).disabled).toBe(true)
+    box.click()
+    await flushPromises()
+    await click('[data-testid=count-blocks-save]')
+    expect(PUT.mock.calls[0]![0]).toBe('/api/v1/properties/{propertyId}/inventory/settings')
+    expect(PUT.mock.calls[0]![1].body).toMatchObject({ count_blocks_night_audit: false, costing_method: 'AVERAGE', count_blind: true, po_requires_pr: true, version: 3 })
+  })
+
+  it('shows it read only to who may not manage the inventory', async () => {
+    await setup(InventoryCostingView, ['inventory.view'])
+    expect((document.body.querySelector('[data-testid=count-blocks]') as HTMLInputElement).disabled).toBe(true)
+    expect(has('[data-testid=count-blocks-save]')).toBe(false)
   })
 })
 

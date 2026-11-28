@@ -218,6 +218,21 @@ describe('the actions on the asset page', () => {
     expect(callTo(POST, '/assets/{id}/revisions')?.[1].body).toEqual({ kind: 'CATEGORY', reason: 'opened', category_id: 3, in_service_date: '2026-11-01', start_rule: 'IN_SERVICE_MONTH' })
   })
 
+  // KD-28: the finished building took the month in service whatever the settings said (37-fixed-assets.md section 10, "construction finished": the start rule of the property), as KD-10 was for a new asset.
+  for (const rule of ['NEXT_MONTH', 'IN_SERVICE_MONTH'] as const) {
+    it(`KD-28: finishes a construction in progress with the start rule of the property settings (${rule})`, async () => {
+      const cip = { ...detail, category_kind: 'CIP', category_name: 'Construction in progress', method: null, life_months: null, in_service_date: '2026-08-01' }
+      const settings = { register_from: '2026-10-01', capitalization_threshold: '2500000', start_rule: rule, oe_policy: 'EXPENSE', oe_default_months: 36, started: true, has_assets: true }
+      await at(DISPOSE, (path) => (path.endsWith('/assets/{id}') ? { data: cip } : path.endsWith('/assets/settings') ? { data: settings } : ok(path)))
+      await click('[data-testid=act-category]')
+      expect((document.body.querySelector('select[name=start_rule]') as HTMLSelectElement).value).toBe(rule)
+      await choose('[data-testid=revise-category]', 3)
+      await type('input[name=reason]', 'opened')
+      await click('[data-testid=revise-confirm]')
+      expect(callTo(POST, '/assets/{id}/revisions')?.[1].body.start_rule).toBe(rule)
+    })
+  }
+
   it('sends "add value" to the waiting list with the asset', async () => {
     await at()
     expect(document.body.querySelector('[data-testid=act-addvalue]')?.getAttribute('href')).toBe('/assets/waiting?addTo=2')

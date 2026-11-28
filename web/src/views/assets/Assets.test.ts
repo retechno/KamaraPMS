@@ -43,7 +43,7 @@ const detail = {
   ...assets[1], opening_import_number: null, supplier_name: 'PT Astra', warranty_until: '2028-02-14', fiscal_accum_opening: '36000000', fiscal_opening_as_of: '2026-09-30', fiscal_months_done_opening: 48, fiscal_opening_estimated: true, dep_months_done: 13,
   ledger: [{ id: 5, kind: 'OPEN', event_date: '2026-09-30', cost_delta: '36000000', accum_delta: '13000000', months_delta: 13, source_type: 'OPENING', source_id: 1, created_at: '2026-10-01T00:00:00Z' }],
 }
-const settings = { register_from: null, capitalization_threshold: '2500000', start_rule: 'IN_SERVICE_MONTH', oe_policy: 'EXPENSE', oe_default_months: 24, oe_policy_changed_on: null, tax_year_start_month: null, started: false, version: 4 }
+const settings = { register_from: null, capitalization_threshold: '2500000', start_rule: 'IN_SERVICE_MONTH', oe_policy: 'EXPENSE', oe_default_months: 24, oe_policy_changed_on: null, tax_year_start_month: null, started: false, has_assets: false, version: 4 }
 const fiscalGroups = [{ code: 'G1', life_years: 4, sl_rate: '25.000', db_rate: '50.000' }, { code: 'BLD_PERMANENT', life_years: 20, sl_rate: '5.000', db_rate: null }]
 const dry = {
   dry_run: true, valid: true, replayed: false, mode: 'WITH_JOURNAL', as_of: '2026-09-30', journal_date: '2026-09-30', register_from: '2026-10-01',
@@ -337,6 +337,19 @@ describe('categories and settings', () => {
     expect(body('[data-testid=check-issues]').text()).not.toContain('server text')
     expect(body('[data-testid=check-reconciliation]').text()).toContain('Furniture')
     expect(body('[data-testid=check-causes-FFE]').text()).toContain('Manual journal on an asset account')
+  })
+
+  // KD-24: the server keeps register_from only while the register holds assets (REGISTER_FROM_LOCKED); a register that has started and is empty may still move.
+  it('lets the start of an empty register move and locks it once the register holds an asset', async () => {
+    const started = { ...settings, register_from: '2026-10-01', started: true }
+    await setup(AssetSettingsView, SETUP, '/assets', (path) => (path.endsWith('/assets/settings') ? { data: started } : ok(path)))
+    expect((document.body.querySelector('[name=register_from]') as HTMLInputElement).disabled).toBe(false)
+    expect(document.body.textContent).not.toContain('Fixed once an asset has been entered.')
+    while (mounted.length) mounted.pop()!.unmount()
+    document.body.innerHTML = ''
+    await setup(AssetSettingsView, SETUP, '/assets', (path) => (path.endsWith('/assets/settings') ? { data: { ...started, has_assets: true } } : ok(path)))
+    expect((document.body.querySelector('[name=register_from]') as HTMLInputElement).disabled).toBe(true)
+    expect(document.body.textContent).toContain('Fixed once an asset has been entered.')
   })
 
   it('saves the settings with the version', async () => {

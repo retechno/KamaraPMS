@@ -79,17 +79,13 @@ Halaman **Kategori dan pengaturan aset** punya lima bagian: **Kategori**, **Peng
 - **Kategori yang sudah punya aset** tidak bisa diubah jenis dan akunnya: "Kategori ini sudah punya aset: jenis dan akunnya tidak bisa diubah.". Buat kategori baru, lalu ganti kategori asetnya dengan **Ganti kategori**. Lihat [Memindahkan dan mengubah aset](memindahkan-dan-mengubah-aset.md).
 - **Akumulasi penyusutan, Beban penyusutan, Metode, dan Umur** diisi bersama-sama. Kalau satu diisi, ketiganya juga harus diisi.
 - **Umur dan metode kategori** adalah bawaan untuk aset baru. Aset yang sudah ada tetap memakai umurnya sendiri. Untuk mengubahnya, pakai **Ubah umur / nilai sisa / metode** di halaman aset.
-- **Mulai penyusutan (bawaan)** menjadi pilihan awal **Mulai disusutkan** di jendela **Jadikan aset**, dan bisa diganti per aset selama aset itu belum disusutkan. Lihat [Daftar tunggu dan register](daftar-tunggu-dan-register.md). Jendela **Selesai dibangun** belum mengikuti pengaturan ini (KD-28, lihat [Memindahkan dan mengubah aset](memindahkan-dan-mengubah-aset.md)).
+- **Mulai penyusutan (bawaan)** menjadi pilihan awal **Mulai disusutkan** di jendela **Jadikan aset** dan **Selesai dibangun**, dan bisa diganti per aset selama aset itu belum disusutkan. Lihat [Daftar tunggu dan register](daftar-tunggu-dan-register.md) dan [Memindahkan dan mengubah aset](memindahkan-dan-mengubah-aset.md).
 - **Akun beban yang mewajibkan departemen:** isi **Departemen bawaan** kategorinya. Kalau tidak, **Pemeriksaan register** memperingatkan, dan penyusutan tertahan untuk aset tanpa departemen. Lihat [Penyusutan bulanan](penyusutan-bulanan.md).
 - **Peralatan operasional:** perubahan pilihan berlaku untuk pembelian sesudahnya. Batch yang sudah ada tetap diamortisasi.
 - **Tarif fiskal** menunjukkan **Umur (tahun)**, tarif **Garis lurus**, dan tarif **Saldo menurun** setiap kelompok fiskal. Ubah angkanya, lalu klik **Simpan** di baris itu. Tarif ini hanya dipakai laporan fiskal, dan perlu dikonfirmasi konsultan pajak. Lihat [Laporan aset](laporan-aset.md).
-- **Mematikan lokasi:**
+- **Mematikan lokasi:** klik **Matikan** di baris lokasi. Lokasi itu menjadi **Nonaktif** dan tidak lagi ditawarkan di pilihan lokasi, misalnya di **Jadikan aset** dan **Pindahkan**. Aset yang sudah ada di lokasi itu tetap di sana. Klik **Aktifkan** untuk memakainya lagi.
 
-  > 🐞 Kendala yang diketahui (KD-23): tombol **Matikan** (dan **Aktifkan**) pada baris lokasi tidak berhasil. Di atas halaman muncul "Ada isian yang tidak valid.", dan lokasinya tetap aktif. **Dampaknya:** lokasi yang tidak dipakai lagi tidak bisa dimatikan dari layar dan tetap muncul di pilihan lokasi. **Sementara ini:** biarkan lokasinya aktif dan jangan pilih lokasi itu untuk aset. Kalau lokasinya harus dimatikan, minta administrator hotel menghubungi tim dukungan KamaraPMS. Lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak).
-
-- **Register mulai:**
-
-  > 🐞 Kendala yang diketahui (KD-24): field **Register mulai** terkunci segera setelah disimpan, walaupun keterangannya berbunyi "Terkunci setelah ada aset yang dimasukkan.". **Dampaknya:** kalau bulan yang salah tersimpan, bulan itu tidak bisa diperbaiki dari layar, walaupun register belum berisi aset. Impor saldo awal juga menolak per tanggal yang tidak cocok dengan bulan itu. **Sementara ini:** periksa bulannya baik-baik sebelum menyimpan. Kalau sudah terlanjur salah dan belum ada aset, minta administrator hotel menghubungi tim dukungan KamaraPMS. Lihat [Bantuan dan kontak](../README.md#bantuan-dan-kontak).
+- **Register mulai** bisa diubah selama register belum berisi aset, juga setelah disimpan. Begitu ada aset yang dimasukkan (lewat **Jadikan aset** atau impor saldo awal), keterangannya berbunyi "Terkunci setelah ada aset yang dimasukkan." dan bulannya tidak bisa diubah lagi. Impor saldo awal hanya diterima per tanggal terakhir bulan sebelum **Register mulai**.
 
 ## Terkait
 

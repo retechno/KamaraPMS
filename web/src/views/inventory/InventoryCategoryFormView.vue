@@ -46,6 +46,10 @@ const form = reactive({
   code: '', name: '', kind: 'FOOD', inventory_account_id: 0, cogs_account_id: 0, issue_account_id: 0, waste_account_id: 0, variance_account_id: 0, sort_order: 0, is_active: true, version: 0,
 })
 const KINDS = ['FOOD', 'BEVERAGE', 'SUPPLIES', 'OTHER'] as const
+// The class of a kind (ClassOfKind of internal/inventory/model.go): food, beverage, or other for supplies and other. A category with stock keeps its class (CATEGORY_HAS_STOCK, KD-19).
+const classOf = (k: string): string => (k === 'FOOD' || k === 'BEVERAGE' ? k : 'OTHER')
+const lockedClass = ref('')
+const kinds = computed(() => (locked.value ? KINDS.filter((k) => classOf(k) === lockedClass.value) : [...KINDS]))
 
 async function load(): Promise<void> {
   const propertyId = pid.value
@@ -70,7 +74,8 @@ async function load(): Promise<void> {
           code: c.code, name: c.name, kind: c.kind, inventory_account_id: c.inventory_account_id, cogs_account_id: c.cogs_account_id ?? 0, issue_account_id: c.issue_account_id ?? 0,
           waste_account_id: c.waste_account_id ?? 0, variance_account_id: c.variance_account_id ?? 0, sort_order: c.sort_order, is_active: c.is_active, version: c.version,
         })
-        locked.value = c.item_count > 0
+        locked.value = c.has_stock
+        lockedClass.value = classOf(c.kind)
       }
     }
   } catch (e) {
@@ -129,8 +134,8 @@ watch([pid, categoryId], load, { immediate: true })
       </FormField>
       <FormField :label="t('inventory.categories.kind')" :hint="t('inventory.categories.kindHint')" :error="fieldError('kind')">
         <template #default="{ id }">
-          <NativeSelect :id="id" v-model="form.kind" name="kind" :disabled="locked">
-            <option v-for="k in KINDS" :key="k" :value="k">{{ t(`inventory.categoryKind.${k}`) }}</option>
+          <NativeSelect :id="id" v-model="form.kind" name="kind" :disabled="kinds.length < 2">
+            <option v-for="k in kinds" :key="k" :value="k">{{ t(`inventory.categoryKind.${k}`) }}</option>
           </NativeSelect>
         </template>
       </FormField>

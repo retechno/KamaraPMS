@@ -301,8 +301,8 @@ watch([ensureKind, canSetup], loadEnsure, { immediate: true })
         </fieldset>
         <div class="flex flex-col gap-3">
           <FormField :label="t('assets.settings.threshold')" :hint="t('assets.settings.thresholdHint')" :error="sError?.fieldMessage('capitalization_threshold')"><template #default="{ id }"><Input :id="id" v-model="sForm.capitalization_threshold" name="capitalization_threshold" inputmode="decimal" :disabled="!canSetup" /></template></FormField>
-          <FormField :label="t('assets.settings.registerFrom')" :hint="settings.started ? t('assets.settings.registerLocked') : t('assets.settings.registerFromHint')" :error="sError?.fieldMessage('register_from')">
-            <template #default="{ id }"><DateInput :id="id" v-model="sForm.register_from" name="register_from" :disabled="!canSetup || settings.started" /></template>
+          <FormField :label="t('assets.settings.registerFrom')" :hint="settings.has_assets ? t('assets.settings.registerLocked') : t('assets.settings.registerFromHint')" :error="sError?.fieldMessage('register_from')">
+            <template #default="{ id }"><DateInput :id="id" v-model="sForm.register_from" name="register_from" :disabled="!canSetup || settings.has_assets" /></template>
           </FormField>
           <FormField :label="t('assets.settings.taxYear')" :hint="t('assets.settings.taxYearHint')">
             <template #default="{ id }">

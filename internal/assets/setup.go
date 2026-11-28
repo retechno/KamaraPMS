@@ -40,7 +40,11 @@ func (s *Service) GetSettings(ctx context.Context, propertyID int64) (Settings, 
 	if err != nil {
 		return Settings{}, err
 	}
-	return settingsFrom(r), nil
+	st := settingsFrom(r)
+	if st.HasAssets, err = s.q(ctx).AssetsExist(ctx, assetsdb.AssetsExistParams{TenantID: p.TenantID, PropertyID: propertyID}); err != nil {
+		return Settings{}, err
+	}
+	return st, nil
 }
 
 // UpdateSettings replaces the settings (asset.setup). A change of the rule for the operating equipment applies to later purchases (A10) and is dated; the start of the register is set once

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { ApiError } from '@/api/problem'
-import type { AssetCategory, AssetDetail } from '@/api/types'
+import type { AssetCategory, AssetDetail, AssetSettings } from '@/api/types'
 import ErrorNotice from '@/components/app/ErrorNotice.vue'
 import FormField from '@/components/app/FormField.vue'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,8 @@ import { formatMoney } from '@/utils/format'
  * Change the life, the residual value or the method of an asset, or move it to another category (docs/architecture/37-fixed-assets.md 4.5): prospective, from the next run, nothing posted is rewritten.
  * A construction in progress that is finished takes the same route: it moves to the category of the finished asset, with the date it was put in service.
  */
-const props = defineProps<{ asset: AssetDetail | null; categories: AssetCategory[]; propertyId: number; initialKind: 'TERMS' | 'CATEGORY' }>()
+// startRule is the start rule of the property settings: the default of a finished building, as of a new asset (37-fixed-assets.md section 10, KD-28)
+const props = withDefaults(defineProps<{ asset: AssetDetail | null; categories: AssetCategory[]; propertyId: number; initialKind: 'TERMS' | 'CATEGORY'; startRule?: AssetSettings['start_rule'] }>(), { startRule: 'IN_SERVICE_MONTH' })
 const emit = defineEmits<{ close: []; done: [asset: AssetDetail] }>()
 
 type Kind = 'LIFE' | 'RESIDUAL' | 'METHOD' | 'CATEGORY'
@@ -36,7 +37,7 @@ watch(() => props.asset, (a) => {
   const cip = a.category_kind === 'CIP'
   form.value = {
     kind: cip || props.initialKind === 'CATEGORY' ? 'CATEGORY' : 'LIFE', reason: '', life_months: a.life_months ? String(a.life_months) : '', residual_value: a.residual_value, method: a.method ?? 'SL', db_factor: a.db_factor ?? '2',
-    category_id: 0, in_service_date: a.in_service_date, start_rule: 'IN_SERVICE_MONTH',
+    category_id: 0, in_service_date: a.in_service_date, start_rule: props.startRule,
   }
   error.value = null
   key = crypto.randomUUID()

@@ -146,7 +146,29 @@ func TestTheAccountAndTheClassOfACategoryCannotChangeOnceItsItemsHaveMoved(t *te
 	}
 	_, err = f.svc.UpdateCategory(f.admin, f.propID, f.cat["FOOD"], food(f.accounts["1310"], "FOOD", 1))
 	wantCode(t, err, "VERSION_CONFLICT") // someone else changed it
+	// KD-19: the list says whether the category has stock, the rule of the server, not only whether it has items
+	hasStock := func() bool {
+		t.Helper()
+		list, err := f.svc.ListCategories(f.admin, f.propID)
+		must(t, err)
+		for _, c := range list {
+			if c.ID == f.cat["FOOD"] {
+				if c.ItemCount == 0 {
+					t.Fatalf("FOOD has items: %+v", c)
+				}
+				return c.HasStock
+			}
+		}
+		t.Fatal("FOOD is not listed")
+		return false
+	}
+	if hasStock() {
+		t.Fatal("an item without a movement is no stock")
+	}
 	f.in(t, inventory.KindReceipt, f.pair("MAIN", "BERAS"), "1", "1000")
+	if !hasStock() {
+		t.Fatal("a receipt is stock")
+	}
 	_, err = f.svc.UpdateCategory(f.admin, f.propID, f.cat["FOOD"], food(f.accounts["1310"], "FOOD", 2))
 	wantCode(t, err, "CATEGORY_HAS_STOCK")
 	_, err = f.svc.UpdateCategory(f.admin, f.propID, f.cat["FOOD"], food(f.accounts["1340"], "BEVERAGE", 2))

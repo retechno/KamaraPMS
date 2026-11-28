@@ -3386,12 +3386,11 @@ export async function flowPengaturanAset(page: Page, loginAs: LoginAs, data: Fac
   await shot(locations, 'aset-pengaturan-08')
   // STEP 9: Pemeriksaan register
   await expect(page.getByTestId('check-card')).toBeVisible()
-  // KD-23 (not a step): Matikan on the new pool area. The page sends the switch without the name and the server wants a name, so the location is
-  // expected to stay on with "Ada isian yang tidak valid." over the page. The outcome goes to the run log ([KD-23] lines) and never fails the test.
-  await page.getByTestId('location-toggle-KOLAM').click()
-  await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined)
-  const banner = page.getByTestId('form-error')
-  const said = (await banner.count()) ? (await banner.first().innerText()).replace(/\s+/g, ' ').trim().slice(0, 200) : '(no banner)'
-  const row = (await page.getByTestId('location-KOLAM').innerText()).replace(/\s+/g, ' ').trim()
-  console.log(`[KD-23] after Matikan on KOLAM: row "${row}" · banner "${said}"`)
+  // KD-23 (fixed, not a step): Matikan on the new pool area switches it off with the switch alone, then Aktifkan switches it on again, so the later pages still offer it.
+  const toggle = page.getByTestId('location-toggle-KOLAM')
+  await toggle.click()
+  await expect(toggle).toHaveText('Aktifkan')
+  await expect(page.getByTestId('location-KOLAM')).toContainText('Nonaktif')
+  await toggle.click()
+  await expect(toggle).toHaveText('Matikan')
 }

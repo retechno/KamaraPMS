@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { t } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 import { usePropertyStore } from '@/stores/property'
 
 /**
@@ -29,7 +30,10 @@ interface Editable {
 }
 
 const property = usePropertyStore()
+const auth = useAuthStore()
 const pid = computed(() => property.currentId)
+// The server saves a chain only for property.manage (35-inventory.md 5.8, section 13); the managers of the module read it (KD-16).
+const canEdit = computed(() => auth.can('property.manage', pid.value))
 const decimals = computed(() => property.current?.currency_decimals ?? 0)
 const loaded = ref(false)
 const error = ref<ApiError | null>(null)
@@ -113,11 +117,12 @@ async function save(c: Editable): Promise<void> {
   <ErrorNotice v-if="error" :error="error" inline />
   <p v-if="pid === null" class="muted">{{ t('setup.selectProperty') }}</p>
   <div v-else-if="loaded" class="flex flex-col gap-6">
+    <p v-if="!canEdit" class="m-0 rounded-lg border border-border bg-muted/40 p-3 text-sm" data-testid="chains-read-only">{{ t('inventory.chains.readOnly') }}</p>
     <template v-for="doc in docs" :key="doc">
       <section v-if="chains[doc]" class="rounded-xl border border-border bg-card p-4" :data-testid="`chain-${doc}`">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="m-0 text-base font-semibold">{{ t(`inventory.chains.doc.${doc}`) }}</h2>
-          <Button type="button" variant="outline" size="sm" :disabled="chains[doc]!.levels.length >= 5" :data-testid="`add-level-${doc}`" @click="addLevel(chains[doc]!)">{{ t('inventory.chains.addLevel') }}</Button>
+          <Button v-if="canEdit" type="button" variant="outline" size="sm" :disabled="chains[doc]!.levels.length >= 5" :data-testid="`add-level-${doc}`" @click="addLevel(chains[doc]!)">{{ t('inventory.chains.addLevel') }}</Button>
         </div>
         <ErrorNotice v-if="chains[doc]!.error" :error="chains[doc]!.error!" inline :data-testid="`chain-error-${doc}`" />
         <p v-if="chains[doc]!.levels.length === 0" class="alert warning mt-3 text-sm">{{ t('inventory.chains.noLevel') }}</p>
@@ -127,16 +132,16 @@ async function save(c: Editable): Promise<void> {
             <tbody>
               <tr v-for="(l, i) in chains[doc]!.levels" :key="i" class="border-t border-border align-top" :data-testid="`level-${doc}-${i + 1}`">
                 <td class="py-2 pr-2">{{ i + 1 }}</td>
-                <td class="py-2 pr-2"><Input v-model="l.name" :name="`name_${doc}_${i}`" class="max-w-56" maxlength="60" :aria-label="t('inventory.chains.levelName')" :aria-invalid="!!levelError(chains[doc]!, i, 'name')" /><p v-if="levelError(chains[doc]!, i, 'name')" class="m-0 mt-1 text-xs text-destructive">{{ levelError(chains[doc]!, i, 'name') }}</p></td>
-                <td class="py-2 pr-2"><NativeSelect v-model="l.approver" :name="`approver_${doc}_${i}`" :aria-label="t('inventory.chains.who')"><option v-for="a in approvers(doc)" :key="a.value" :value="a.value">{{ a.label }}</option></NativeSelect></td>
+                <td class="py-2 pr-2"><Input v-model="l.name" :name="`name_${doc}_${i}`" :disabled="!canEdit" class="max-w-56" maxlength="60" :aria-label="t('inventory.chains.levelName')" :aria-invalid="!!levelError(chains[doc]!, i, 'name')" /><p v-if="levelError(chains[doc]!, i, 'name')" class="m-0 mt-1 text-xs text-destructive">{{ levelError(chains[doc]!, i, 'name') }}</p></td>
+                <td class="py-2 pr-2"><NativeSelect v-model="l.approver" :name="`approver_${doc}_${i}`" :disabled="!canEdit" :aria-label="t('inventory.chains.who')"><option v-for="a in approvers(doc)" :key="a.value" :value="a.value">{{ a.label }}</option></NativeSelect></td>
                 <td class="py-2 pr-2">
                   <div class="flex flex-wrap items-center gap-2">
-                    <NativeSelect v-model="l.condition" :name="`condition_${doc}_${i}`" class="w-56" :aria-label="t('inventory.chains.when')"><option value="ALWAYS">{{ t('inventory.chains.always') }}</option><option value="TOTAL_ABOVE">{{ t('inventory.chains.totalAbove') }}</option></NativeSelect>
-                    <MoneyInput v-if="l.condition === 'TOTAL_ABOVE'" v-model="l.threshold" :name="`threshold_${doc}_${i}`" :decimals="decimals" class="w-36" :aria-label="t('inventory.chains.threshold')" :aria-invalid="!!levelError(chains[doc]!, i, 'threshold')" />
+                    <NativeSelect v-model="l.condition" :name="`condition_${doc}_${i}`" :disabled="!canEdit" class="w-56" :aria-label="t('inventory.chains.when')"><option value="ALWAYS">{{ t('inventory.chains.always') }}</option><option value="TOTAL_ABOVE">{{ t('inventory.chains.totalAbove') }}</option></NativeSelect>
+                    <MoneyInput v-if="l.condition === 'TOTAL_ABOVE'" v-model="l.threshold" :name="`threshold_${doc}_${i}`" :disabled="!canEdit" :decimals="decimals" class="w-36" :aria-label="t('inventory.chains.threshold')" :aria-invalid="!!levelError(chains[doc]!, i, 'threshold')" />
                   </div>
                   <p v-if="levelError(chains[doc]!, i, 'threshold')" class="m-0 mt-1 text-xs text-destructive">{{ levelError(chains[doc]!, i, 'threshold') }}</p>
                 </td>
-                <td class="py-2 text-right"><Button type="button" variant="ghost" size="sm" :data-testid="`remove-level-${doc}-${i + 1}`" @click="removeLevel(chains[doc]!, i)">{{ t('common.remove') }}</Button></td>
+                <td class="py-2 text-right"><Button v-if="canEdit" type="button" variant="ghost" size="sm" :data-testid="`remove-level-${doc}-${i + 1}`" @click="removeLevel(chains[doc]!, i)">{{ t('common.remove') }}</Button></td>
               </tr>
             </tbody>
           </table>
@@ -145,11 +150,11 @@ async function save(c: Editable): Promise<void> {
           <legend class="mb-1 text-sm font-semibold">{{ t('inventory.chains.rules') }}</legend>
           <label class="flex items-center gap-2 py-0.5 text-sm text-muted-foreground"><input type="checkbox" checked disabled /> {{ t('inventory.chains.ruleOnePerson') }}</label>
           <label class="flex items-center gap-2 py-0.5 text-sm text-muted-foreground"><input type="checkbox" checked disabled /> {{ t('inventory.chains.ruleNotOwn') }}</label>
-          <label class="flex items-center gap-2 py-0.5 text-sm"><input v-model="chains[doc]!.skip" type="checkbox" :name="`skip_${doc}`" :data-testid="`skip-${doc}`" /> {{ t('inventory.chains.optionSkip') }}</label>
-          <label class="flex items-center gap-2 py-0.5 text-sm"><input v-model="chains[doc]!.edit" type="checkbox" :name="`edit_${doc}`" :data-testid="`edit-${doc}`" /> {{ t('inventory.chains.optionEdit') }}</label>
+          <label class="flex items-center gap-2 py-0.5 text-sm"><input v-model="chains[doc]!.skip" type="checkbox" :name="`skip_${doc}`" :disabled="!canEdit" :data-testid="`skip-${doc}`" /> {{ t('inventory.chains.optionSkip') }}</label>
+          <label class="flex items-center gap-2 py-0.5 text-sm"><input v-model="chains[doc]!.edit" type="checkbox" :name="`edit_${doc}`" :disabled="!canEdit" :data-testid="`edit-${doc}`" /> {{ t('inventory.chains.optionEdit') }}</label>
         </fieldset>
         <p class="muted mt-3 text-sm">{{ t('inventory.chains.howItWorks') }}</p>
-        <div class="mt-3 flex items-center justify-end gap-3">
+        <div v-if="canEdit" class="mt-3 flex items-center justify-end gap-3">
           <span v-if="chains[doc]!.saved" class="text-sm text-muted-foreground" role="status" :data-testid="`saved-${doc}`">{{ t('inventory.chains.saved') }}</span>
           <Button type="button" :disabled="chains[doc]!.busy" :data-testid="`save-${doc}`" @click="save(chains[doc]!)">{{ t('inventory.chains.save') }}</Button>
         </div>

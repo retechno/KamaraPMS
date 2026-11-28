@@ -139,7 +139,7 @@ export const navigation: NavSection[] = [
       { id: 'inventoryCategories', to: '/inventory/categories', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
       { id: 'inventoryUnits', to: '/inventory/units', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
       { id: 'inventoryCosting', to: '/inventory/costing', permission: ['inventory.view', 'inventory.manage', 'inventory.opening'], module: 'INVENTORY' },
-      { id: 'inventoryPurchasing', to: '/inventory/purchasing', permission: ['inventory.view', 'inventory.request', 'inventory.purchase', 'inventory.receive', 'inventory.bill', 'inventory.approve', 'inventory.cost_control', 'inventory.final_approve'], module: 'INVENTORY' },
+      { id: 'inventoryPurchasing', to: '/inventory/purchasing', permission: ['inventory.view', 'inventory.request', 'inventory.purchase', 'inventory.receive', 'inventory.bill', 'inventory.approve', 'inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve'], module: 'INVENTORY' },
       { id: 'inventoryDrafts', to: '/inventory/bill-drafts', permission: ['inventory.bill', 'inventory.view'], module: 'INVENTORY' },
       { id: 'inventoryMovements', to: '/inventory/requisitions', permission: ['inventory.view', 'inventory.request', 'inventory.purchase', 'inventory.receive', 'inventory.move', 'inventory.count', 'inventory.approve', 'inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve'], module: 'INVENTORY' },
       { id: 'inventoryIssues', to: '/inventory/issues', permission: ['inventory.view', 'inventory.request', 'inventory.purchase', 'inventory.receive', 'inventory.move', 'inventory.count', 'inventory.approve', 'inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve'], module: 'INVENTORY' },
@@ -147,7 +147,7 @@ export const navigation: NavSection[] = [
       { id: 'inventoryAmenities', to: '/inventory/amenities', permission: ['inventory.view', 'inventory.manage'], module: 'INVENTORY' },
       { id: 'inventoryPosGap', to: '/inventory/pos-gap', permission: ['inventory.view', 'inventory.manage'], module: 'INVENTORY' },
       { id: 'inventoryApprovals', to: '/inventory/approvals', permission: ['inventory.approve', 'inventory.dept_approve', 'inventory.cost_control', 'inventory.final_approve', 'inventory.sr_final_approve'], module: 'INVENTORY' },
-      { id: 'inventoryChains', to: '/inventory/approval-chains', permission: 'inventory.manage', module: 'INVENTORY' },
+      { id: 'inventoryChains', to: '/inventory/approval-chains', permission: ['property.manage', 'inventory.manage'], module: 'INVENTORY' },
     ],
   },
   {
@@ -171,6 +171,7 @@ export const navigation: NavSection[] = [
     items: [
       { id: 'chartOfAccounts', to: '/accounting/accounts', permission: 'accounting.view' },
       { id: 'systemAccounts', to: '/accounting/mapping', permission: 'accounting.view' },
+      { id: 'readiness', to: '/accounting/readiness', permission: 'accounting.view' },
       { id: 'journals', to: '/accounting/journals', permission: 'accounting.view' },
       { id: 'periods', to: '/accounting/periods', permission: 'accounting.view' },
       { id: 'fiscalYears', to: '/accounting/fiscal-years', permission: 'accounting.view' },

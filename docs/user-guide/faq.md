@@ -320,7 +320,7 @@ Tidak. Dokumen yang sudah diposting tidak bisa diedit. Pembalikan hanya bisa pad
 
 ### Kenapa transfer atau penerimaan ke gudang ditolak dengan "Opname sedang berjalan di gudang."?
 
-Gudang itu sedang dibekukan oleh opname. Tunggu opname disetujui atau dibatalkan. Opname yang masih terbuka juga menahan audit malam, jadi selesaikan pada hari yang sama.
+Gudang itu sedang dibekukan oleh opname. Tunggu opname disetujui atau dibatalkan. Opname yang masih terbuka juga menahan audit malam (bawaan, bisa diubah di **Persediaan → Harga pokok**), jadi selesaikan pada hari yang sama.
 → [Opname stok gudang](09-inventory/opname.md)
 
 ### Saya mencentang "Simpan dan ajukan" di pesanan pembelian, kenapa pesanan langsung berstatus Terkirim ke pemasok?
@@ -328,14 +328,14 @@ Gudang itu sedang dibekukan oleh opname. Tunggu opname disetujui atau dibatalkan
 Label kotak itu menyesatkan: artinya "kirim pesanan ke pemasok sekarang", bukan mengajukan untuk persetujuan (kendala yang diketahui). Centang kotak itu hanya kalau pesanan memang dikirim ke pemasok sekarang. Tanpa centang, pesanan tersimpan sebagai **Draf**.
 → [Permintaan pembelian dan pesanan pembelian](09-inventory/permintaan-dan-pesanan-pembelian.md)
 
-### Saya penyetuju, permintaannya ada di Perlu saya setujui, tetapi saya dialihkan keluar saat membukanya. Kenapa?
+### Saya hanya penyetuju. Apakah peran saya butuh izin melihat barang dan stok?
 
-Peran Anda hanya boleh menyetujui, tanpa izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal** (kendala yang diketahui). Akibatnya permintaan tertahan di tingkat Anda. Minta administrator menambahkan izin melihat barang dan stok ke peran Anda.
+Tidak. Izin persetujuan (kepala departemen, kontrol biaya, atau persetujuan akhir) sudah cukup untuk membuka **Persediaan → Pembelian** dan permintaan yang menunggu Anda, lalu memutuskannya. Izin **Melihat barang, gudang, stok, kartu stok, dan saldo awal** hanya perlu kalau Anda juga bekerja dengan barang dan stoknya.
 → [Rantai persetujuan: mengatur dan memutuskan](09-inventory/rantai-persetujuan.md)
 
-### Rantai persetujuan sudah saya isi, tetapi ditolak saat Simpan rantai. Kenapa?
+### Rantai persetujuan terkunci dan tidak ada tombol Simpan rantai. Kenapa?
 
-**Simpan rantai** hanya diterima dari peran yang juga boleh **Mengubah pengaturan properti** (kendala yang diketahui). Minta administrator, atau manajer yang perannya boleh mengubah pengaturan properti, untuk menyimpan rantainya.
+Rantai persetujuan hanya diubah oleh peran yang boleh **Mengubah pengaturan properti**. Peran yang hanya boleh mengelola persediaan bisa membacanya, tetapi tidak mengubahnya. Minta administrator, atau manajer yang perannya boleh mengubah pengaturan properti, untuk mengubah rantainya.
 → [Rantai persetujuan: mengatur dan memutuskan](09-inventory/rantai-persetujuan.md)
 
 ### Bulatan Bawaan beli dan Bawaan resep tidak terisi setelah saya klik. Apakah pilihannya tersimpan?
@@ -345,7 +345,7 @@ Pilihannya tetap tercatat saat disimpan, hanya bulatannya yang tidak tampil teri
 
 ### Akun persediaan sebuah kategori salah, tetapi tidak bisa diubah. Apa yang harus dilakukan?
 
-Akun dan jenis kategori terkunci begitu kategori berisi barang, walaupun barangnya belum punya mutasi stok (kendala yang diketahui). Buat kategori baru dengan akun yang benar, lalu pindahkan barangnya ke kategori itu lewat **Kategori** di formulir barang, selama barangnya belum punya stok. Ke depan, periksa akun dan jenisnya sebelum menambahkan barang.
+Selama belum ada barang kategori itu yang punya mutasi stok, akunnya bisa diubah langsung di formulir kategori. Setelah mutasi stok pertama, akunnya terkunci. Buat kategori baru dengan akun yang benar; barang yang belum punya stok bisa dipindah ke kategori itu lewat **Kategori** di formulir barang. Ke depan, periksa akunnya sebelum mencatat saldo awal atau penerimaan pertama.
 → [Menyiapkan persediaan: metode harga pokok, satuan, dan kategori](09-inventory/menyiapkan-persediaan.md)
 
 ### Saldo awal barang salah ketik. Bisakah dibatalkan?
@@ -436,9 +436,9 @@ Periksa kolom **Akses** di daftar **Pengguna**: properti itu harus tertulis deng
 Tidak. Pengguna tidak bisa dihapus, dan emailnya tidak bisa diubah. Nonaktifkan pengguna itu, lalu buat yang baru dengan email yang benar.
 → [Pengguna](13-pengaturan/pengguna.md)
 
-### Kode biaya pembulatan POS tidak bisa disimpan. Apa yang harus dilakukan?
+### Bagaimana mengubah akun kode biaya pembulatan POS?
 
-Kolom **Jenis** kode `POS_ROUNDING` menampilkan teks mentah, dan setiap perubahan gagal disimpan dengan "Ada isian yang tidak valid." (kendala yang diketahui). Biarkan kode ini apa adanya. Kalau akunnya perlu diubah, hubungi administrator hotel; administrator hotel akan meneruskannya ke tim dukungan KamaraPMS (lihat [Bantuan dan kontak](README.md#bantuan-dan-kontak)).
+Buka **Pengaturan → Kode biaya**, klik **Ubah** pada kode `POS_ROUNDING` (jenis **Pembulatan POS**), ganti **Akun pendapatan** atau **Departemen bawaan**, lalu simpan. **Jenis** kode ini terkunci.
 → [Pajak dan kode biaya](13-pengaturan/pajak-dan-kode-biaya.md)
 
 ### Muncul "Langganan sudah berakhir: data bisa dibaca tetapi tidak bisa diubah." Apa artinya?

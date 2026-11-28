@@ -38,6 +38,8 @@ const typeFilter = ref('')
 
 const canManage = computed(() => auth.can('billing_config.manage', property.currentId))
 const types: ChargeType[] = ['ROOM', 'FOOD_BEVERAGE', 'SERVICE', 'FEE', 'OTHER']
+// A system code may have a type nobody chooses (ROUNDING of POS_ROUNDING): its locked select still names it (KD-15).
+const formTypes = computed<ChargeType[]>(() => (types.includes(form.charge_type) ? types : [...types, form.charge_type]))
 const columns = computed<Column<ChargeCode>[]>(() => [
   { key: 'code', label: t('chargeCodes.code'), sortable: true, filter: 'text' as const },
   { key: 'name', label: t('chargeCodes.name'), sortable: true, filter: 'text' as const },
@@ -231,7 +233,7 @@ watch(() => property.currentId, load, { immediate: true })
             <FormField :label="t('chargeCodes.type')" :hint="editing !== 'new' && editing.is_system ? t('chargeCodes.typeFixed') : undefined" :error="fieldError('charge_type')">
               <template #default="{ id, invalid }">
                 <NativeSelect :id="id" v-model="form.charge_type" name="charge_type" :disabled="editing !== 'new' && editing.is_system" :aria-invalid="invalid">
-                  <option v-for="ty in types" :key="ty" :value="ty">{{ t(`chargeCodes.type_${ty}`) }}</option>
+                  <option v-for="ty in formTypes" :key="ty" :value="ty">{{ t(`chargeCodes.type_${ty}`) }}</option>
                 </NativeSelect>
               </template>
             </FormField>

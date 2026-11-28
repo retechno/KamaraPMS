@@ -136,7 +136,7 @@ Kolom **Izin** berisi permission yang membuat item tampil di menu atau yang dimi
 | `/inventory/categories` (+form) | Kategori & akun | baca (form: manage) |
 | `/inventory/units` (+form) | Satuan | baca (form: manage) |
 | `/inventory/costing` | Harga pokok (termasuk Kartu stok) | baca |
-| `/inventory/purchasing`, `/requests/*`, `/purchase-orders/*`, `/receipts/*`, `/returns/*` | Pembelian | `inventory.view` / request / purchase / receive / bill / approve / cost_control / final_approve |
+| `/inventory/purchasing`, `/requests/*`, `/purchase-orders/*`, `/receipts/*`, `/returns/*` | Pembelian | `inventory.view` / request / purchase / receive / bill / approve / cost_control / final_approve; `/inventory/purchasing` dan `/requests/:id` juga dept_approve / sr_final_approve (KD-17) |
 | `/inventory/bill-drafts` (+`/:id`) | Draf tagihan | `inventory.bill` atau `inventory.view` |
 | `/inventory/requisitions`, `/requisitions/*`, `/transfers/*` | Permintaan & transfer | gerak |
 | `/inventory/issues` (+`/new`, `/:id`) | Pemakaian & waste | gerak |
@@ -144,7 +144,7 @@ Kolom **Izin** berisi permission yang membuat item tampil di menu atau yang dimi
 | `/inventory/amenities`, `/amenities/runs/:date` | Amenities otomatis | `inventory.view` atau `inventory.manage` |
 | `/inventory/pos-gap` | Penjualan POS tanpa stok | `inventory.view` atau `inventory.manage` |
 | `/inventory/approvals` | Perlu saya setujui | izin persetujuan persediaan |
-| `/inventory/approval-chains` | Rantai persetujuan | `inventory.manage` (menyimpan butuh `property.manage`) |
+| `/inventory/approval-chains` | Rantai persetujuan | `property.manage` atau `inventory.manage` (mengubah dan menyimpan hanya `property.manage`; `inventory.manage` membaca) |
 | `/inventory/reports` dan 23 laporan di `/inventory/reports/*` | Laporan persediaan | baca. **Tidak ada di menu**: dibuka dari tautan "Laporan persediaan" di Ringkasan |
 
 ### 2.9 Banquet (`banquet`, modul BANQUET)
@@ -590,7 +590,7 @@ Tautan dari halaman yang sudah ditulis ke halaman yang belum ada. Halaman yang d
 ### 9.1 Teks yang tampil dalam bahasa Inggris atau sebagai kode mentah
 
 **Izin dan peran**
-- 20 izin tidak punya `permissionLabel` Indonesia: semua `asset.*`, semua `banquet.*`, dan 11 izin `inventory.*` (request, purchase, receive, bill, approve, cost_control, final_approve, move, count, dept_approve, sr_final_approve).
+- 9 izin tidak punya `permissionLabel` Indonesia: semua `asset.*` dan semua `banquet.*`. *Diperbaiki (PR C2):* ke-11 izin `inventory.*` yang dulu tanpa label (request, purchase, receive, bill, approve, cost_control, final_approve, move, count, dept_approve, sr_final_approve) sekarang berlabel.
 - Grup izin "Inventory", "Fixed assets", dan "Banquet" tampil dalam bahasa Inggris di form Peran.
 
 **Error dan temuan tanpa teks Indonesia**
@@ -644,8 +644,8 @@ Tautan dari halaman yang sudah ditulis ke halaman yang belum ada. Halaman yang d
 - "Ubah jadwal" deposit tampil dengan `banquet.confirm`, padahal backend meminta `banquet.manage`.
 
 **Persediaan**
-- Pengaturan persediaan (toleransi, PO wajib PR, batas penerimaan tanpa pesanan, opname menahan audit, hitung buta) tidak punya layar.
-- Rantai persetujuan: menunya untuk `inventory.manage`, tetapi menyimpan butuh `property.manage`.
+- Pengaturan persediaan (toleransi, PO wajib PR, batas penerimaan tanpa pesanan, hitung buta) tidak punya layar. *Diperbaiki (PR C2):* opname menahan audit (`count_blocks_night_audit`) punya centang di **Persediaan → Harga pokok**.
+- *Diperbaiki (KD-16):* rantai persetujuan terbuka untuk `property.manage` dan `inventory.manage`; hanya `property.manage` yang bisa mengubah dan menyimpan, sesuai desain 35 §5.8.
 - Membuang draf tagihan tidak punya tombol.
 - Lingkup opname "Daftar" tidak tersedia di UI.
 - Teks "Menambah nilai … menyusul di rilis berikutnya" masih tampil, padahal fiturnya sudah ada.
